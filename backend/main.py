@@ -2,16 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.database import Base, engine
-
-# Import models so SQLAlchemy creates the tables
 from app.models.company import Company
+from app.api.companies import router as companies_router
 
-# Create all database tables
+# Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Alpha India API",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 app.add_middleware(
@@ -22,13 +21,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register Companies API
+app.include_router(companies_router)
+
 
 @app.get("/")
 def root():
     return {
         "project": "Alpha India",
-        "database": "Connected ✅",
-        "status": "Ready"
+        "database": "Connected",
+        "status": "Ready 🚀"
     }
 
 

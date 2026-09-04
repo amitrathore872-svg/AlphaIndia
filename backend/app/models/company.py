@@ -8,13 +8,14 @@ class Company(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    company = Column(String(150), nullable=False, unique=True)
-    sector = Column(String(100), nullable=False)
+    symbol = Column(String(30), unique=True, nullable=False, index=True)
+    company = Column(String(200), nullable=False)
+    sector = Column(String(120), nullable=False)
 
-    market_cap = Column(String(50))
+    market_cap = Column(String(50), default="Unknown")
 
-    revenue_growth = Column(Float)
-    pat_growth = Column(Float)
-    roce = Column(Float)
+    revenue_growth = Column(Float, default=0)
+    pat_growth = Column(Float, default=0)
+    roce = Column(Float, default=0)
 
-    ai_score = Column(Float)
+    ai_score = Column(Float, default=0)
