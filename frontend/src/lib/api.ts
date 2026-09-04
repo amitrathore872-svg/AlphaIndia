@@ -3,15 +3,17 @@ import { QuarterlyResult } from "@/types/result";
 const API_BASE = "http://127.0.0.1:8000";
 
 export async function fetchQuarterlyResults(): Promise<QuarterlyResult[]> {
-  const response = await fetch(`${API_BASE}/companies`);
+  const response = await fetch(`${API_BASE}/companies`, {
+    cache: "no-store",
+  });
 
   if (!response.ok) {
-    throw new Error("Failed to fetch companies.");
+    throw new Error("Unable to connect to Alpha India API.");
   }
 
-  const companies = await response.json();
+  const data = await response.json();
 
-  return companies.map((company: any) => ({
+  return data.companies.map((company: any) => ({
     company: company.company,
     sector: company.sector,
     marketCap: company.market_cap,
