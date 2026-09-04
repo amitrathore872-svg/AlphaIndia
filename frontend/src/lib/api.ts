@@ -1,25 +1,25 @@
-import { QuarterlyResult } from "@/types/result";
+export type GrowthCompany = {
+  company: string;
+  symbol: string;
+  sector: string;
+  quarter: string;
+  resultDate: string;
+  revenueGrowth: number;
+  patGrowth: number;
+  roce: number;
+  growthScore: number;
+};
 
-const API_BASE = "http://127.0.0.1:8000";
+const API = "http://127.0.0.1:8000";
 
-export async function fetchQuarterlyResults(): Promise<QuarterlyResult[]> {
-  const response = await fetch(`${API_BASE}/companies`, {
-    cache: "no-store",
+export async function fetchGrowthCompanies(): Promise<GrowthCompany[]> {
+  const response = await fetch(`${API}/growth-screener`, {
+    cache: "no-store"
   });
 
   if (!response.ok) {
     throw new Error("Unable to connect to Alpha India API.");
   }
 
-  const data = await response.json();
-
-  return data.companies.map((company: any) => ({
-    company: company.company,
-    sector: company.sector,
-    marketCap: company.market_cap,
-    revenueGrowth: company.revenue_growth,
-    patGrowth: company.pat_growth,
-    roce: company.roce,
-    score: company.ai_score,
-  }));
+  return response.json();
 }

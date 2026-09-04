@@ -1,47 +1,22 @@
-import DashboardLayout from "@/components/layout/DashboardLayout";
-import StatCard from "@/components/cards/StatCard";
-import ResultsTable from "@/components/screener/ResultsTable";
+import GrowthTable from "@/components/screener/GrowthTable";
 
-export default function Home() {
-  const stats = [
-    { title: "Results Today", value: "127" },
-    { title: "High Growth Stocks", value: "23" },
-    { title: "Watchlist", value: "14" },
-    { title: "AI Growth Alerts", value: "08" },
-  ];
-
+export default function HomePage() {
   return (
-    <DashboardLayout>
-      {/* KPI Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {stats.map((item) => (
-          <StatCard
-            key={item.title}
-            title={item.title}
-            value={item.value}
-          />
-        ))}
-      </section>
+    <main className="min-h-screen bg-black text-white p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
 
-      {/* Quarterly Results Table */}
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
-        <div className="flex justify-between items-center mb-5">
-          <div>
-            <h3 className="text-xl font-semibold text-white">
-              Latest Quarterly Results
-            </h3>
-            <p className="text-slate-400 text-sm mt-1">
-              Live quarterly results from Alpha India API.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-4xl font-bold text-blue-400">
+            Alpha India Growth Radar
+          </h1>
 
-          <span className="text-emerald-400 text-sm font-medium">
-            ● Live (Refresh every 5 sec)
-          </span>
+          <p className="text-gray-400 mt-2">
+            Live NSE Quarterly Growth Screener • Refreshes Every 5 Seconds
+          </p>
         </div>
 
-        <ResultsTable />
-      </section>
-    </DashboardLayout>
+        <GrowthTable />
+      </div>
+    </main>
   );
 }
