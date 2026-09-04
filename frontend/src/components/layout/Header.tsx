@@ -8,7 +8,7 @@ export default function Header() {
           Growth Screener Dashboard
         </h2>
         <p className="text-slate-400 text-sm">
-          Discover India's fastest-growing companies.
+          Discover India&apos;s fastest-growing companies.
         </p>
       </div>
 
