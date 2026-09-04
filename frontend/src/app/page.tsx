@@ -1,48 +1,47 @@
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import StatCard from "@/components/cards/StatCard";
+import ResultsTable from "@/components/screener/ResultsTable";
+
 export default function Home() {
   const stats = [
-    { title: "Companies Today", value: "0" },
-    { title: "Results Today", value: "0" },
-    { title: "High Growth Alerts", value: "0" },
-    { title: "Watchlist", value: "0" },
+    { title: "Results Today", value: "127" },
+    { title: "High Growth Stocks", value: "23" },
+    { title: "Watchlist", value: "14" },
+    { title: "AI Growth Alerts", value: "08" },
   ];
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="max-w-7xl mx-auto px-8 py-8">
+    <DashboardLayout>
+      {/* KPI Cards */}
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        {stats.map((item) => (
+          <StatCard
+            key={item.title}
+            title={item.title}
+            value={item.value}
+          />
+        ))}
+      </section>
 
-        <div className="mb-10">
-          <h1 className="text-4xl font-bold">Alpha India</h1>
-          <p className="text-slate-400 mt-2">
-            Growth Stock Research Terminal for NSE & BSE
-          </p>
+      {/* Quarterly Results Table */}
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
+        <div className="flex justify-between items-center mb-5">
+          <div>
+            <h3 className="text-xl font-semibold text-white">
+              Latest Quarterly Results
+            </h3>
+            <p className="text-slate-400 text-sm mt-1">
+              Live quarterly results from Alpha India API.
+            </p>
+          </div>
+
+          <span className="text-emerald-400 text-sm font-medium">
+            ● Live (Refresh every 5 sec)
+          </span>
         </div>
 
-        <div className="grid md:grid-cols-4 gap-4">
-          {stats.map((card) => (
-            <div
-              key={card.title}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-5"
-            >
-              <p className="text-sm text-slate-400">{card.title}</p>
-
-              <h2 className="text-3xl font-bold mt-3 text-emerald-400">
-                {card.value}
-              </h2>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-10 bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h3 className="text-xl font-semibold mb-3">
-            Latest Quarterly Results
-          </h3>
-
-          <p className="text-slate-400">
-            Live NSE quarterly results will appear here in the next step.
-          </p>
-        </div>
-
-      </div>
-    </main>
+        <ResultsTable />
+      </section>
+    </DashboardLayout>
   );
 }
