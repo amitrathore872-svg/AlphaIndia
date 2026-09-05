@@ -1,12 +1,86 @@
 "use client";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import Filters from "@/components/screener/Filters";
-import Pagination from "@/components/screener/Pagination";
-import type { useGrowthScreener } from "@/hooks/useGrowthScreener";
-type Props = { screener: ReturnType<typeof useGrowthScreener> };
-const badge = (score: number) => score >= 90 ? "bg-emerald-400/20 text-emerald-300" : score >= 80 ? "bg-cyan-400/15 text-cyan-300" : "bg-amber-400/15 text-amber-300";
-export default function GrowthTable({ screener }: Props) {
-  const { data, loading, error, params, setSector, setMarketCap, setMinScore, setPage, toggleSort } = screener;
-  const header = (label: string, key: "growthScore" | "revenueGrowth" | "patGrowth" | "roce" | "company", align = "right") => <th className={`sticky top-0 z-10 bg-slate-950/95 px-4 py-3 text-${align}`}><button onClick={() => toggleSort(key)} className="inline-flex items-center gap-1 hover:text-emerald-300">{label}{params.sortBy === key ? params.sortOrder === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}</button></th>;
-  return <section className="space-y-5"><Filters sectors={data?.sectors ?? []} sector={params.sector} marketCap={params.marketCap} minScore={params.minScore} onSector={setSector} onMarketCap={setMarketCap} onMinScore={setMinScore} />{error && <div role="alert" className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>}<div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/70"><div className="flex items-center justify-between border-b border-slate-800 px-5 py-4"><div><h3 className="font-semibold text-white">NSE Growth Radar</h3><p className="mt-1 text-xs text-slate-400">Live PostgreSQL results · refreshes every 5 seconds</p></div><span className="flex items-center gap-2 text-xs text-emerald-300"><i className="h-2 w-2 rounded-full bg-emerald-400" /> Live</span></div><div className="max-h-[560px] overflow-auto"><table className="w-full min-w-[900px] text-sm"><thead className="text-xs uppercase tracking-wide text-slate-400"><tr>{header("Company", "company", "left")}<th className="sticky top-0 z-10 bg-slate-950/95 px-4 py-3 text-left">Sector</th><th className="sticky top-0 z-10 bg-slate-950/95 px-4 py-3 text-left">Market cap</th>{header("Revenue", "revenueGrowth")}{header("PAT", "patGrowth")}{header("ROCE", "roce")}{header("Growth score", "growthScore")}</tr></thead><tbody>{loading && !data ? Array.from({ length: 7 }, (_, index) => <tr key={index} className="border-t border-slate-800"><td colSpan={7} className="px-5 py-4"><div className="h-5 animate-pulse rounded bg-slate-800" /></td></tr>) : data?.items.map((company) => <tr key={company.symbol} className="border-t border-slate-800 transition duration-150 hover:bg-slate-800/80"><td className="px-5 py-4"><p className="font-medium text-white">{company.company}</p><p className="mt-1 text-xs text-slate-500">{company.symbol} <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5">{company.quarter}</span></p></td><td className="px-4 py-4"><span className="rounded-full bg-violet-400/10 px-2 py-1 text-xs text-violet-300">{company.sector}</span></td><td className="px-4 py-4"><span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">{company.marketCap}</span></td><td className="px-4 py-4 text-right font-medium text-emerald-300">{company.revenueGrowth >= 0 ? "+" : ""}{company.revenueGrowth}%</td><td className="px-4 py-4 text-right font-medium text-emerald-300">{company.patGrowth >= 0 ? "+" : ""}{company.patGrowth}%</td><td className="px-4 py-4 text-right text-slate-200">{company.roce}%</td><td className="px-5 py-4 text-right"><span className={`rounded-full px-3 py-1 font-semibold ${badge(company.growthScore)}`}>{company.growthScore}</span></td></tr>)}{!loading && data?.items.length === 0 && <tr><td colSpan={7} className="px-5 py-16 text-center text-slate-400">No companies match these filters. Try lowering the score or clearing a filter.</td></tr>}</tbody></table></div></div>{data && <Pagination page={data.page} totalPages={data.totalPages} totalItems={data.totalItems} limit={data.limit} onPage={setPage} />}</section>;
+
+export interface Company {
+  id: number;
+  symbol: string;
+  company: string;
+  sector: string;
+  market_cap: string;
+  revenue_growth: number;
+  pat_growth: number;
+  roce: number;
+  ai_score: number;
+}
+
+interface Props {
+  companies: Company[];
+}
+
+export default function GrowthTable({ companies }: Props) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-slate-200">
+          <thead className="bg-slate-950 text-slate-400 uppercase text-xs">
+            <tr>
+              <th className="px-4 py-3 text-left">Company</th>
+              <th className="px-4 py-3 text-left">Symbol</th>
+              <th className="px-4 py-3 text-left">Sector</th>
+              <th className="px-4 py-3 text-right">Revenue %</th>
+              <th className="px-4 py-3 text-right">PAT %</th>
+              <th className="px-4 py-3 text-right">ROCE</th>
+              <th className="px-4 py-3 text-right">AI Score</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {companies.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                  No companies found.
+                </td>
+              </tr>
+            ) : (
+              companies.map((company) => (
+                <tr
+                  key={company.id}
+                  className="border-t border-slate-800 hover:bg-slate-800/40"
+                >
+                  <td className="px-4 py-3 font-medium text-white">
+                    {company.company}
+                  </td>
+
+                  <td className="px-4 py-3 text-cyan-400">
+                    {company.symbol}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {company.sector || "Unknown"}
+                  </td>
+
+                  <td className="px-4 py-3 text-right">
+                    {Number(company.revenue_growth).toFixed(1)}%
+                  </td>
+
+                  <td className="px-4 py-3 text-right">
+                    {Number(company.pat_growth).toFixed(1)}%
+                  </td>
+
+                  <td className="px-4 py-3 text-right">
+                    {Number(company.roce).toFixed(1)}%
+                  </td>
+
+                  <td className="px-4 py-3 text-right">
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">
+                      {Number(company.ai_score).toFixed(1)}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }

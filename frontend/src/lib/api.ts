@@ -1,5 +1,54 @@
-import type { DashboardSummary, GrowthScreenerParams, GrowthScreenerResponse } from "@/types/growth";
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
-async function getJson<T>(path: string): Promise<T> { const response = await fetch(`${API_URL}${path}`, { cache: "no-store" }); if (!response.ok) throw new Error("Unable to connect to Alpha India API."); return response.json() as Promise<T>; }
-export async function fetchGrowthCompanies(params: GrowthScreenerParams = {}): Promise<GrowthScreenerResponse> { const query = new URLSearchParams(); Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== "") query.set(key, String(value)); }); return getJson<GrowthScreenerResponse>(`/growth-screener${query.size ? `?${query}` : ""}`); }
-export function fetchDashboardSummary(): Promise<DashboardSummary> { return getJson<DashboardSummary>("/dashboard-summary"); }
+const API_BASE = "http://127.0.0.1:8000";
+
+// -------------------------------------------------
+// Companies API
+// -------------------------------------------------
+export async function fetchCompanies(
+  search = "",
+  page = 1,
+  limit = 50
+) {
+  const offset = (page - 1) * limit;
+
+  const response = await fetch(
+    `${API_BASE}/companies?search=${encodeURIComponent(search)}&limit=${limit}&offset=${offset}`,
+    { cache: "no-store" }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch companies");
+  }
+
+  return response.json();
+}
+
+// -------------------------------------------------
+// Dashboard Summary API
+// -------------------------------------------------
+export async function fetchDashboardSummary() {
+  const response = await fetch(`${API_BASE}/dashboard-summary`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch dashboard summary");
+  }
+
+  return response.json();
+}
+
+// -------------------------------------------------
+// Growth Screener API
+// -------------------------------------------------
+export async function fetchGrowthCompanies(search = "") {
+  const response = await fetch(
+    `${API_BASE}/growth-screener?search=${encodeURIComponent(search)}`,
+    { cache: "no-store" }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch growth screener");
+  }
+
+  return response.json();
+}

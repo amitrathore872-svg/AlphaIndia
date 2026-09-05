@@ -1,3 +1,28 @@
 "use client";
-type Props = { sectors: string[]; sector: string; marketCap: "all" | "large" | "mid" | "small"; minScore: number; onSector: (value: string) => void; onMarketCap: (value: "all" | "large" | "mid" | "small") => void; onMinScore: (value: number) => void };
-export default function Filters({ sectors, sector, marketCap, minScore, onSector, onMarketCap, onMinScore }: Props) { return <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/70 p-4"><div className="flex gap-2 overflow-x-auto pb-1"><button onClick={() => onSector("")} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${!sector ? "bg-emerald-400 text-slate-950" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>All</button>{sectors.map((item) => <button key={item} onClick={() => onSector(item)} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${sector === item ? "bg-emerald-400 text-slate-950" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>{item}</button>)}</div><div className="grid gap-4 md:grid-cols-2"><label className="text-sm text-slate-300">Market cap<select value={marketCap} onChange={(event) => onMarketCap(event.target.value as Props["marketCap"])} className="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-emerald-400"><option value="all">All Caps</option><option value="large">Large Cap</option><option value="mid">Mid Cap</option><option value="small">Small Cap</option></select></label><label className="text-sm text-slate-300">Minimum Growth Score <span className="float-right font-bold text-emerald-300">{minScore}</span><input aria-label="Minimum Growth Score" type="range" min="50" max="100" value={minScore} onChange={(event) => onMinScore(Number(event.target.value))} className="mt-3 block w-full accent-emerald-400" /></label></div></div>; }
+
+interface FiltersProps {
+  search: string;
+  setSearch: (value: string) => void;
+}
+
+export default function Filters({ search, setSearch }: FiltersProps) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <label className="block text-sm font-medium text-slate-300 mb-2">
+        Search NSE Companies
+      </label>
+
+      <input
+        type="text"
+        value={search}
+        placeholder="Search by company name or symbol (e.g. RELIANCE, TCS, BANK)..."
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
+      />
+
+      <p className="mt-2 text-xs text-slate-500">
+        Search works across all NSE listed companies.
+      </p>
+    </div>
+  );
+}

@@ -14,8 +14,8 @@ class Company(Base):
     isin = Column(String(20), unique=True, nullable=True)
 
     # Classification
-    sector = Column(String(120), nullable=False)
-    industry = Column(String(150), nullable=True)
+    sector = Column(String, nullable=True, default="Unknown")
+    industry = Column(String, nullable=True, default="Unknown")
     series = Column(String(20), nullable=True)
 
     # Listing

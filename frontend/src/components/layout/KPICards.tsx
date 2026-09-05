@@ -1,6 +1,71 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import StatCard from "@/components/cards/StatCard";
 import { fetchDashboardSummary } from "@/lib/api";
-import type { DashboardSummary } from "@/types/growth";
-export default function KPICards() { const [summary, setSummary] = useState<DashboardSummary | null>(null); useEffect(() => { const load = () => fetchDashboardSummary().then(setSummary).catch(() => undefined); load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, []); return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"><StatCard title="Companies tracked" value={summary?.companiesTracked.toLocaleString() ?? "—"} /><StatCard title="Results today" value={String(summary?.resultsToday ?? "—")} /><StatCard title="Average score" value={summary ? String(summary.averageGrowthScore) : "—"} /><StatCard title="Current leader" value={summary?.currentLeader ? `${summary.currentLeader.name} · ${summary.currentLeader.score}` : "—"} /><StatCard title="High-growth stocks" value={String(summary?.highGrowthStocks ?? "—")} /></div>; }
+
+interface DashboardSummary {
+  total_companies: number;
+  growth_companies: number;
+  sectors: number;
+  latest_results: number;
+}
+
+interface Props {
+  totalCompanies: number;
+  displayedCompanies: number;
+  currentPage: number;
+}
+
+export default function KPICards({
+  totalCompanies,
+  displayedCompanies,
+  currentPage,
+}: Props) {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+
+  useEffect(() => {
+    async function loadSummary() {
+      try {
+        const data = await fetchDashboardSummary();
+        setSummary(data);
+      } catch (err) {
+        console.error("Dashboard summary failed", err);
+      }
+    }
+
+    loadSummary();
+  }, []);
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Card
+        title="Total NSE Companies"
+        value={summary?.total_companies ?? totalCompanies}
+      />
+
+      <Card
+        title="Growth Companies"
+        value={summary?.growth_companies ?? 0}
+      />
+
+      <Card
+        title="Sectors Covered"
+        value={summary?.sectors ?? 0}
+      />
+
+      <Card
+        title="Current Page"
+        value={`${currentPage} (${displayedCompanies})`}
+      />
+    </div>
+  );
+}
+
+function Card({ title, value }: { title: string; value: string | number }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+      <p className="text-slate-400 text-sm">{title}</p>
+      <h2 className="text-2xl font-bold text-white mt-2">{value}</h2>
+    </div>
+  );
+}

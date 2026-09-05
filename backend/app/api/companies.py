@@ -1,70 +1,53 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
-from app.db.database import get_db
+from app.db.database import SessionLocal
 from app.models.company import Company
 
-router = APIRouter(
-    prefix="/companies",
-    tags=["Companies"]
-)
+router = APIRouter(tags=["Companies"])
 
 
-@router.get("")
+# Database Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@router.get("/companies")
 def get_companies(
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=25, ge=1, le=100),
-    search: str | None = None,
-    sector: str | None = None,
-    sort_by: str = "company",
-    order: str = "asc",
-    db: Session = Depends(get_db)
+    search: str = Query(default=""),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
 ):
     query = db.query(Company)
 
-    # Search by company name
+    # Search by company or symbol
     if search:
         query = query.filter(
-            Company.company.ilike(f"%{search}%")
+            or_(
+                Company.company.ilike(f"%{search}%"),
+                Company.symbol.ilike(f"%{search}%"),
+            )
         )
-
-    # Filter by sector
-    if sector:
-        query = query.filter(
-            Company.sector.ilike(f"%{sector}%")
-        )
-
-    # Allowed sort fields
-    sortable_fields = {
-        "company": Company.company,
-        "sector": Company.sector,
-        "score": Company.ai_score,
-        "revenue": Company.revenue_growth,
-        "pat": Company.pat_growth,
-        "roce": Company.roce,
-    }
-
-    column = sortable_fields.get(sort_by, Company.company)
-
-    if order.lower() == "desc":
-        query = query.order_by(desc(column))
-    else:
-        query = query.order_by(asc(column))
 
     total = query.count()
 
     companies = (
-        query
-        .offset((page - 1) * limit)
+        query.order_by(Company.company.asc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
 
     return {
-        "page": page,
-        "limit": limit,
         "total": total,
+        "limit": limit,
+        "offset": offset,
+        "count": len(companies),
         "companies": companies,
     }
-    
