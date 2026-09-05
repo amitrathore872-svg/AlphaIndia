@@ -1,0 +1,4 @@
+export type GrowthCompany = { company: string; symbol: string; sector: string; marketCap: string; quarter: string; resultDate: string; revenueGrowth: number; patGrowth: number; roce: number; growthScore: number };
+export type GrowthScreenerResponse = { items: GrowthCompany[]; page: number; limit: number; totalItems: number; totalPages: number; sectors: string[] };
+export type GrowthScreenerParams = { search?: string; sector?: string; marketCap?: "all" | "large" | "mid" | "small"; minScore?: number; page?: number; limit?: number; sortBy?: "growthScore" | "revenueGrowth" | "patGrowth" | "roce" | "company"; sortOrder?: "asc" | "desc" };
+export type DashboardSummary = { companiesTracked: number; resultsToday: number; averageGrowthScore: number; currentLeader: { name: string; score: number } | null; highGrowthStocks: number };

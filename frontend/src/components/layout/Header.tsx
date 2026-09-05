@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react';
 
-export default function Header() {
+type Props = { search?: string; onSearch?: (value: string) => void };
+export default function Header({ search = "", onSearch }: Props) {
   return (
     <header className="flex items-center justify-between border-b border-slate-800 pb-5 mb-6">
       <div>
@@ -19,7 +20,9 @@ export default function Header() {
         />
 
         <input
-          placeholder="Search NSE Company..."
+          value={search}
+          onChange={(event) => onSearch?.(event.target.value)}
+          placeholder="Search company, symbol, or sector..."
           className="w-full bg-slate-900 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white outline-none focus:border-emerald-400"
         />
       </div>

@@ -3,49 +3,55 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.database import Base, engine
 
-# Import database models
+# Database Models
 from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
+from app.models.announcement import Announcement
 
-# Import API routers
+# API Routers
 from app.api.companies import router as companies_router
 from app.api.growth import router as growth_router
+from app.api.dashboard import router as dashboard_router
 
-# Create all database tables
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Alpha India API",
-    version="0.6.0",
-    description="AI-powered NSE Growth Screener Backend"
+    version="0.7.5-dev",
+    description="AI-powered NSE Growth Screener Backend",
 )
 
-# CORS configuration for Next.js frontend
+# CORS (Next.js Frontend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register API routes
+# Register API Routers
 app.include_router(companies_router)
 app.include_router(growth_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")
 def root():
     return {
         "project": "Alpha India",
-        "version": "0.6.0",
+        "version": "0.7.5-dev",
         "database": "Connected",
         "status": "Ready 🚀",
-        "apis": [
-            "/companies",
-            "/growth-screener",
-            "/health"
-        ]
+        "apis": {
+            "companies": "/companies",
+            "growth_screener": "/growth-screener",
+            "dashboard_summary": "/dashboard-summary",
+            "health": "/health",
+        },
     }
 
 
@@ -54,5 +60,6 @@ def health():
     return {
         "status": "healthy",
         "database": "PostgreSQL Connected",
-        "service": "Alpha India Backend v0.6"
+        "collector": "Not Started",
+        "service": "Alpha India Backend v0.7.5-dev",
     }

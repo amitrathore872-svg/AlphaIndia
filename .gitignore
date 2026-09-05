@@ -1,0 +1,32 @@
+# =========================
+# Alpha India Git Ignore
+# =========================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual Environment
+.venv/
+venv/
+
+# Environment Variables
+.env
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+
+# VS Code
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
