@@ -2,30 +2,35 @@
 
 import { useEffect, useState } from "react";
 import {
-  fetchSystemSettings,
   fetchSystemStatus,
+  fetchSystemSettings,
+  fetchHeartbeat,
   updateSystemSetting,
 } from "@/lib/systemApi";
-import type { SystemSetting, SystemStatus } from "@/types/system";
+
+import type { SystemStatus, SystemSetting } from "@/types/system";
+import type { MonitoringHeartbeat } from "@/types/heartbeat";
 
 export default function MonitoringPage() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [heartbeat, setHeartbeat] = useState<MonitoringHeartbeat | null>(null);
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   async function loadData() {
-    setLoading(true);
     try {
-      const [statusData, settingsData] = await Promise.all([
+      const [statusData, settingsData, heartbeatData] = await Promise.all([
         fetchSystemStatus(),
         fetchSystemSettings(),
+        fetchHeartbeat(),
       ]);
 
       setStatus(statusData);
       setSettings(settingsData);
+      setHeartbeat(heartbeatData);
     } catch (err) {
-      console.error("Monitoring load failed", err);
+      console.error("Monitoring Center Load Failed", err);
     } finally {
       setLoading(false);
     }
@@ -35,15 +40,27 @@ export default function MonitoringPage() {
     loadData();
   }, []);
 
-  async function toggleSetting(setting: SystemSetting) {
-    setSavingKey(setting.setting_key);
+  // Auto refresh heartbeat every 10 seconds.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      loadData();
+    }, 10000);
 
+    return () => clearInterval(timer);
+  }, []);
+
+  async function toggleSetting(setting: SystemSetting) {
     const nextValue =
       setting.setting_value === "true" ? "false" : "true";
+
+    setSavingKey(setting.setting_key);
 
     try {
       await updateSystemSetting(setting.setting_key, nextValue);
       await loadData();
+    } catch (err) {
+      console.error(err);
+      alert("Unable to update setting.");
     } finally {
       setSavingKey(null);
     }
@@ -55,6 +72,9 @@ export default function MonitoringPage() {
     try {
       await updateSystemSetting(key, value);
       await loadData();
+    } catch (err) {
+      console.error(err);
+      alert("Unable to save setting.");
     } finally {
       setSavingKey(null);
     }
@@ -72,14 +92,16 @@ export default function MonitoringPage() {
     <main className="min-h-screen bg-slate-950 text-white p-8">
       <div className="max-w-7xl mx-auto space-y-8">
 
-        {/* Header */}
-        <div className="flex justify-between items-center">
+        {/* HEADER */}
+
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold text-emerald-400">
               Alpha India Monitoring Center
             </h1>
+
             <p className="text-slate-400 mt-2">
-              Live NSE & BSE Monitoring Engine Configuration
+              Live NSE & BSE Autonomous Monitoring Engine
             </p>
           </div>
 
@@ -87,60 +109,150 @@ export default function MonitoringPage() {
             onClick={loadData}
             className="rounded-xl bg-slate-800 hover:bg-slate-700 px-5 py-3 text-sm"
           >
-            Refresh Status
+            Refresh
           </button>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatusCard title="Engine Status" value={status?.status ?? "Unknown"} color="emerald" />
-          <StatusCard title="Current Session" value={status?.current_session ?? "Unknown"} color="cyan" />
-          <StatusCard title="Collector" value={status?.collector ?? "Unknown"} color="amber" />
-          <StatusCard title="Version" value={status?.version ?? "Unknown"} color="violet" />
-        </div>
+        {/* ENGINE HEALTH */}
 
-        {/* Engine Summary */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
-          <h2 className="text-2xl font-semibold">Engine Summary</h2>
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-white">
+            Engine Health
+          </h2>
 
-          <InfoRow
-            label="Monitoring Enabled"
-            value={status?.monitoring_enabled ? "YES" : "NO"}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
 
-          <InfoRow
-            label="Market Polling Interval"
-            value={`${status?.market_interval_minutes} Minutes`}
-          />
+            <HealthCard
+              title="Engine Status"
+              value={heartbeat?.engine_status ?? "Unknown"}
+              color="emerald"
+            />
 
-          <InfoRow
-            label="Post Market Polling Interval"
-            value={`${status?.post_market_interval_minutes} Minutes`}
-          />
+            <HealthCard
+              title="Current Session"
+              value={heartbeat?.current_session ?? "Unknown"}
+              color="cyan"
+            />
 
-          <InfoRow
-            label="Last Heartbeat"
-            value={new Date(status?.timestamp ?? "").toLocaleString("en-IN")}
-          />
+            <HealthCard
+              title="Collector"
+              value={status?.collector ?? "Idle"}
+              color="amber"
+            />
+
+            <HealthCard
+              title="Version"
+              value={status?.version ?? "0.9.1"}
+              color="violet"
+            />
+
+          </div>
         </section>
 
-        {/* Boolean Switches */}
+        {/* LIVE HEARTBEAT */}
+
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
-          <h2 className="text-2xl font-semibold text-white">
+
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold">
+              Live Monitoring Heartbeat
+            </h2>
+
+            <span className="text-xs text-emerald-400 animate-pulse">
+              ● Auto Refresh Every 10 Seconds
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+
+            <StatCard
+              title="Last Scan"
+              value={
+                heartbeat?.last_scan_time
+                  ? new Date(heartbeat.last_scan_time).toLocaleTimeString("en-IN")
+                  : "--"
+              }
+            />
+
+            <StatCard
+              title="Next Scan"
+              value={
+                heartbeat?.next_scan_time
+                  ? new Date(heartbeat.next_scan_time).toLocaleTimeString("en-IN")
+                  : "--"
+              }
+            />
+
+            <StatCard
+              title="Heartbeat"
+              value={
+                heartbeat?.heartbeat_at
+                  ? new Date(heartbeat.heartbeat_at).toLocaleTimeString("en-IN")
+                  : "--"
+              }
+            />
+
+            <StatCard
+              title="Engine State"
+              value={heartbeat?.engine_status ?? "--"}
+            />
+
+          </div>
+        </section>
+
+        {/* TODAY'S MONITORING */}
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+
+          <h2 className="text-2xl font-semibold">
+            Today's Monitoring Statistics
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            <MetricCard
+              title="Companies Scanned Today"
+              value={heartbeat?.companies_scanned_today ?? 0}
+              color="text-cyan-400"
+            />
+
+            <MetricCard
+              title="Quarterly Results Found"
+              value={heartbeat?.results_found_today ?? 0}
+              color="text-emerald-400"
+            />
+
+            <MetricCard
+              title="Parser Failures"
+              value={heartbeat?.parser_failures_today ?? 0}
+              color="text-red-400"
+            />
+
+          </div>
+        </section>
+
+        {/* MONITORING SWITCHES */}
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+
+          <h2 className="text-2xl font-semibold">
             Monitoring Switches
           </h2>
 
           {settings
             .filter((s) => s.setting_type === "boolean")
             .map((setting) => (
+
               <div
                 key={setting.id}
                 className="flex justify-between items-center border-b border-slate-800 py-4"
               >
+
                 <div>
-                  <h3 className="capitalize font-medium text-white">
+                  <h3 className="capitalize font-medium">
                     {setting.setting_key.replaceAll("_", " ")}
                   </h3>
+
                   <p className="text-sm text-slate-400">
                     {setting.description}
                   </p>
@@ -149,27 +261,31 @@ export default function MonitoringPage() {
                 <button
                   disabled={savingKey === setting.setting_key}
                   onClick={() => toggleSetting(setting)}
-                  className={`relative h-8 w-16 rounded-full transition-all ${
+                  className={`relative w-16 h-8 rounded-full transition-all duration-300 ${
                     setting.setting_value === "true"
                       ? "bg-emerald-500"
                       : "bg-slate-700"
                   }`}
                 >
                   <span
-                    className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all ${
+                    className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all duration-300 ${
                       setting.setting_value === "true"
                         ? "translate-x-8"
                         : "translate-x-1"
                     }`}
                   />
                 </button>
+
               </div>
+
             ))}
         </section>
 
-        {/* Scheduler Configuration */}
+        {/* SCHEDULER CONFIGURATION */}
+
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
-          <h2 className="text-2xl font-semibold text-white">
+
+          <h2 className="text-2xl font-semibold">
             Scheduler Configuration
           </h2>
 
@@ -183,21 +299,27 @@ export default function MonitoringPage() {
                 onSave={saveSetting}
               />
             ))}
+
         </section>
+
       </div>
     </main>
   );
 }
 
-/* ---------------- Status Card ---------------- */
+/* -------------------------------------------------------------------- */
+/* COMPONENTS */
+/* -------------------------------------------------------------------- */
 
-interface StatusCardProps {
+function HealthCard({
+  title,
+  value,
+  color,
+}: {
   title: string;
   value: string;
   color: "emerald" | "cyan" | "amber" | "violet";
-}
-
-function StatusCard({ title, value, color }: StatusCardProps) {
+}) {
   const colors = {
     emerald: "text-emerald-400",
     cyan: "text-cyan-400",
@@ -206,8 +328,9 @@ function StatusCard({ title, value, color }: StatusCardProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-700 transition-colors">
+    <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5">
       <p className="text-sm text-slate-400">{title}</p>
+
       <h3 className={`mt-3 text-2xl font-bold ${colors[color]}`}>
         {value}
       </h3>
@@ -215,23 +338,43 @@ function StatusCard({ title, value, color }: StatusCardProps) {
   );
 }
 
-/* ---------------- Info Row ---------------- */
-
-interface InfoRowProps {
-  label: string;
+function StatCard({
+  title,
+  value,
+}: {
+  title: string;
   value: string;
-}
-
-function InfoRow({ label, value }: InfoRowProps) {
+}) {
   return (
-    <div className="flex justify-between items-center border-b border-slate-800 py-3">
-      <span className="text-slate-400">{label}</span>
-      <span className="font-semibold text-white">{value}</span>
+    <div className="rounded-xl bg-slate-950 border border-slate-800 p-4">
+      <p className="text-xs text-slate-400">{title}</p>
+
+      <h3 className="mt-3 text-lg font-semibold text-white">
+        {value}
+      </h3>
     </div>
   );
 }
 
-/* ---------------- Scheduler Field ---------------- */
+function MetricCard({
+  title,
+  value,
+  color,
+}: {
+  title: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl bg-slate-950 border border-slate-800 p-5">
+      <p className="text-sm text-slate-400">{title}</p>
+
+      <h2 className={`mt-3 text-4xl font-bold ${color}`}>
+        {value}
+      </h2>
+    </div>
+  );
+}
 
 interface SchedulerFieldProps {
   setting: SystemSetting;
@@ -239,7 +382,11 @@ interface SchedulerFieldProps {
   onSave: (key: string, value: string) => Promise<void>;
 }
 
-function SchedulerField({ setting, savingKey, onSave }: SchedulerFieldProps) {
+function SchedulerField({
+  setting,
+  savingKey,
+  onSave,
+}: SchedulerFieldProps) {
   const [value, setValue] = useState(setting.setting_value);
 
   useEffect(() => {
@@ -250,14 +397,19 @@ function SchedulerField({ setting, savingKey, onSave }: SchedulerFieldProps) {
 
   return (
     <div className="flex justify-between items-center border-b border-slate-800 py-4">
+
       <div>
-        <h3 className="capitalize font-medium text-white">
+        <h3 className="capitalize font-medium">
           {setting.setting_key.replaceAll("_", " ")}
         </h3>
-        <p className="text-sm text-slate-400">{setting.description}</p>
+
+        <p className="text-sm text-slate-400">
+          {setting.description}
+        </p>
       </div>
 
       <div className="flex items-center gap-3">
+
         {setting.setting_type === "integer" ? (
           <select
             value={value}
@@ -286,7 +438,9 @@ function SchedulerField({ setting, savingKey, onSave }: SchedulerFieldProps) {
         >
           {savingKey === setting.setting_key ? "Saving..." : "Save"}
         </button>
+
       </div>
+
     </div>
   );
 }

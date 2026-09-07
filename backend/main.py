@@ -1,85 +1,72 @@
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.database import Base, engine
+from app.api import companies, system
+from app.services.monitoring_scheduler import scheduler
 
-# -----------------------------
-# Import Models
-# -----------------------------
-from app.models.company import Company
-from app.models.quarterly_result import QuarterlyResult
-from app.models.announcement import Announcement
 
-# -----------------------------
-# Import API Routers
-# -----------------------------
-from app.api.companies import router as companies_router
-from app.api.growth import router as growth_router
-from app.api.dashboard import router as dashboard_router
-from app.api.system import router as system_router
+# =========================================================
+# Alpha India Lifecycle
+# =========================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("\n=====================================")
+    print(" Alpha India Backend Starting")
+    print("=====================================\n")
 
-# Create database tables (only if they don't exist)
-Base.metadata.create_all(bind=engine)
+    scheduler.start()
 
-# -----------------------------
-# FastAPI Application
-# -----------------------------
+    yield
+
+    scheduler.stop()
+
+    print("\n=====================================")
+    print(" Alpha India Backend Stopped")
+    print("=====================================\n")
+
+
+# =========================================================
+# FastAPI App
+# =========================================================
 app = FastAPI(
     title="Alpha India API",
-    version="0.8.1",
-    description="AI Powered NSE + BSE Growth Intelligence Platform",
+    version="0.9.1",
+    lifespan=lifespan,
 )
 
-# -----------------------------
-# CORS Configuration
-# -----------------------------
+
+# =========================================================
+# CORS
+# =========================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3001",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -----------------------------
-# Register Routers
-# -----------------------------
-app.include_router(companies_router)
-app.include_router(growth_router)
-app.include_router(dashboard_router)
-app.include_router(system_router)
 
-# -----------------------------
+# =========================================================
+# API Routes
+# =========================================================
+app.include_router(companies.router)
+app.include_router(system.router)
+
+
+# =========================================================
 # Root Endpoint
-# -----------------------------
+# =========================================================
 @app.get("/")
 def root():
     return {
         "project": "Alpha India",
-        "version": "0.8.1",
+        "version": "0.9.1",
         "status": "Running",
-        "database": "Connected",
-        "modules": [
-            "Companies API",
-            "Growth Screener API",
-            "Dashboard API",
-            "System API",
-            "Announcements Collector",
-        ],
-    }
-
-# -----------------------------
-# Health Endpoint
-# -----------------------------
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "database": "PostgreSQL Connected",
-        "backend": "Running",
-        "frontend": "http://localhost:3000",
-        "version": "0.8.1",
     }
