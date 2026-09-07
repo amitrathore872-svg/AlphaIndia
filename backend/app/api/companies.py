@@ -1,53 +1,57 @@
-from fastapi import APIRouter, Depends, Query
+
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.models.company import Company
+from app.schemas.company import CompanyResponse
 
 router = APIRouter(tags=["Companies"])
-
-
-# Database Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.get("/companies")
 def get_companies(
     search: str = Query(default=""),
-    limit: int = Query(default=50, ge=1, le=100),
+    exchange: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Company)
+    try:
+        query = db.query(Company)
 
-    # Search by company or symbol
-    if search:
-        query = query.filter(
-            or_(
-                Company.company.ilike(f"%{search}%"),
-                Company.symbol.ilike(f"%{search}%"),
+        if search:
+            query = query.filter(
+                or_(
+                    Company.company.ilike(f"%{search}%"),
+                    Company.symbol.ilike(f"%{search}%"),
+                    Company.bse_code.ilike(f"%{search}%"),
+                )
             )
+
+        if exchange:
+            query = query.filter(Company.exchange == exchange.upper())
+
+        total = query.count()
+
+        companies = (
+            query.order_by(Company.company.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
         )
 
-    total = query.count()
+        return {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "data": [CompanyResponse.model_validate(c).model_dump(mode="json") for c in companies],
+        }
 
-    companies = (
-        query.order_by(Company.company.asc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-
-    return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "count": len(companies),
-        "companies": companies,
-    }
+    except Exception as e:
+        print("\n========== COMPANIES API ERROR ==========")
+        print(type(e).__name__)
+        print(e)
+        print("=========================================\n")
+        raise HTTPException(status_code=500, detail=str(e))

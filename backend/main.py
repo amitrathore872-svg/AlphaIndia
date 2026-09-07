@@ -1,28 +1,39 @@
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.database import Base, engine
 
-# Database Models
+# -----------------------------
+# Import Models
+# -----------------------------
 from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
 from app.models.announcement import Announcement
 
-# API Routers
+# -----------------------------
+# Import API Routers
+# -----------------------------
 from app.api.companies import router as companies_router
 from app.api.growth import router as growth_router
 from app.api.dashboard import router as dashboard_router
+from app.api.system import router as system_router
 
-# Create database tables
+# Create database tables (only if they don't exist)
 Base.metadata.create_all(bind=engine)
 
+# -----------------------------
+# FastAPI Application
+# -----------------------------
 app = FastAPI(
     title="Alpha India API",
-    version="0.7.5-dev",
-    description="AI-powered NSE Growth Screener Backend",
+    version="0.8.1",
+    description="AI Powered NSE + BSE Growth Intelligence Platform",
 )
 
-# CORS (Next.js Frontend)
+# -----------------------------
+# CORS Configuration
+# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -33,33 +44,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register API Routers
+# -----------------------------
+# Register Routers
+# -----------------------------
 app.include_router(companies_router)
 app.include_router(growth_router)
 app.include_router(dashboard_router)
+app.include_router(system_router)
 
-
+# -----------------------------
+# Root Endpoint
+# -----------------------------
 @app.get("/")
 def root():
     return {
         "project": "Alpha India",
-        "version": "0.7.5-dev",
+        "version": "0.8.1",
+        "status": "Running",
         "database": "Connected",
-        "status": "Ready 🚀",
-        "apis": {
-            "companies": "/companies",
-            "growth_screener": "/growth-screener",
-            "dashboard_summary": "/dashboard-summary",
-            "health": "/health",
-        },
+        "modules": [
+            "Companies API",
+            "Growth Screener API",
+            "Dashboard API",
+            "System API",
+            "Announcements Collector",
+        ],
     }
 
-
+# -----------------------------
+# Health Endpoint
+# -----------------------------
 @app.get("/health")
 def health():
     return {
         "status": "healthy",
         "database": "PostgreSQL Connected",
-        "collector": "Not Started",
-        "service": "Alpha India Backend v0.7.5-dev",
+        "backend": "Running",
+        "frontend": "http://localhost:3000",
+        "version": "0.8.1",
     }

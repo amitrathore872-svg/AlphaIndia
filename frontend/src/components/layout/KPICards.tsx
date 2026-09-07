@@ -1,26 +1,21 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { fetchDashboardSummary } from "@/lib/api";
 
 interface DashboardSummary {
-  total_companies: number;
-  growth_companies: number;
-  sectors: number;
-  latest_results: number;
+  companiesTracked: number;
+  resultsToday: number;
+  averageGrowthScore: number;
+  currentLeader: {
+    name: string;
+    score: number;
+  } | null;
+  highGrowthStocks: number;
 }
 
-interface Props {
-  totalCompanies: number;
-  displayedCompanies: number;
-  currentPage: number;
-}
-
-export default function KPICards({
-  totalCompanies,
-  displayedCompanies,
-  currentPage,
-}: Props) {
+export default function KPICards() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
 
   useEffect(() => {
@@ -29,43 +24,51 @@ export default function KPICards({
         const data = await fetchDashboardSummary();
         setSummary(data);
       } catch (err) {
-        console.error("Dashboard summary failed", err);
+        console.error("Dashboard summary failed:", err);
       }
     }
 
     loadSummary();
   }, []);
 
+  const cards = [
+    {
+      title: "Total NSE Companies",
+      value: summary?.companiesTracked ?? 0,
+    },
+    {
+      title: "Results Today",
+      value: summary?.resultsToday ?? 0,
+    },
+    {
+      title: "Average Growth Score",
+      value: summary?.averageGrowthScore ?? 0,
+    },
+    {
+      title: "Current Leader",
+      value: summary?.currentLeader
+        ? `${summary.currentLeader.name} (${summary.currentLeader.score})`
+        : "-",
+    },
+    {
+      title: "High Growth Stocks",
+      value: summary?.highGrowthStocks ?? 0,
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Card
-        title="Total NSE Companies"
-        value={summary?.total_companies ?? totalCompanies}
-      />
-
-      <Card
-        title="Growth Companies"
-        value={summary?.growth_companies ?? 0}
-      />
-
-      <Card
-        title="Sectors Covered"
-        value={summary?.sectors ?? 0}
-      />
-
-      <Card
-        title="Current Page"
-        value={`${currentPage} (${displayedCompanies})`}
-      />
-    </div>
-  );
-}
-
-function Card({ title, value }: { title: string; value: string | number }) {
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-      <p className="text-slate-400 text-sm">{title}</p>
-      <h2 className="text-2xl font-bold text-white mt-2">{value}</h2>
+    <div className="grid gap-4 md:grid-cols-5">
+      {cards.map((card) => (
+        <div
+          key={card.title}
+          className="rounded-xl border border-slate-800 bg-slate-900/70 p-5"
+        >
+          <p className="text-xs uppercase text-slate-400">{card.title}</p>
+          <h2 className="mt-2 text-2xl font-bold text-emerald-400">
+            {card.value}
+          </h2>
+        </div>
+      ))}
     </div>
   );
 }

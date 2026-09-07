@@ -1,32 +1,44 @@
-# =========================
-# Alpha India Git Ignore
-# =========================
 
+# ----------------------------
 # Python
+# ----------------------------
+.venv/
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.egg-info/
 
-# Virtual Environment
-.venv/
-venv/
-
-# Environment Variables
-.env
-
-# Node / Next.js
-frontend/node_modules/
-frontend/.next/
-
-# VS Code
-.vscode/
+# Pytest
+.pytest_cache/
 
 # Logs
-logs/
 *.log
 
-# OS Files
+# Environment
+.env
+
+# SQLite
+*.db
+
+# ----------------------------
+# Node / Next.js
+# ----------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# VSCode
+.vscode/
+
+# macOS / Windows
 .DS_Store
 Thumbs.db
+
+# Import Logs
+backend/data/import_logs/
+
+# Python bytecode
+backend/**/__pycache__/
+
+# Temporary CSV exports
+backend/data/*.tmp

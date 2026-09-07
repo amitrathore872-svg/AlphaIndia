@@ -1,4 +1,7 @@
-const API_BASE = "http://127.0.0.1:8000";
+
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 // -------------------------------------------------
 // Companies API
@@ -11,8 +14,12 @@ export async function fetchCompanies(
   const offset = (page - 1) * limit;
 
   const response = await fetch(
-    `${API_BASE}/companies?search=${encodeURIComponent(search)}&limit=${limit}&offset=${offset}`,
-    { cache: "no-store" }
+    `${API_BASE}/companies?search=${encodeURIComponent(
+      search
+    )}&limit=${limit}&offset=${offset}`,
+    {
+      cache: "no-store",
+    }
   );
 
   if (!response.ok) {
@@ -32,22 +39,6 @@ export async function fetchDashboardSummary() {
 
   if (!response.ok) {
     throw new Error("Failed to fetch dashboard summary");
-  }
-
-  return response.json();
-}
-
-// -------------------------------------------------
-// Growth Screener API
-// -------------------------------------------------
-export async function fetchGrowthCompanies(search = "") {
-  const response = await fetch(
-    `${API_BASE}/growth-screener?search=${encodeURIComponent(search)}`,
-    { cache: "no-store" }
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch growth screener");
   }
 
   return response.json();
