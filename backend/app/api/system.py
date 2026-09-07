@@ -12,6 +12,8 @@ from app.schemas.system_setting import (
 
 router = APIRouter(prefix="/system", tags=["System"])
 
+from app.models.monitoring_heartbeat import MonitoringHeartbeat
+from app.schemas.monitoring_heartbeat import MonitoringHeartbeatResponse
 
 # -------------------------------------------------------
 # Existing Health Endpoint (Kept for backward compatibility)
@@ -157,3 +159,22 @@ def reset_system_settings(db: Session = Depends(get_db)):
         "updated": updated,
         "message": "Monitoring settings reset successfully.",
     }
+
+
+# -------------------------------------------------------
+# HEARTBEAT STATUS
+# -------------------------------------------------------
+@router.get(
+    "/heartbeat",
+    response_model=MonitoringHeartbeatResponse,
+)
+def monitoring_heartbeat(db: Session = Depends(get_db)):
+    heartbeat = db.query(MonitoringHeartbeat).first()
+
+    if heartbeat is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Monitoring heartbeat not initialized.",
+        )
+
+    return heartbeat
