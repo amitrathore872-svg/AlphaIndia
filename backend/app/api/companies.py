@@ -1,57 +1,144 @@
-
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import func, or_, not_
 
-from app.db.database import get_db
+from app.db.database import SessionLocal
 from app.models.company import Company
-from app.schemas.company import CompanyResponse
 
-router = APIRouter(tags=["Companies"])
+# ---------------------------------------------------------
+# Router
+# ---------------------------------------------------------
+router = APIRouter(
+    prefix="/companies",
+    tags=["Companies"],
+)
 
 
-@router.get("/companies")
+# ---------------------------------------------------------
+# Database Dependency
+# ---------------------------------------------------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------
+# Dashboard Summary
+# ---------------------------------------------------------
+@router.get("/dashboard-summary")
+def dashboard_summary():
+    db = SessionLocal()
+
+    try:
+        total_companies = db.query(func.count(Company.id)).scalar() or 0
+
+        active_companies = (
+            db.query(func.count(Company.id))
+            .filter(Company.listing_status == "Active")
+            .scalar()
+            or 0
+        )
+
+        nse_companies = (
+            db.query(func.count(Company.id))
+            .filter(Company.exchange.in_(["NSE", "BOTH"]))
+            .scalar()
+            or 0
+        )
+
+        bse_companies = (
+            db.query(func.count(Company.id))
+            .filter(Company.exchange.in_(["BSE", "BOTH"]))
+            .scalar()
+            or 0
+        )
+
+        return {
+            "total_companies": total_companies,
+            "active_companies": active_companies,
+            "nse_companies": nse_companies,
+            "bse_companies": bse_companies,
+        }
+
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------
+# Companies List API
+# ---------------------------------------------------------
+@router.get("/")
 def get_companies(
-    search: str = Query(default=""),
-    exchange: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    search: str = Query(""),
 ):
+    db: Session = SessionLocal()
+
     try:
         query = db.query(Company)
 
-        if search:
+        # Only Active companies
+        query = query.filter(Company.listing_status == "Active")
+
+        # Remove temporary symbols like Rights Entitlement
+        query = query.filter(
+            not_(
+                or_(
+                    Company.symbol.ilike("%-RE"),
+                    Company.symbol.ilike("%-BE"),
+                    Company.symbol.ilike("%-BZ"),
+                    Company.symbol.ilike("%-PP"),
+                    Company.symbol.ilike("%-P"),
+                    Company.symbol.ilike("%-N1"),
+                    Company.symbol.ilike("%-N2"),
+                )
+            )
+        )
+
+        # Search
+        if search.strip():
             query = query.filter(
                 or_(
                     Company.company.ilike(f"%{search}%"),
                     Company.symbol.ilike(f"%{search}%"),
-                    Company.bse_code.ilike(f"%{search}%"),
                 )
             )
 
-        if exchange:
-            query = query.filter(Company.exchange == exchange.upper())
+        # Alphabetical Order
+        query = query.order_by(Company.company.asc())
 
         total = query.count()
 
         companies = (
-            query.order_by(Company.company.asc())
-            .offset(offset)
+            query.offset((page - 1) * limit)
             .limit(limit)
             .all()
         )
 
         return {
-            "total": total,
+            "page": page,
             "limit": limit,
-            "offset": offset,
-            "data": [CompanyResponse.model_validate(c).model_dump(mode="json") for c in companies],
+            "total": total,
+            "results": [
+                {
+                    "id": company.id,
+                    "company_name": company.company,      # Frontend still expects company_name
+                    "symbol": company.symbol,
+                    "exchange": company.exchange,
+                    "bse_code": company.bse_code,
+                    "isin": company.isin,
+                    "sector": company.sector or "Unknown",
+                    "market_cap": company.market_cap or "Unknown",
+                    "listing_status": company.listing_status,
+                    "ai_score": company.ai_score or 0,
+                }
+                for company in companies
+            ],
         }
 
-    except Exception as e:
-        print("\n========== COMPANIES API ERROR ==========")
-        print(type(e).__name__)
-        print(e)
-        print("=========================================\n")
-        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
