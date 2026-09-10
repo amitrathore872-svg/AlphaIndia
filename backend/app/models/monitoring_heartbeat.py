@@ -1,11 +1,5 @@
-"""
-Alpha India Monitoring Heartbeat Model
-Stores monitoring engine heartbeat and scheduler status.
-"""
-
-from datetime import datetime
-
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.sql import func
 
 from app.db.database import Base
 
@@ -15,12 +9,18 @@ class MonitoringHeartbeat(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    engine_status = Column(String(20), default="STOPPED")
+    # Discovery Engine Status
+    engine_status = Column(String, default="IDLE")
+    current_session = Column(String, default="BOOTSTRAP")
 
-    current_session = Column(String(30), default="NON_MARKET")
-
+    # Scan timestamps
     last_scan_time = Column(DateTime, nullable=True)
-
     next_scan_time = Column(DateTime, nullable=True)
 
-    heartbeat_at = Column(DateTime, default=datetime.utcnow)
+    # Sprint 28 counters
+    companies_scanned_today = Column(Integer, default=0)
+    results_found_today = Column(Integer, default=0)
+    parser_failures_today = Column(Integer, default=0)
+
+    # Last heartbeat update
+    heartbeat_at = Column(DateTime(timezone=True), server_default=func.now())

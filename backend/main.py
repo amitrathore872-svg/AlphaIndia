@@ -8,6 +8,7 @@ from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
 from app.models.announcement import Announcement
 from app.models.filing_registry import FilingRegistry
+from app.models.monitoring_heartbeat import MonitoringHeartbeat
 
 # ---------------- API Routers ----------------
 from app.api.companies import router as companies_router
@@ -15,6 +16,11 @@ from app.api.growth import router as growth_router
 from app.api.dashboard import router as dashboard_router
 from app.api.import_dashboard import router as import_dashboard_router
 from app.api.system import router as system_router
+from app.api.discovery import router as discovery_router
+from app.api.filings import router as filings_router
+from app.api.downloads import router as downloads_router
+
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -43,6 +49,9 @@ app.include_router(growth_router)
 app.include_router(dashboard_router)
 app.include_router(import_dashboard_router)
 app.include_router(system_router)
+app.include_router(discovery_router)
+app.include_router(filings_router)
+app.include_router(downloads_router)
 
 # ==========================================================
 # Root Endpoint
