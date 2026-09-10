@@ -3,101 +3,111 @@
 import { useEffect, useState } from "react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import Header from "@/components/layout/Header";
+import MarketTicker from "@/components/layout/MarketTicker";
+import MonitoringRibbon from "@/components/layout/MonitoringRibbon";
 import KPICards from "@/components/layout/KPICards";
+import GrowthTable from "@/components/layout/screener/GrowthTable";
 
-import Filters from "@/components/screener/Filters";
-import GrowthTable from "@/components/screener/GrowthTable";
-import Pagination from "@/components/screener/Pagination";
-
-import { fetchCompanies } from "@/lib/api";
-
-export interface Company {
-  id: number;
-  symbol: string;
-  company: string;
-  sector: string;
-  market_cap: string;
-  revenue_growth: number;
-  pat_growth: number;
-  roce: number;
-  ai_score: number;
-}
+import { fetchCompanies, Company } from "@/lib/api";
 
 export default function HomePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [search, setSearch] = useState("");
-
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const [search, setSearch] = useState("");
 
   const [totalCompanies, setTotalCompanies] = useState(0);
 
-  // -----------------------------
-  // Load companies from backend
-  // -----------------------------
+  const limit = 25;
+
+  // Load companies whenever page changes
   useEffect(() => {
-    async function loadCompanies() {
-      try {
-        setLoading(true);
+    loadCompanies(search);
+  }, [page]);
 
-        const data = await fetchCompanies(search, page, limit);
+  // Fetch companies from backend
+  async function loadCompanies(searchValue: string = search) {
+    setLoading(true);
 
-        setCompanies(data.companies);
-        setTotalCompanies(data.total);
-      } catch (err) {
-        console.error("Failed to load companies", err);
-      } finally {
-        setLoading(false);
-      }
+    try {
+      const data = await fetchCompanies(page, limit, searchValue);
+      setCompanies(data.results);
+      setTotalCompanies(data.total);
+    } catch (error) {
+      console.error("Failed to load companies:", error);
+      setCompanies([]);
+      setTotalCompanies(0);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    loadCompanies();
-  }, [search, page]);
+  // Search handler
+  function handleSearch() {
+    setPage(1);
+    loadCompanies(search);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalCompanies / limit));
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      {/* Bloomberg Live Market Ribbon */}
+      <MarketTicker />
 
-        {/* Top Header */}
-        <Header />
+      {/* Monitoring Engine */}
+      <MonitoringRibbon />
 
-        {/* KPI Cards */}
-        <KPICards
-          totalCompanies={totalCompanies}
-          displayedCompanies={companies.length}
-          currentPage={page}
-        />
+      {/* KPI Cards */}
+      <KPICards />
 
-        {/* Search Filters */}
-        <Filters
-          search={search}
-          setSearch={(value: string) => {
-            setPage(1);
-            setSearch(value);
-          }}
-        />
+      {/* Search Toolbar */}
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-white">
+              Company Search
+            </h2>
 
-        {/* Company Table */}
-        {loading ? (
-          <div className="bg-slate-900 rounded-xl p-10 text-center text-slate-400">
-            Loading NSE Companies...
+            <p className="mt-1 text-sm text-slate-400">
+              Search companies from Alpha India's live NSE & BSE database.
+            </p>
           </div>
-        ) : (
-          <GrowthTable companies={companies} />
-        )}
 
-        {/* Pagination */}
-        <Pagination
-          page={page}
-          total={totalCompanies}
-          limit={limit}
-          onPageChange={setPage}
-        />
+          <div className="flex w-full gap-3 lg:w-auto">
+            <input
+              type="text"
+              placeholder="Search company name or symbol..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSearch();
+              }}
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 outline-none transition focus:border-emerald-500 lg:w-80"
+            />
 
-      </div>
+            <button
+              onClick={handleSearch}
+              className="rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Growth Screener Table */}
+      <GrowthTable
+        companies={companies}
+        loading={loading}
+        page={page}
+        totalPages={totalPages}
+        totalCompanies={totalCompanies}
+        limit={limit}
+        onPrevious={() => setPage((prev) => Math.max(prev - 1, 1))}
+        onNext={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+      />
     </DashboardLayout>
   );
 }
