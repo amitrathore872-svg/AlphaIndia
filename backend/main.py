@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import companies, system
+from app.api import companies, system, growth_metrics
 from app.services.monitoring_scheduler import scheduler
 
 
@@ -56,7 +56,9 @@ app.add_middleware(
 # =========================================================
 # API Routes
 # =========================================================
+
 app.include_router(companies.router)
+app.include_router(growth_metrics.router)
 app.include_router(system.router)
 
 

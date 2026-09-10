@@ -9,8 +9,8 @@ class Company(Base):
 
     # Master identifiers
     isin = Column(String(20), unique=True, index=True)
-    symbol = Column(String(30), index=True)       # NSE Symbol
-    bse_code = Column(String(20), index=True)     # BSE Security Code
+    symbol = Column(String(30), index=True)
+    bse_code = Column(String(20), index=True)
 
     company = Column(String(255), nullable=False)
 
