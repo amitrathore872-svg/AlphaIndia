@@ -1,279 +1,305 @@
+// =======================================================
+// Alpha India Mission Control API
+// Sprint 33.4 (Stable Enterprise Version)
+// Compatible with Sprint 32 Home + Sprint 33 Mission Control
+// =======================================================
+
+import type {
+  MonitoringHeartbeat,
+  WarehouseSummary,
+  DiscoveryStatus,
+  AuditBackfillStatus,
+  MissionControlStatus,
+  DiscoveryQueueSummary,
+} from "@/types/monitoring";
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-/* ============================================================
-   Alpha India Monitoring API
-   Sprint 33.3 — Mission Control
-   Backend Compatible: v0.9.5+
-============================================================ */
+// =======================================================
+// Generic Request Helper
+// =======================================================
 
-// -------------------- Interfaces --------------------
-
-export interface HeartbeatStatus {
-  status: string;
-  engine: string;
-  collector_status: string;
-  last_scan: string | null;
-  next_scan: string | null;
-  scan_interval_seconds: number;
-  companies_scanned_today: number;
-  results_found_today: number;
-  pdf_downloaded_today: number;
-  parser_failures_today: number;
-}
-
-export interface DiscoveryStatus {
-  engine_status: string;
-  current_session: string;
-  next_scan_time: string | null;
-  last_scan_time: string | null;
-  companies_scanned_today: number;
-  results_found_today: number;
-  parser_failures_today: number;
-}
-
-export interface DiscoveryQueueItem {
-  id?: number;
-  symbol: string;
-  company_name?: string;
-  exchange?: string;
-  status: string;
-  discovered_at?: string;
-  updated_at?: string;
-}
-
-export interface DiscoveryQueueResponse {
-  pending: number;
-  completed: number;
-  running: number;
-  total: number;
-  queue: DiscoveryQueueItem[];
-}
-
-export interface WarehouseStatus {
-  total_companies: number;
-  imported_companies: number;
-  pending_companies: number;
-  failed_companies: number;
-  quarterly_records: number;
-  coverage_percent: number;
-}
-
-export interface AuditStatus {
-  running: boolean;
-  thread_alive: boolean;
-  progress_percent: number;
-  processed: number;
-  passed: number;
-  warning: number;
-  failed: number;
-  total: number;
-  started_at: string | null;
-  last_symbol: string | null;
-  last_error?: string | null;
-}
-
-export interface ImportEngineStatus {
-  running: boolean;
-  thread_alive?: boolean;
-  processed: number;
-  imported: number;
-  skipped: number;
-  failed: number;
-  pending: number;
-  total: number;
-  started_at?: string | null;
-  last_symbol?: string | null;
-}
-
-export interface EngineResponse {
-  running: boolean;
-  batch_size?: number;
-  sleep_seconds?: number;
-  message?: string;
-}
-
-// -------------------- Generic Request --------------------
-
-async function request<T>(
-  endpoint: string,
-  method: "GET" | "POST" = "GET"
-): Promise<T> {
+async function request<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
-    method,
     cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-    },
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error(`Monitoring API Error (${response.status})`, error);
-    throw new Error(`API Error (${response.status})`);
+    throw new Error(`API Error (${response.status}): ${endpoint}`);
   }
 
   return response.json();
 }
 
-// -------------------- Heartbeat --------------------
+// =======================================================
+// HEARTBEAT
+// GET /system/heartbeat
+// =======================================================
 
-export const fetchHeartbeat = () =>
-  request<HeartbeatStatus>("/system/heartbeat");
+export async function fetchHeartbeat(): Promise<MonitoringHeartbeat> {
+  return request("/system/heartbeat");
+}
 
-// -------------------- Discovery Engine --------------------
+// =======================================================
+// WAREHOUSE SUMMARY
+// GET /import-dashboard/summary
+// Supports Sprint 32 + Sprint 33 response formats.
+// =======================================================
 
-export const fetchDiscoveryStatus = () =>
-  request<DiscoveryStatus>("/discovery/status");
+// =======================================================
+// WAREHOUSE SUMMARY
+// GET /import-dashboard/summary
+// Compatible with current backend payload.
+// =======================================================
 
-export const fetchDiscoveryQueue = () =>
-  request<DiscoveryQueueResponse>("/discovery/queue");
+export async function fetchWarehouseSummary(): Promise<WarehouseSummary> {
+  const data: any = await request("/import-dashboard/summary");
 
-export const bootstrapDiscoveryQueue = () =>
-  request("/discovery/bootstrap", "POST");
+  // Sprint 33 nested response
+  if (data?.warehouse) {
+    return data;
+  }
 
-export const runNextDiscovery = () =>
-  request("/discovery/run-next", "POST");
-
-// -------------------- Warehouse --------------------
-
-export async function fetchWarehouseStatus(): Promise<WarehouseStatus> {
-  const data: any = await request("/financials/status");
+  // Current backend flat response
+  const totalCompanies = data.total_companies ?? 0;
+  const importedCompanies = data.imported_companies ?? 0;
 
   return {
-    total_companies:
-      data.total_companies ??
-      data.total ??
-      data.universe_companies ??
-      8588,
+    warehouse: {
+      total_companies: totalCompanies,
+      imported_companies: importedCompanies,
 
-    imported_companies:
-      data.imported_companies ??
-      data.completed ??
-      data.imported ??
-      0,
+      // Calculate values because backend doesn't send them.
+      pending_companies: Math.max(totalCompanies - importedCompanies, 0),
 
-    pending_companies:
-      data.pending_companies ??
-      data.pending ??
-      0,
+      coverage_percent:
+        totalCompanies === 0
+          ? 0
+          : (importedCompanies / totalCompanies) * 100,
 
-    failed_companies:
-      data.failed_companies ??
-      data.failed ??
-      0,
+      quarterly_records: data.filings_discovered ?? 0,
+    },
 
-    quarterly_records:
-      data.quarterly_records ??
-      data.financial_records ??
-      data.records ??
-      0,
-
-    coverage_percent:
-      data.coverage_percent ??
-      data.coverage ??
-      0,
+    audit: {
+      total_audited: data.ai_scores_generated ?? 0,
+      pass: data.ai_scores_generated ?? 0,
+      warning: 0,
+      fail: 0,
+    },
   };
 }
 
-// -------------------- Import Engine --------------------
+// =======================================================
+// DISCOVERY ENGINE STATUS
+// GET /discovery/status
+// =======================================================
 
-export const fetchImportEngineStatus = () =>
-  request<ImportEngineStatus>("/financials/engine/status");
-
-export function startImportEngine(batch = 5, sleep = 2) {
-  return request<EngineResponse>(
-    `/financials/engine/start?batch_size=${batch}&sleep_seconds=${sleep}`,
-    "POST"
-  );
+export async function fetchDiscoveryStatus(): Promise<DiscoveryStatus> {
+  return request("/discovery/status");
 }
 
-export const stopImportEngine = () =>
-  request<EngineResponse>("/financials/engine/stop", "POST");
+// =======================================================
+// AUDIT BACKFILL ENGINE
+// GET /financials/audit/backfill/status
+// =======================================================
 
-// -------------------- Audit Engine --------------------
-
-export const fetchAuditStatus = () =>
-  request<AuditStatus>("/financials/audit/backfill/status");
-
-export function startAuditEngine(batch = 25, sleep = 1) {
-  return request<EngineResponse>(
-    `/financials/audit/backfill/start?batch_size=${batch}&sleep_seconds=${sleep}`,
-    "POST"
-  );
+export async function fetchAuditBackfillStatus(): Promise<AuditBackfillStatus> {
+  return request("/financials/audit/backfill/status");
 }
 
-export const stopAuditEngine = () =>
-  request<EngineResponse>("/financials/audit/backfill/stop", "POST");
+// =======================================================
+// MISSION CONTROL
+// Combined backend payload for /monitoring
+// =======================================================
 
-// -------------------- Combined Dashboard --------------------
-
-export interface MonitoringDashboard {
-  heartbeat: HeartbeatStatus;
-  discovery: DiscoveryStatus;
-  warehouse: WarehouseStatus;
-  audit: AuditStatus;
-  importEngine: ImportEngineStatus;
-}
-
-export async function fetchMonitoringDashboard(): Promise<MonitoringDashboard> {
-  const [heartbeat, discovery, warehouse, audit, importEngine] =
-    await Promise.all([
-      fetchHeartbeat(),
-      fetchDiscoveryStatus(),
-      fetchWarehouseStatus(),
-      fetchAuditStatus(),
-      fetchImportEngineStatus(),
-    ]);
+export async function fetchMissionControlStatus(): Promise<MissionControlStatus> {
+  const [heartbeat, warehouse, discovery, audit] = await Promise.all([
+    fetchHeartbeat(),
+    fetchWarehouseSummary(),
+    fetchDiscoveryStatus(),
+    fetchAuditBackfillStatus(),
+  ]);
 
   return {
     heartbeat,
-    discovery,
     warehouse,
+    discovery,
     audit,
-    importEngine,
   };
 }
 
-// -------------------- Helpers --------------------
+// =======================================================
+// DISCOVERY QUEUE SUMMARY
+// GET /discovery/queue
+// Current backend returns queue counters only.
+// =======================================================
 
-export function getEngineColor(status?: string) {
-  if (!status) return "gray";
-
-  const value = status.toUpperCase();
-
-  if (
-    value.includes("ONLINE") ||
-    value.includes("RUNNING") ||
-    value.includes("READY") ||
-    value.includes("ACTIVE")
-  ) {
-    return "emerald";
-  }
-
-  if (value.includes("WARNING") || value.includes("PAUSED")) {
-    return "amber";
-  }
-
-  if (value.includes("FAIL") || value.includes("STOP")) {
-    return "red";
-  }
-
-  return "gray";
+export async function fetchDiscoveryQueueSummary(): Promise<DiscoveryQueueSummary> {
+  return request("/discovery/queue");
 }
+
+// =======================================================
+// AUDIT ENGINE CONTROLS
+// =======================================================
+
+export async function startAuditBackfill(
+  batchSize = 25,
+  sleepSeconds = 1
+) {
+  const response = await fetch(
+    `${API_BASE}/financials/audit/backfill/start?batch_size=${batchSize}&sleep_seconds=${sleepSeconds}`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to start Audit Backfill Engine.");
+  }
+
+  return response.json();
+}
+
+export async function stopAuditBackfill() {
+  const response = await fetch(
+    `${API_BASE}/financials/audit/backfill/stop`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to stop Audit Backfill Engine.");
+  }
+
+  return response.json();
+}
+
+// =======================================================
+// SPRINT 32 BACKWARD COMPATIBILITY
+// Used by existing Home Page and MonitoringRibbon.
+// =======================================================
+
+// =======================================================
+// Warehouse Status (Sprint 32 + Sprint 33 Compatible)
+// =======================================================
+
+// =======================================================
+// Warehouse Status (Used by MonitoringRibbon)
+// =======================================================
+
+export async function fetchWarehouseStatus() {
+  const summary = await fetchWarehouseSummary();
+
+  return {
+    total_companies: summary.warehouse.total_companies,
+    imported_companies: summary.warehouse.imported_companies,
+    pending_companies: summary.warehouse.pending_companies,
+    coverage_percent: summary.warehouse.coverage_percent,
+    quarterly_records: summary.warehouse.quarterly_records,
+  };
+}
+// Audit Status (MonitoringRibbon)
+
+export async function fetchAuditStatus() {
+  return fetchAuditBackfillStatus();
+}
+
+// Legacy names retained.
+
+export async function startAuditEngine(
+  batchSize = 25,
+  sleepSeconds = 1
+) {
+  return startAuditBackfill(batchSize, sleepSeconds);
+}
+
+export async function stopAuditEngine() {
+  return stopAuditBackfill();
+}
+
+// =======================================================
+// SPRINT 33 HELPERS
+// =======================================================
+
+export interface MonitoringDashboard extends MissionControlStatus {}
+
+export async function fetchMonitoringDashboard(): Promise<MonitoringDashboard> {
+  return fetchMissionControlStatus();
+}
+
+// Date formatter used across Mission Control.
 
 export function formatDateTime(value?: string | null) {
   if (!value) return "--";
 
   try {
     return new Date(value).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+      dateStyle: "medium",
+      timeStyle: "medium",
     });
   } catch {
     return value;
   }
+}
+// =======================================================
+// Mission Control Queue Types
+// Sprint 33.4 Phase 4C.2
+// =======================================================
+
+export interface MissionControlQueueRow {
+  symbol: string;
+  company: string;
+  exchange: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  filings_discovered: number;
+  updated_at: string | null;
+}
+
+export interface MissionControlQueueResponse {
+  success: boolean;
+  summary: {
+    pending: number;
+    completed: number;
+    running: number;
+    total: number;
+  };
+  page: number;
+  limit: number;
+  total_pages: number;
+  search: string;
+  status_filter: string;
+  results: MissionControlQueueRow[];
+}
+// =======================================================
+// Mission Control Queue API
+// Sprint 33.4 Phase 4C.2
+// =======================================================
+
+export async function fetchMissionControlQueue(
+  page = 1,
+  limit = 50,
+  search = "",
+  status = "ALL"
+): Promise<MissionControlQueueResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    search,
+    status,
+  });
+
+  const response = await fetch(
+    `${API_BASE}/mission-control/queue?${params.toString()}`,
+    {
+      cache: "no-store",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch Mission Control Queue.");
+  }
+
+  return response.json();
 }

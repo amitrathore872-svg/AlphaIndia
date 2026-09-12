@@ -1,377 +1,307 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  Activity,
-  Database,
-  ShieldCheck,
-  Brain,
-  Clock,
-  Building2,
-  FileText,
-  AlertTriangle,
-  RefreshCcw,
-} from "lucide-react";
+// =======================================================
+// Alpha India Mission Control
+// Sprint 33.4 Phase 4C.2.2
+// Live Queue Integration
+// =======================================================
 
+import { useEffect, useState } from "react";
+
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import MonitoringRibbon from "@/components/layout/MonitoringRibbon";
 
+import MissionHeader from "@/components/layout/monitoring/MissionHeader";
+import EngineGrid from "@/components/layout/monitoring/EngineGrid";
+import ScannerTimeline from "@/components/layout/monitoring/ScannerTimeline";
+import DiscoveryQueueDashboard from "@/components/layout/monitoring/DiscoveryQueueDashboard";
+import DiscoveryToolbar from "@/components/layout/monitoring/DiscoveryToolbar";
+import DiscoveryQueueTable from "@/components/layout/monitoring/DiscoveryQueueTable";
+
 import {
-  fetchMonitoringDashboard,
-  fetchDiscoveryQueue,
-  formatDateTime,
-  MonitoringDashboard,
-  DiscoveryQueueItem,
+  fetchMissionControlStatus,
+  fetchMissionControlQueue,
+  type MissionControlQueueRow,
 } from "@/lib/monitoringApi";
 
-export default function MonitoringPage() {
-  const [dashboard, setDashboard] =
-    useState<MonitoringDashboard | null>(null);
+import type { MissionControlStatus } from "@/types/monitoring";
 
-  const [queue, setQueue] = useState<DiscoveryQueueItem[]>([]);
+export default function MonitoringPage() {
+  // =====================================================
+  // Mission Control State
+  // =====================================================
+
+  const [status, setStatus] = useState<MissionControlStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function loadDashboard() {
-    try {
-      const [status, queueResponse] = await Promise.all([
-        fetchMonitoringDashboard(),
-        fetchDiscoveryQueue(),
-      ]);
+  // Discovery Queue
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
-      setDashboard(status);
-      setQueue(queueResponse.queue ?? []);
-    } catch (err) {
-      console.error("Mission Control failed:", err);
+  const [queueRows, setQueueRows] = useState<MissionControlQueueRow[]>([]);
+  const [queuePage, setQueuePage] = useState(1);
+  const [queueTotalPages, setQueueTotalPages] = useState(1);
+
+  // =====================================================
+  // Load Mission Control Dashboard
+  // =====================================================
+
+  async function loadMissionControl() {
+    try {
+      const data = await fetchMissionControlStatus();
+      setStatus(data);
+    } catch (error) {
+      console.error("Mission Control:", error);
     } finally {
       setLoading(false);
     }
   }
 
+  // =====================================================
+  // Load Discovery Queue
+  // =====================================================
+
+  async function loadQueue() {
+    try {
+      const data = await fetchMissionControlQueue(
+        queuePage,
+        50,
+        search,
+        statusFilter
+      );
+
+      setQueueRows(data.results);
+      setQueueTotalPages(data.total_pages);
+    } catch (error) {
+      console.error("Discovery Queue:", error);
+      setQueueRows([]);
+    }
+  }
+
+  // =====================================================
+  // Auto Refresh Every 5 Seconds
+  // =====================================================
+
   useEffect(() => {
-    loadDashboard();
+    loadMissionControl();
+    loadQueue();
 
-    const timer = setInterval(loadDashboard, 5000);
+    const interval = setInterval(() => {
+      loadMissionControl();
+      loadQueue();
+    }, 5000);
 
-    return () => clearInterval(timer);
-  }, []);
+    return () => clearInterval(interval);
+  }, [queuePage, search, statusFilter]);
+
+  // =====================================================
+  // Render
+  // =====================================================
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white p-6 space-y-6">
-
-      {/* Mission Header */}
-      <section className="rounded-3xl bg-gradient-to-r from-emerald-900 via-slate-900 to-cyan-900 p-6 border border-emerald-700 shadow-xl">
-        <div className="flex flex-wrap justify-between gap-4">
-
-          <div>
-            <p className="text-xs uppercase tracking-widest text-emerald-300">
-              Alpha India v3.0
-            </p>
-
-            <h1 className="text-3xl font-bold text-white mt-2">
-              Mission Control
-            </h1>
-
-            <p className="text-slate-300 mt-2">
-              Live NSE / BSE Monitoring & Financial Warehouse Operations Center
-            </p>
-          </div>
-
-          <div className="text-right">
-            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-2 border border-emerald-500">
-              <Activity className="h-4 w-4 text-emerald-400" />
-              <span className="text-sm font-medium text-emerald-300">
-                {dashboard?.heartbeat.status ?? "OFFLINE"}
-              </span>
-            </div>
-
-            <p className="mt-4 text-sm text-slate-300">
-              Session:{" "}
-              <span className="text-cyan-300">
-                {dashboard?.discovery.current_session ?? "--"}
-              </span>
-            </p>
-
-            <p className="text-xs text-slate-400">
-              Last Scan:{" "}
-              {formatDateTime(dashboard?.heartbeat.last_scan)}
-            </p>
-          </div>
-
-        </div>
-      </section>
-
-      {/* Monitoring Ribbon */}
+    <DashboardLayout>
       <MonitoringRibbon />
 
-      {/* Engine Status */}
-      <section className="grid md:grid-cols-4 gap-4">
+      <div className="space-y-8 p-6">
+        {loading || !status ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-10 text-center text-slate-400">
+            Loading Mission Control...
+          </div>
+        ) : (
+          <>
+            {/* =================================================== */}
+            {/* Phase 1 — Mission Header */}
+            {/* =================================================== */}
 
-        <EngineCard
-          icon={<Activity className="text-green-400" />}
-          title="Discovery Engine"
-          value={dashboard?.discovery.engine_status ?? "--"}
-          subtitle="Live Scanner"
-        />
+            <MissionHeader status={status} />
 
-        <EngineCard
-          icon={<Database className="text-cyan-400" />}
-          title="Financial Engine"
-          value={dashboard?.importEngine.running ? "RUNNING" : "STOPPED"}
-          subtitle="Quarterly Import"
-        />
+            {/* =================================================== */}
+            {/* Phase 2 — Live Engine Grid */}
+            {/* =================================================== */}
 
-        <EngineCard
-          icon={<ShieldCheck className="text-yellow-400" />}
-          title="Audit Engine"
-          value={dashboard?.audit.running ? "RUNNING" : "STOPPED"}
-          subtitle="Health Validation"
-        />
+            <EngineGrid status={status} />
 
-        <EngineCard
-          icon={<Brain className="text-purple-400" />}
-          title="AI Growth Engine"
-          value="READY"
-          subtitle="Growth Ranking"
-        />
+            {/* =================================================== */}
+            {/* Phase 3 — Scanner Timeline */}
+            {/* =================================================== */}
 
-      </section>
+            <ScannerTimeline status={status} />
 
-      {/* KPI Section */}
-      <section className="grid md:grid-cols-4 gap-4">
+            {/* =================================================== */}
+            {/* Phase 4 — Queue Summary Dashboard */}
+            {/* =================================================== */}
 
-        <KpiCard
-          icon={<Building2 className="text-green-400" />}
-          label="Companies Scanned Today"
-          value={dashboard?.heartbeat.companies_scanned_today ?? 0}
-        />
+            <DiscoveryQueueDashboard />
 
-        <KpiCard
-          icon={<FileText className="text-blue-400" />}
-          label="Results Found Today"
-          value={dashboard?.heartbeat.results_found_today ?? 0}
-        />
+            {/* =================================================== */}
+            {/* Discovery Queue Toolbar */}
+            {/* =================================================== */}
 
-        <KpiCard
-          icon={<Database className="text-cyan-400" />}
-          label="Quarterly Records"
-          value={dashboard?.warehouse.quarterly_records ?? 0}
-        />
+            <DiscoveryToolbar
+              search={search}
+              setSearch={setSearch}
+              status={statusFilter}
+              setStatus={setStatusFilter}
+              total={status.warehouse.warehouse.total_companies}
+              onRefresh={() => {
+                loadMissionControl();
+                loadQueue();
+              }}
+            />
 
-        <KpiCard
-          icon={<AlertTriangle className="text-red-400" />}
-          label="Parser Failures"
-          value={dashboard?.heartbeat.parser_failures_today ?? 0}
-        />
+            {/* =================================================== */}
+            {/* Discovery Queue Table */}
+            {/* =================================================== */}
 
-      </section>
+            <DiscoveryQueueTable
+              rows={queueRows}
+              search={search}
+              statusFilter={statusFilter}
+            />
 
-      {/* Warehouse Progress */}
-      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+            {/* =================================================== */}
+            {/* Queue Pagination */}
+            {/* =================================================== */}
 
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold text-cyan-300">
-            Financial Warehouse Coverage
-          </h2>
+            <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 px-5 py-4">
+              <div className="text-sm text-slate-400">
+                Showing page{" "}
+                <span className="font-semibold text-white">{queuePage}</span>{" "}
+                of{" "}
+                <span className="font-semibold text-white">
+                  {queueTotalPages}
+                </span>
+              </div>
 
-          <RefreshCcw className="h-5 w-5 text-slate-500" />
-        </div>
-
-        <div className="flex justify-between text-sm text-slate-300">
-          <span>
-            {dashboard?.warehouse.imported_companies ?? 0} Imported
-          </span>
-
-          <span>
-            {dashboard?.warehouse.total_companies ?? 0} Universe
-          </span>
-        </div>
-
-        <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
-          <div
-            className="h-3 rounded-full bg-gradient-to-r from-green-500 to-cyan-400 transition-all duration-500"
-            style={{
-              width: `${dashboard?.warehouse.coverage_percent ?? 0}%`,
-            }}
-          />
-        </div>
-
-        <p className="text-right text-green-400 font-semibold">
-          {(dashboard?.warehouse.coverage_percent ?? 0).toFixed(2)}%
-        </p>
-
-      </section>
-
-      {/* Discovery Queue */}
-      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-
-        <h2 className="text-xl font-bold text-emerald-300 mb-5">
-          Live Discovery Queue
-        </h2>
-
-        <div className="overflow-auto rounded-xl border border-slate-800">
-
-          <table className="w-full text-sm">
-            <thead className="bg-slate-950 text-slate-400">
-              <tr>
-                <th className="p-3 text-left">SYMBOL</th>
-                <th className="p-3 text-left">EXCHANGE</th>
-                <th className="p-3 text-left">STATUS</th>
-                <th className="p-3 text-left">UPDATED</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {queue.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="text-center text-slate-500 p-6"
-                  >
-                    Loading Queue...
-                  </td>
-                </tr>
-              )}
-
-              {queue.slice(0, 25).map((item, index) => (
-                <tr
-                  key={index}
-                  className="border-t border-slate-800 hover:bg-slate-800/40"
+              <div className="flex gap-3">
+                <button
+                  disabled={queuePage === 1}
+                  onClick={() =>
+                    setQueuePage((prev) => Math.max(prev - 1, 1))
+                  }
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <td className="p-3 font-medium text-cyan-300">
-                    {item.symbol}
-                  </td>
+                  Previous
+                </button>
 
-                  <td className="p-3">
-                    {item.exchange ?? "NSE"}
-                  </td>
+                <button
+                  disabled={queuePage >= queueTotalPages}
+                  onClick={() =>
+                    setQueuePage((prev) =>
+                      Math.min(prev + 1, queueTotalPages)
+                    )
+                  }
+                  className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
 
-                  <td className="p-3">
-                    <StatusBadge status={item.status} />
-                  </td>
+            {/* =================================================== */}
+            {/* Live Metrics Snapshot */}
+            {/* =================================================== */}
 
-                  <td className="p-3 text-slate-400 text-xs">
-                    {formatDateTime(item.updated_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">
+                    Live Metrics
+                  </p>
 
-          </table>
+                  <h2 className="mt-2 text-2xl font-bold text-white">
+                    Mission Control Snapshot
+                  </h2>
 
-        </div>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Real-time operational metrics from Alpha India backend.
+                  </p>
+                </div>
 
-      </section>
+                <div className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+                  AUTO REFRESH • 5 SEC
+                </div>
+              </div>
 
-      {/* Audit Summary */}
-      <section className="grid md:grid-cols-4 gap-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard
+                  title="System Status"
+                  value={status.heartbeat.status}
+                  color="text-emerald-400"
+                />
 
-        <AuditCard
-          label="PASS"
-          value={dashboard?.audit.passed ?? 0}
-          color="text-green-400"
-        />
+                <MetricCard
+                  title="Market Session"
+                  value={status.discovery.current_session}
+                  color="text-sky-400"
+                />
 
-        <AuditCard
-          label="WARNING"
-          value={dashboard?.audit.warning ?? 0}
-          color="text-yellow-400"
-        />
+                <MetricCard
+                  title="Last Scan Time"
+                  value={status.heartbeat.last_scan}
+                  color="text-amber-400"
+                />
 
-        <AuditCard
-          label="FAIL"
-          value={dashboard?.audit.failed ?? 0}
-          color="text-red-400"
-        />
+                <MetricCard
+                  title="Next Scan Time"
+                  value={status.heartbeat.next_scan}
+                  color="text-violet-400"
+                />
 
-        <AuditCard
-          label="Processed"
-          value={dashboard?.audit.processed ?? 0}
-          color="text-cyan-400"
-        />
+                <MetricCard
+                  title="Companies Scanned Today"
+                  value={status.heartbeat.companies_scanned_today.toLocaleString()}
+                  color="text-cyan-400"
+                />
 
-      </section>
+                <MetricCard
+                  title="Results Found Today"
+                  value={status.heartbeat.results_found_today.toLocaleString()}
+                  color="text-emerald-400"
+                />
 
-      {/* Footer */}
-      <footer className="rounded-3xl bg-slate-900 border border-slate-800 p-5 flex flex-wrap justify-between text-sm text-slate-400 gap-3">
+                <MetricCard
+                  title="PDF Downloaded Today"
+                  value={status.heartbeat.pdf_downloaded_today.toLocaleString()}
+                  color="text-indigo-400"
+                />
 
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-cyan-400" />
-          Refreshing every 5 seconds
-        </div>
-
-        <div>
-          Next Scan:{" "}
-          {formatDateTime(dashboard?.heartbeat.next_scan)}
-        </div>
-
-      </footer>
-
-    </main>
+                <MetricCard
+                  title="Parser Failures Today"
+                  value={status.heartbeat.parser_failures_today.toLocaleString()}
+                  color="text-red-400"
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }
 
-/* -------------------------------- Components ------------------------------ */
+// =======================================================
+// Reusable Metric Card
+// =======================================================
 
-function EngineCard({
-  icon,
+function MetricCard({
   title,
   value,
-  subtitle,
-}: any) {
+  color,
+}: {
+  title: string;
+  value: string;
+  color: string;
+}) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3">
-      <div className="flex items-center justify-between">
-        {icon}
-      </div>
-
-      <h3 className="text-sm text-slate-400">{title}</h3>
-
-      <p className="text-xl font-bold">{value}</p>
-
-      <p className="text-xs text-slate-500">{subtitle}</p>
-    </div>
-  );
-}
-
-function KpiCard({ icon, label, value }: any) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <div className="flex items-center gap-3 text-slate-400">
-        {icon}
-        <span className="text-xs">{label}</span>
-      </div>
-
-      <p className="mt-4 text-3xl font-bold text-white">
-        {Number(value).toLocaleString()}
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 transition-all hover:border-slate-700">
+      <p className="text-xs uppercase tracking-wider text-slate-500">
+        {title}
       </p>
-    </div>
-  );
-}
 
-function AuditCard({ label, value, color }: any) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-center">
-      <p className="text-xs text-slate-400">{label}</p>
-
-      <p className={`mt-3 text-3xl font-bold ${color}`}>
+      <p className={`mt-3 break-all text-lg font-semibold ${color}`}>
         {value}
       </p>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const color =
-    status === "COMPLETED"
-      ? "bg-green-500/20 text-green-400 border-green-500"
-      : status === "RUNNING"
-      ? "bg-cyan-500/20 text-cyan-400 border-cyan-500"
-      : status === "FAILED"
-      ? "bg-red-500/20 text-red-400 border-red-500"
-      : "bg-yellow-500/20 text-yellow-400 border-yellow-500";
-
-  return (
-    <span className={`px-2 py-1 rounded-full border text-xs ${color}`}>
-      {status}
-    </span>
   );
 }

@@ -2,7 +2,7 @@
 
 // =======================================================
 // Alpha India Dashboard
-// Sprint 32.8.1
+// Sprint 32.8.1 (Stable)
 // Growth Screener PRO Dashboard
 // =======================================================
 
@@ -22,10 +22,6 @@ import {
 } from "@/lib/api";
 
 export default function HomePage() {
-  // =====================================================
-  // State
-  // =====================================================
-
   const [companies, setCompanies] = useState<GrowthCompany[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,10 +32,6 @@ export default function HomePage() {
 
   const limit = 25;
 
-  // =====================================================
-  // Load Screener
-  // =====================================================
-
   useEffect(() => {
     loadCompanies(search);
   }, [page]);
@@ -48,11 +40,7 @@ export default function HomePage() {
     setLoading(true);
 
     try {
-      const data = await fetchGrowthScreener(
-        page,
-        limit,
-        searchValue
-      );
+      const data = await fetchGrowthScreener(page, limit, searchValue);
 
       setCompanies(data.results);
       setTotalCompanies(data.total);
@@ -65,27 +53,15 @@ export default function HomePage() {
     }
   }
 
-  // =====================================================
-  // Search
-  // =====================================================
-
   function handleSearch() {
     setPage(1);
     loadCompanies(search);
   }
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalCompanies / limit)
-  );
-
-  // =====================================================
-  // Render
-  // =====================================================
+  const totalPages = Math.max(1, Math.ceil(totalCompanies / limit));
 
   return (
     <DashboardLayout>
-
       {/* Bloomberg Market Ribbon */}
       <MarketTicker />
 
@@ -110,16 +86,9 @@ export default function HomePage() {
         totalPages={totalPages}
         totalCompanies={totalCompanies}
         limit={limit}
-        onPrevious={() =>
-          setPage((prev) => Math.max(prev - 1, 1))
-        }
-        onNext={() =>
-          setPage((prev) =>
-            Math.min(prev + 1, totalPages)
-          )
-        }
+        onPrevious={() => setPage((prev) => Math.max(prev - 1, 1))}
+        onNext={() => setPage((prev) => Math.min(prev + 1, totalPages))}
       />
-
     </DashboardLayout>
   );
 }
