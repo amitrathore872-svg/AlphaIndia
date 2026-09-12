@@ -1,6 +1,5 @@
 # backend/app/api/downloads.py
 
-```python
 """
 Alpha India Download API
 Sprint 29.2.2 — Bronze Layer Download Endpoints (Production)
@@ -195,4 +194,3 @@ def download_health(db: Session = Depends(get_db)):
         "completion_percent": completion,
         "statistics": stats,
     }
-```

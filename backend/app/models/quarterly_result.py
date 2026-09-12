@@ -1,53 +1,53 @@
+"""
+Alpha India Quarterly Financial Warehouse
+Sprint 30.2 Production Model
+"""
+
 from datetime import datetime
 
-from sqlalchemy import (
-    Column,
-    Integer,
-    Float,
-    String,
-    Date,
-    DateTime,
-    ForeignKey,
-)
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
 
 class QuarterlyResult(Base):
-    """
-    Alpha India Financial Warehouse
-    Sprint 30.2
-    Quarterly structured financial statements imported from Yahoo Finance.
-    """
-
     __tablename__ = "quarterly_results"
 
     id = Column(Integer, primary_key=True, index=True)
 
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
 
-    # Quarter identity
-    fiscal_period = Column(String(20))     # Q1 FY27
-    period_end = Column(Date)
+    # ----------------------------------------------------------------
+    # Legacy Compatibility
+    # ----------------------------------------------------------------
+    quarter = Column(String(20), nullable=False)
+
+    # ----------------------------------------------------------------
+    # Financial Warehouse
+    # ----------------------------------------------------------------
+    fiscal_period = Column(String(20), index=True)
+    period_end = Column(Date, index=True)
     result_date = Column(Date)
 
-    # Core financial metrics
     revenue = Column(Float)
+    operating_income = Column(Float)
     net_profit = Column(Float)
     eps = Column(Float)
 
-    # Banking metrics
     interest_income = Column(Float)
     interest_expense = Column(Float)
     net_interest_income = Column(Float)
 
-    # Balance sheet metrics
+    total_assets = Column(Float)
     total_equity = Column(Float)
     total_debt = Column(Float)
+
     book_value = Column(Float)
 
-    # Growth metrics
+    operating_cash_flow = Column(Float)
+    free_cash_flow = Column(Float)
+
     revenue_growth = Column(Float)
     pat_growth = Column(Float)
     roce = Column(Float)

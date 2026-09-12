@@ -5,6 +5,7 @@ from app.models.system_setting import SystemSetting
 from app.models.quarterly_result import QuarterlyResult
 from app.models.announcement import Announcement
 from app.models.filing_registry import FilingRegistry
+from app.models.financial_import_audit import FinancialImportAudit
 
 __all__ = [
     "Company",

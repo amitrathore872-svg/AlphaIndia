@@ -9,6 +9,7 @@ from app.models.quarterly_result import QuarterlyResult
 from app.models.announcement import Announcement
 from app.models.filing_registry import FilingRegistry
 from app.models.monitoring_heartbeat import MonitoringHeartbeat
+from app.models.financial_import_queue import FinancialImportQueue
 
 # ---------------- API Routers ----------------
 from app.api.companies import router as companies_router
@@ -19,6 +20,7 @@ from app.api.system import router as system_router
 from app.api.discovery import router as discovery_router
 from app.api.filings import router as filings_router
 from app.api.downloads import router as downloads_router
+from app.api.financials import router as financials_router
 
 
 
@@ -52,6 +54,7 @@ app.include_router(system_router)
 app.include_router(discovery_router)
 app.include_router(filings_router)
 app.include_router(downloads_router)
+app.include_router(financials_router)
 
 # ==========================================================
 # Root Endpoint

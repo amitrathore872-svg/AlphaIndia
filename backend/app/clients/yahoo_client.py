@@ -2,45 +2,62 @@
 
 """
 Alpha India Yahoo Finance Client
-Sprint 30.1 — Production Financial Client
-Version: v1.0.1
+Sprint 31.2 — Production Financial Client
+Version: v1.1.0
 """
 
 from __future__ import annotations
 
 import time
+from functools import lru_cache
 from typing import Dict
 
 import pandas as pd
 import yfinance as yf
 
+from app.services.yahoo_symbol_resolver import YahooSymbolResolver
+
 
 class YahooClient:
     """
     Production Yahoo Finance Client for Alpha India.
-    Fetches structured financial statements from Yahoo Finance.
+
+    Features
+    --------
+    • Automatic NSE/BSE ticker resolution.
+    • Retry mechanism.
+    • Cached Yahoo ticker lookup.
+    • Graceful handling of missing quarterly cash flow.
     """
 
     RETRIES = 3
     RETRY_DELAY = 2
 
     # ---------------------------------------------------------
-    # Symbol Converter
+    # Resolve Yahoo Symbol (.NS / .BO)
     # ---------------------------------------------------------
     @staticmethod
-    def to_symbol(symbol: str) -> str:
-        symbol = symbol.upper().strip()
+    @lru_cache(maxsize=10000)
+    def resolve_symbol(symbol: str) -> str:
 
-        if symbol.endswith(".NS"):
-            return symbol
+        resolved = YahooSymbolResolver.resolve(symbol)
 
-        return f"{symbol}.NS"
+        if resolved is None:
+            raise ValueError(
+                f"No Yahoo Finance ticker found for {symbol}"
+            )
+
+        return resolved
 
     # ---------------------------------------------------------
     # Yahoo Ticker
     # ---------------------------------------------------------
-    def ticker(self, symbol: str) -> yf.Ticker:
-        return yf.Ticker(self.to_symbol(symbol))
+    @classmethod
+    @lru_cache(maxsize=10000)
+    def ticker(cls, symbol: str) -> yf.Ticker:
+
+        yahoo_symbol = cls.resolve_symbol(symbol)
+        return yf.Ticker(yahoo_symbol)
 
     # ---------------------------------------------------------
     # Company Info
@@ -54,6 +71,7 @@ class YahooClient:
 
             return {
                 "symbol": symbol.upper(),
+                "yahoo_symbol": ticker.ticker,
                 "name": info.get("longName"),
                 "sector": info.get("sector"),
                 "industry": info.get("industry"),
@@ -65,6 +83,7 @@ class YahooClient:
         except Exception:
             return {
                 "symbol": symbol.upper(),
+                "yahoo_symbol": None,
                 "name": None,
                 "sector": None,
                 "industry": None,
@@ -88,7 +107,11 @@ class YahooClient:
     # ---------------------------------------------------------
     # Internal Downloader
     # ---------------------------------------------------------
-    def _download_dataframe(self, symbol: str, dataset: str) -> pd.DataFrame:
+    def _download_dataframe(
+        self,
+        symbol: str,
+        dataset: str,
+    ) -> pd.DataFrame:
 
         ticker = self.ticker(symbol)
 
@@ -108,7 +131,8 @@ class YahooClient:
                 else:
                     raise ValueError("Unknown dataset requested.")
 
-                # Quarterly cash flow is unavailable for many Indian banks.
+                # Yahoo does not publish quarterly cash flow
+                # for many Indian banks.
                 if df is None or df.empty:
 
                     if dataset == "cashflow":
