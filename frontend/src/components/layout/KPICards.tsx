@@ -2,230 +2,126 @@
 
 import { useEffect, useState } from "react";
 import {
+  Database,
   Building2,
-  CircleCheck,
-  Landmark,
-  BarChart3,
-  Rocket,
-  FileSpreadsheet,
+  FileBarChart,
+  ShieldCheck,
 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import {
+  fetchWarehouseStatus,
+  fetchAuditSummary,
+} from "@/lib/importDashboardApi";
 
-interface DashboardSummary {
+interface WarehouseStatus {
+  warehouse: string;
+  companies_imported: number;
+  quarter_records: number;
+}
+
+interface AuditSummary {
   total_companies: number;
-  active_companies: number;
-  nse_companies: number;
-  bse_companies: number;
+  companies_imported: number;
+  coverage_percent: number;
+  quarter_records: number;
 }
 
 export default function KPICards() {
-  const [summary, setSummary] = useState<DashboardSummary>({
-    total_companies: 0,
-    active_companies: 0,
-    nse_companies: 0,
-    bse_companies: 0,
-  });
-
-  const [loading, setLoading] = useState(true);
+  const [warehouse, setWarehouse] = useState<WarehouseStatus | null>(null);
+  const [audit, setAudit] = useState<AuditSummary | null>(null);
 
   useEffect(() => {
-    loadSummary();
+    loadDashboard();
 
-    const timer = setInterval(loadSummary, 30000);
-    return () => clearInterval(timer);
+    const interval = setInterval(loadDashboard, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  async function loadSummary() {
+  async function loadDashboard() {
     try {
-      const response = await fetch(
-        `${API_URL}/companies/dashboard-summary`,
-        {
-          cache: "no-store",
-        }
-      );
+      const warehouseData = await fetchWarehouseStatus();
+      const auditData = await fetchAuditSummary();
 
-      if (!response.ok) {
-        throw new Error(`API Error (${response.status})`);
-      }
-
-      const data = await response.json();
-
-      // Compatible with Sprint 23 (v0.9.4) and Sprint 28 backend.
-      setSummary({
-        total_companies: data.total_companies ?? data.total ?? 0,
-        active_companies:
-          data.active_companies ??
-          data.total_active ??
-          data.total_companies ??
-          data.total ??
-          0,
-        nse_companies: data.nse_companies ?? data.nse ?? 0,
-        bse_companies: data.bse_companies ?? data.bse ?? 0,
-      });
+      setWarehouse(warehouseData);
+      setAudit(auditData);
     } catch (error) {
-      console.error("Dashboard summary failed:", error);
-
-      setSummary({
-        total_companies: 0,
-        active_companies: 0,
-        nse_companies: 0,
-        bse_companies: 0,
-      });
-    } finally {
-      setLoading(false);
+      console.error("Failed to load dashboard KPIs", error);
     }
   }
 
   const cards = [
     {
-      title: "Total Companies",
-      value: (summary.total_companies ?? 0).toLocaleString(),
-      icon: Building2,
+      title: "WAREHOUSE COVERAGE",
+      value: audit
+        ? `${Number(audit.coverage_percent ?? 0).toFixed(2)}%`
+        : "--",
+      subtitle: "Imported vs Universe",
+      icon: ShieldCheck,
       color: "emerald",
-      subtitle: "NSE + BSE Universe",
     },
     {
-      title: "Active Companies",
-      value: (summary.active_companies ?? 0).toLocaleString(),
-      icon: CircleCheck,
-      color: "green",
-      subtitle: "Currently Listed",
-    },
-    {
-      title: "NSE Listed",
-      value: (summary.nse_companies ?? 0).toLocaleString(),
-      icon: BarChart3,
-      color: "cyan",
-      subtitle: "National Stock Exchange",
-    },
-    {
-      title: "BSE Listed",
-      value: (summary.bse_companies ?? 0).toLocaleString(),
-      icon: Landmark,
+      title: "COMPANIES IMPORTED",
+      value: warehouse
+        ? warehouse.companies_imported.toLocaleString()
+        : "--",
+      subtitle: "Financial Warehouse",
+      icon: Building2,
       color: "blue",
-      subtitle: "Bombay Stock Exchange",
     },
     {
-      title: "Growth Opportunities",
-      value: "128",
-      icon: Rocket,
+      title: "QUARTERLY RECORDS",
+      value: warehouse
+        ? warehouse.quarter_records.toLocaleString()
+        : "--",
+      subtitle: "Financial Statements",
+      icon: FileBarChart,
       color: "amber",
-      subtitle: "AI Growth Score ≥ 80",
     },
     {
-      title: "Results Today",
-      value: "42",
-      icon: FileSpreadsheet,
-      color: "purple",
-      subtitle: "Quarterly Results Today",
+      title: "WAREHOUSE STATUS",
+      value: warehouse?.warehouse ?? "--",
+      subtitle: "Backend Health",
+      icon: Database,
+      color: "emerald",
     },
   ];
 
-  const colorMap = {
-    emerald: {
-      icon: "text-emerald-400",
-      bg: "from-emerald-500/15 to-emerald-700/5",
-      border: "border-emerald-500/20",
-      value: "text-emerald-400",
-    },
-    green: {
-      icon: "text-green-400",
-      bg: "from-green-500/15 to-green-700/5",
-      border: "border-green-500/20",
-      value: "text-green-400",
-    },
-    cyan: {
-      icon: "text-cyan-400",
-      bg: "from-cyan-500/15 to-cyan-700/5",
-      border: "border-cyan-500/20",
-      value: "text-cyan-400",
-    },
-    blue: {
-      icon: "text-blue-400",
-      bg: "from-blue-500/15 to-blue-700/5",
-      border: "border-blue-500/20",
-      value: "text-blue-400",
-    },
-    amber: {
-      icon: "text-amber-400",
-      bg: "from-amber-500/15 to-amber-700/5",
-      border: "border-amber-500/20",
-      value: "text-amber-400",
-    },
-    purple: {
-      icon: "text-purple-400",
-      bg: "from-purple-500/15 to-purple-700/5",
-      border: "border-purple-500/20",
-      value: "text-purple-400",
-    },
+  const colorClasses: Record<string, string> = {
+    emerald:
+      "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+    blue: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+    amber:
+      "border-amber-500/30 bg-amber-500/10 text-amber-400",
   };
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-white">
-            Market Overview
-          </h2>
-          <p className="text-sm text-slate-400">
-            Live statistics from the Alpha India database.
-          </p>
-        </div>
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => {
+        const Icon = card.icon;
 
-        <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-          {loading ? "Updating..." : "LIVE DATABASE"}
-        </div>
-      </div>
+        return (
+          <div
+            key={card.title}
+            className={`rounded-2xl border p-5 ${colorClasses[card.color]}`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold tracking-wider text-slate-400">
+                {card.title}
+              </p>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card) => {
-          const Icon = card.icon;
-          const theme = colorMap[card.color as keyof typeof colorMap];
-
-          return (
-            <div
-              key={card.title}
-              className={`rounded-2xl border ${theme.border}
-                bg-gradient-to-br ${theme.bg}
-                p-5 transition-all duration-300
-                hover:-translate-y-1 hover:border-slate-600 hover:shadow-xl hover:shadow-slate-900/50`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.25em] text-slate-400">
-                    {card.title}
-                  </p>
-
-                  <h3 className={`mt-3 text-4xl font-bold ${theme.value}`}>
-                    {loading ? "--" : card.value}
-                  </h3>
-
-                  <p className="mt-2 text-sm text-slate-400">
-                    {card.subtitle}
-                  </p>
-                </div>
-
-                <div
-                  className={`rounded-2xl border ${theme.border} bg-slate-950/40 p-4`}
-                >
-                  <Icon className={`h-8 w-8 ${theme.icon}`} />
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center justify-between border-t border-slate-800 pt-4">
-                <span className="text-xs text-slate-500">
-                  ALPHA INDIA v0.9.5
-                </span>
-
-                <span className={`text-xs font-semibold ${theme.icon}`}>
-                  {loading ? "Syncing" : "Updated"}
-                </span>
-              </div>
+              <Icon className="h-5 w-5" />
             </div>
-          );
-        })}
-      </div>
+
+            <h3 className="mt-4 text-3xl font-bold text-white">
+              {card.value}
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-400">
+              {card.subtitle}
+            </p>
+          </div>
+        );
+      })}
     </section>
   );
 }

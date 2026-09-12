@@ -3,160 +3,243 @@
 import { useEffect, useState } from "react";
 import {
   Activity,
-  Clock3,
+  ShieldCheck,
+  Database,
   RefreshCcw,
-  CheckCircle2,
-  AlertTriangle,
+  Play,
+  Square,
 } from "lucide-react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import {
+  fetchWarehouseStatus,
+  fetchAuditStatus,
+  startAuditEngine,
+  stopAuditEngine,
+} from "@/lib/monitoringApi";
 
-interface Heartbeat {
-  status: string;
-  collector_status: string;
-  last_scan: string;
-  next_scan: string;
-  companies_scanned_today: number;
-  results_found_today: number;
-  parser_failures_today: number;
+interface WarehouseData {
+  total_companies: number;
+  imported_companies: number;
+  pending_companies: number;
+  failed_companies: number;
+  quarterly_records: number;
+  coverage_percent: number;
+}
+
+interface AuditData {
+  running: boolean;
+  progress_percent: number;
+  processed: number;
+  passed: number;
+  warning: number;
+  failed: number;
+  last_symbol: string | null;
 }
 
 export default function MonitoringRibbon() {
-  const [heartbeat, setHeartbeat] = useState<Heartbeat | null>(null);
+  const [warehouse, setWarehouse] = useState<WarehouseData | null>(null);
+  const [audit, setAudit] = useState<AuditData | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function loadHeartbeat() {
+  async function loadStatus() {
     try {
-      const response = await fetch(`${API_URL}/system/heartbeat`, {
-        cache: "no-store",
-      });
+      const [warehouseStatus, auditStatus] = await Promise.all([
+        fetchWarehouseStatus(),
+        fetchAuditStatus(),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(`Heartbeat API Error (${response.status})`);
-      }
-
-      const data = await response.json();
-      setHeartbeat(data);
+      setWarehouse(warehouseStatus);
+      setAudit(auditStatus);
     } catch (error) {
-      console.error("Heartbeat fetch failed", error);
+      console.error("Monitoring status failed:", error);
     }
   }
 
   useEffect(() => {
-    loadHeartbeat();
+    loadStatus();
 
-    const timer = setInterval(loadHeartbeat, 10000);
+    const timer = setInterval(loadStatus, 5000);
 
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (value?: string) => {
-    if (!value) return "--";
+  async function handleStartAudit() {
+    setLoading(true);
 
-    return new Date(value).toLocaleTimeString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    });
-  };
+    try {
+      await startAuditEngine(25, 1);
+      await loadStatus();
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const statusColor =
-    heartbeat?.status === "ONLINE"
-      ? "text-emerald-400"
-      : "text-yellow-400";
+  async function handleStopAudit() {
+    setLoading(true);
+
+    try {
+      await stopAuditEngine();
+      await loadStatus();
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-slate-900 to-cyan-500/10 p-5 shadow-lg">
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-white shadow-lg">
       {/* Header */}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="rounded-full bg-emerald-500/20 p-3">
-            <Activity className="h-7 w-7 text-emerald-400" />
-          </div>
-
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
-              Live Monitoring Engine
-            </p>
-
-            <h2 className={`mt-1 text-xl font-bold ${statusColor}`}>
-              {heartbeat?.status ?? "CONNECTING..."}
-            </h2>
-          </div>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-emerald-400">
+            Alpha India Mission Control
+          </h2>
+          <p className="text-xs text-slate-400">
+            Live Warehouse + Financial Audit Engine
+          </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-full border border-slate-700 bg-slate-900 px-4 py-2">
-          <CheckCircle2 className={`h-5 w-5 ${statusColor}`} />
+        <button
+          onClick={loadStatus}
+          className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"
+        >
+          <RefreshCcw className="h-4 w-4" />
+        </button>
+      </div>
 
-          <span className={`font-semibold ${statusColor}`}>
-            {heartbeat?.collector_status ?? "UNKNOWN"}
-          </span>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Card
+          icon={<Database className="h-5 w-5 text-cyan-400" />}
+          label="Warehouse Coverage"
+          value={
+            warehouse
+              ? `${warehouse.coverage_percent.toFixed(2)}%`
+              : "--"
+          }
+          sub={`${warehouse?.imported_companies ?? 0} / ${
+            warehouse?.total_companies ?? 0
+          } companies`}
+        />
+
+        <Card
+          icon={<Activity className="h-5 w-5 text-emerald-400" />}
+          label="Quarterly Records"
+          value={warehouse?.quarterly_records ?? "--"}
+          sub="Imported financial records"
+        />
+
+        <Card
+          icon={<ShieldCheck className="h-5 w-5 text-yellow-400" />}
+          label="Audit Progress"
+          value={
+            audit ? `${audit.progress_percent.toFixed(1)}%` : "--"
+          }
+          sub={`${audit?.processed ?? 0} processed`}
+        />
+
+        <Card
+          icon={<ShieldCheck className="h-5 w-5 text-green-400" />}
+          label="Audit Engine"
+          value={audit?.running ? "RUNNING" : "STOPPED"}
+          sub={audit?.last_symbol ?? "Waiting..."}
+        />
+      </div>
+
+      {/* Progress Bar */}
+      <div className="mt-5">
+        <div className="mb-2 flex justify-between text-xs text-slate-400">
+          <span>Warehouse Coverage</span>
+          <span>{warehouse?.coverage_percent.toFixed(2) ?? 0}%</span>
+        </div>
+
+        <div className="h-2 w-full rounded-full bg-slate-800">
+          <div
+            className="h-2 rounded-full bg-emerald-500 transition-all duration-500"
+            style={{
+              width: `${warehouse?.coverage_percent ?? 0}%`,
+            }}
+          />
         </div>
       </div>
 
-      {/* Metrics */}
-      <div className="mt-5 grid gap-4 md:grid-cols-4">
-        <div className="rounded-xl bg-slate-900/70 p-4">
-          <div className="mb-2 flex items-center gap-2 text-slate-400">
-            <Clock3 className="h-4 w-4 text-cyan-400" />
-            <span className="text-xs uppercase">Next Scan</span>
-          </div>
+      {/* Audit Breakdown */}
+      <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+        <Stat color="text-green-400" label="PASS" value={audit?.passed ?? 0} />
 
-          <p className="text-lg font-bold text-cyan-400">
-            {formatTime(heartbeat?.next_scan)}
-          </p>
-        </div>
+        <Stat
+          color="text-yellow-400"
+          label="WARNING"
+          value={audit?.warning ?? 0}
+        />
 
-        <div className="rounded-xl bg-slate-900/70 p-4">
-          <div className="mb-2 flex items-center gap-2 text-slate-400">
-            <RefreshCcw className="h-4 w-4 text-purple-400" />
-            <span className="text-xs uppercase">Last Scan</span>
-          </div>
-
-          <p className="text-lg font-bold text-white">
-            {formatTime(heartbeat?.last_scan)}
-          </p>
-        </div>
-
-        <div className="rounded-xl bg-slate-900/70 p-4">
-          <p className="mb-2 text-xs uppercase text-slate-400">
-            Companies Scanned Today
-          </p>
-
-          <p className="text-2xl font-bold text-emerald-400">
-            {(heartbeat?.companies_scanned_today ?? 0).toLocaleString()}
-          </p>
-        </div>
-
-        <div className="rounded-xl bg-slate-900/70 p-4">
-          <p className="mb-2 text-xs uppercase text-slate-400">
-            Results Found Today
-          </p>
-
-          <p className="text-2xl font-bold text-yellow-400">
-            {heartbeat?.results_found_today ?? 0}
-          </p>
-        </div>
+        <Stat color="text-red-400" label="FAIL" value={audit?.failed ?? 0} />
       </div>
 
-      {/* Footer */}
-      <div className="mt-5 flex items-center justify-between border-t border-slate-800 pt-4 text-sm">
-        <div className="flex items-center gap-2 text-slate-400">
-          <AlertTriangle className="h-4 w-4 text-red-400" />
+      {/* Controls */}
+      <div className="mt-6 flex gap-3">
+        <button
+          disabled={loading}
+          onClick={handleStartAudit}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium hover:bg-emerald-500 disabled:opacity-60"
+        >
+          <Play className="h-4 w-4" />
+          Start Audit
+        </button>
 
-          Parser Failures Today:
-
-          <span className="font-bold text-red-400">
-            {heartbeat?.parser_failures_today ?? 0}
-          </span>
-        </div>
-
-        <span className="text-xs text-slate-500">
-          Refreshes every 10 seconds
-        </span>
+        <button
+          disabled={loading}
+          onClick={handleStopAudit}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 font-medium hover:bg-red-500 disabled:opacity-60"
+        >
+          <Square className="h-4 w-4" />
+          Stop Audit
+        </button>
       </div>
+    </div>
+  );
+}
+
+/* ---------- Reusable Components ---------- */
+
+function Card({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  sub: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+      <div className="mb-3 flex items-center gap-2 text-slate-400">
+        {icon}
+        <span className="text-xs">{label}</span>
+      </div>
+
+      <div className="text-xl font-bold">{value}</div>
+
+      <div className="mt-1 text-xs text-slate-500">{sub}</div>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+
+      <div className="mt-1 text-xs text-slate-400">{label}</div>
     </div>
   );
 }

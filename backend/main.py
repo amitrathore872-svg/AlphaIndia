@@ -21,6 +21,7 @@ from app.api.discovery import router as discovery_router
 from app.api.filings import router as filings_router
 from app.api.downloads import router as downloads_router
 from app.api.financials import router as financials_router
+from app.api.screener import router as screener_router
 
 
 
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 # ---------------- Register Routers ----------------
+# ---------------- Register Routers ----------------
 app.include_router(companies_router)
 app.include_router(growth_router)
 app.include_router(dashboard_router)
@@ -55,6 +57,7 @@ app.include_router(discovery_router)
 app.include_router(filings_router)
 app.include_router(downloads_router)
 app.include_router(financials_router)
+app.include_router(screener_router)
 
 # ==========================================================
 # Root Endpoint

@@ -1,84 +1,102 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Bell, Clock3, Wifi } from "lucide-react";
+import {
+  Search,
+  Bell,
+  Activity,
+  ShieldCheck,
+  Clock3,
+} from "lucide-react";
 
 export default function TopHeader() {
-  const [currentTime, setCurrentTime] = useState("");
+  const [time, setTime] = useState("");
 
   useEffect(() => {
     const updateClock = () => {
-      const indiaTime = new Date().toLocaleTimeString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
-
-      setCurrentTime(indiaTime);
+      const now = new Date();
+      setTime(
+        now.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          timeZone: "Asia/Kolkata",
+        })
+      );
     };
 
     updateClock();
-    const timer = setInterval(updateClock, 1000);
 
+    const timer = setInterval(updateClock, 1000);
     return () => clearInterval(timer);
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
-      <div className="flex h-20 items-center justify-between px-6 lg:px-8">
-        {/* Left */}
-        <div className="flex flex-1 items-center gap-6">
+    <header className="sticky top-0 z-40 border-b border-slate-800 bg-[#081225]/95 backdrop-blur-xl">
+      <div className="flex items-center justify-between px-6 py-4">
+        {/* LEFT */}
+        <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Growth Screener</h1>
-            <p className="text-sm text-slate-400">
+            <h2 className="text-xl font-bold text-white">
+              Growth Screener
+            </h2>
+            <p className="text-xs text-slate-400">
               Discover India's fastest-growing listed companies.
             </p>
           </div>
+        </div>
 
-          <div className="hidden xl:flex xl:flex-1 xl:max-w-xl">
-            <div className="flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 focus-within:border-emerald-500">
-              <Search className="h-5 w-5 text-slate-400" />
+        {/* CENTER SEARCH */}
+        <div className="hidden w-full max-w-xl lg:block">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3">
+            <Search size={18} className="text-slate-500" />
 
-              <input
-                type="text"
-                placeholder="Search company, symbol, sector..."
-                className="w-full bg-transparent text-sm text-white placeholder:text-slate-500 outline-none"
-              />
-            </div>
+            <input
+              placeholder="Search company, symbol, sector..."
+              className="w-full bg-transparent text-sm text-white placeholder:text-slate-500 outline-none"
+            />
           </div>
         </div>
 
-        {/* Right */}
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2">
-            <Wifi className="h-4 w-4 text-emerald-400" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+        {/* RIGHT STATUS */}
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 lg:flex">
+            <Activity size={15} className="text-emerald-400" />
+            <span className="text-xs font-semibold text-emerald-400">
               LIVE MARKET ENGINE
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-            <Clock3 className="h-4 w-4 text-cyan-400" />
-            <span className="text-sm font-medium text-cyan-300">
-              {currentTime} IST
+          <div className="hidden items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 lg:flex">
+            <ShieldCheck size={15} className="text-cyan-400" />
+            <span className="text-xs font-semibold text-cyan-400">
+              AUDIT READY
             </span>
           </div>
 
-          <button className="relative rounded-xl border border-slate-700 bg-slate-900 p-3 hover:border-emerald-500">
-            <Bell className="h-5 w-5 text-slate-300" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500"></span>
+          <div className="hidden items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 lg:flex">
+            <Clock3 size={15} className="text-amber-400" />
+            <span className="text-xs font-semibold text-white">
+              {time} IST
+            </span>
+          </div>
+
+          <button className="rounded-xl border border-slate-700 bg-slate-900 p-2 text-slate-300 hover:bg-slate-800">
+            <Bell size={18} />
           </button>
 
           <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 text-sm font-bold text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 font-bold text-black">
               A
             </div>
 
             <div className="hidden lg:block">
-              <p className="text-sm font-semibold text-white">Amit</p>
-              <p className="text-xs text-slate-400">Alpha India Admin</p>
+              <p className="text-sm font-semibold text-white">
+                Amit
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Alpha India Admin
+              </p>
             </div>
           </div>
         </div>

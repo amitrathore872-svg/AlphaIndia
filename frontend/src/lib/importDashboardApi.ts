@@ -1,26 +1,77 @@
-const API_BASE = "http://127.0.0.1:8000";
+// ==========================================================
+// Alpha India Import Dashboard API
+// Sprint 32.6
+// ==========================================================
 
-export interface ImportDashboardSummary {
-  total_companies: number;
-  imported_companies: number;
-  progress_percent: number;
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-  filings_discovered: number;
-  pdf_downloaded: number;
-  pending_downloads: number;
-  parsed_filings: number;
+export interface WarehouseStatus {
+  warehouse: string;
+  companies_imported: number;
+  quarter_records: number;
 
-  ai_scores_generated: number;
+  queue: {
+    total: number;
+    pending: number;
+    completed: number;
+    failed: number;
+    unavailable: number;
+    progress_percent: number;
+  };
+
+  progress: {
+    status: string;
+    total_companies: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    unavailable: number;
+    completion_percent: number;
+  };
+
+  engine: {
+    running: boolean;
+    thread_alive: boolean;
+  };
+
+  latest_import: string | null;
 }
 
-export async function fetchImportDashboardSummary(): Promise<ImportDashboardSummary> {
-  const response = await fetch(`${API_BASE}/import-dashboard/summary`, {
+async function request<T>(endpoint: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
     cache: "no-store",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to fetch Mission Control summary.");
+    const text = await response.text();
+    throw new Error(`API ${response.status}: ${text}`);
   }
 
   return response.json();
+}
+
+// Warehouse Status
+export function fetchWarehouseStatus() {
+  return request<WarehouseStatus>("/financials/status");
+}
+
+// Queue Status
+export function fetchQueueStatus() {
+  return request("/financials/queue");
+}
+
+// Audit Summary
+export function fetchAuditSummary() {
+  return request("/financials/audit/summary");
+}
+
+// Audit Failures
+export function fetchAuditFailures(limit = 20) {
+  return request(`/financials/audit/failures?limit=${limit}`);
+}
+
+// Engine Status
+export function fetchEngineStatus() {
+  return request("/financials/engine/status");
 }

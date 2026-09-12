@@ -1,148 +1,177 @@
-from datetime import datetime
-from sqlalchemy import func
+"""
+Alpha India Financial Audit Service
+Sprint 32.7.2
+
+Per-company financial health audit service.
+"""
+
 from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
-from app.models.financial_import_queue import FinancialImportQueue
 from app.models.financial_import_audit import FinancialImportAudit
 
 
 class FinancialAuditService:
-    """
-    Alpha India Financial Warehouse Audit Service
 
-    Sprint 31.5.2
-    -----------------
-    Generates warehouse-wide quality statistics.
-    """
-
+    # ==========================================================
+    # Audit One Company
+    # ==========================================================
     @classmethod
-    def warehouse_summary(cls, db: Session):
+    def audit_company(cls, db: Session, symbol: str):
 
-        total_companies = db.query(Company).count()
-
-        imported_companies = (
-            db.query(QuarterlyResult.company_id)
-            .distinct()
-            .count()
-        )
-
-        total_quarters = db.query(QuarterlyResult).count()
-
-        # Queue Status
-        pending = (
-            db.query(FinancialImportQueue)
-            .filter(FinancialImportQueue.status == "PENDING")
-            .count()
-        )
-
-        completed = (
-            db.query(FinancialImportQueue)
-            .filter(FinancialImportQueue.status == "COMPLETED")
-            .count()
-        )
-
-        failed = (
-            db.query(FinancialImportQueue)
-            .filter(FinancialImportQueue.status == "FAILED")
-            .count()
-        )
-
-        unavailable = (
-            db.query(FinancialImportQueue)
-            .filter(FinancialImportQueue.status == "UNAVAILABLE")
-            .count()
-        )
-
-        # Audit Status
-        pass_count = (
-            db.query(FinancialImportAudit)
-            .filter(FinancialImportAudit.status == "PASS")
-            .count()
-        )
-
-        warning_count = (
-            db.query(FinancialImportAudit)
-            .filter(FinancialImportAudit.status == "WARNING")
-            .count()
-        )
-
-        fail_count = (
-            db.query(FinancialImportAudit)
-            .filter(FinancialImportAudit.status == "FAIL")
-            .count()
-        )
-
-        average_health = (
-            db.query(func.avg(FinancialImportAudit.health_score))
-            .scalar()
-        )
-
-        latest_audit = (
-            db.query(FinancialImportAudit)
-            .order_by(FinancialImportAudit.audited_at.desc())
+        company = (
+            db.query(Company)
+            .filter(Company.symbol == symbol.upper())
             .first()
         )
 
-        coverage = round(
-            imported_companies / total_companies * 100,
-            2,
-        ) if total_companies else 0
+        if company is None:
+            return {
+                "status": "FAIL",
+                "health_score": 0,
+                "reason": "Company not found.",
+            }
+
+        quarters = (
+            db.query(QuarterlyResult)
+            .filter(QuarterlyResult.company_id == company.id)
+            .order_by(QuarterlyResult.period_end.desc())
+            .all()
+        )
+
+        if len(quarters) == 0:
+            status = "FAIL"
+            score = 0
+            issues = ["No quarterly financial records."]
+
+        else:
+            score = 100
+            issues = []
+
+            if len(quarters) < 4:
+                score -= 20
+                issues.append("Less than four quarterly records.")
+
+            latest = quarters[0]
+
+            if latest.revenue is None:
+                score -= 20
+                issues.append("Missing revenue.")
+
+            if latest.net_profit is None:
+                score -= 20
+                issues.append("Missing net profit.")
+
+            if latest.eps is None:
+                score -= 10
+                issues.append("Missing EPS.")
+
+            if latest.period_end is None:
+                score -= 10
+                issues.append("Missing period end.")
+
+            if score >= 90:
+                status = "PASS"
+            elif score >= 70:
+                status = "WARNING"
+            else:
+                status = "FAIL"
+
+        audit = (
+            db.query(FinancialImportAudit)
+            .filter(FinancialImportAudit.symbol == symbol.upper())
+            .first()
+        )
+
+        if audit is None:
+            audit = FinancialImportAudit(symbol=symbol.upper())
+            db.add(audit)
+
+        audit.company_id = company.id
+        audit.status = status
+        audit.health_score = score
+        audit.notes = "; ".join(issues) if issues else "Healthy financial history."
+
+        db.commit()
 
         return {
-            "warehouse": {
-                "total_companies": total_companies,
-                "companies_imported": imported_companies,
-                "coverage_percent": coverage,
-                "quarter_records": total_quarters,
-            },
-            "queue": {
-                "pending": pending,
-                "completed": completed,
-                "failed": failed,
-                "unavailable": unavailable,
-            },
-            "audit": {
-                "pass": pass_count,
-                "warning": warning_count,
-                "fail": fail_count,
-                "average_health_score": round(
-                    average_health or 0,
-                    2,
-                ),
-                "latest_audit": latest_audit.audited_at
-                if latest_audit else None,
-            },
-            "generated_at": datetime.utcnow(),
+            "symbol": symbol.upper(),
+            "status": status,
+            "health_score": score,
+            "issues": issues,
         }
 
-    # ----------------------------------------------------------
-    # Companies requiring repair
-    # ----------------------------------------------------------
+    # ==========================================================
+    # Warehouse Summary
+    # ==========================================================
+    @classmethod
+    def warehouse_summary(cls, db: Session):
 
+        total = db.query(Company).count()
+        imported = db.query(QuarterlyResult.company_id).distinct().count()
+
+        return {
+            "total_companies": total,
+            "companies_imported": imported,
+            "coverage_percent": round(imported / total * 100, 2) if total else 0,
+            "quarter_records": db.query(QuarterlyResult).count(),
+        }
+
+    # ==========================================================
+    # Audit Summary
+    # ==========================================================
+    @classmethod
+    def audit_summary(cls, db: Session):
+
+        audits = db.query(FinancialImportAudit).all()
+
+        if not audits:
+            return {
+                "pass": 0,
+                "warning": 0,
+                "fail": 0,
+                "average_health_score": 0,
+            }
+
+        passed = sum(1 for a in audits if a.status == "PASS")
+        warning = sum(1 for a in audits if a.status == "WARNING")
+        failed = sum(1 for a in audits if a.status == "FAIL")
+
+        average = round(
+            sum(a.health_score for a in audits) / len(audits),
+            2,
+        )
+
+        latest = max((a.updated_at for a in audits if a.updated_at), default=None)
+
+        return {
+            "pass": passed,
+            "warning": warning,
+            "fail": failed,
+            "average_health_score": average,
+            "latest_audit": latest,
+        }
+
+    # ==========================================================
+    # Failed / Warning Companies
+    # ==========================================================
     @classmethod
     def failures(cls, db: Session, limit: int = 100):
 
-        rows = (
+        audits = (
             db.query(FinancialImportAudit)
             .filter(FinancialImportAudit.status != "PASS")
-            .order_by(FinancialImportAudit.health_score.asc())
             .limit(limit)
             .all()
         )
 
         return [
             {
-                "symbol": r.symbol,
-                "status": r.status,
-                "health_score": r.health_score,
-                "quarters": r.quarter_count,
-                "missing_revenue": r.missing_revenue,
-                "missing_profit": r.missing_profit,
-                "missing_eps": r.missing_eps,
-                "missing_period": r.missing_period,
-                "duplicate_quarters": r.duplicate_quarters,
+                "symbol": a.symbol,
+                "status": a.status,
+                "health_score": a.health_score,
+                "notes": a.notes,
             }
-            for r in rows
+            for a in audits
         ]

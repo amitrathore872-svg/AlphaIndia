@@ -1,15 +1,30 @@
 "use client";
 
-import { Company } from "@/lib/api";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+// =======================================================
+// Alpha India Growth Screener PRO
+// Sprint 32.8.1
+// Bloomberg Style Table + Sorting + Sticky Header
+// =======================================================
+
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import type { GrowthCompany } from "@/lib/api";
+
+import GrowthTableHeader, {
+  SortField,
+} from "./GrowthTableHeader";
+import GrowthTableRow from "./GrowthTableRow";
 
 interface GrowthTableProps {
-  companies: Company[];
+  companies: GrowthCompany[];
   loading: boolean;
+
   page: number;
   totalPages: number;
   totalCompanies: number;
   limit: number;
+
   onPrevious: () => void;
   onNext: () => void;
 }
@@ -24,137 +39,200 @@ export default function GrowthTable({
   onPrevious,
   onNext,
 }: GrowthTableProps) {
+  const [sortField, setSortField] =
+    useState<SortField>("ai_score");
+
+  const [sortDirection, setSortDirection] = useState<
+    "asc" | "desc"
+  >("desc");
+
+  function handleSort(field: SortField) {
+    if (field === sortField) {
+      setSortDirection((prev) =>
+        prev === "asc" ? "desc" : "asc"
+      );
+      return;
+    }
+
+    setSortField(field);
+    setSortDirection("desc");
+  }
+
+  const sortedCompanies = useMemo(() => {
+    const data = [...companies];
+
+    data.sort((a: any, b: any) => {
+      let valueA = a[sortField];
+      let valueB = b[sortField];
+
+      if (sortField === "company" || sortField === "sector") {
+        valueA = String(valueA || "").toLowerCase();
+        valueB = String(valueB || "").toLowerCase();
+
+        return sortDirection === "asc"
+          ? valueA.localeCompare(valueB)
+          : valueB.localeCompare(valueA);
+      }
+
+      valueA = Number(valueA ?? 0);
+      valueB = Number(valueB ?? 0);
+
+      return sortDirection === "asc"
+        ? valueA - valueB
+        : valueB - valueA;
+    });
+
+    return data;
+  }, [companies, sortField, sortDirection]);
+
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
-      {/* Table Header */}
-      <div className="border-b border-slate-800 px-6 py-5">
-        <h2 className="text-xl font-semibold text-white">
-          Growth Screener Companies
-        </h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Live NSE & BSE companies monitored by Alpha India.
-        </p>
+    <section className="rounded-3xl border border-slate-800 bg-slate-950 overflow-hidden shadow-2xl">
+
+      {/* Header */}
+      <div className="border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-950 px-6 py-5">
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+          <div>
+            <h2 className="text-2xl font-bold text-white">
+              Growth Screener PRO
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              AI-powered ranking of India's fastest growing listed companies.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-6 text-sm">
+
+            <div>
+              <p className="text-slate-500 uppercase text-xs">
+                Total Companies
+              </p>
+
+              <p className="text-xl font-bold text-emerald-400">
+                {totalCompanies.toLocaleString()}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-slate-500 uppercase text-xs">
+                Page
+              </p>
+
+              <p className="text-xl font-bold text-cyan-400">
+                {page} / {totalPages}
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
-
-      {/* Table */}
+      {/* Scrollable Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-950 text-xs uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-5 py-4 text-left">Company</th>
-              <th className="px-5 py-4 text-left">Symbol</th>
-              <th className="px-5 py-4 text-left">Exchange</th>
-              <th className="px-5 py-4 text-left">Sector</th>
-              <th className="px-5 py-4 text-right">Market Cap</th>
-            </tr>
-          </thead>
 
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="py-12 text-center text-slate-400">
-                  Loading companies...
-                </td>
-              </tr>
-            ) : companies.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-12 text-center text-slate-400">
-                  No companies found.
-                </td>
-              </tr>
-            ) : (
-              companies.map((company) => (
-                <tr
-                  key={company.id}
-                  className="border-t border-slate-800 transition hover:bg-slate-800/40"
-                >
-                  {/* Company Name */}
-                  <td className="px-5 py-4">
-                    <div className="flex flex-col">
-                      <a
-                        href={`https://www.screener.in/company/${company.symbol}/`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 font-medium text-cyan-400 hover:text-cyan-300 hover:underline"
-                      >
-                        {company.company_name}
-                        <ExternalLink size={14} />
-                      </a>
+        <div className="max-h-[700px] overflow-y-auto">
 
-                      <span className="mt-1 text-xs text-slate-500">
-                        Alpha India Coverage
-                      </span>
-                    </div>
-                  </td>
+          <table className="w-full min-w-[1250px] border-collapse">
 
-                  {/* Symbol */}
-                  <td className="px-5 py-4 font-medium text-cyan-300">
-                    {company.symbol}
-                  </td>
+            <GrowthTableHeader
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
 
-                  {/* Exchange Badge */}
-                  <td className="px-5 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        company.exchange === "NSE"
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : company.exchange === "BSE"
-                          ? "bg-blue-500/15 text-blue-400"
-                          : "bg-purple-500/15 text-purple-400"
-                      }`}
-                    >
-                      {company.exchange}
-                    </span>
-                  </td>
+            <tbody>
 
-                  {/* Sector */}
-                  <td className="px-5 py-4 text-slate-300">
-                    {company.sector || "Unknown"}
-                  </td>
-
-                  {/* Market Cap */}
-                  <td className="px-5 py-4 text-right font-medium text-slate-300">
-                    {company.market_cap || "Unknown"}
+              {loading ? (
+                Array.from({ length: 12 }).map((_, index) => (
+                  <tr
+                    key={index}
+                    className="border-b border-slate-800 animate-pulse"
+                  >
+                    {Array.from({ length: 9 }).map((_, cell) => (
+                      <td key={cell} className="px-4 py-5">
+                        <div className="h-4 rounded bg-slate-800" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : sortedCompanies.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={9}
+                    className="py-16 text-center text-slate-500"
+                  >
+                    No companies found.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                sortedCompanies.map((company, index) => (
+                  <GrowthTableRow
+                    key={company.id ?? company.symbol}
+                    company={company}
+                    index={(page - 1) * limit + index}
+                  />
+                ))
+              )}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
       </div>
 
-      {/* Pagination */}
-      <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-800 p-5 lg:flex-row">
-        <p className="text-sm text-slate-400">
-          Showing {(page - 1) * limit + 1} –{" "}
-          {Math.min(page * limit, totalCompanies)} of {totalCompanies} companies
-        </p>
+      {/* Footer / Pagination */}
+      <div className="flex flex-col gap-4 border-t border-slate-800 bg-slate-900 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+
+        <div className="text-sm text-slate-400">
+          Showing{" "}
+          <span className="font-semibold text-white">
+            {(page - 1) * limit + 1}
+          </span>{" "}
+          –{" "}
+          <span className="font-semibold text-white">
+            {Math.min(page * limit, totalCompanies)}
+          </span>{" "}
+          of{" "}
+          <span className="font-semibold text-emerald-400">
+            {totalCompanies.toLocaleString()}
+          </span>{" "}
+          companies.
+        </div>
 
         <div className="flex items-center gap-3">
+
           <button
-            disabled={page === 1}
             onClick={onPrevious}
-            className="flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-white transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={page === 1}
+            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-white transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft className="h-4 w-4" />
             Previous
           </button>
 
-          <div className="rounded-lg bg-slate-800 px-4 py-2 font-semibold text-white">
-            Page {page} / {totalPages}
+          <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-semibold text-emerald-400">
+            {page}
           </div>
 
           <button
-            disabled={page >= totalPages}
             onClick={onNext}
-            className="flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-white transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={page === totalPages}
+            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-white transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Next
-            <ChevronRight size={16} />
+            <ChevronRight className="h-4 w-4" />
           </button>
+
         </div>
+
       </div>
+
     </section>
   );
 }

@@ -2,445 +2,376 @@
 
 import { useEffect, useState } from "react";
 import {
-  fetchSystemStatus,
-  fetchSystemSettings,
-  fetchHeartbeat,
-  updateSystemSetting,
-} from "@/lib/systemApi";
+  Activity,
+  Database,
+  ShieldCheck,
+  Brain,
+  Clock,
+  Building2,
+  FileText,
+  AlertTriangle,
+  RefreshCcw,
+} from "lucide-react";
 
-import type { SystemStatus, SystemSetting } from "@/types/system";
-import type { MonitoringHeartbeat } from "@/types/heartbeat";
+import MonitoringRibbon from "@/components/layout/MonitoringRibbon";
+
+import {
+  fetchMonitoringDashboard,
+  fetchDiscoveryQueue,
+  formatDateTime,
+  MonitoringDashboard,
+  DiscoveryQueueItem,
+} from "@/lib/monitoringApi";
 
 export default function MonitoringPage() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [heartbeat, setHeartbeat] = useState<MonitoringHeartbeat | null>(null);
-  const [settings, setSettings] = useState<SystemSetting[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [dashboard, setDashboard] =
+    useState<MonitoringDashboard | null>(null);
 
-  async function loadData() {
+  const [queue, setQueue] = useState<DiscoveryQueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function loadDashboard() {
     try {
-      const [statusData, settingsData, heartbeatData] = await Promise.all([
-        fetchSystemStatus(),
-        fetchSystemSettings(),
-        fetchHeartbeat(),
+      const [status, queueResponse] = await Promise.all([
+        fetchMonitoringDashboard(),
+        fetchDiscoveryQueue(),
       ]);
 
-      setStatus(statusData);
-      setSettings(settingsData);
-      setHeartbeat(heartbeatData);
+      setDashboard(status);
+      setQueue(queueResponse.queue ?? []);
     } catch (err) {
-      console.error("Monitoring Center Load Failed", err);
+      console.error("Mission Control failed:", err);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadDashboard();
 
-  // Auto refresh heartbeat every 10 seconds.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      loadData();
-    }, 10000);
+    const timer = setInterval(loadDashboard, 5000);
 
     return () => clearInterval(timer);
   }, []);
 
-  async function toggleSetting(setting: SystemSetting) {
-    const nextValue =
-      setting.setting_value === "true" ? "false" : "true";
-
-    setSavingKey(setting.setting_key);
-
-    try {
-      await updateSystemSetting(setting.setting_key, nextValue);
-      await loadData();
-    } catch (err) {
-      console.error(err);
-      alert("Unable to update setting.");
-    } finally {
-      setSavingKey(null);
-    }
-  }
-
-  async function saveSetting(key: string, value: string) {
-    setSavingKey(key);
-
-    try {
-      await updateSystemSetting(key, value);
-      await loadData();
-    } catch (err) {
-      console.error(err);
-      alert("Unable to save setting.");
-    } finally {
-      setSavingKey(null);
-    }
-  }
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-        Loading Monitoring Center...
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen bg-slate-950 text-white p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <main className="min-h-screen bg-slate-950 text-white p-6 space-y-6">
 
-        {/* HEADER */}
+      {/* Mission Header */}
+      <section className="rounded-3xl bg-gradient-to-r from-emerald-900 via-slate-900 to-cyan-900 p-6 border border-emerald-700 shadow-xl">
+        <div className="flex flex-wrap justify-between gap-4">
 
-        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-emerald-400">
-              Alpha India Monitoring Center
+            <p className="text-xs uppercase tracking-widest text-emerald-300">
+              Alpha India v3.0
+            </p>
+
+            <h1 className="text-3xl font-bold text-white mt-2">
+              Mission Control
             </h1>
 
-            <p className="text-slate-400 mt-2">
-              Live NSE & BSE Autonomous Monitoring Engine
+            <p className="text-slate-300 mt-2">
+              Live NSE / BSE Monitoring & Financial Warehouse Operations Center
             </p>
           </div>
 
-          <button
-            onClick={loadData}
-            className="rounded-xl bg-slate-800 hover:bg-slate-700 px-5 py-3 text-sm"
-          >
-            Refresh
-          </button>
+          <div className="text-right">
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 px-3 py-2 border border-emerald-500">
+              <Activity className="h-4 w-4 text-emerald-400" />
+              <span className="text-sm font-medium text-emerald-300">
+                {dashboard?.heartbeat.status ?? "OFFLINE"}
+              </span>
+            </div>
+
+            <p className="mt-4 text-sm text-slate-300">
+              Session:{" "}
+              <span className="text-cyan-300">
+                {dashboard?.discovery.current_session ?? "--"}
+              </span>
+            </p>
+
+            <p className="text-xs text-slate-400">
+              Last Scan:{" "}
+              {formatDateTime(dashboard?.heartbeat.last_scan)}
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      {/* Monitoring Ribbon */}
+      <MonitoringRibbon />
+
+      {/* Engine Status */}
+      <section className="grid md:grid-cols-4 gap-4">
+
+        <EngineCard
+          icon={<Activity className="text-green-400" />}
+          title="Discovery Engine"
+          value={dashboard?.discovery.engine_status ?? "--"}
+          subtitle="Live Scanner"
+        />
+
+        <EngineCard
+          icon={<Database className="text-cyan-400" />}
+          title="Financial Engine"
+          value={dashboard?.importEngine.running ? "RUNNING" : "STOPPED"}
+          subtitle="Quarterly Import"
+        />
+
+        <EngineCard
+          icon={<ShieldCheck className="text-yellow-400" />}
+          title="Audit Engine"
+          value={dashboard?.audit.running ? "RUNNING" : "STOPPED"}
+          subtitle="Health Validation"
+        />
+
+        <EngineCard
+          icon={<Brain className="text-purple-400" />}
+          title="AI Growth Engine"
+          value="READY"
+          subtitle="Growth Ranking"
+        />
+
+      </section>
+
+      {/* KPI Section */}
+      <section className="grid md:grid-cols-4 gap-4">
+
+        <KpiCard
+          icon={<Building2 className="text-green-400" />}
+          label="Companies Scanned Today"
+          value={dashboard?.heartbeat.companies_scanned_today ?? 0}
+        />
+
+        <KpiCard
+          icon={<FileText className="text-blue-400" />}
+          label="Results Found Today"
+          value={dashboard?.heartbeat.results_found_today ?? 0}
+        />
+
+        <KpiCard
+          icon={<Database className="text-cyan-400" />}
+          label="Quarterly Records"
+          value={dashboard?.warehouse.quarterly_records ?? 0}
+        />
+
+        <KpiCard
+          icon={<AlertTriangle className="text-red-400" />}
+          label="Parser Failures"
+          value={dashboard?.heartbeat.parser_failures_today ?? 0}
+        />
+
+      </section>
+
+      {/* Warehouse Progress */}
+      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold text-cyan-300">
+            Financial Warehouse Coverage
+          </h2>
+
+          <RefreshCcw className="h-5 w-5 text-slate-500" />
         </div>
 
-        {/* ENGINE HEALTH */}
+        <div className="flex justify-between text-sm text-slate-300">
+          <span>
+            {dashboard?.warehouse.imported_companies ?? 0} Imported
+          </span>
 
-        <section className="space-y-4">
-          <h2 className="text-2xl font-semibold text-white">
-            Engine Health
-          </h2>
+          <span>
+            {dashboard?.warehouse.total_companies ?? 0} Universe
+          </span>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+        <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+          <div
+            className="h-3 rounded-full bg-gradient-to-r from-green-500 to-cyan-400 transition-all duration-500"
+            style={{
+              width: `${dashboard?.warehouse.coverage_percent ?? 0}%`,
+            }}
+          />
+        </div>
 
-            <HealthCard
-              title="Engine Status"
-              value={heartbeat?.engine_status ?? "Unknown"}
-              color="emerald"
-            />
+        <p className="text-right text-green-400 font-semibold">
+          {(dashboard?.warehouse.coverage_percent ?? 0).toFixed(2)}%
+        </p>
 
-            <HealthCard
-              title="Current Session"
-              value={heartbeat?.current_session ?? "Unknown"}
-              color="cyan"
-            />
+      </section>
 
-            <HealthCard
-              title="Collector"
-              value={status?.collector ?? "Idle"}
-              color="amber"
-            />
+      {/* Discovery Queue */}
+      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
 
-            <HealthCard
-              title="Version"
-              value={status?.version ?? "0.9.1"}
-              color="violet"
-            />
+        <h2 className="text-xl font-bold text-emerald-300 mb-5">
+          Live Discovery Queue
+        </h2>
 
-          </div>
-        </section>
+        <div className="overflow-auto rounded-xl border border-slate-800">
 
-        {/* LIVE HEARTBEAT */}
+          <table className="w-full text-sm">
+            <thead className="bg-slate-950 text-slate-400">
+              <tr>
+                <th className="p-3 text-left">SYMBOL</th>
+                <th className="p-3 text-left">EXCHANGE</th>
+                <th className="p-3 text-left">STATUS</th>
+                <th className="p-3 text-left">UPDATED</th>
+              </tr>
+            </thead>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+            <tbody>
+              {queue.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="text-center text-slate-500 p-6"
+                  >
+                    Loading Queue...
+                  </td>
+                </tr>
+              )}
 
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold">
-              Live Monitoring Heartbeat
-            </h2>
-
-            <span className="text-xs text-emerald-400 animate-pulse">
-              ● Auto Refresh Every 10 Seconds
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-
-            <StatCard
-              title="Last Scan"
-              value={
-                heartbeat?.last_scan_time
-                  ? new Date(heartbeat.last_scan_time).toLocaleTimeString("en-IN")
-                  : "--"
-              }
-            />
-
-            <StatCard
-              title="Next Scan"
-              value={
-                heartbeat?.next_scan_time
-                  ? new Date(heartbeat.next_scan_time).toLocaleTimeString("en-IN")
-                  : "--"
-              }
-            />
-
-            <StatCard
-              title="Heartbeat"
-              value={
-                heartbeat?.heartbeat_at
-                  ? new Date(heartbeat.heartbeat_at).toLocaleTimeString("en-IN")
-                  : "--"
-              }
-            />
-
-            <StatCard
-              title="Engine State"
-              value={heartbeat?.engine_status ?? "--"}
-            />
-
-          </div>
-        </section>
-
-        {/* TODAY'S MONITORING */}
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
-
-          <h2 className="text-2xl font-semibold">
-            Today's Monitoring Statistics
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-            <MetricCard
-              title="Companies Scanned Today"
-              value={heartbeat?.companies_scanned_today ?? 0}
-              color="text-cyan-400"
-            />
-
-            <MetricCard
-              title="Quarterly Results Found"
-              value={heartbeat?.results_found_today ?? 0}
-              color="text-emerald-400"
-            />
-
-            <MetricCard
-              title="Parser Failures"
-              value={heartbeat?.parser_failures_today ?? 0}
-              color="text-red-400"
-            />
-
-          </div>
-        </section>
-
-        {/* MONITORING SWITCHES */}
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
-
-          <h2 className="text-2xl font-semibold">
-            Monitoring Switches
-          </h2>
-
-          {settings
-            .filter((s) => s.setting_type === "boolean")
-            .map((setting) => (
-
-              <div
-                key={setting.id}
-                className="flex justify-between items-center border-b border-slate-800 py-4"
-              >
-
-                <div>
-                  <h3 className="capitalize font-medium">
-                    {setting.setting_key.replaceAll("_", " ")}
-                  </h3>
-
-                  <p className="text-sm text-slate-400">
-                    {setting.description}
-                  </p>
-                </div>
-
-                <button
-                  disabled={savingKey === setting.setting_key}
-                  onClick={() => toggleSetting(setting)}
-                  className={`relative w-16 h-8 rounded-full transition-all duration-300 ${
-                    setting.setting_value === "true"
-                      ? "bg-emerald-500"
-                      : "bg-slate-700"
-                  }`}
+              {queue.slice(0, 25).map((item, index) => (
+                <tr
+                  key={index}
+                  className="border-t border-slate-800 hover:bg-slate-800/40"
                 >
-                  <span
-                    className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all duration-300 ${
-                      setting.setting_value === "true"
-                        ? "translate-x-8"
-                        : "translate-x-1"
-                    }`}
-                  />
-                </button>
+                  <td className="p-3 font-medium text-cyan-300">
+                    {item.symbol}
+                  </td>
 
-              </div>
+                  <td className="p-3">
+                    {item.exchange ?? "NSE"}
+                  </td>
 
-            ))}
-        </section>
+                  <td className="p-3">
+                    <StatusBadge status={item.status} />
+                  </td>
 
-        {/* SCHEDULER CONFIGURATION */}
+                  <td className="p-3 text-slate-400 text-xs">
+                    {formatDateTime(item.updated_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+          </table>
 
-          <h2 className="text-2xl font-semibold">
-            Scheduler Configuration
-          </h2>
+        </div>
 
-          {settings
-            .filter((s) => s.setting_type !== "boolean")
-            .map((setting) => (
-              <SchedulerField
-                key={setting.id}
-                setting={setting}
-                savingKey={savingKey}
-                onSave={saveSetting}
-              />
-            ))}
+      </section>
 
-        </section>
+      {/* Audit Summary */}
+      <section className="grid md:grid-cols-4 gap-4">
 
-      </div>
+        <AuditCard
+          label="PASS"
+          value={dashboard?.audit.passed ?? 0}
+          color="text-green-400"
+        />
+
+        <AuditCard
+          label="WARNING"
+          value={dashboard?.audit.warning ?? 0}
+          color="text-yellow-400"
+        />
+
+        <AuditCard
+          label="FAIL"
+          value={dashboard?.audit.failed ?? 0}
+          color="text-red-400"
+        />
+
+        <AuditCard
+          label="Processed"
+          value={dashboard?.audit.processed ?? 0}
+          color="text-cyan-400"
+        />
+
+      </section>
+
+      {/* Footer */}
+      <footer className="rounded-3xl bg-slate-900 border border-slate-800 p-5 flex flex-wrap justify-between text-sm text-slate-400 gap-3">
+
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-cyan-400" />
+          Refreshing every 5 seconds
+        </div>
+
+        <div>
+          Next Scan:{" "}
+          {formatDateTime(dashboard?.heartbeat.next_scan)}
+        </div>
+
+      </footer>
+
     </main>
   );
 }
 
-/* -------------------------------------------------------------------- */
-/* COMPONENTS */
-/* -------------------------------------------------------------------- */
+/* -------------------------------- Components ------------------------------ */
 
-function HealthCard({
+function EngineCard({
+  icon,
   title,
   value,
-  color,
-}: {
-  title: string;
-  value: string;
-  color: "emerald" | "cyan" | "amber" | "violet";
-}) {
-  const colors = {
-    emerald: "text-emerald-400",
-    cyan: "text-cyan-400",
-    amber: "text-amber-400",
-    violet: "text-violet-400",
-  };
-
+  subtitle,
+}: any) {
   return (
-    <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
-
-      <h3 className={`mt-3 text-2xl font-bold ${colors[color]}`}>
-        {value}
-      </h3>
-    </div>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl bg-slate-950 border border-slate-800 p-4">
-      <p className="text-xs text-slate-400">{title}</p>
-
-      <h3 className="mt-3 text-lg font-semibold text-white">
-        {value}
-      </h3>
-    </div>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  color,
-}: {
-  title: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className="rounded-xl bg-slate-950 border border-slate-800 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
-
-      <h2 className={`mt-3 text-4xl font-bold ${color}`}>
-        {value}
-      </h2>
-    </div>
-  );
-}
-
-interface SchedulerFieldProps {
-  setting: SystemSetting;
-  savingKey: string | null;
-  onSave: (key: string, value: string) => Promise<void>;
-}
-
-function SchedulerField({
-  setting,
-  savingKey,
-  onSave,
-}: SchedulerFieldProps) {
-  const [value, setValue] = useState(setting.setting_value);
-
-  useEffect(() => {
-    setValue(setting.setting_value);
-  }, [setting.setting_value]);
-
-  const intervalOptions = ["1", "2", "5", "10", "15", "30", "60"];
-
-  return (
-    <div className="flex justify-between items-center border-b border-slate-800 py-4">
-
-      <div>
-        <h3 className="capitalize font-medium">
-          {setting.setting_key.replaceAll("_", " ")}
-        </h3>
-
-        <p className="text-sm text-slate-400">
-          {setting.description}
-        </p>
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        {icon}
       </div>
 
-      <div className="flex items-center gap-3">
+      <h3 className="text-sm text-slate-400">{title}</h3>
 
-        {setting.setting_type === "integer" ? (
-          <select
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-white"
-          >
-            {intervalOptions.map((option) => (
-              <option key={option} value={option}>
-                {option} Minutes
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="time"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-white"
-          />
-        )}
+      <p className="text-xl font-bold">{value}</p>
 
-        <button
-          disabled={savingKey === setting.setting_key}
-          onClick={() => onSave(setting.setting_key, value)}
-          className="rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2 text-black font-semibold disabled:opacity-50"
-        >
-          {savingKey === setting.setting_key ? "Saving..." : "Save"}
-        </button>
+      <p className="text-xs text-slate-500">{subtitle}</p>
+    </div>
+  );
+}
 
+function KpiCard({ icon, label, value }: any) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <div className="flex items-center gap-3 text-slate-400">
+        {icon}
+        <span className="text-xs">{label}</span>
       </div>
 
+      <p className="mt-4 text-3xl font-bold text-white">
+        {Number(value).toLocaleString()}
+      </p>
     </div>
+  );
+}
+
+function AuditCard({ label, value, color }: any) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-center">
+      <p className="text-xs text-slate-400">{label}</p>
+
+      <p className={`mt-3 text-3xl font-bold ${color}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const color =
+    status === "COMPLETED"
+      ? "bg-green-500/20 text-green-400 border-green-500"
+      : status === "RUNNING"
+      ? "bg-cyan-500/20 text-cyan-400 border-cyan-500"
+      : status === "FAILED"
+      ? "bg-red-500/20 text-red-400 border-red-500"
+      : "bg-yellow-500/20 text-yellow-400 border-yellow-500";
+
+  return (
+    <span className={`px-2 py-1 rounded-full border text-xs ${color}`}>
+      {status}
+    </span>
   );
 }
