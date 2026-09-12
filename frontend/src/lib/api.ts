@@ -1,266 +1,248 @@
-// ======================================================
-// Alpha India Frontend API Layer
-// Sprint 32.6.4 — Growth Screener Integration
-// Backend Compatible: v0.9.5 Recovery
-// ======================================================
+// =======================================================
+// Alpha India API Client
+// Sprint 33.4.1
+// Enterprise API Layer
+// =======================================================
 
-const API_URL =
+const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-// ======================================================
-// Company Master Interface
-// ======================================================
-
-export interface Company {
-  id: number;
-  company_name: string;
-  symbol: string;
-  exchange: string;
-  sector: string;
-  market_cap: string;
-  listing_status?: string;
-  ai_score?: number;
-}
-
-// ======================================================
-// Dashboard Summary Interface
-// ======================================================
-
-export interface DashboardSummary {
-  total_companies: number;
-  active_companies: number;
-  nse_companies: number;
-  bse_companies: number;
-}
-
-// ======================================================
-// Growth Screener Interfaces
-// ======================================================
+// =======================================================
+// Growth Screener Types
+// =======================================================
 
 export interface GrowthCompany {
-  id: number;
-
   symbol: string;
   company: string;
+  sector: string | null;
+  exchange: string | null;
 
-  exchange: string;
-  series: string;
+  market_cap: number | string | null;
 
-  sector: string;
-  industry: string;
+  revenue_growth: number | string | null;
+  pat_growth: number | string | null;
+  eps_growth: number | string | null;
 
-  market_cap: number | string;
-
-  revenue_growth: number;
-  pat_growth: number;
-  roce: number;
-
-  ai_score: number;
-
-  health_score: number | null;
-  health_status: "PASS" | "WARNING" | "FAIL" | "PENDING";
+  health_score: number | string | null;
+  result_date: string | null;
 }
 
 export interface GrowthScreenerResponse {
+  success: boolean;
   page: number;
   limit: number;
   total: number;
+  total_pages: number;
+
+  sort_by?: string;
+  sort_order?: string;
+
   results: GrowthCompany[];
 }
 
-// ======================================================
-// Dashboard Summary API
-// ======================================================
-
-export async function fetchDashboardSummary(): Promise<DashboardSummary> {
-  const response = await fetch(`${API_URL}/companies/dashboard-summary`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch dashboard summary");
-  }
-
-  const data = await response.json();
-
-  return {
-    total_companies: data.total_companies ?? data.total ?? 0,
-
-    active_companies:
-      data.active_companies ??
-      data.total_active ??
-      data.total_companies ??
-      0,
-
-    nse_companies: data.nse_companies ?? data.nse ?? 0,
-    bse_companies: data.bse_companies ?? data.bse ?? 0,
-  };
-}
-
-// ======================================================
-// Company Master API (Legacy)
-// ======================================================
-
-export async function fetchCompanies(
-  page = 1,
-  limit = 25,
-  search = ""
-): Promise<{
-  page: number;
-  total: number;
-  results: Company[];
-}> {
-  const params = new URLSearchParams({
-    page: String(page),
-    limit: String(limit),
-    search,
-  });
-
-  const response = await fetch(
-    `${API_URL}/companies?${params.toString()}`,
-    {
-      cache: "no-store",
-    }
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    console.error("Companies API Error:", text);
-    throw new Error(`Failed to fetch companies (${response.status})`);
-  }
-
-  const data = await response.json();
-
-  const companies = data.results ?? data.companies ?? [];
-
-  return {
-    page: data.page ?? page,
-    total: data.total ?? companies.length,
-
-    results: companies.map((company: any) => ({
-      id: company.id,
-      company_name: company.company_name,
-      symbol: company.symbol,
-      exchange: company.exchange ?? "NSE",
-      sector: company.sector ?? "Unknown",
-      market_cap: company.market_cap ?? "Unknown",
-      listing_status: company.listing_status ?? "ACTIVE",
-      ai_score: Number(company.ai_score ?? 0),
-    })),
-  };
-}
-
-// ======================================================
+// =======================================================
 // Growth Screener API
-// Sprint 32
-// ======================================================
+// Server-side Search + Sorting + Pagination
+// =======================================================
+
+// =======================================================
+// Growth Screener API (Sprint 33.4.1)
+// Server-side Sorting + Pagination
+// =======================================================
 
 export async function fetchGrowthScreener(
   page = 1,
   limit = 25,
   search = "",
-  sector = "",
-  health = ""
-): Promise<GrowthScreenerResponse> {
-
+  sortBy = "revenue_growth",
+  sortOrder: "asc" | "desc" = "desc"
+) {
   const params = new URLSearchParams({
     page: String(page),
     limit: String(limit),
+    search,
+    sort_by: sortBy,
+    sort_order: sortOrder,
   });
 
-  if (search.trim()) {
-    params.append("search", search.trim());
-  }
-
-  if (sector && sector !== "All") {
-    params.append("sector", sector);
-  }
-
-  if (health && health !== "All") {
-    params.append("health", health);
-  }
-
   const response = await fetch(
-    `${API_URL}/screener/growth?${params.toString()}`,
+    `${API_BASE}/growth-screener?${params.toString()}`,
     {
       cache: "no-store",
     }
   );
 
   if (!response.ok) {
-    const text = await response.text();
-    console.error("Growth Screener API Error:", text);
-    throw new Error(`Growth Screener API failed (${response.status})`);
+    throw new Error(`Growth Screener API Error (${response.status})`);
   }
 
   const data = await response.json();
 
   return {
-    page: data.page,
-    limit: data.limit,
-    total: data.total,
-
-    results: data.results.map((company: any) => ({
-      id: company.id,
-
-      symbol: company.symbol,
-      company: company.company,
-
-      exchange: company.exchange ?? "NSE",
-      series: company.series ?? "EQ",
-
-      sector: company.sector ?? "Unknown",
-      industry: company.industry ?? "Unknown",
-
-      market_cap: company.market_cap ?? "Unknown",
-
-      revenue_growth: Number(company.revenue_growth ?? 0),
-      pat_growth: Number(company.pat_growth ?? 0),
-      roce: Number(company.roce ?? 0),
-
-      ai_score: Number(company.ai_score ?? 0),
-
-      // IMPORTANT FIX
-      health_score:
-        company.health_score === null ||
-        company.health_score === undefined
-          ? null
-          : Number(company.health_score),
-
-      health_status: company.health_status ?? "PENDING",
-    })),
+    results: data.results ?? [],
+    total: data.total ?? 0,
+    page: data.page ?? page,
+    limit: data.limit ?? limit,
+    total_pages: data.total_pages ?? 1,
+    success: data.success ?? true,
   };
 }
 
-// ======================================================
-// Sector List API
-// ======================================================
+// =======================================================
+// Growth Screener Filters (Future GAP-02)
+// =======================================================
 
-export async function fetchSectors(): Promise<string[]> {
-  const response = await fetch(`${API_URL}/screener/sectors`, {
-    cache: "force-cache",
-  });
-
-  if (!response.ok) {
-    return [];
-  }
-
-  const data = await response.json();
-
-  return data.results ?? [];
+export interface GrowthFilters {
+  success: boolean;
+  sectors: string[];
+  exchanges: string[];
+  health_scores: string[];
 }
 
-// ======================================================
-// Screener Filter Metadata API
-// ======================================================
-
-export async function fetchScreenerFilters() {
-  const response = await fetch(`${API_URL}/screener/filters`, {
-    cache: "force-cache",
+export async function fetchGrowthFilters(): Promise<GrowthFilters> {
+  const response = await fetch(`${API_BASE}/growth-screener/filters`, {
+    cache: "no-store",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to load screener filters");
+    throw new Error("Failed to fetch Growth Screener filters.");
+  }
+
+  return response.json();
+}
+
+// =======================================================
+// Mission Control Types
+// =======================================================
+
+export interface MissionHeartbeat {
+  status: string;
+  last_scan: string;
+  next_scan: string;
+
+  companies_scanned_today: number;
+  results_found_today: number;
+  pdf_downloaded_today: number;
+  parser_failures_today: number;
+}
+
+export interface WarehouseSnapshot {
+  warehouse: {
+    total_companies: number;
+    imported_companies: number;
+    progress_percent: number;
+
+    filings_discovered: number;
+    pdf_downloaded: number;
+    pending_downloads: number;
+    parsed_filings: number;
+    ai_scores_generated: number;
+  };
+}
+
+export interface DiscoverySnapshot {
+  current_session: string;
+}
+
+export interface MissionControlStatus {
+  heartbeat: MissionHeartbeat;
+  warehouse: WarehouseSnapshot;
+  discovery: DiscoverySnapshot;
+}
+
+// =======================================================
+// Mission Control Dashboard
+// =======================================================
+
+export async function fetchMissionControlStatus(): Promise<MissionControlStatus> {
+  const response = await fetch(`${API_BASE}/mission-control/dashboard`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch Mission Control dashboard.");
+  }
+
+  return response.json();
+}
+
+// =======================================================
+// Discovery Queue Types
+// =======================================================
+
+export interface MissionControlQueueRow {
+  symbol: string;
+  company: string;
+  exchange: string;
+
+  status: "PENDING" | "RUNNING" | "COMPLETED";
+
+  filings_discovered: number;
+  updated_at: string | null;
+}
+
+export interface MissionControlQueueResponse {
+  success: boolean;
+
+  summary: {
+    pending: number;
+    running: number;
+    completed: number;
+    total: number;
+  };
+
+  page: number;
+  limit: number;
+  total_pages: number;
+
+  search: string;
+  status_filter: string;
+
+  results: MissionControlQueueRow[];
+}
+
+// =======================================================
+// Mission Control Queue
+// =======================================================
+
+export async function fetchMissionControlQueue(
+  page = 1,
+  limit = 50,
+  search = "",
+  status = "ALL"
+): Promise<MissionControlQueueResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    search,
+    status,
+  });
+
+  const response = await fetch(
+    `${API_BASE}/mission-control/queue?${params.toString()}`,
+    {
+      cache: "no-store",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch Discovery Queue.");
+  }
+
+  return response.json();
+}
+
+// =======================================================
+// Warehouse Monitoring Snapshot
+// =======================================================
+
+export async function fetchWarehouseStatus() {
+  const response = await fetch(`${API_BASE}/warehouse/status`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch Warehouse status.");
   }
 
   return response.json();
