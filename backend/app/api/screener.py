@@ -64,6 +64,8 @@ def growth_screener(
             FinancialImportAudit,
             FinancialImportAudit.company_id == Company.id,
         )
+        .filter(Company.listing_status == "Active")
+        .filter(Company.is_growth_eligible.is_(True))
     )
 
     # ------------------------------------------------------

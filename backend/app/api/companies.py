@@ -36,7 +36,31 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 @router.get("/companies/dashboard-summary")
 def dashboard_summary(db: Session = Depends(get_db)):
     total_companies = db.query(func.count(Company.id)).scalar() or 0
-    active_companies = total_companies
+    active_companies = (
+        db.query(func.count(Company.id))
+        .filter(Company.listing_status == "Active")
+        .filter(Company.is_growth_eligible.is_(True))
+        .scalar()
+        or 0
+    )
+    unlisted_companies = (
+        db.query(func.count(Company.id))
+        .filter(Company.listing_status != "Active")
+        .scalar()
+        or 0
+    )
+    mutual_funds = (
+        db.query(func.count(Company.id))
+        .filter(Company.security_type == "MUTUAL_FUND")
+        .scalar()
+        or 0
+    )
+    debt_instruments = (
+        db.query(func.count(Company.id))
+        .filter(Company.security_type == "DEBT")
+        .scalar()
+        or 0
+    )
 
     nse_companies = 0
     bse_companies = 0
@@ -58,6 +82,9 @@ def dashboard_summary(db: Session = Depends(get_db)):
     return {
         "total_companies": total_companies,
         "active_companies": active_companies,
+        "unlisted_companies": unlisted_companies,
+        "mutual_funds": mutual_funds,
+        "debt_instruments": debt_instruments,
         "nse_companies": nse_companies,
         "bse_companies": bse_companies,
     }
@@ -69,11 +96,18 @@ def dashboard_summary(db: Session = Depends(get_db)):
 @router.get("/companies")
 def get_companies(
     search: str = Query(default=""),
+    eligible_only: bool = Query(default=True),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     query = db.query(Company)
+
+    if eligible_only:
+        query = query.filter(
+            Company.listing_status == "Active",
+            Company.is_growth_eligible.is_(True),
+        )
 
     if search:
         query = query.filter(
@@ -114,6 +148,7 @@ def get_companies(
                 "pat_growth": company.pat_growth or 0,
                 "roce": company.roce or 0,
                 "ai_score": company.ai_score or 0,
+                "updated_at": company.updated_at.isoformat() if getattr(company, "updated_at", None) else None,
             }
             for company in companies
         ],

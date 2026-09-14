@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Database,
   Building2,
@@ -30,24 +30,24 @@ export default function KPICards() {
   const [warehouse, setWarehouse] = useState<WarehouseStatus | null>(null);
   const [audit, setAudit] = useState<AuditSummary | null>(null);
 
-  useEffect(() => {
-    loadDashboard();
-
-    const interval = setInterval(loadDashboard, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     try {
       const warehouseData = await fetchWarehouseStatus();
       const auditData = await fetchAuditSummary();
 
       setWarehouse(warehouseData);
-      setAudit(auditData);
+      setAudit(auditData as unknown as AuditSummary);
     } catch (error) {
       console.error("Failed to load dashboard KPIs", error);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+
+    const interval = setInterval(loadDashboard, 5000);
+    return () => clearInterval(interval);
+  }, [loadDashboard]);
 
   const cards = [
     {
@@ -88,10 +88,10 @@ export default function KPICards() {
 
   const colorClasses: Record<string, string> = {
     emerald:
-      "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-    blue: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+      "border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400",
+    blue: "border-blue-500/20 bg-blue-500/5 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400",
     amber:
-      "border-amber-500/30 bg-amber-500/10 text-amber-400",
+      "border-amber-500/20 bg-amber-500/5 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400",
   };
 
   return (
@@ -105,18 +105,18 @@ export default function KPICards() {
             className={`rounded-2xl border p-5 ${colorClasses[card.color]}`}
           >
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold tracking-wider text-slate-400">
+              <p className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400">
                 {card.title}
               </p>
 
               <Icon className="h-5 w-5" />
             </div>
 
-            <h3 className="mt-4 text-3xl font-bold text-white">
+            <h3 className="mt-4 text-3xl font-bold text-slate-900 dark:text-white">
               {card.value}
             </h3>
 
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               {card.subtitle}
             </p>
           </div>

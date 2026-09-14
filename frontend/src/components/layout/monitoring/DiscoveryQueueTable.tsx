@@ -15,7 +15,7 @@ export interface DiscoveryQueueRow {
   exchange: string;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
   filings_discovered: number;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 interface DiscoveryQueueTableProps {

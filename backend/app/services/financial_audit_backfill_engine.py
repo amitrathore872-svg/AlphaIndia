@@ -169,6 +169,81 @@ class FinancialAuditBackfillEngine:
     @classmethod
     def status(cls):
 
+        # If not actively running in-memory worker, read actual database audit statistics
+        if not cls._running and cls._stats["processed"] == 0:
+            db = SessionLocal()
+            try:
+                from sqlalchemy import func
+                from app.models.financial_import_audit import FinancialImportAudit
+                from app.models.financial_import_queue import FinancialImportQueue
+
+                total_completed_queue = (
+                    db.query(func.count(FinancialImportQueue.id))
+                    .filter(FinancialImportQueue.status == "COMPLETED")
+                    .scalar()
+                    or 0
+                )
+                total_audits = (
+                    db.query(func.count(FinancialImportAudit.id)).scalar() or 0
+                )
+                passed = (
+                    db.query(func.count(FinancialImportAudit.id))
+                    .filter(FinancialImportAudit.status == "PASS")
+                    .scalar()
+                    or 0
+                )
+                warning = (
+                    db.query(func.count(FinancialImportAudit.id))
+                    .filter(FinancialImportAudit.status == "WARNING")
+                    .scalar()
+                    or 0
+                )
+                failed = (
+                    db.query(func.count(FinancialImportAudit.id))
+                    .filter(FinancialImportAudit.status == "FAIL")
+                    .scalar()
+                    or 0
+                )
+
+                latest_audit = (
+                    db.query(FinancialImportAudit)
+                    .order_by(
+                        FinancialImportAudit.updated_at.desc().nullslast(),
+                        FinancialImportAudit.id.desc(),
+                    )
+                    .first()
+                )
+                last_symbol = latest_audit.symbol if latest_audit else None
+
+                effective_total = (
+                    total_completed_queue
+                    if total_completed_queue > 0
+                    else (total_audits or 1)
+                )
+                progress = (
+                    round((total_audits / effective_total) * 100, 1)
+                    if effective_total
+                    else 0.0
+                )
+
+                return {
+                    "running": False,
+                    "thread_alive": False,
+                    "progress_percent": min(progress, 100.0),
+                    "processed": total_audits,
+                    "passed": passed,
+                    "warning": warning,
+                    "failed": failed,
+                    "total": effective_total,
+                    "started_at": cls._stats.get("started_at"),
+                    "last_symbol": last_symbol,
+                    "last_error": None,
+                }
+            except Exception:
+                pass
+            finally:
+                db.close()
+
         total = cls._stats["total"] or 1
 
         return {

@@ -131,20 +131,32 @@ class FinancialAuditEngine:
     # ------------------------------------------------------
     # Engine Status
     # ------------------------------------------------------
+    # ------------------------------------------------------
+    # Engine Status
+    # ------------------------------------------------------
     @classmethod
-    def status(cls, db):
+    def status(cls, db=None):
+        should_close = False
+        if db is None:
+            db = SessionLocal()
+            should_close = True
 
-        summary = FinancialAuditService.warehouse_summary(db)
+        try:
+            summary = FinancialAuditService.warehouse_summary(db)
+            audit = FinancialAuditService.audit_summary(db)
 
-        return {
-            "engine": {
-                "running": cls.running,
-                "thread_alive": (
-                    cls.worker_thread.is_alive()
-                    if cls.worker_thread
-                    else False
-                ),
-            },
-            "audit_summary": summary["audit"],
-            "warehouse": summary["warehouse"],
-        }
+            return {
+                "engine": {
+                    "running": cls.running,
+                    "thread_alive": (
+                        cls.worker_thread.is_alive()
+                        if cls.worker_thread
+                        else False
+                    ),
+                },
+                "audit_summary": audit,
+                "warehouse": summary,
+            }
+        finally:
+            if should_close:
+                db.close()

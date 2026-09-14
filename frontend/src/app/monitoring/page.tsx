@@ -6,7 +6,7 @@
 // Live Queue Integration
 // =======================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import MonitoringRibbon from "@/components/layout/MonitoringRibbon";
@@ -28,13 +28,12 @@ import type { MissionControlStatus } from "@/types/monitoring";
 
 export default function MonitoringPage() {
   // =====================================================
-  // Mission Control State
+  // State
   // =====================================================
 
   const [status, setStatus] = useState<MissionControlStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Discovery Queue
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -46,7 +45,7 @@ export default function MonitoringPage() {
   // Load Mission Control Dashboard
   // =====================================================
 
-  async function loadMissionControl() {
+  const loadMissionControl = useCallback(async () => {
     try {
       const data = await fetchMissionControlStatus();
       setStatus(data);
@@ -55,13 +54,13 @@ export default function MonitoringPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   // =====================================================
   // Load Discovery Queue
   // =====================================================
 
-  async function loadQueue() {
+  const loadQueue = useCallback(async () => {
     try {
       const data = await fetchMissionControlQueue(
         queuePage,
@@ -76,7 +75,7 @@ export default function MonitoringPage() {
       console.error("Discovery Queue:", error);
       setQueueRows([]);
     }
-  }
+  }, [queuePage, search, statusFilter]);
 
   // =====================================================
   // Auto Refresh Every 5 Seconds
@@ -92,7 +91,7 @@ export default function MonitoringPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [queuePage, search, statusFilter]);
+  }, [loadMissionControl, loadQueue]);
 
   // =====================================================
   // Render

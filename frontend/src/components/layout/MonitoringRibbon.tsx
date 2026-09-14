@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Activity,
   ShieldCheck,
@@ -21,7 +21,7 @@ interface WarehouseData {
   total_companies: number;
   imported_companies: number;
   pending_companies: number;
-  failed_companies: number;
+  failed_companies?: number;
   quarterly_records: number;
   coverage_percent: number;
 }
@@ -41,7 +41,7 @@ export default function MonitoringRibbon() {
   const [audit, setAudit] = useState<AuditData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function loadStatus() {
+  const loadStatus = useCallback(async () => {
     try {
       const [warehouseStatus, auditStatus] = await Promise.all([
         fetchWarehouseStatus(),
@@ -53,15 +53,17 @@ export default function MonitoringRibbon() {
     } catch (error) {
       console.error("Monitoring status failed:", error);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadStatus();
 
     const timer = setInterval(loadStatus, 5000);
 
-    return () => clearInterval(timer);
-  }, []);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [loadStatus]);
 
   async function handleStartAudit() {
     setLoading(true);

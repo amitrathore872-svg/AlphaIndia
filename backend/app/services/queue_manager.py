@@ -23,6 +23,8 @@ class QueueManager:
 
         companies = (
             db.query(Company)
+            .filter(Company.listing_status == "Active")
+            .filter(Company.is_growth_eligible.is_(True))
             .order_by(Company.company.asc())
             .all()
         )

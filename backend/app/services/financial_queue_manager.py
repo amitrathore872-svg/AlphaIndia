@@ -22,6 +22,8 @@ class FinancialQueueManager:
 
         companies = (
             db.query(Company.symbol, Company.id)
+            .filter(Company.listing_status == "Active")
+            .filter(Company.is_growth_eligible.is_(True))
             .distinct(Company.symbol)
             .order_by(Company.symbol, Company.id)
             .all()

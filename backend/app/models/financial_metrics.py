@@ -26,16 +26,24 @@ class FinancialMetric(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), index=True)
 
     period = Column(String(20), index=True)
+    period_type = Column(String(20), default="QUARTERLY")
 
+    revenue = Column(Float, nullable=True)
     revenue_growth = Column(Float, default=0)
+    pat = Column(Float, nullable=True)
     pat_growth = Column(Float, default=0)
+    ebitda_margin = Column(Float, nullable=True)
     roce = Column(Float, default=0)
+    roe = Column(Float, nullable=True)
 
     debt_equity = Column(Float, default=0)
     promoter_holding = Column(Float, default=0)
+    eps = Column(Float, nullable=True)
+    eps_growth = Column(Float, default=0)
+    pe_ratio = Column(Float, nullable=True)
 
     ai_score = Column(Float, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    scanned_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company")

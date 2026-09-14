@@ -75,3 +75,21 @@ export function fetchAuditFailures(limit = 20) {
 export function fetchEngineStatus() {
   return request("/financials/engine/status");
 }
+
+export interface ImportDashboardSummary {
+  total_companies: number;
+  imported_companies: number;
+  pending_companies: number;
+  progress_percent: number;
+  coverage_percent: number;
+  quarterly_records: number;
+  filings_discovered: number;
+  pdf_downloaded: number;
+  pending_downloads: number;
+  parsed_filings: number;
+  ai_scores_generated: number;
+}
+
+export function fetchImportDashboardSummary() {
+  return request<ImportDashboardSummary>("/import-dashboard/summary");
+}

@@ -11,6 +11,10 @@ import type {
   AuditBackfillStatus,
   MissionControlStatus,
   DiscoveryQueueSummary,
+  TimelineEventsResponse,
+  ValidationScorecardResponse,
+  Sprint23EnginesResponse,
+  ReplayStatusResponse,
 } from "@/types/monitoring";
 
 const API_BASE =
@@ -53,15 +57,34 @@ export async function fetchHeartbeat(): Promise<MonitoringHeartbeat> {
 // Compatible with current backend payload.
 // =======================================================
 
-export async function fetchWarehouseSummary(): Promise<WarehouseSummary> {
-  const data: any = await request("/import-dashboard/summary");
+interface RawWarehouseSummary {
+  warehouse?: WarehouseSummary["warehouse"];
+  audit?: WarehouseSummary["audit"];
+  total_companies?: number;
+  imported_companies?: number;
+  quarterly_records?: number;
+  filings_discovered?: number;
+  ai_scores_generated?: number;
+  total_audited?: number;
+  pass?: number;
+  warning?: number;
+  fail?: number;
+}
 
-  // Sprint 33 nested response
-  if (data?.warehouse) {
-    return data;
+export async function fetchWarehouseSummary(): Promise<WarehouseSummary> {
+  const data = await request<RawWarehouseSummary>(
+    "/import-dashboard/summary"
+  );
+
+  // Sprint 33 nested response with full real data
+  if (data?.warehouse && data?.audit) {
+    return {
+      warehouse: data.warehouse,
+      audit: data.audit,
+    };
   }
 
-  // Current backend flat response
+  // Backward-compatible fallback
   const totalCompanies = data.total_companies ?? 0;
   const importedCompanies = data.imported_companies ?? 0;
 
@@ -69,23 +92,18 @@ export async function fetchWarehouseSummary(): Promise<WarehouseSummary> {
     warehouse: {
       total_companies: totalCompanies,
       imported_companies: importedCompanies,
-
-      // Calculate values because backend doesn't send them.
       pending_companies: Math.max(totalCompanies - importedCompanies, 0),
-
       coverage_percent:
         totalCompanies === 0
           ? 0
           : (importedCompanies / totalCompanies) * 100,
-
-      quarterly_records: data.filings_discovered ?? 0,
+      quarterly_records: data.quarterly_records ?? data.filings_discovered ?? 0,
     },
-
     audit: {
-      total_audited: data.ai_scores_generated ?? 0,
-      pass: data.ai_scores_generated ?? 0,
-      warning: 0,
-      fail: 0,
+      total_audited: data.audit?.total_audited ?? data.total_audited ?? data.ai_scores_generated ?? 0,
+      pass: data.audit?.pass ?? data.pass ?? data.ai_scores_generated ?? 0,
+      warning: data.audit?.warning ?? data.warning ?? 0,
+      fail: data.audit?.fail ?? data.fail ?? 0,
     },
   };
 }
@@ -196,6 +214,7 @@ export async function fetchWarehouseStatus() {
     total_companies: summary.warehouse.total_companies,
     imported_companies: summary.warehouse.imported_companies,
     pending_companies: summary.warehouse.pending_companies,
+    failed_companies: summary.audit.fail,
     coverage_percent: summary.warehouse.coverage_percent,
     quarterly_records: summary.warehouse.quarterly_records,
   };
@@ -223,7 +242,7 @@ export async function stopAuditEngine() {
 // SPRINT 33 HELPERS
 // =======================================================
 
-export interface MonitoringDashboard extends MissionControlStatus {}
+export type MonitoringDashboard = MissionControlStatus;
 
 export async function fetchMonitoringDashboard(): Promise<MonitoringDashboard> {
   return fetchMissionControlStatus();
@@ -302,4 +321,81 @@ export async function fetchMissionControlQueue(
   }
 
   return response.json();
+}
+
+// =======================================================
+// Scanner Timeline Events API (Real Filing Events)
+// =======================================================
+
+export async function fetchScannerEvents(
+  limit = 50,
+  eventType = "ALL",
+  symbol = ""
+): Promise<TimelineEventsResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    event_type: eventType,
+    symbol,
+  });
+
+  return request(`/mission-control/events?${params.toString()}`);
+}
+
+// =======================================================
+// Sprint 23 — Pipeline Validation & Replay Controls API
+// =======================================================
+
+export async function fetchValidationScorecard(): Promise<ValidationScorecardResponse> {
+  return request("/mission-control/validation/scorecard");
+}
+
+export async function fetchSprint23Engines(): Promise<Sprint23EnginesResponse> {
+  return request("/mission-control/engines");
+}
+
+export async function startReplayPipeline(
+  intervalSeconds = 5.0
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(
+    `${API_BASE}/mission-control/replay/start?interval_seconds=${intervalSeconds}`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to start replay pipeline.");
+  }
+
+  return response.json();
+}
+
+export async function resetReplayPipeline(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const response = await fetch(`${API_BASE}/mission-control/replay/reset`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to reset replay pipeline.");
+  }
+
+  return response.json();
+}
+
+export async function fetchReplayStatus(): Promise<ReplayStatusResponse> {
+  return request("/mission-control/replay/status");
+}
+
+export async function fetchReconciliationLogs(
+  symbol = "",
+  limit = 100
+): Promise<{ success: boolean; total: number; logs: Record<string, unknown>[] }> {
+  const params = new URLSearchParams({
+    symbol,
+    limit: String(limit),
+  });
+  return request(`/mission-control/reconciliation/logs?${params.toString()}`);
 }

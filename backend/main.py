@@ -10,6 +10,11 @@ from app.models.announcement import Announcement
 from app.models.filing_registry import FilingRegistry
 from app.models.monitoring_heartbeat import MonitoringHeartbeat
 from app.models.financial_import_queue import FinancialImportQueue
+# Sprint 23 — Early Stage Discovery
+from app.models.early_stage_candidate import EarlyStageCandidate  # noqa: F401
+from app.models.early_stage_temp_cache import EarlyStageTempCache  # noqa: F401
+from app.models.early_stage_daily import EarlyStageDaily  # noqa: F401
+from app.models.early_stage_import_log import EarlyStageImportLog  # noqa: F401
 
 # ---------------- API Routers ----------------
 from app.api.companies import router as companies_router
@@ -23,6 +28,14 @@ from app.api.downloads import router as downloads_router
 from app.api.financials import router as financials_router
 from app.api.screener import router as screener_router
 from app.api.mission_control import router as mission_control_router
+from app.api.market_intelligence import router as market_intelligence_router
+from app.api.screener_growth import router as screener_growth_router
+from app.api.screener_monitoring import router as screener_monitoring_router
+from app.api.watchlist import router as watchlist_router
+from app.services.screener_scheduler import ScreenerScheduler
+from app.services.early_stage_scheduler import EarlyStageScheduler
+from app.api.early_stage import router as early_stage_router
+from app.api.monitoring_early_stage import router as monitoring_early_stage_router
 
 
 # Create database tables
@@ -47,7 +60,6 @@ app.add_middleware(
 )
 
 # ---------------- Register Routers ----------------
-# ---------------- Register Routers ----------------
 app.include_router(companies_router)
 app.include_router(growth_router)
 app.include_router(dashboard_router)
@@ -59,6 +71,19 @@ app.include_router(downloads_router)
 app.include_router(financials_router)
 app.include_router(screener_router)
 app.include_router(mission_control_router)
+app.include_router(mission_control_router, prefix="/api")
+app.include_router(market_intelligence_router)
+app.include_router(screener_growth_router)
+app.include_router(screener_monitoring_router)
+app.include_router(watchlist_router)
+app.include_router(early_stage_router)         # Sprint 23 — discovery
+app.include_router(monitoring_early_stage_router)  # Sprint 23 — monitoring
+
+
+@app.on_event("startup")
+def on_startup():
+    ScreenerScheduler.start()
+    EarlyStageScheduler.start()  # Sprint 23 — guarded by early_stage_enabled flag
 
 # ==========================================================
 # Root Endpoint

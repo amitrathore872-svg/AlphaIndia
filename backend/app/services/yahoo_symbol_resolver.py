@@ -35,7 +35,7 @@ class YahooSymbolResolver:
                 ticker = yf.Ticker(ticker_symbol)
 
                 # Fast metadata call (much faster than ticker.info)
-                hist = ticker.history(period="1d")
+                hist = ticker.history(period="5d")
 
                 if hist is not None and not hist.empty:
                     return ticker_symbol

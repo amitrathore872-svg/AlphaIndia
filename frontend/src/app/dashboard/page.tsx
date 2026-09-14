@@ -20,7 +20,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
 
-          <KPI title="Companies Imported" value="0 / 8588" color="emerald" />
+          <KPI title="Companies Imported" value="0 / 5002" color="emerald" />
 
           <KPI title="Filings Discovered" value="3" color="cyan" />
 
@@ -47,7 +47,7 @@ export default function DashboardPage() {
 
           <div className="mt-3 flex justify-between text-sm text-slate-400">
             <span>0 Companies Imported</span>
-            <span>8588 Remaining</span>
+            <span>5002 Active Equities</span>
           </div>
         </section>
 

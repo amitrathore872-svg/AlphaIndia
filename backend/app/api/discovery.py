@@ -4,7 +4,7 @@ Sprint 28.5.2 — Production Discovery Worker
 Version: v0.9.8
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -126,10 +126,38 @@ def bootstrap_queue(db: Session = Depends(get_db)):
 # Queue Status
 # ==========================================================
 @router.get("/queue")
-def queue_status():
+def queue_status(db: Session = Depends(get_db)):
+    mgr_status = QueueManager.status()
+    if mgr_status.get("total", 0) > 0:
+        return {
+            "success": True,
+            **mgr_status,
+        }
+
+    from sqlalchemy import func
+    from app.models.financial_import_queue import FinancialImportQueue
+    from app.models.quarterly_result import QuarterlyResult
+
+    total_companies = db.query(func.count(Company.id)).scalar() or 0
+    completed = (
+        db.query(func.count(func.distinct(QuarterlyResult.company_id))).scalar()
+        or 0
+    )
+    failed = (
+        db.query(func.count(FinancialImportQueue.id))
+        .filter(FinancialImportQueue.status.in_(["FAILED", "UNAVAILABLE"]))
+        .scalar()
+        or 0
+    )
+    pending = max(total_companies - completed - failed, 0)
+    running_list = [QueueManager.running] if QueueManager.running else []
+
     return {
         "success": True,
-        **QueueManager.status(),
+        "pending": pending,
+        "completed": completed,
+        "running": running_list,
+        "total": total_companies,
     }
 
 
@@ -299,9 +327,11 @@ def discover_company(symbol: str, db: Session = Depends(get_db)):
         )
 
     # ------------------------------------------------------
-    # Queue + Heartbeat
+    # Queue + Heartbeat & Company Timestamp
     # ------------------------------------------------------
     QueueManager.complete_company(symbol)
+
+    company.updated_at = datetime.now(timezone.utc)
 
     heartbeat = DiscoveryService.get_status(db)
     heartbeat.companies_scanned_today += 1
@@ -443,6 +473,8 @@ def run_next_company(db: Session = Depends(get_db)):
 
     QueueManager.complete_company(symbol)
 
+    company.updated_at = datetime.now(timezone.utc)
+
     heartbeat = DiscoveryService.get_status(db)
     heartbeat.companies_scanned_today += 1
     heartbeat.results_found_today += inserted
@@ -457,4 +489,70 @@ def run_next_company(db: Session = Depends(get_db)):
         "exchange": "NSE",
         "filings_discovered": inserted,
         "queue": QueueManager.status(),
+    }
+
+
+# ==========================================================
+# Real-Time Continuous Discovery Monitor Cycle
+# ==========================================================
+@router.post("/monitor/run-cycle")
+def run_monitor_cycle(limit: int = 10, db: Session = Depends(get_db)):
+    """
+    Executes an active real-time discovery cycle across exchange announcement feeds.
+    Pulls newly published quarterly filings, updates financial statements in the warehouse,
+    calculates YoY growth rates, sets company.updated_at, and returns telemetry.
+    """
+    result = DiscoveryService.run_realtime_monitor_cycle(db, limit=limit)
+    return {
+        "success": True,
+        "message": "Real-time discovery monitor cycle completed successfully",
+        **result,
+    }
+
+
+@router.get("/monitor/recent-activity")
+def recent_monitor_activity(limit: int = 15, db: Session = Depends(get_db)):
+    """
+    Retrieves the most recently discovered & updated companies and filings across NSE/BSE.
+    """
+    recent_companies = (
+        db.query(Company)
+        .filter(Company.updated_at.isnot(None))
+        .order_by(Company.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    recent_filings = (
+        db.query(FilingRegistry)
+        .order_by(FilingRegistry.discovered_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "success": True,
+        "recent_companies": [
+            {
+                "symbol": c.symbol,
+                "company": c.company,
+                "exchange": c.exchange,
+                "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+                "revenue_growth": c.revenue_growth,
+                "pat_growth": c.pat_growth,
+                "ai_score": getattr(c, "ai_score", None),
+            }
+            for c in recent_companies
+        ],
+        "recent_filings": [
+            {
+                "symbol": f.symbol,
+                "exchange": f.exchange,
+                "period": f.period,
+                "filing_type": f.filing_type,
+                "discovered_at": f.discovered_at.isoformat() if f.discovered_at else None,
+                "parse_status": f.parse_status,
+            }
+            for f in recent_filings
+        ],
     }

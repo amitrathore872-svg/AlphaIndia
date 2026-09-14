@@ -1,4 +1,4 @@
-{"use client";
+"use client";
 
 import { ImportDashboardSummary } from "@/lib/importDashboardApi";
 
@@ -11,7 +11,7 @@ export default function ImportKPICards({
   summary,
   loading,
 }: Props) {
-  const cards = [
+  const cards: Omit<CardProps, "loading">[] = [
     {
       title: "Companies Imported",
       value: summary

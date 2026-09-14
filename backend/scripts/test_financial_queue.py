@@ -16,7 +16,7 @@ count = FinancialQueueManager.bootstrap(db)
 print("Companies in Queue:", count)
 
 print("\nQueue Status")
-print(FinancialQueueManager.status(db))
+print(FinancialQueueManager.stats(db))
 
 item = FinancialQueueManager.next_company(db)
 
@@ -24,6 +24,6 @@ print("\nNext Company")
 print(item.symbol if item else "None")
 
 print("\nQueue Status After Picking One")
-print(FinancialQueueManager.status(db))
+print(FinancialQueueManager.stats(db))
 
 db.close()

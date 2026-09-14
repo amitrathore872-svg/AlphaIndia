@@ -35,6 +35,8 @@ def growth_screener_filters(db: Session = Depends(get_db)):
     # -----------------------------
     sectors = (
         db.query(Company.sector)
+        .filter(Company.listing_status == "Active")
+        .filter(Company.is_growth_eligible.is_(True))
         .filter(Company.sector.isnot(None))
         .filter(Company.sector != "")
         .distinct()
@@ -106,7 +108,10 @@ def growth_screener(
     Sorting happens across ALL companies before pagination.
     """
 
-    query = db.query(Company)
+    query = db.query(Company).filter(
+        Company.listing_status == "Active",
+        Company.is_growth_eligible.is_(True),
+    )
 
     # ------------------------------------------------------
     # Search

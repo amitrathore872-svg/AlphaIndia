@@ -1,6 +1,6 @@
-{"use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import ImportKPICards from "@/components/dashboard/ImportKPICards";
 
@@ -15,11 +15,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
 
     try {
@@ -30,7 +26,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   return (
     <main className="min-h-screen bg-[#050B14] text-white">

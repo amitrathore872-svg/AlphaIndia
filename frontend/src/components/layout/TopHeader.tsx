@@ -1,15 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Search,
   Bell,
   Activity,
   ShieldCheck,
   Clock3,
+  Menu,
 } from "lucide-react";
+import ThemeToggle from "./ThemeToggle";
 
-export default function TopHeader() {
+interface TopHeaderProps {
+  onOpenSidebar?: () => void;
+}
+
+export default function TopHeader({ onOpenSidebar }: TopHeaderProps) {
   const [time, setTime] = useState("");
 
   useEffect(() => {
@@ -32,69 +39,87 @@ export default function TopHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-800 bg-[#081225]/95 backdrop-blur-xl">
-      <div className="flex items-center justify-between px-6 py-4">
-        {/* LEFT */}
-        <div className="flex items-center gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              Growth Screener
-            </h2>
-            <p className="text-xs text-slate-400">
-              Discover India's fastest-growing listed companies.
-            </p>
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-xl transition-colors duration-200 dark:border-slate-800 dark:bg-[#081225]/95">
+      <div className="flex items-center justify-between px-3.5 py-2.5 sm:px-6 sm:py-3.5">
+        {/* LEFT: Mobile Menu Button */}
+        {onOpenSidebar && (
+          <div className="flex items-center lg:hidden">
+            <button
+              onClick={onOpenSidebar}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 text-slate-700 transition hover:border-cyan-500/50 hover:bg-slate-200 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu size={18} />
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* CENTER SEARCH */}
-        <div className="hidden w-full max-w-xl lg:block">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3">
-            <Search size={18} className="text-slate-500" />
+        {/* CENTER SEARCH (Desktop) */}
+        <div className="hidden w-full max-w-xl lg:block mx-4">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-100/80 px-4 py-2 transition-colors dark:border-slate-700 dark:bg-slate-900/80">
+            <Search size={16} className="text-slate-400 dark:text-slate-500" />
 
             <input
               placeholder="Search company, symbol, sector..."
-              className="w-full bg-transparent text-sm text-white placeholder:text-slate-500 outline-none"
+              className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 outline-none dark:text-white dark:placeholder:text-slate-500"
             />
           </div>
         </div>
 
-        {/* RIGHT STATUS */}
-        <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 lg:flex">
-            <Activity size={15} className="text-emerald-400" />
-            <span className="text-xs font-semibold text-emerald-400">
+        {/* RIGHT STATUS & PROFILE */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <Link
+            href="/monitoring"
+            title="Live Market Engine — View Real-time Telemetry"
+            className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 transition-all duration-200 hover:border-emerald-400/50 hover:bg-emerald-500/20"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+            </span>
+            <Activity size={14} className="text-emerald-500 dark:text-emerald-400" />
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tracking-wide">
               LIVE MARKET ENGINE
             </span>
-          </div>
+            <span className="hidden sm:inline-flex rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300">
+              ONLINE
+            </span>
+          </Link>
 
-          <div className="hidden items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 lg:flex">
-            <ShieldCheck size={15} className="text-cyan-400" />
-            <span className="text-xs font-semibold text-cyan-400">
+          <div className="hidden items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 xl:flex">
+            <ShieldCheck size={14} className="text-cyan-600 dark:text-cyan-400" />
+            <span className="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400">
               AUDIT READY
             </span>
           </div>
 
-          <div className="hidden items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 lg:flex">
-            <Clock3 size={15} className="text-amber-400" />
-            <span className="text-xs font-semibold text-white">
+          <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 md:flex dark:border-slate-700 dark:bg-slate-900">
+            <Clock3 size={14} className="text-amber-500 dark:text-amber-400" />
+            <span className="text-xs font-semibold text-slate-700 dark:text-white">
               {time} IST
             </span>
           </div>
 
-          <button className="rounded-xl border border-slate-700 bg-slate-900 p-2 text-slate-300 hover:bg-slate-800">
-            <Bell size={18} />
+          {/* Theme Toggle Button */}
+          <ThemeToggle />
+
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-xs transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
+            aria-label="Notifications"
+          >
+            <Bell size={16} />
           </button>
 
-          <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 font-bold text-black">
+          <div className="flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white p-1 sm:px-2.5 sm:py-1.5 shadow-xs dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-xs font-bold text-black shadow-sm">
               A
             </div>
 
             <div className="hidden lg:block">
-              <p className="text-sm font-semibold text-white">
+              <p className="text-xs font-semibold text-slate-800 dark:text-white">
                 Amit
               </p>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
                 Alpha India Admin
               </p>
             </div>
