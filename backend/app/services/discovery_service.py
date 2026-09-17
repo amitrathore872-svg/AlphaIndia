@@ -94,7 +94,14 @@ class DiscoveryService:
         processed_companies = []
         high_growth_count = 0
 
-        # Process the incoming live feed items up to limit
+        # 1. Ingest real-time market filings from live NSE & BSE feeds
+        from app.services.discovery_worker import DiscoveryWorker
+        try:
+            live_market_res = DiscoveryWorker.discover_live_market(db)
+        except Exception as e:
+            print(f"[DiscoveryService] Live market wire polling error: {e}")
+
+        # 2. Process feed items up to limit
         items_to_process = EXCHANGE_FEED_DATASET[:limit]
         for item in items_to_process:
             try:

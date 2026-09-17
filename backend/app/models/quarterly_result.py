@@ -5,7 +5,7 @@ Sprint 30.2 Production Model
 
 from datetime import datetime
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -13,10 +13,16 @@ from app.db.database import Base
 
 class QuarterlyResult(Base):
     __tablename__ = "quarterly_results"
+    __table_args__ = (
+        UniqueConstraint("company_id", "period_end", name="uq_quarterly_results_company_period"),
+        Index("idx_qr_company_period", "company_id", "period_end"),
+        Index("idx_qr_company_id", "company_id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+
 
     # ----------------------------------------------------------------
     # Legacy Compatibility

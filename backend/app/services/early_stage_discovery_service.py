@@ -75,25 +75,33 @@ def _get_yesterday_count(db: Session, company_name: str) -> int:
     return row[0] if row else 0
 
 
-def _extract_text_from_payload(payload: dict, source: str) -> List[str]:
+def _extract_text_from_payload(payload: dict, source: str) -> List[Dict]:
     """
-    Pull text fields from a raw cache payload depending on source type.
-    Returns a flat list of text strings for NER processing.
+    Pull text+url from a raw cache payload depending on source type.
+    Returns list of {text, url} dicts for NER processing.
     """
-    texts = []
-    if "articles" in payload:          # news
+    items = []
+    if "articles" in payload:          # news RSS
         for a in payload["articles"]:
-            texts.append(f"{a.get('title', '')} {a.get('summary', '')}")
+            t = f"{a.get('title', '')} {a.get('summary', '')}"
+            if len(t.strip()) >= 20:
+                items.append({"text": t, "url": a.get("link", "")})
     elif "posts" in payload:           # reddit
         for p in payload["posts"]:
-            texts.append(f"{p.get('title', '')} {p.get('selftext', '')}")
+            t = f"{p.get('title', '')} {p.get('selftext', '')}"
+            if len(t.strip()) >= 20:
+                items.append({"text": t, "url": p.get("url", "")})
     elif "tweets" in payload:          # twitter
         for t in payload["tweets"]:
-            texts.append(t.get("text", ""))
+            txt = t.get("text", "")
+            if len(txt.strip()) >= 20:
+                items.append({"text": txt, "url": ""})
     elif "videos" in payload:          # youtube
         for v in payload["videos"]:
-            texts.append(f"{v.get('title', '')} {v.get('description', '')}")
-    return [t for t in texts if len(t.strip()) >= 20]
+            t = f"{v.get('title', '')} {v.get('description', '')}"
+            if len(t.strip()) >= 20:
+                items.append({"text": t, "url": v.get("url", "")})
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -129,11 +137,13 @@ def run_extraction_pipeline() -> Dict[str, int]:
         for row in cache_rows:
             source   = row.source
             payload  = row.payload or {}
-            texts    = _extract_text_from_payload(payload, source)
-            texts_processed += len(texts)
+            items    = _extract_text_from_payload(payload, source)
+            texts_processed += len(items)
 
-            for text in texts:
-                entities = extract_companies(text)
+            for item in items:
+                text = item["text"]
+                url  = item.get("url", "")
+                entities  = extract_companies(text)
                 sentiment = _classify_sentiment(text)
 
                 for ent in entities:
@@ -147,20 +157,48 @@ def run_extraction_pipeline() -> Dict[str, int]:
                             "source": source,
                             "mention_count": 0,
                             "sentiment_votes": {"positive": 0, "neutral": 0, "negative": 0},
+                            "source_url": url,   # first URL seen for this entity
                         }
                     aggregate[key]["mention_count"] += 1
                     aggregate[key]["sentiment_votes"][sentiment] += 1
+                    # Keep the most recent non-empty URL
+                    if url and not aggregate[key]["source_url"]:
+                        aggregate[key]["source_url"] = url
 
         # Upsert into early_stage_candidate
         now = datetime.now(timezone.utc)
+
+        # Build a set of all listed company names (lowercase) from companies table
+        # Used to set is_listed flag on each candidate.
+        from sqlalchemy import text as sql_text
+        listed_names_raw = db.execute(
+            sql_text("SELECT LOWER(company) FROM companies WHERE listing_status IN ('Active','PROVISIONAL') LIMIT 10000")
+        ).fetchall()
+        listed_names: set = {r[0].strip() for r in listed_names_raw if r[0]}
+
+        def _is_listed(name: str) -> bool:
+            """True if the company name fuzzy-matches a listed company."""
+            lower = name.lower().strip()
+            # Exact match
+            if lower in listed_names:
+                return True
+            # Partial match: any listed name starts with the first word of candidate
+            first_word = lower.split()[0] if lower.split() else lower
+            if len(first_word) >= 4:
+                return any(n.startswith(first_word) for n in listed_names)
+            return False
+
         for key, data in aggregate.items():
             company_name = data["company_name"]
             source       = data["source"]
             mentions     = data["mention_count"]
+            src_url      = data.get("source_url", "")
 
             # Dominant sentiment
             votes     = data["sentiment_votes"]
             sentiment = max(votes, key=votes.get)
+
+            listed = _is_listed(company_name)
 
             # Check existing candidate
             existing = (
@@ -177,7 +215,7 @@ def run_extraction_pipeline() -> Dict[str, int]:
                 mention_count=mentions,
                 yesterday_count=yesterday_count,
                 sentiment=sentiment,
-                sector=None,  # sector resolved in Phase 5 (import)
+                sector=None,
             )
 
             if existing:
@@ -185,6 +223,9 @@ def run_extraction_pipeline() -> Dict[str, int]:
                 existing.last_seen      = now
                 existing.sentiment      = sentiment
                 existing.trend_score    = score
+                existing.is_listed      = listed
+                if src_url and not existing.source_url:
+                    existing.source_url = src_url
                 updated += 1
             else:
                 db.add(EarlyStageCandidate(
@@ -196,6 +237,8 @@ def run_extraction_pipeline() -> Dict[str, int]:
                     status="suggested",
                     first_seen=now,
                     last_seen=now,
+                    source_url=src_url or None,
+                    is_listed=listed,
                 ))
                 created += 1
 

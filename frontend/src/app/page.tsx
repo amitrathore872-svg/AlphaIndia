@@ -12,6 +12,7 @@ import ScreenerToolbar from "@/components/layout/screener/ScreenerToolbar";
 import GrowthTable, {
   type TableDensity,
 } from "@/components/layout/screener/GrowthTable";
+import WatchlistModal from "@/components/layout/screener/WatchlistModal";
 
 import {
   fetchGrowthScreener,
@@ -19,6 +20,8 @@ import {
   type GrowthCompany,
   type ScreenerFiltersState,
 } from "@/lib/api";
+import { fetchWatchlists } from "@/lib/watchlistApi";
+import type { WatchlistSummary } from "@/types/watchlist";
 
 const initialFilters: ScreenerFiltersState = {
   sector: "ALL",
@@ -29,6 +32,8 @@ const initialFilters: ScreenerFiltersState = {
   roce_min: "ALL",
   roe_min: "ALL",
   health_score_range: "ALL",
+  watchlist_only: false,
+  min_conviction: "ALL",
 };
 
 export default function HomePage() {
@@ -41,7 +46,23 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [totalCompanies, setTotalCompanies] = useState(0);
+
+  // Debounce search input by 350ms to eliminate multi-fetch on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Watchlist integration state
+  const [watchlists, setWatchlists] = useState<WatchlistSummary[]>([]);
+  const [selectedCompanyForWatchlist, setSelectedCompanyForWatchlist] = useState<GrowthCompany | null>(null);
+  const [isWatchlistModalOpen, setIsWatchlistModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Table Density (Compact | Default)
   const [density, setDensity] = useState<TableDensity>("default");
@@ -75,8 +96,21 @@ export default function HomePage() {
   const [availableSectors, setAvailableSectors] = useState<string[]>([]);
 
   // =====================================================
-  // Load Available Filter Options
+  // Load Watchlists & Available Filter Options
   // =====================================================
+  const loadWatchlists = useCallback(async () => {
+    try {
+      const res = await fetchWatchlists();
+      if (res.watchlists) setWatchlists(res.watchlists);
+    } catch (err) {
+      console.warn("Could not load watchlists:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWatchlists();
+  }, [loadWatchlists]);
+
   useEffect(() => {
     async function loadFilterOptions() {
       try {
@@ -92,10 +126,68 @@ export default function HomePage() {
   }, []);
 
   // =====================================================
+  // Watchlist Update Handler
+  // =====================================================
+  const handleWatchlistUpdated = (
+    symbol: string,
+    action: "added" | "updated" | "removed",
+    data?: {
+      watchlistId: number;
+      watchlistName: string;
+      convictionScore: number;
+      comment?: string;
+      targetPrice?: number | null;
+    }
+  ) => {
+    // Optimistic update in table
+    setCompanies((prev) =>
+      prev.map((c) => {
+        if (c.symbol === symbol) {
+          if (action === "removed") {
+            return {
+              ...c,
+              in_watchlist: false,
+              watchlist_item_id: null,
+              watchlist_id: null,
+              watchlist_name: null,
+              conviction_score: null,
+              watchlist_comment: null,
+              target_price: null,
+            };
+          } else {
+            return {
+              ...c,
+              in_watchlist: true,
+              watchlist_id: data?.watchlistId,
+              watchlist_name: data?.watchlistName,
+              conviction_score: data?.convictionScore,
+              watchlist_comment: data?.comment,
+              target_price: data?.targetPrice,
+            };
+          }
+        }
+        return c;
+      })
+    );
+
+    // Toast
+    if (action === "removed") {
+      setToastMessage(`Removed ${symbol} from watchlist`);
+    } else {
+      setToastMessage(
+        `★ ${symbol} ${action === "updated" ? "updated in" : "saved to"} ${data?.watchlistName ?? "Watchlist"} (${data?.convictionScore ?? 3}★ Conviction)`
+      );
+    }
+    setTimeout(() => setToastMessage(null), 4000);
+
+    loadWatchlists();
+  };
+
+  // =====================================================
   // Fetch Screener Data (Server-Side)
   // =====================================================
   const loadCompanies = useCallback(
-    async (currentPage = page, currentLimit = limit, currentSearch = search) => {
+    async (currentPage = page, currentLimit = limit, currentSearch = debouncedSearch) => {
       setLoading(true);
 
       try {
@@ -118,23 +210,23 @@ export default function HomePage() {
         setLoading(false);
       }
     },
-    [page, limit, search, sortBy, sortOrder, filters]
+    [page, limit, debouncedSearch, sortBy, sortOrder, filters]
   );
 
-  // Reload when page, limit, sort, or filters change
+  // Reload when page, limit, sort, filters, or debouncedSearch change
   useEffect(() => {
-    loadCompanies(page, limit, search);
-  }, [loadCompanies, page, limit, sortBy, sortOrder, filters, search]);
+    loadCompanies(page, limit, debouncedSearch);
+  }, [loadCompanies, page, limit, sortBy, sortOrder, filters, debouncedSearch]);
 
   // =====================================================
   // Handlers
   // =====================================================
   function handleSearch() {
+    setDebouncedSearch(search);
     setPage(1);
-    loadCompanies(1, limit, search);
   }
 
-  function handleFilterChange(key: keyof ScreenerFiltersState, value: string) {
+  function handleFilterChange(key: keyof ScreenerFiltersState, value: string | number | boolean) {
     setFilters((prev) => ({
       ...prev,
       [key]: value,
@@ -142,11 +234,14 @@ export default function HomePage() {
     setPage(1);
   }
 
+
   function handleResetFilters() {
     setFilters(initialFilters);
     setSearch("");
+    setDebouncedSearch("");
     setPage(1);
   }
+
 
   function handleSort(column: string) {
     if (column === sortBy) {
@@ -271,7 +366,29 @@ export default function HomePage() {
           onFirst={() => setPage(1)}
           onLast={() => setPage(totalPages)}
           density={density}
+          onOpenWatchlist={(company) => {
+            setSelectedCompanyForWatchlist(company);
+            setIsWatchlistModalOpen(true);
+          }}
         />
+
+        {/* Watchlist & Conviction Score Modal */}
+        <WatchlistModal
+          isOpen={isWatchlistModalOpen}
+          onClose={() => setIsWatchlistModalOpen(false)}
+          company={selectedCompanyForWatchlist}
+          watchlists={watchlists}
+          onWatchlistUpdated={handleWatchlistUpdated}
+          onRefreshWatchlists={loadWatchlists}
+        />
+
+        {/* Floating Toast Notification */}
+        {toastMessage && (
+          <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl border border-amber-500/40 bg-slate-900/95 px-4 py-3 text-xs font-semibold text-amber-400 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-3 duration-200">
+            <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

@@ -16,30 +16,44 @@ import {
 } from "lucide-react";
 
 import { fetchDiscoveryQueueSummary } from "@/lib/monitoringApi";
-import type { DiscoveryQueueSummary } from "@/types/monitoring";
 
-export default function DiscoveryQueueDashboard() {
-  const [queue, setQueue] = useState<DiscoveryQueueSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+export interface DiscoveryQueueSummaryData {
+  pending: number;
+  completed: number;
+  running?: number | string[] | null;
+  total: number;
+  success?: boolean;
+}
 
-  async function loadQueue() {
-    try {
-      const data = await fetchDiscoveryQueueSummary();
-      setQueue(data);
-    } catch (error) {
-      console.error("Discovery Queue:", error);
-    } finally {
-      setLoading(false);
-    }
-  }
+interface DiscoveryQueueDashboardProps {
+  summary?: DiscoveryQueueSummaryData | null;
+}
+
+export default function DiscoveryQueueDashboard({ summary }: DiscoveryQueueDashboardProps) {
+  const [internalQueue, setInternalQueue] = useState<DiscoveryQueueSummaryData | null>(null);
+  const [loading, setLoading] = useState(!summary);
+
+  const queue = summary || internalQueue;
 
   useEffect(() => {
+    if (summary) return; // Prop provided from parent; disable redundant polling
+
+    async function loadQueue() {
+      try {
+        const data = await fetchDiscoveryQueueSummary();
+        setInternalQueue(data);
+      } catch (error) {
+        console.error("Discovery Queue:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     loadQueue();
-
     const interval = setInterval(loadQueue, 5000);
-
     return () => clearInterval(interval);
-  }, []);
+  }, [summary]);
+
 
   if (loading || !queue) {
     return (
@@ -49,7 +63,10 @@ export default function DiscoveryQueueDashboard() {
     );
   }
 
-  const runningWorkers = queue.running ? queue.running.length : 0;
+  const runningWorkers = Array.isArray(queue.running)
+    ? queue.running.length
+    : (typeof queue.running === "number" ? queue.running : 0);
+
 
   const progress =
     queue.total === 0 ? 0 : (queue.completed / queue.total) * 100;

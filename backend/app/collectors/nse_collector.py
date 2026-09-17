@@ -1,85 +1,29 @@
-from datetime import datetime
-from sqlalchemy.orm import Session
+"""
+Alpha India — Multi-Exchange Live Corporate Announcement Collector
+Sprint 34 Production Version
+Discovers and ingests real-time filings from official NSE & BSE feeds.
+"""
 
+from typing import Optional
 from app.db.database import SessionLocal
-from app.models.announcement import Announcement
-
-# Temporary sample data (will become live NSE API in Step 4.1.3)
-SAMPLE_ANNOUNCEMENTS = [
-    {
-        "symbol": "KPITTECH",
-        "company": "KPIT Technologies",
-        "announcement_type": "Quarterly Results",
-        "quarter": "Q1 FY27",
-        "published_at": datetime(2026, 9, 5, 14, 31),
-        "source_url": "https://www.nseindia.com/",
-    },
-    {
-        "symbol": "BEL",
-        "company": "Bharat Electronics",
-        "announcement_type": "Quarterly Results",
-        "quarter": "Q1 FY27",
-        "published_at": datetime(2026, 9, 5, 15, 2),
-        "source_url": "https://www.nseindia.com/",
-    },
-    {
-        "symbol": "KARNATAKA",
-        "company": "Karnataka Bank",
-        "announcement_type": "Quarterly Results",
-        "quarter": "Q1 FY27",
-        "published_at": datetime(2026, 9, 5, 15, 20),
-        "source_url": "https://www.nseindia.com/",
-    },
-]
+from app.services.discovery_worker import DiscoveryWorker
 
 
-def collect_nse_announcements():
+def collect_nse_announcements(symbol: Optional[str] = None):
     """
-    Inserts only NEW announcements into PostgreSQL.
-    Duplicate announcements are skipped.
+    Collects live corporate announcements from NSE and BSE and saves to filing_registry and announcements.
+    If symbol is None or "ALL", polls the entire live exchange market wire.
     """
-
-    db: Session = SessionLocal()
-
-    inserted = 0
-    skipped = 0
-
+    db = SessionLocal()
     try:
-        for item in SAMPLE_ANNOUNCEMENTS:
-
-            existing = (
-                db.query(Announcement)
-                .filter(
-                    Announcement.symbol == item["symbol"],
-                    Announcement.quarter == item["quarter"],
-                )
-                .first()
-            )
-
-            if existing:
-                skipped += 1
-                continue
-
-            announcement = Announcement(
-                symbol=item["symbol"],
-                company=item["company"],
-                announcement_type=item["announcement_type"],
-                quarter=item["quarter"],
-                published_at=item["published_at"],
-                source_url=item["source_url"],
-                status="NEW",
-            )
-
-            db.add(announcement)
-            inserted += 1
-
-        db.commit()
-
-        print("=" * 50)
-        print("📡 Alpha India NSE Collector")
-        print(f"Inserted : {inserted}")
-        print(f"Skipped  : {skipped}")
-        print("=" * 50)
+        if not symbol or symbol.upper() == "ALL":
+            res = DiscoveryWorker.discover_live_market(db)
+            print(f"[Exchange Collector] Live Market Wire Discovered {res['new_entries_discovered']} new filings (Scanned {res['total_scanned']})")
+            return res
+        else:
+            res = DiscoveryWorker.discover_company(db, symbol, exchange="NSE")
+            print(f"[Exchange Collector] Discovered {res['filings_discovered']} filings for {symbol}")
+            return res
 
     finally:
         db.close()

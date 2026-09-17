@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, Boolean, Text
 from sqlalchemy.sql import func
 from app.db.database import Base
 
@@ -16,3 +16,5 @@ class EarlyStageCandidate(Base):
     sentiment = Column(Enum('positive', 'neutral', 'negative', name='sentiment_enum'), default='neutral')
     status = Column(Enum('suggested', 'imported', 'ignored', name='candidate_status'), default='suggested')
     sector = Column(String(100), nullable=True)
+    source_url  = Column(Text, nullable=True)      # direct link to the article that triggered discovery
+    is_listed   = Column(Boolean, default=False, index=True)  # True if matched in NSE/BSE companies table

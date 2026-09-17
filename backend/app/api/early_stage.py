@@ -56,6 +56,8 @@ class CandidateOut(BaseModel):
     sector:           Optional[str]
     first_seen:       str
     last_seen:        str
+    source_url:       Optional[str]   # direct link to triggering article
+    is_listed:        bool            # True = matched in NSE/BSE companies
 
     class Config:
         from_attributes = True
@@ -122,13 +124,14 @@ def run_discovery_pipeline(background_tasks: BackgroundTasks, db: Session = Depe
 
 @router.get("/candidates", response_model=List[CandidateOut])
 def get_candidates(
-    page:       int = Query(default=1, ge=1),
-    limit:      int = Query(default=25, ge=1, le=100),
-    status:     Optional[str] = Query(default="suggested"),
-    source:     Optional[str] = Query(default=None),
-    sentiment:  Optional[str] = Query(default=None),
-    sort_by:    str = Query(default="trend_score"),
-    sort_order: str = Query(default="desc"),
+    page:        int = Query(default=1, ge=1),
+    limit:       int = Query(default=25, ge=1, le=100),
+    status:      Optional[str] = Query(default="suggested"),
+    source:      Optional[str] = Query(default=None),
+    sentiment:   Optional[str] = Query(default=None),
+    listed_only: bool = Query(default=False, description="Show only NSE/BSE matched candidates"),
+    sort_by:     str = Query(default="trend_score"),
+    sort_order:  str = Query(default="desc"),
     db: Session = Depends(get_db),
 ):
     """
@@ -143,6 +146,8 @@ def get_candidates(
         query = query.filter(EarlyStageCandidate.source.ilike(f"%{source}%"))
     if sentiment:
         query = query.filter(EarlyStageCandidate.sentiment == sentiment)
+    if listed_only:
+        query = query.filter(EarlyStageCandidate.is_listed.is_(True))
 
     # Sort
     allowed_sort = {"trend_score", "mention_count", "first_seen", "last_seen", "company_name"}
@@ -169,6 +174,8 @@ def get_candidates(
             sector=r.sector,
             first_seen=r.first_seen.isoformat() if r.first_seen else "",
             last_seen=r.last_seen.isoformat() if r.last_seen else "",
+            source_url=r.source_url or None,
+            is_listed=bool(r.is_listed),
         )
         for r in records
     ]

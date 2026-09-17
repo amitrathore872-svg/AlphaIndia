@@ -11,13 +11,12 @@ import {
 } from "lucide-react";
 
 import {
-  fetchWarehouseStatus,
-  fetchAuditStatus,
+  fetchMissionControlTelemetry,
   startAuditEngine,
   stopAuditEngine,
 } from "@/lib/monitoringApi";
 
-interface WarehouseData {
+export interface WarehouseData {
   total_companies: number;
   imported_companies: number;
   pending_companies: number;
@@ -26,7 +25,7 @@ interface WarehouseData {
   coverage_percent: number;
 }
 
-interface AuditData {
+export interface AuditData {
   running: boolean;
   progress_percent: number;
   processed: number;
@@ -36,26 +35,36 @@ interface AuditData {
   last_symbol: string | null;
 }
 
-export default function MonitoringRibbon() {
-  const [warehouse, setWarehouse] = useState<WarehouseData | null>(null);
-  const [audit, setAudit] = useState<AuditData | null>(null);
+interface MonitoringRibbonProps {
+  warehouse?: WarehouseData | null;
+  audit?: AuditData | null;
+}
+
+export default function MonitoringRibbon({ warehouse: propWarehouse, audit: propAudit }: MonitoringRibbonProps = {}) {
+  const [internalWarehouse, setInternalWarehouse] = useState<WarehouseData | null>(null);
+  const [internalAudit, setInternalAudit] = useState<AuditData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const loadStatus = useCallback(async () => {
-    try {
-      const [warehouseStatus, auditStatus] = await Promise.all([
-        fetchWarehouseStatus(),
-        fetchAuditStatus(),
-      ]);
+  const warehouse = propWarehouse ?? internalWarehouse;
+  const audit = propAudit ?? internalAudit;
 
-      setWarehouse(warehouseStatus);
-      setAudit(auditStatus);
+  const loadStatus = useCallback(async () => {
+    if (propWarehouse && propAudit) return;
+    try {
+      const telemetry = await fetchMissionControlTelemetry();
+      if (telemetry.warehouse) {
+        setInternalWarehouse(telemetry.warehouse);
+      }
+      if (telemetry.audit) {
+        setInternalAudit(telemetry.audit as unknown as AuditData);
+      }
     } catch (error) {
       console.error("Monitoring status failed:", error);
     }
-  }, []);
+  }, [propWarehouse, propAudit]);
 
   useEffect(() => {
+    if (propWarehouse && propAudit) return;
     loadStatus();
 
     const timer = setInterval(loadStatus, 5000);
@@ -63,7 +72,7 @@ export default function MonitoringRibbon() {
     return () => {
       clearInterval(timer);
     };
-  }, [loadStatus]);
+  }, [loadStatus, propWarehouse, propAudit]);
 
   async function handleStartAudit() {
     setLoading(true);

@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
+  Star,
 } from "lucide-react";
 import type { ScreenerFiltersState } from "@/lib/api";
 import type { TableDensity } from "./GrowthTable";
@@ -23,8 +24,9 @@ interface ScreenerToolbarProps {
   onSearch: () => void;
 
   filters: ScreenerFiltersState;
-  onFilterChange: (key: keyof ScreenerFiltersState, value: string) => void;
+  onFilterChange: (key: keyof ScreenerFiltersState, value: string | number | boolean) => void;
   onResetFilters: () => void;
+
   onExportCSV: () => void;
 
   availableSectors?: string[];
@@ -50,9 +52,10 @@ export default function ScreenerToolbar({
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Count active non-default filters
-  const activeFilterCount = Object.entries(filters).filter(
-    ([, val]) => val && val !== "ALL"
-  ).length + (search.trim() ? 1 : 0);
+  const activeFilterCount =
+    Object.entries(filters).filter(
+      ([, val]) => val && val !== "ALL" && val !== false
+    ).length + (search.trim() ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -140,6 +143,24 @@ export default function ScreenerToolbar({
               </button>
             )}
 
+            {/* Watchlist Quick Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => onFilterChange("watchlist_only", !filters.watchlist_only)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
+                filters.watchlist_only
+                  ? "border-amber-500 bg-amber-500/15 text-amber-500 font-bold"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-amber-400 hover:text-amber-500 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:border-amber-400"
+              }`}
+              title={filters.watchlist_only ? "Showing Watchlist stocks only" : "Filter by Watchlist"}
+            >
+              <Star
+                size={12}
+                className={filters.watchlist_only ? "fill-amber-500 text-amber-500" : "text-slate-400"}
+              />
+              <span className="hidden xs:inline">Watchlist</span>
+            </button>
+
             {/* Quick Segmented Density Selector: Compact | Default */}
             {onDensityChange && (
               <div className="flex items-center rounded-xl border border-slate-300 bg-slate-100 p-0.5 text-xs shadow-2xs dark:border-slate-800 dark:bg-[#060B14]">
@@ -212,10 +233,23 @@ export default function ScreenerToolbar({
         </div>
 
         <div
-          className={`grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8 ${
+          className={`grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-9 ${
             filtersExpanded ? "grid" : "hidden sm:grid"
           }`}
         >
+          {/* Conviction Score Filter */}
+          <FilterSelect
+            label="Conviction"
+            value={filters.min_conviction || "ALL"}
+            onChange={(val) => onFilterChange("min_conviction", val)}
+            options={[
+              { label: "All Conviction", value: "ALL" },
+              { label: "5★ Max Conviction", value: "5" },
+              { label: "≥ 4★ High Conviction", value: "4" },
+              { label: "≥ 3★ Radar", value: "3" },
+            ]}
+          />
+
           {/* Sector */}
           <FilterSelect
             label="Sector"

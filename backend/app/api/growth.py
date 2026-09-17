@@ -16,6 +16,7 @@ from app.db.database import get_db
 from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
+from app.models.watchlist import Watchlist, WatchlistItem
 
 router = APIRouter(
     prefix="/growth-screener",
@@ -29,50 +30,17 @@ router = APIRouter(
 
 def latest_screener_query(db: Session):
     """
-    Returns Master Company joined with authoritative ScreenerGrowthRecord fundamentals
-    and the latest reported QuarterlyResult.
+    Returns Master Company joined with authoritative ScreenerGrowthRecord fundamentals.
+    Historical quarterly time-series are batched per-page for maximum query performance.
     """
-    # Subquery to rank quarters per company (latest first)
-    latest_result_ids = (
-        db.query(
-            QuarterlyResult.id.label("result_id"),
-            func.row_number()
-            .over(
-                partition_by=QuarterlyResult.company_id,
-                order_by=(
-                    QuarterlyResult.period_end.desc().nullslast(),
-                    QuarterlyResult.result_date.desc().nullslast(),
-                    QuarterlyResult.id.desc(),
-                ),
-            )
-            .label("rank"),
-        )
-        .subquery()
-    )
-
     return (
         db.query(
             Company,
             ScreenerGrowthRecord,
-            QuarterlyResult,
         )
         .outerjoin(
             ScreenerGrowthRecord,
             ScreenerGrowthRecord.symbol == Company.symbol,
-        )
-        .outerjoin(
-            QuarterlyResult,
-            QuarterlyResult.company_id == Company.id,
-        )
-        .outerjoin(
-            latest_result_ids,
-            latest_result_ids.c.result_id == QuarterlyResult.id,
-        )
-        .filter(
-            or_(
-                latest_result_ids.c.rank == 1,
-                latest_result_ids.c.rank.is_(None),
-            )
         )
         .filter(Company.listing_status == "Active")
         .filter(Company.is_growth_eligible.is_(True))
@@ -81,6 +49,7 @@ def latest_screener_query(db: Session):
 
 # Backward-compatibility alias
 latest_results_query = latest_screener_query
+
 
 
 # ==========================================================
@@ -114,6 +83,11 @@ def growth_screener(
 
     min_health_score: Optional[float] = Query(default=None),
     max_health_score: Optional[float] = Query(default=None),
+
+    # Watchlist & Conviction Parameters
+    watchlist_only: bool = Query(default=False),
+    watchlist_id: Optional[int] = Query(default=None),
+    min_conviction: Optional[int] = Query(default=None),
 
     # Sorting
     sort_by: str = Query(default="market_cap"),
@@ -229,6 +203,32 @@ def growth_screener(
         query = query.filter(score_expr <= max_health_score)
 
     # ------------------------------------------------------
+    # Watchlist & Conviction Subquery & Filters
+    # ------------------------------------------------------
+    conviction_subq = (
+        db.query(
+            WatchlistItem.symbol.label("wl_sym"),
+            func.max(WatchlistItem.confidence_score).label("max_conviction"),
+        )
+        .group_by(WatchlistItem.symbol)
+        .subquery()
+    )
+    query = query.outerjoin(conviction_subq, conviction_subq.c.wl_sym == Company.symbol)
+
+    if watchlist_id is not None:
+        wl_q = db.query(WatchlistItem.symbol).filter(WatchlistItem.watchlist_id == watchlist_id)
+        if min_conviction is not None:
+            wl_q = wl_q.filter(WatchlistItem.confidence_score >= min_conviction)
+        wl_syms = [r[0].strip().upper() for r in wl_q.all()]
+        query = query.filter(Company.symbol.in_(wl_syms))
+    elif watchlist_only or min_conviction is not None:
+        wl_q = db.query(WatchlistItem.symbol)
+        if min_conviction is not None:
+            wl_q = wl_q.filter(WatchlistItem.confidence_score >= min_conviction)
+        wl_syms = [r[0].strip().upper() for r in wl_q.distinct().all()]
+        query = query.filter(Company.symbol.in_(wl_syms))
+
+    # ------------------------------------------------------
     # Server-Side Sorting across all columns
     # ------------------------------------------------------
     sortable_columns = {
@@ -237,6 +237,7 @@ def growth_screener(
         "cmp": ScreenerGrowthRecord.current_price,
         "market_cap": ScreenerGrowthRecord.market_cap,
         "pe_ratio": ScreenerGrowthRecord.stock_pe,
+        "conviction": func.coalesce(conviction_subq.c.max_conviction, 0),
         "pb_ratio": ScreenerGrowthRecord.price_to_book,
         "roce": func.coalesce(ScreenerGrowthRecord.roce, Company.roce),
         "roe": ScreenerGrowthRecord.roe,
@@ -300,7 +301,7 @@ def growth_screener(
     # ------------------------------------------------------
     # Batch Retrieve Historical Quarters for QoQ & 3Y CAGR
     # ------------------------------------------------------
-    company_ids = [c.id for c, _, _ in rows]
+    company_ids = [c.id for c, _ in rows]
     history_by_company = {}
 
     if company_ids:
@@ -312,6 +313,8 @@ def growth_screener(
                 QuarterlyResult.net_profit,
                 QuarterlyResult.period_end,
                 QuarterlyResult.result_date,
+                QuarterlyResult.revenue_growth,
+                QuarterlyResult.pat_growth,
             )
             .filter(QuarterlyResult.company_id.in_(company_ids))
             .order_by(
@@ -327,11 +330,38 @@ def growth_screener(
             history_by_company.setdefault(r.company_id, []).append(r)
 
     # ------------------------------------------------------
+    # Retrieve Watchlist Information for Page Symbols
+    # ------------------------------------------------------
+    page_symbols = [c.symbol for c, _ in rows]
+    watchlist_info_by_symbol = {}
+    if page_symbols:
+        wl_items = (
+            db.query(WatchlistItem, Watchlist)
+            .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
+            .filter(WatchlistItem.symbol.in_(page_symbols))
+            .all()
+        )
+        for item, wl in wl_items:
+            sym = item.symbol.strip().upper()
+            if sym not in watchlist_info_by_symbol or item.confidence_score > (
+                watchlist_info_by_symbol[sym].get("conviction_score") or 0
+            ):
+                watchlist_info_by_symbol[sym] = {
+                    "in_watchlist": True,
+                    "watchlist_item_id": item.id,
+                    "watchlist_id": wl.id,
+                    "watchlist_name": wl.name,
+                    "conviction_score": item.confidence_score,
+                    "watchlist_comment": item.comment,
+                    "target_price": item.target_price,
+                }
+
+    # ------------------------------------------------------
     # Result Serialization
     # ------------------------------------------------------
     results = []
 
-    for index, (company, scr, result) in enumerate(rows, start=(page - 1) * limit + 1):
+    for index, (company, scr) in enumerate(rows, start=(page - 1) * limit + 1):
         qh = history_by_company.get(company.id, [])
         q0 = qh[0] if len(qh) > 0 else None
         q1 = qh[1] if len(qh) > 1 else None
@@ -401,7 +431,7 @@ def growth_screener(
         sales_yoy = (
             (scr.quarterly_sales_yoy if scr and scr.quarterly_sales_yoy is not None else None)
             or (scr.sales_growth_ttm if scr and scr.sales_growth_ttm is not None else None)
-            or (result.revenue_growth if result and result.revenue_growth is not None else None)
+            or (q0.revenue_growth if q0 and q0.revenue_growth is not None else None)
             or company.revenue_growth
         )
 
@@ -409,7 +439,7 @@ def growth_screener(
         pat_yoy = (
             (scr.quarterly_pat_yoy if scr and scr.quarterly_pat_yoy is not None else None)
             or (scr.profit_growth_ttm if scr and scr.profit_growth_ttm is not None else None)
-            or (result.pat_growth if result and result.pat_growth is not None else None)
+            or (q0.pat_growth if q0 and q0.pat_growth is not None else None)
             or company.pat_growth
         )
 
@@ -427,12 +457,13 @@ def growth_screener(
 
         # Result date string
         res_date_str = None
-        if result and result.period_end:
-            res_date_str = result.period_end.isoformat()
-        elif result and result.result_date:
-            res_date_str = result.result_date.isoformat()
+        if q0 and q0.period_end:
+            res_date_str = q0.period_end.isoformat()
+        elif q0 and q0.result_date:
+            res_date_str = q0.result_date.isoformat()
         elif scr and scr.latest_quarter_name:
             res_date_str = scr.latest_quarter_name
+
 
         results.append(
             {
@@ -475,6 +506,15 @@ def growth_screener(
                 "result_date": res_date_str,
                 "last_updated": last_upd_dt.isoformat() if last_upd_dt else None,
 
+                # Watchlist & Conviction
+                "in_watchlist": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("in_watchlist", False),
+                "watchlist_item_id": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("watchlist_item_id"),
+                "watchlist_id": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("watchlist_id"),
+                "watchlist_name": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("watchlist_name"),
+                "conviction_score": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("conviction_score"),
+                "watchlist_comment": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("watchlist_comment"),
+                "target_price": watchlist_info_by_symbol.get(company.symbol.strip().upper(), {}).get("target_price"),
+
                 # Backward compatibility aliases
                 "revenue_growth": round(float(sales_yoy), 2) if sales_yoy is not None else None,
                 "pat_growth": round(float(pat_yoy), 2) if pat_yoy is not None else None,
@@ -494,14 +534,23 @@ def growth_screener(
 
 
 # ==========================================================
-# Growth Screener Filters Dropdown Options
+# Growth Screener Filters Dropdown Options (Cached TTL: 5 min)
 # ==========================================================
+
+import time
+_filters_cache: Dict[str, Any] = {"timestamp": 0.0, "data": None}
+
 
 @router.get("/filters")
 def growth_screener_filters(db: Session = Depends(get_db)):
     """
     Returns dynamic dropdown options for Growth Screener filters.
+    Cached for 5 minutes in memory to avoid repetitive full-table DISTINCT scans.
     """
+    now = time.time()
+    if _filters_cache["data"] is not None and (now - _filters_cache["timestamp"]) < 300:
+        return _filters_cache["data"]
+
     sectors = (
         db.query(Company.sector)
         .filter(Company.listing_status == "Active")
@@ -514,7 +563,7 @@ def growth_screener_filters(db: Session = Depends(get_db)):
         .all()
     )
 
-    return {
+    data = {
         "success": True,
         "sectors": [row[0] for row in sectors if row[0]],
         "exchanges": ["ALL", "NSE", "BSE"],
@@ -551,3 +600,7 @@ def growth_screener_filters(db: Session = Depends(get_db)):
             {"label": "< 60 (Weak)", "min": 0, "max": 59},
         ],
     }
+
+    _filters_cache["timestamp"] = now
+    _filters_cache["data"] = data
+    return data

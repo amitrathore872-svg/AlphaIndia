@@ -9,14 +9,22 @@ import {
   ShieldCheck,
   Clock3,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 
 interface TopHeaderProps {
   onOpenSidebar?: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebarCollapse?: () => void;
 }
 
-export default function TopHeader({ onOpenSidebar }: TopHeaderProps) {
+export default function TopHeader({
+  onOpenSidebar,
+  isSidebarCollapsed = false,
+  onToggleSidebarCollapse,
+}: TopHeaderProps) {
   const [time, setTime] = useState("");
 
   useEffect(() => {
@@ -41,18 +49,29 @@ export default function TopHeader({ onOpenSidebar }: TopHeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-xl transition-colors duration-200 dark:border-slate-800 dark:bg-[#081225]/95">
       <div className="flex items-center justify-between px-3.5 py-2.5 sm:px-6 sm:py-3.5">
-        {/* LEFT: Mobile Menu Button */}
-        {onOpenSidebar && (
-          <div className="flex items-center lg:hidden">
+        {/* LEFT: Mobile Menu Button & Desktop Sidebar Toggle */}
+        <div className="flex items-center gap-2">
+          {onOpenSidebar && (
             <button
               onClick={onOpenSidebar}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 text-slate-700 transition hover:border-cyan-500/50 hover:bg-slate-200 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 text-slate-700 transition hover:border-cyan-500/50 hover:bg-slate-200 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white lg:hidden"
               aria-label="Open Navigation Menu"
             >
               <Menu size={18} />
             </button>
-          </div>
-        )}
+          )}
+
+          {onToggleSidebarCollapse && (
+            <button
+              onClick={onToggleSidebarCollapse}
+              className="hidden lg:flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-100/80 text-slate-600 transition hover:border-cyan-500/50 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white"
+              title={isSidebarCollapsed ? "Expand sidebar (Maximize)" : "Collapse sidebar (Minimize)"}
+              aria-label="Toggle Sidebar"
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          )}
+        </div>
 
         {/* CENTER SEARCH (Desktop) */}
         <div className="hidden w-full max-w-xl lg:block mx-4">

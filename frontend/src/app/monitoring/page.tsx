@@ -25,6 +25,7 @@ import {
 } from "@/lib/monitoringApi";
 
 import type { MissionControlStatus } from "@/types/monitoring";
+import type { DiscoveryQueueSummaryData } from "@/components/layout/monitoring/DiscoveryQueueDashboard";
 
 export default function MonitoringPage() {
   // =====================================================
@@ -38,8 +39,11 @@ export default function MonitoringPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
 
   const [queueRows, setQueueRows] = useState<MissionControlQueueRow[]>([]);
+  const [queueSummary, setQueueSummary] = useState<DiscoveryQueueSummaryData | null>(null);
   const [queuePage, setQueuePage] = useState(1);
   const [queueTotalPages, setQueueTotalPages] = useState(1);
+
+
 
   // =====================================================
   // Load Mission Control Dashboard
@@ -71,6 +75,9 @@ export default function MonitoringPage() {
 
       setQueueRows(data.results);
       setQueueTotalPages(data.total_pages);
+      if (data.summary) {
+        setQueueSummary(data.summary);
+      }
     } catch (error) {
       console.error("Discovery Queue:", error);
       setQueueRows([]);
@@ -99,7 +106,7 @@ export default function MonitoringPage() {
 
   return (
     <DashboardLayout>
-      <MonitoringRibbon />
+      <MonitoringRibbon warehouse={status?.warehouse?.warehouse} audit={status?.audit} />
 
       <div className="space-y-8 p-6">
         {loading || !status ? (
@@ -130,7 +137,8 @@ export default function MonitoringPage() {
             {/* Phase 4 — Queue Summary Dashboard */}
             {/* =================================================== */}
 
-            <DiscoveryQueueDashboard />
+            <DiscoveryQueueDashboard summary={queueSummary} />
+
 
             {/* =================================================== */}
             {/* Discovery Queue Toolbar */}

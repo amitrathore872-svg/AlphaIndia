@@ -4,8 +4,8 @@
 // Enterprise API Layer
 // =======================================================
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/apiConfig";
+
 
 // =======================================================
 // Growth Screener Types
@@ -44,6 +44,15 @@ export interface GrowthCompany {
   result_date: string | null;
   last_updated?: string | null;
 
+  // Watchlist & Conviction
+  in_watchlist?: boolean;
+  watchlist_item_id?: number | null;
+  watchlist_id?: number | null;
+  watchlist_name?: string | null;
+  conviction_score?: number | null; // 1 to 5
+  watchlist_comment?: string | null;
+  target_price?: number | null;
+
   // Backward-compatibility
   revenue_growth?: number | string | null;
   pat_growth?: number | string | null;
@@ -75,6 +84,9 @@ export interface ScreenerFiltersState {
   roce_min: string;
   roe_min: string;
   health_score_range: string;
+  watchlist_only?: boolean;
+  watchlist_id?: number | null;
+  min_conviction?: string;
 }
 
 export async function fetchGrowthScreener(
@@ -101,6 +113,17 @@ export async function fetchGrowthScreener(
   }
   if (filters?.market_cap_category && filters.market_cap_category !== "ALL") {
     params.set("market_cap_category", filters.market_cap_category);
+  }
+
+  // Watchlist & Conviction filters
+  if (filters?.watchlist_only) {
+    params.set("watchlist_only", "true");
+  }
+  if (filters?.watchlist_id) {
+    params.set("watchlist_id", String(filters.watchlist_id));
+  }
+  if (filters?.min_conviction && filters.min_conviction !== "ALL") {
+    params.set("min_conviction", filters.min_conviction);
   }
 
   // P/E Range

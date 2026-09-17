@@ -14,11 +14,54 @@ import type {
   TimelineEventsResponse,
   ValidationScorecardResponse,
   Sprint23EnginesResponse,
+  Sprint23EngineCardItem,
   ReplayStatusResponse,
 } from "@/types/monitoring";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/apiConfig";
+
+export interface MissionControlTelemetryResponse {
+  success: boolean;
+  heartbeat: {
+    status: string;
+    server_time: string;
+    version?: string;
+    environment?: string;
+  };
+  dashboard: {
+    heartbeat: {
+      status: string;
+      server_time: string;
+    };
+    engines: Record<string, string>;
+  };
+  engines: Sprint23EngineCardItem[];
+  queue_summary: {
+    pending: number;
+    completed: number;
+    failed: number;
+    running: number;
+    total: number;
+  };
+  warehouse: {
+    total_companies: number;
+    imported_companies: number;
+    pending_companies: number;
+    failed_companies: number;
+    quarterly_records: number;
+    coverage_percent: number;
+  };
+  audit: {
+    running: boolean;
+    progress_percent: number;
+    processed: number;
+    passed: number;
+    warning: number;
+    failed: number;
+    last_symbol: string | null;
+  };
+}
+
 
 // =======================================================
 // Generic Request Helper
@@ -399,3 +442,7 @@ export async function fetchReconciliationLogs(
   });
   return request(`/mission-control/reconciliation/logs?${params.toString()}`);
 }
+
+export async function fetchMissionControlTelemetry(): Promise<MissionControlTelemetryResponse> {
+  return request("/mission-control/telemetry");
+}

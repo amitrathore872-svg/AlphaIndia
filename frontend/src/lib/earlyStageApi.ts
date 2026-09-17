@@ -3,7 +3,8 @@
 // Sprint 23 — Phase 6
 // =======================================================
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/apiConfig";
+
 
 // -------------------------------------------------------
 // Types
@@ -21,6 +22,8 @@ export interface EarlyStageCandidate {
   sector: string | null;
   first_seen: string;
   last_seen: string;
+  source_url?: string | null;
+  is_listed?: boolean;
 }
 
 export interface EarlyStageStats {
@@ -83,17 +86,19 @@ export async function fetchCandidates(params: {
   status?: string;
   source?: string;
   sentiment?: string;
+  listed_only?: boolean;
   sort_by?: string;
   sort_order?: string;
 }): Promise<EarlyStageCandidate[]> {
   const qs = new URLSearchParams();
-  if (params.page)       qs.set("page",       String(params.page));
-  if (params.limit)      qs.set("limit",      String(params.limit));
-  if (params.status)     qs.set("status",     params.status);
-  if (params.source)     qs.set("source",     params.source);
-  if (params.sentiment)  qs.set("sentiment",  params.sentiment);
-  if (params.sort_by)    qs.set("sort_by",    params.sort_by);
-  if (params.sort_order) qs.set("sort_order", params.sort_order);
+  if (params.page)        qs.set("page",        String(params.page));
+  if (params.limit)       qs.set("limit",       String(params.limit));
+  if (params.status)      qs.set("status",      params.status);
+  if (params.source)      qs.set("source",      params.source);
+  if (params.sentiment)   qs.set("sentiment",   params.sentiment);
+  if (params.listed_only) qs.set("listed_only", "true");
+  if (params.sort_by)     qs.set("sort_by",     params.sort_by);
+  if (params.sort_order)  qs.set("sort_order",  params.sort_order);
   return request<EarlyStageCandidate[]>(`/early-stage/candidates?${qs}`);
 }
 

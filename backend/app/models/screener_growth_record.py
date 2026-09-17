@@ -30,9 +30,9 @@ class ScreenerGrowthRecord(Base):
 
     # Valuation Multiples & Price (Screener: CMP Rs., Mar Cap Rs.Cr., P/E, Ind PE, B.V. Rs., CMP / BV)
     current_price = Column(Float, nullable=True)  # CMP Rs.
-    market_cap = Column(Float, nullable=True)  # Mar Cap Rs.Cr.
+    market_cap = Column(Float, nullable=True, index=True)  # Mar Cap Rs.Cr.
     market_cap_category = Column(String(20), nullable=True, index=True)  # LARGE, MID, SMALL, MICRO
-    stock_pe = Column(Float, nullable=True)  # P/E
+    stock_pe = Column(Float, nullable=True, index=True)  # P/E
     industry_pe = Column(Float, nullable=True)  # Ind PE
     price_to_book = Column(Float, nullable=True)  # CMP / BV
     book_value = Column(Float, nullable=True)  # B.V. Rs.
@@ -43,7 +43,7 @@ class ScreenerGrowthRecord(Base):
     # Trailing 12-Month & Profitability (Screener: PAT 12M Rs.Cr., EPS 12M Rs., OPM %)
     pat_12m = Column(Float, nullable=True)  # PAT 12M Rs.Cr. (TTM Net Profit)
     eps_12m = Column(Float, nullable=True)  # EPS 12M Rs. (TTM EPS)
-    roce = Column(Float, nullable=True)  # ROCE (%)
+    roce = Column(Float, nullable=True, index=True)  # ROCE (%)
     roe = Column(Float, nullable=True)  # ROE (%)
     opm_latest = Column(Float, nullable=True)  # OPM % (Operating Profit Margin %)
     opm_ttm = Column(Float, nullable=True)  # OPM TTM (%)
@@ -69,7 +69,7 @@ class ScreenerGrowthRecord(Base):
 
     # Financial Quality & Composite (Screener: Piotroski Scr)
     piotroski_score = Column(Float, nullable=True)  # Piotroski Scr (0 to 9)
-    health_score = Column(Float, nullable=True)  # Alpha India Institutional Score (0 to 100)
+    health_score = Column(Float, nullable=True, index=True)  # Alpha India Institutional Score (0 to 100)
 
     # Quarterly Momentum (Screener: Qtr Profit Var %, NP Qtr Rs.Cr.)
     latest_quarter_name = Column(String(50), nullable=True)  # e.g. "Dec 2024"
@@ -77,8 +77,8 @@ class ScreenerGrowthRecord(Base):
     latest_quarter_net_profit = Column(Float, nullable=True)  # NP Qtr Rs.Cr. (Net Profit Latest Quarter)
     operating_profit = Column(Float, nullable=True)  # Operating Profit Latest Quarter (₹ Cr)
     latest_quarter_eps = Column(Float, nullable=True)  # EPS Latest Quarter (₹)
-    quarterly_sales_yoy = Column(Float, nullable=True)  # Qtr Sales Var % (Quarterly Sales YoY %)
-    quarterly_pat_yoy = Column(Float, nullable=True)  # Qtr Profit Var % (Quarterly Profit YoY %)
+    quarterly_sales_yoy = Column(Float, nullable=True, index=True)  # Qtr Sales Var % (Quarterly Sales YoY %)
+    quarterly_pat_yoy = Column(Float, nullable=True, index=True)  # Qtr Profit Var % (Quarterly Profit YoY %)
     quarterly_sales_qoq = Column(Float, nullable=True)  # Sales QoQ %
     quarterly_pat_qoq = Column(Float, nullable=True)  # Profit / PAT QoQ %
     quarterly_eps_yoy = Column(Float, nullable=True)  # Qtr EPS Var % (Quarterly EPS YoY %)

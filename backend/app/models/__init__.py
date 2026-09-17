@@ -14,7 +14,26 @@ from app.models.screener_import_run import ScreenerImportRun
 from app.models.screener_import_event import ScreenerImportEvent
 from app.models.watchlist import Watchlist, WatchlistItem
 from app.models.early_stage_candidate import EarlyStageCandidate
+from app.models.early_stage_temp_cache import EarlyStageTempCache
+from app.models.early_stage_daily import EarlyStageDaily
+from app.models.early_stage_import_log import EarlyStageImportLog
+from app.models.announcement_radar import AnnouncementRadar
 from app.models.financial_reconciliation_log import FinancialReconciliationLog
+from app.models.athena_models import (
+    AthenaOmegaFiling,
+    AthenaQuarterlyMetrics,
+    AthenaShockAnalysis,
+    AthenaQualityAnalysis,
+    AthenaValuationRisk,
+    AthenaConvictionFlash,
+)
+from app.models.mf_models import (
+    MFScheme,
+    MFSchemeHolding,
+    MFStockMonthlyAggregate,
+    MFSectorFlow,
+    MFAccumulationSignal,
+)
 
 __all__ = [
     "Company",
@@ -34,5 +53,21 @@ __all__ = [
     "Watchlist",
     "WatchlistItem",
     "EarlyStageCandidate",
+    "EarlyStageTempCache",
+    "EarlyStageDaily",
+    "EarlyStageImportLog",
+    "AnnouncementRadar",
     "FinancialReconciliationLog",
-]
+
+    "AthenaOmegaFiling",
+    "AthenaQuarterlyMetrics",
+    "AthenaShockAnalysis",
+    "AthenaQualityAnalysis",
+    "AthenaValuationRisk",
+    "AthenaConvictionFlash",
+    "MFScheme",
+    "MFSchemeHolding",
+    "MFStockMonthlyAggregate",
+    "MFSectorFlow",
+    "MFAccumulationSignal",
+]

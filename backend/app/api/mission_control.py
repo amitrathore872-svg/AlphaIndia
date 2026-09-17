@@ -20,6 +20,7 @@ from app.models.filing_registry import FilingRegistry
 from app.models.financial_import_queue import FinancialImportQueue
 from app.models.monitoring_heartbeat import MonitoringHeartbeat
 from app.models.financial_reconciliation_log import FinancialReconciliationLog
+from app.models.quarterly_result import QuarterlyResult
 from app.services.financial_audit_backfill_engine import FinancialAuditBackfillEngine
 from app.services.financial_import_engine import FinancialImportEngine
 from app.services.replay_pipeline_service import ReplayPipelineService
@@ -31,6 +32,169 @@ router = APIRouter(
     prefix="/mission-control",
     tags=["Mission Control"],
 )
+
+# ==========================================================
+# UNIFIED TELEMETRY AGGREGATOR
+# Consolidates Heartbeat, Engines, Queue, Warehouse & Audit into 1 call
+# ==========================================================
+
+
+@router.get("/telemetry")
+def mission_control_telemetry(db: Session = Depends(get_db)):
+    """
+    Unified Mission Control Telemetry Aggregator.
+    Returns heartbeat, engine statuses, queue counters, and warehouse/audit health in a single payload.
+    Reduces frontend polling from 7 HTTP calls down to 1 call every 5 seconds.
+    """
+    now = datetime.now()
+    server_time = now.isoformat()
+
+    # 1. Heartbeat
+    hb = (
+        db.query(MonitoringHeartbeat)
+        .order_by(MonitoringHeartbeat.id.desc())
+        .first()
+    )
+    discovery_status = hb.engine_status if (hb and hb.engine_status) else "ONLINE"
+    audit_status = "RUNNING" if FinancialAuditBackfillEngine._running else "ONLINE"
+    warehouse_status = "RUNNING" if FinancialImportEngine.status().get("running") else "ONLINE"
+
+    dashboard_data = {
+        "heartbeat": {
+            "status": "RUNNING",
+            "server_time": server_time,
+            "version": "2.3.0",
+            "environment": "development",
+        },
+        "engines": {
+            "discovery": discovery_status,
+            "warehouse": warehouse_status,
+            "audit": audit_status,
+            "growth": "ONLINE",
+            "ai": "ONLINE",
+        },
+    }
+
+    # 2. Engine Grid Metrics (Sprint 23 5-engine pipeline)
+    state = ReplayPipelineService.get_state()
+    disc_m = state["discovery"]
+    imp_m = state["import"]
+    rec_m = state["reconciliation"]
+    aud_m = state["audit"]
+    ai_m = state["ai"]
+
+    engine_grid = [
+        {
+            "name": "Discovery Engine",
+            "status": disc_m["engine_status"] if disc_m["scanned_today"] > 0 else discovery_status,
+            "color": "green",
+            "metrics": [
+                ["Session", disc_m["session"]],
+                ["Scanned Today", str(disc_m["scanned_today"])],
+                ["Results Today", str(disc_m["results_today"])],
+                ["Parser Failures", str(disc_m["parser_failures_today"])],
+            ],
+        },
+        {
+            "name": "Import Engine",
+            "status": "RUNNING" if state["is_running"] else ("ONLINE" if imp_m["imported_new"] > 0 or imp_m["unchanged"] > 0 else "READY"),
+            "color": "blue",
+            "metrics": [
+                ["Imported", str(imp_m["imported_new"])],
+                ["Updated From NSE", str(imp_m["updated_from_nse"])],
+                ["Unchanged", str(imp_m["unchanged"])],
+                ["Pending Queue", str(imp_m["pending_queue"])],
+                ["Coverage", f"{imp_m['coverage_percent']}%"],
+            ],
+        },
+        {
+            "name": "Data Reconciliation Engine",
+            "status": "ONLINE" if rec_m["compared"] > 0 else "READY",
+            "color": "cyan",
+            "metrics": [
+                ["Compared", str(rec_m["compared"])],
+                ["Exact Match", str(rec_m["exact_match"])],
+                ["Within Tolerance", str(rec_m["within_tolerance"])],
+                ["Differences >2%", str(rec_m["differences_gt_2pct"])],
+                ["Missing Values", str(rec_m["missing_values"])],
+                ["Parse Errors", str(rec_m["parse_errors"])],
+            ],
+        },
+        {
+            "name": "Audit Engine",
+            "status": "RUNNING" if state["is_running"] else ("ONLINE" if aud_m["processed"] > 0 else "READY"),
+            "color": "amber",
+            "metrics": [
+                ["Processed", str(aud_m["processed"])],
+                ["PASS", str(aud_m["passed"])],
+                ["WARNING", str(aud_m["warning"])],
+                ["FAIL", str(aud_m["failed"])],
+            ],
+        },
+        {
+            "name": "AI Growth Engine",
+            "status": "ONLINE" if ai_m["scored_companies"] > 0 else "READY",
+            "color": "violet",
+            "metrics": [
+                ["Scored Companies", str(ai_m["scored_companies"])],
+                ["AI Reports", str(ai_m["ai_reports"])],
+                ["Pending Queue", str(ai_m["pending_queue"])],
+                ["Avg Processing Time", f"{ai_m['avg_processing_time_ms']:.0f}ms"],
+            ],
+        },
+    ]
+
+    # 3. Queue Summary Counters (Single grouped query)
+    total_companies = db.query(func.count(Company.id)).scalar() or 0
+    q_counts = dict(
+        db.query(FinancialImportQueue.status, func.count(FinancialImportQueue.id))
+        .group_by(FinancialImportQueue.status)
+        .all()
+    )
+    completed_count = q_counts.get("COMPLETED", 0)
+    failed_count = q_counts.get("FAILED", 0) + q_counts.get("UNAVAILABLE", 0)
+    running_count = q_counts.get("RUNNING", 0)
+    pending_count = max(total_companies - completed_count - failed_count - running_count, 0)
+
+    queue_summary = {
+        "pending": pending_count,
+        "completed": completed_count,
+        "failed": failed_count,
+        "running": running_count,
+        "total": total_companies,
+    }
+
+    # 4. Warehouse & Audit Health Summary
+    quarterly_records_count = db.query(func.count(QuarterlyResult.id)).scalar() or 0
+    warehouse_info = {
+        "total_companies": total_companies,
+        "imported_companies": completed_count,
+        "pending_companies": pending_count,
+        "failed_companies": failed_count,
+        "quarterly_records": quarterly_records_count,
+        "coverage_percent": round((completed_count / total_companies * 100), 1) if total_companies > 0 else 0.0,
+    }
+
+    audit_info = {
+        "running": FinancialAuditBackfillEngine._running,
+        "progress_percent": 100.0 if not FinancialAuditBackfillEngine._running else 50.0,
+        "processed": aud_m["processed"],
+        "passed": aud_m["passed"],
+        "warning": aud_m["warning"],
+        "failed": aud_m["failed"],
+        "last_symbol": None,
+    }
+
+    return {
+        "success": True,
+        "heartbeat": dashboard_data["heartbeat"],
+        "dashboard": dashboard_data,
+        "engines": engine_grid,
+        "queue_summary": queue_summary,
+        "warehouse": warehouse_info,
+        "audit": audit_info,
+    }
+
 
 # ==========================================================
 # HEARTBEAT
@@ -71,26 +235,16 @@ def discovery_queue(
     Reads live companies and import states from the database.
     """
 
-    # Global Queue Summary counters across all companies
+    # Global Queue Summary counters across all companies via single grouped query
     total_companies = db.query(func.count(Company.id)).scalar() or 0
-    completed_count = (
-        db.query(func.count(FinancialImportQueue.id))
-        .filter(FinancialImportQueue.status == "COMPLETED")
-        .scalar()
-        or 0
+    q_counts = dict(
+        db.query(FinancialImportQueue.status, func.count(FinancialImportQueue.id))
+        .group_by(FinancialImportQueue.status)
+        .all()
     )
-    failed_count = (
-        db.query(func.count(FinancialImportQueue.id))
-        .filter(FinancialImportQueue.status.in_(["FAILED", "UNAVAILABLE"]))
-        .scalar()
-        or 0
-    )
-    running_count = (
-        db.query(func.count(FinancialImportQueue.id))
-        .filter(FinancialImportQueue.status == "RUNNING")
-        .scalar()
-        or 0
-    )
+    completed_count = q_counts.get("COMPLETED", 0)
+    failed_count = q_counts.get("FAILED", 0) + q_counts.get("UNAVAILABLE", 0)
+    running_count = q_counts.get("RUNNING", 0)
     pending_count = max(
         total_companies - completed_count - failed_count - running_count, 0
     )
@@ -102,6 +256,7 @@ def discovery_queue(
         "running": running_count,
         "total": total_companies,
     }
+
 
     # Base Query joined with FinancialImportQueue
     query = (

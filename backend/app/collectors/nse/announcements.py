@@ -83,3 +83,32 @@ class NSEAnnouncementCollector:
             )
 
         return filings
+
+    def fetch_global_announcements(self):
+        """
+        Fetches live market-wide announcements across all listed equities.
+        """
+        data = self.client.global_announcements()
+        filings = []
+
+        for item in data:
+            sym = item.get("symbol", "").upper()
+            if not sym:
+                continue
+
+            filings.append(
+                {
+                    "symbol": sym,
+                    "company_name": item.get("sm_name", ""),
+                    "exchange": "NSE",
+                    "period": self._extract_period(item),
+                    "filing_type": item.get("desc") or "Corporate Announcement",
+                    "announcement_date": parse_date(item["sort_date"]).date() if item.get("sort_date") else datetime.utcnow().date(),
+                    "pdf_url": item.get("attchmntFile"),
+                    "title": item.get("attchmntText") or item.get("desc"),
+                    "xbrl": item.get("hasXbrl", False),
+                    "is_financial": self._is_financial(item),
+                }
+            )
+
+        return filings

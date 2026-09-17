@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Star,
 } from "lucide-react";
 import type { GrowthCompany } from "@/lib/api";
 
@@ -41,6 +42,7 @@ interface GrowthTableProps {
   onLast?: () => void;
 
   density?: TableDensity;
+  onOpenWatchlist?: (company: GrowthCompany) => void;
 }
 
 // =======================================================
@@ -239,6 +241,7 @@ export default function GrowthTable({
   onFirst,
   onLast,
   density = "default",
+  onOpenWatchlist,
 }: GrowthTableProps) {
   const isCompact = density === "compact";
 
@@ -275,6 +278,17 @@ export default function GrowthTable({
                   sortOrder={sortOrder}
                   onSort={onSort}
                   align="left"
+                />
+              </th>
+
+              <th rowSpan={2} className={`${cellPx} ${thPy} text-center min-w-[85px] sm:min-w-[100px] border-r border-slate-200/80 dark:border-slate-800/60`}>
+                <SortHeader
+                  label="Conviction"
+                  column="conviction"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                  align="center"
                 />
               </th>
 
@@ -459,7 +473,7 @@ export default function GrowthTable({
           <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800/50">
             {loading ? (
               <tr>
-                <td colSpan={15} className="py-20 text-center text-slate-500 dark:text-slate-400">
+                <td colSpan={16} className="py-20 text-center text-slate-500 dark:text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <div className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
                     <p className="text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
@@ -470,7 +484,7 @@ export default function GrowthTable({
               </tr>
             ) : companies.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-20 text-center text-slate-500">
+                <td colSpan={16} className="py-20 text-center text-slate-500">
                   <p className="text-sm">No companies matched your screener criteria.</p>
                   <p className="text-xs text-slate-400 dark:text-slate-600 mt-1">
                     Try adjusting your sector, market cap, or valuation ratio filters.
@@ -507,6 +521,44 @@ export default function GrowthTable({
                         <span className={`truncate ${isCompact ? "max-w-[140px] sm:max-w-[190px]" : "max-w-[160px] sm:max-w-[220px]"}`}>{company.company}</span>
                         <ExternalLink size={isCompact ? 10 : 11} className="text-slate-400 group-hover:text-cyan-600 dark:text-slate-600 dark:group-hover:text-cyan-400 shrink-0" />
                       </a>
+                    </td>
+
+                    {/* Conviction Score & Watchlist Star Action */}
+                    <td className={`${cellPx} ${cellPy} text-center border-r border-slate-200/60 dark:border-slate-800/40`}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenWatchlist?.(company)}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border transition-all cursor-pointer ${
+                          isCompact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-xs"
+                        } ${
+                          company.in_watchlist
+                            ? company.conviction_score === 5
+                              ? "border-amber-500/40 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 font-bold shadow-xs"
+                              : company.conviction_score === 4
+                              ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/25 font-semibold shadow-xs"
+                              : company.conviction_score === 3
+                              ? "border-blue-500/40 bg-blue-500/15 text-blue-600 dark:text-blue-400 hover:bg-blue-500/25 font-semibold"
+                              : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                            : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 text-slate-400 hover:border-amber-400/80 hover:text-amber-500 hover:bg-amber-500/5"
+                        }`}
+                        title={
+                          company.in_watchlist
+                            ? `In ${company.watchlist_name ?? "Watchlist"}: ${company.conviction_score ?? 3}★ Conviction. Click to edit.`
+                            : "Click to add to Watchlist & rate Conviction"
+                        }
+                      >
+                        <Star
+                          size={isCompact ? 11 : 12}
+                          className={
+                            company.in_watchlist
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-slate-400 group-hover:text-amber-400 transition"
+                          }
+                        />
+                        <span className="font-mono font-semibold">
+                          {company.in_watchlist ? `${company.conviction_score ?? 3}★` : "Add"}
+                        </span>
+                      </button>
                     </td>
 
                     {/* CMP (₹) */}

@@ -79,3 +79,14 @@ class NSEClient:
                 "symbol": symbol.upper(),
             },
         )
+
+    def global_announcements(self):
+        """
+        Fetches the latest real-time corporate announcements across all listed equities.
+        """
+        return self.get_json(
+            "/api/corporate-announcements",
+            params={
+                "index": "equities",
+            },
+        )

@@ -29,10 +29,27 @@ _NOISE_WORDS = {
     "sensex", "nifty", "dalal", "bloomberg", "reuters", "moneycontrol",
     "economic times", "livemint", "yourstory", "techcrunch", "twitter",
     "reddit", "youtube", "india", "govt", "government", "ministry",
+    "etmarkets", "et markets", "the hindu", "ndtv", "cnbc", "zee",
+    "ubs", "jpmorgan", "morgan stanley", "goldman sachs", "us federal reserve",
+    "federal reserve", "the fed", "imf", "world bank", "bank of japan",
+    "european central bank", "nasdaq", "dow jones", "s&p", "ftse",
+    "kospi", "hang seng", "nikkei",
 }
 
+# Patterns that indicate noise (not real company names)
+import re as _re
+_NOISE_PATTERNS = [
+    _re.compile(r"\.\w{2,5}$"),          # filenames: Prudential-life_200.jpg
+    _re.compile(r"^Rs\s?\.?\d"),          # currency: Rs 7.75
+    _re.compile(r"^\$?\d+"),              # starts with digit / price
+    _re.compile(r"Q[1-4]\s?FY\d{2}"),     # quarter references: Q4 FY25
+    _re.compile(r"\d{4,}"),               # 4+ consecutive digits
+    _re.compile(r"^(the|an?|of|in)\s", _re.IGNORECASE),  # starts with article
+]
+
 # Minimum characters for a company name to be considered valid
-_MIN_NAME_LEN = 4
+_MIN_NAME_LEN = 5
+_MIN_WORDS    = 1    # spaCy path; regex path already handles word structure
 
 
 def _load_model():
@@ -79,7 +96,20 @@ def _regex_extract(text: str) -> List[Dict[str, Any]]:
     return results[:10]  # cap at 10 per text block
 
 
-def extract_companies(text: str) -> List[Dict[str, Any]]:
+def _is_noise(name: str) -> bool:
+    """Return True if the name is clearly not a real company."""
+    lower = name.lower().strip()
+    if lower in _NOISE_WORDS:
+        return True
+    if len(name) < _MIN_NAME_LEN:
+        return True
+    for pat in _NOISE_PATTERNS:
+        if pat.search(name):
+            return True
+    return False
+
+
+def extract_companies(text: str) -> list:
     """
     Main extraction function. Returns a list of dicts:
       {"company_name": str, "confidence": float}
@@ -100,11 +130,7 @@ def extract_companies(text: str) -> List[Dict[str, Any]]:
             if ent.label_ != "ORG":
                 continue
             name = ent.text.strip()
-            if (
-                len(name) < _MIN_NAME_LEN
-                or name.lower() in _NOISE_WORDS
-                or name in seen
-            ):
+            if _is_noise(name) or name in seen:
                 continue
             confidence = 0.85  # spaCy ORG entity = high confidence
             if confidence >= CONFIDENCE_THRESHOLD:
@@ -114,3 +140,4 @@ def extract_companies(text: str) -> List[Dict[str, Any]]:
     else:
         # ---- regex fallback ----
         return _regex_extract(text)
+

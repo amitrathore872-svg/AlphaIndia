@@ -10,7 +10,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Radar,
   RefreshCw,
-  Search,
   ArrowUpDown,
   TrendingUp,
   TrendingDown,
@@ -25,9 +24,11 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import TerminalSearch from "@/components/common/TerminalSearch";
 import {
   fetchCandidates,
   fetchStats,
@@ -46,8 +47,6 @@ const SENTIMENT_CONFIG = {
   neutral:  { color: "text-slate-400",   bg: "bg-slate-700/30 border-slate-600/30",     icon: Minus },
   negative: { color: "text-red-400",     bg: "bg-red-500/10 border-red-500/30",          icon: TrendingDown },
 };
-
-const STATUS_OPTIONS = ["suggested", "ignored", "imported"];
 
 function ScoreBar({ score }: { score: number }) {
   const pct = Math.min(Math.max(score, 0), 100);
@@ -73,8 +72,22 @@ function SentimentBadge({ sentiment }: { sentiment: EarlyStageCandidate["sentime
   );
 }
 
-function SourceTag({ source }: { source: string }) {
+function SourceTag({ source, sourceUrl }: { source: string; sourceUrl?: string | null }) {
   const short = source.replace(/Reddit_r\//, "r/").slice(0, 18);
+  if (sourceUrl) {
+    return (
+      <a
+        href={sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:bg-slate-700/80 transition-colors group/source"
+        title={`Open source article: ${sourceUrl}`}
+      >
+        <span>{short}</span>
+        <ExternalLink size={9} className="opacity-70 group-hover/source:opacity-100" />
+      </a>
+    );
+  }
   return (
     <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-cyan-400">
       {short}
@@ -95,12 +108,13 @@ export default function EarlyStagePage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Filters
-  const [statusFilter, setStatusFilter]     = useState("suggested");
+  const [statusFilter, setStatusFilter]       = useState("suggested");
   const [sentimentFilter, setSentimentFilter] = useState("");
-  const [search, setSearch]                 = useState("");
-  const [sortBy, setSortBy]                 = useState("trend_score");
-  const [sortOrder, setSortOrder]           = useState<"asc" | "desc">("desc");
-  const [page, setPage]                     = useState(1);
+  const [listedOnly, setListedOnly]           = useState(false);
+  const [search, setSearch]                   = useState("");
+  const [sortBy, setSortBy]                   = useState("trend_score");
+  const [sortOrder, setSortOrder]             = useState<"asc" | "desc">("desc");
+  const [page, setPage]                       = useState(1);
   const PAGE_SIZE = 25;
 
   // Selection
@@ -123,6 +137,7 @@ export default function EarlyStagePage() {
           limit: PAGE_SIZE,
           status: statusFilter || undefined,
           sentiment: sentimentFilter || undefined,
+          listed_only: listedOnly || undefined,
           sort_by: sortBy,
           sort_order: sortOrder,
         }),
@@ -136,7 +151,7 @@ export default function EarlyStagePage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, sentimentFilter, sortBy, sortOrder, showToast]);
+  }, [page, statusFilter, sentimentFilter, listedOnly, sortBy, sortOrder, showToast]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -189,6 +204,11 @@ export default function EarlyStagePage() {
     loadData();
   };
 
+  const handleRestore = async (id: number) => {
+    await updateCandidateStatus(id, "suggested").catch(() => {});
+    loadData();
+  };
+
   const handleBulkImport = async () => {
     if (selected.size === 0) return;
     setImporting(true);
@@ -216,8 +236,8 @@ export default function EarlyStagePage() {
                 <Radar size={20} className="text-black" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight">Early Stage Discovery</h1>
-                <p className="text-xs text-slate-400 mt-0.5">AI-powered company radar · NSE/BSE pre-listing intelligence</p>
+                <h1 className="text-2xl font-bold text-white tracking-tight font-mono">Discovery Incubator & Triage</h1>
+                <p className="text-xs text-slate-400 mt-0.5">Pre-listing discovery radar & NLP news entity triage · Approve candidates to import into Master Universe</p>
               </div>
             </div>
           </div>
@@ -285,47 +305,90 @@ export default function EarlyStagePage() {
           </div>
         )}
 
-        {/* ── Filters Bar ────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800 bg-[#0A1628] px-4 py-3">
-          {/* Search */}
-          <div className="relative flex-1 min-w-48">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              id="search-candidates"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search company / ticker…"
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:border-cyan-500/50 focus:outline-none"
-            />
+        {/* ── Triage Tabs & Filters Bar ─────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-[#0A1628] px-4 py-3">
+          {/* Triage Tabs */}
+          <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              onClick={() => { setStatusFilter("suggested"); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === "suggested"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <span>Pending Triage</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300">
+                {stats?.by_status["suggested"] ?? 0}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setStatusFilter("imported"); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === "imported"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <span>In Master Universe</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300">
+                {stats?.by_status["imported"] ?? 0}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setStatusFilter("ignored"); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === "ignored"
+                  ? "bg-slate-700/40 text-slate-300 border border-slate-600/40"
+                  : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <span>Dismissed</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">
+                {stats?.by_status["ignored"] ?? 0}
+              </span>
+            </button>
           </div>
 
-          {/* Status */}
-          <select
-            id="filter-status"
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
-          >
-            <option value="">All Statuses</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          {/* Search & Extra Filters */}
+          <div className="flex flex-wrap items-center gap-2.5 flex-1 justify-end">
+            <TerminalSearch
+              value={search}
+              onChange={setSearch}
+              placeholder="Search candidate company, ticker, or sector..."
+              className="w-full sm:w-64"
+            />
 
-          {/* Sentiment */}
-          <select
-            id="filter-sentiment"
-            value={sentimentFilter}
-            onChange={e => { setSentimentFilter(e.target.value); setPage(1); }}
-            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
-          >
-            <option value="">All Sentiment</option>
-            <option value="positive">Positive</option>
-            <option value="neutral">Neutral</option>
-            <option value="negative">Negative</option>
-          </select>
+            {/* Listed on NSE/BSE Toggle Filter */}
+            <button
+              id="filter-listed-only"
+              type="button"
+              onClick={() => { setListedOnly(v => !v); setPage(1); }}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                listedOnly
+                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-950"
+                  : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200 hover:border-slate-600"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${listedOnly ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
+              Listed Only
+            </button>
 
-          <span className="ml-auto text-xs text-slate-500">
-            {filtered.length} result{filtered.length !== 1 ? "s" : ""}
-          </span>
+            {/* Sentiment */}
+            <select
+              id="filter-sentiment"
+              value={sentimentFilter}
+              onChange={e => { setSentimentFilter(e.target.value); setPage(1); }}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+            >
+              <option value="">All Sentiments</option>
+              <option value="positive">Positive</option>
+              <option value="neutral">Neutral</option>
+              <option value="negative">Negative</option>
+            </select>
+          </div>
         </div>
 
         {/* ── Table ──────────────────────────────────────── */}
@@ -387,6 +450,7 @@ export default function EarlyStagePage() {
                 )}
                 {!loading && filtered.map((c, i) => {
                   const isSelected = selected.has(c.id);
+                  const screenerUrl = `https://www.screener.in/company/${c.tentative_ticker ? c.tentative_ticker : encodeURIComponent(c.company_name)}/consolidated/`;
                   return (
                     <tr
                       key={c.id}
@@ -405,14 +469,30 @@ export default function EarlyStagePage() {
 
                       {/* Company */}
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-white">{c.company_name}</div>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={screenerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-white hover:text-cyan-400 transition-colors inline-flex items-center gap-1.5 group/screener"
+                            title="View financials on Screener.in"
+                          >
+                            <span>{c.company_name}</span>
+                            <ExternalLink size={11} className="opacity-0 group-hover/screener:opacity-100 text-cyan-400 transition-opacity" />
+                          </a>
+                          {c.is_listed && (
+                            <span className="rounded bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 text-[9px] font-mono font-medium text-emerald-400">
+                              NSE/BSE
+                            </span>
+                          )}
+                        </div>
                         {c.tentative_ticker && (
                           <div className="mt-0.5 font-mono text-[10px] text-slate-500">{c.tentative_ticker}</div>
                         )}
                       </td>
 
                       {/* Source */}
-                      <td className="px-4 py-3"><SourceTag source={c.source} /></td>
+                      <td className="px-4 py-3"><SourceTag source={c.source} sourceUrl={c.source_url} /></td>
 
                       {/* Trend Score */}
                       <td className="px-4 py-3"><ScoreBar score={c.trend_score} /></td>
@@ -442,38 +522,56 @@ export default function EarlyStagePage() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                          {c.status !== "imported" && (
-                            <button
-                              id={`btn-import-${c.id}`}
-                              onClick={async () => {
-                                const ids = [c.id];
-                                setImporting(true);
-                                try {
-                                  const result = await bulkImportCandidates(ids);
-                                  showToast(`Imported ${result.created} new · ${result.reused} matched · ${result.errors} errors`);
-                                  loadData();
-                                } catch {
-                                  showToast("Import failed", "err");
-                                } finally {
-                                  setImporting(false);
-                                }
-                              }}
-                              title="Import this company"
-                              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 hover:bg-emerald-500/20"
-                            >
-                              <Download size={12} />
-                            </button>
-                          )}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           {c.status === "suggested" && (
+                            <>
+                              <button
+                                id={`btn-import-${c.id}`}
+                                onClick={async () => {
+                                  const ids = [c.id];
+                                  setImporting(true);
+                                  try {
+                                    const result = await bulkImportCandidates(ids);
+                                    showToast(`Imported ${result.created} new · ${result.reused} matched`);
+                                    loadData();
+                                  } catch {
+                                    showToast("Import failed", "err");
+                                  } finally {
+                                    setImporting(false);
+                                  }
+                                }}
+                                title="Approve & Import to Master Universe"
+                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 transition-all shadow-xs"
+                              >
+                                <CheckCircle2 size={11} className="text-emerald-400" />
+                                Approve
+                              </button>
+                              <button
+                                id={`btn-ignore-${c.id}`}
+                                onClick={() => handleIgnore(c.id)}
+                                title="Dismiss this candidate"
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs font-medium text-slate-400 hover:text-rose-300 hover:border-rose-500/40 hover:bg-rose-950/20 transition-all"
+                              >
+                                <EyeOff size={11} />
+                                Dismiss
+                              </button>
+                            </>
+                          )}
+
+                          {c.status === "imported" && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
+                              <CheckCircle2 size={11} />
+                              In Universe
+                            </span>
+                          )}
+
+                          {c.status === "ignored" && (
                             <button
-                              id={`btn-ignore-${c.id}`}
-                              onClick={() => handleIgnore(c.id)}
-                              title="Ignore this candidate"
-                              className="rounded-lg border border-slate-700 bg-slate-800 p-1.5 text-slate-400 hover:text-red-400 hover:border-red-500/30"
+                              onClick={() => handleRestore(c.id)}
+                              className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:text-white hover:border-cyan-500/40 transition-all"
                             >
-                              <EyeOff size={12} />
+                              Restore
                             </button>
                           )}
                         </div>
