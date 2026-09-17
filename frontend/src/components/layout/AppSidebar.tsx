@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
+  Sliders,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -79,6 +80,11 @@ const navigation = [
         name: "Monitoring Center",
         href: "/monitoring",
         icon: Radar,
+      },
+      {
+        name: "Control & Action Logs",
+        href: "/monitoring/control",
+        icon: Sliders,
       },
       {
         name: "Pipeline Validation",

@@ -19,6 +19,7 @@ import {
   ExternalLink,
   CheckCircle2,
   Loader2,
+  Sliders,
 } from "lucide-react";
 
 import {
@@ -179,6 +180,16 @@ export default function MissionHeader({ status }: MissionHeaderProps) {
               <RotateCcw size={14} />
               <span>Reset</span>
             </button>
+
+            {/* Link to Control & Logs Page */}
+            <Link
+              href="/monitoring/control"
+              className="flex items-center gap-1.5 rounded-full bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-xs font-semibold text-white transition-all shadow-md shadow-cyan-900/30"
+            >
+              <Sliders size={14} />
+              <span>Control & Action Logs</span>
+              <ExternalLink size={12} className="opacity-70" />
+            </Link>
 
             {/* Link to Validation Scorecard Page */}
             <Link
