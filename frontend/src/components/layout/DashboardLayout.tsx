@@ -3,6 +3,7 @@
 import { ReactNode, useState, useEffect } from "react";
 import AppSidebar from "./AppSidebar";
 import TopHeader from "./TopHeader";
+import ControlCenterDrawer from "./control/ControlCenterDrawer";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -11,6 +12,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [controlCenterOpen, setControlCenterOpen] = useState(false);
 
   // Restore collapsed preference from localStorage on mount
   useEffect(() => {
@@ -51,6 +53,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           onOpenSidebar={() => setMobileSidebarOpen(true)}
           isSidebarCollapsed={isCollapsed}
           onToggleSidebarCollapse={handleToggleCollapse}
+          onOpenControlCenter={() => setControlCenterOpen(true)}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5">
@@ -59,6 +62,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </main>
       </div>
+
+      {/* Omnipresent Universal Control Center & Action Logs Drawer */}
+      <ControlCenterDrawer
+        isOpen={controlCenterOpen}
+        onClose={() => setControlCenterOpen(false)}
+      />
     </div>
   );
 }

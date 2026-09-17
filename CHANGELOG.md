@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.3.1] - 2026-09-17
+
+### Added
+- **Universal Control System & Real-Time Action Logs**:
+  - Global `ControlCenterDrawer` accessible on all platform pages via the top header `CONTROL & LOGS` pulse trigger.
+  - Multi-engine telemetry registry tracking `exchange_live_wire`, `results_discovery`, `athena_omega_watcher`, `screener_financial_importer`, `early_stage_discovery`, and `raw_file_archiver`.
+  - Rolling 250-entry FIFO operational action logs buffer with log-level color badges, search filtering, and service filtering.
+  - Fast-action controls: "Fetch Now", "Fetch All Now", and "Pause / Resume" background scheduling.
+- **Autonomous Raw File Archival & In-Place Compression Engine**:
+  - `RawFileArchiveService` (`backend/app/services/raw_file_archiver.py`) for background archiving of parsed exchange filings.
+  - Level-9 GZIP in-place compression with file verification and safe uncompressed file deletion.
+  - Automatically reclaimed **52.59 MB** across 127 heavy PDF filings on initial execution.
+  - Excluded compressed archives (`.gz`, `.pdf.gz`, `data/archive/`, `data/bronze/`) from git tracking.
+- **End-to-End Diagnostic Health Suite**:
+  - Comprehensive 5-phase diagnostic runner (`backend/scripts/system_health_check.py`) testing database connectivity, live wire workers, archivers, control systems, and 10 REST endpoints with Windows UTF-8 stdout configuration.
+
+### Changed
+- **Institutional Financial Precision & Hardcoded Value Cleanup**:
+  - Replaced static PEAD multipliers (`total * 0.22`, `total * 0.08`) in `quarterly_results.py` with dynamic SQL calculations based on actual historical net profit and revenue expansion.
+  - Replaced dummy fallback figures (`72.4`, `4820.0`, `3950.0`, `8`) in `mf_analytics_service.py` with dynamic aggregations.
+  - Removed static fallback `24.7` industry P/E in `GrowthTable.tsx` and CSV export; properly renders formatted null indicator (`--`).
+  - Purged mock data generator from `DiscoveryQueueTable.tsx`.
+- **API Robustness**:
+  - Adjusted minimum limit parameter on `/quarterly-results/pead-candidates` from `ge=5` to `ge=1` to allow small batch probes without HTTP 422 errors.
+  - Added `getBackendUrl()` helper to `frontend/src/lib/apiConfig.ts`.
+
+---
+
 ## [2.3.0] - 2026-09-17
 
 ### Added

@@ -296,7 +296,7 @@ export default function HomePage() {
       c.cmp ?? "",
       c.market_cap ?? "",
       c.pe_ratio ?? "",
-      c.industry_pe ?? 24.7,
+      c.industry_pe ?? "",
       c.pb_ratio ?? "",
       c.roce ?? "",
       c.roe ?? "",

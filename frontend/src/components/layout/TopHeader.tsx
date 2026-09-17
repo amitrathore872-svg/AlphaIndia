@@ -18,12 +18,14 @@ interface TopHeaderProps {
   onOpenSidebar?: () => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebarCollapse?: () => void;
+  onOpenControlCenter?: () => void;
 }
 
 export default function TopHeader({
   onOpenSidebar,
   isSidebarCollapsed = false,
   onToggleSidebarCollapse,
+  onOpenControlCenter,
 }: TopHeaderProps) {
   const [time, setTime] = useState("");
 
@@ -87,20 +89,30 @@ export default function TopHeader({
 
         {/* RIGHT STATUS & PROFILE */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Universal Control Center & Action Logs Trigger */}
+          <button
+            onClick={onOpenControlCenter}
+            title="Open Universal Control System & Action Logs"
+            className="flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 sm:px-3 py-1.5 transition-all duration-200 hover:border-cyan-400 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-mono text-[11px] font-bold shadow-xs hover:shadow-cyan-950/40 cursor-pointer"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+            </span>
+            <span className="hidden sm:inline">CONTROL & LOGS</span>
+            <span className="sm:hidden">CONTROL</span>
+          </button>
+
           <Link
             href="/monitoring"
             title="Live Market Engine — View Real-time Telemetry"
-            className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 transition-all duration-200 hover:border-emerald-400/50 hover:bg-emerald-500/20"
+            className="hidden md:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 transition-all duration-200 hover:border-emerald-400/50 hover:bg-emerald-500/20"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-            </span>
             <Activity size={14} className="text-emerald-500 dark:text-emerald-400" />
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tracking-wide">
-              LIVE MARKET ENGINE
+              LIVE ENGINE
             </span>
-            <span className="hidden sm:inline-flex rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300">
+            <span className="hidden lg:inline-flex rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300">
               ONLINE
             </span>
           </Link>

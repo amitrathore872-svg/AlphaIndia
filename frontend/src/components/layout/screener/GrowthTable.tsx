@@ -578,7 +578,7 @@ export default function GrowthTable({
 
                     {/* Ind P/E */}
                     <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono text-slate-500 dark:text-slate-400 ${cellFont}`}>
-                      {formatRatio(company.industry_pe || 24.7)}
+                      {formatRatio(company.industry_pe)}
                     </td>
 
                     {/* P/B */}

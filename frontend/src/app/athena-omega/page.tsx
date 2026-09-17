@@ -255,7 +255,7 @@ export default function AthenaOmegaPage() {
   const aaaCount = decisions.filter((d) => d.conviction_grade === "AAA").length;
   const avgProcessingTime = decisions.length > 0
     ? (decisions.reduce((acc, d) => acc + d.processing_time_sec, 0) / decisions.length).toFixed(3)
-    : "0.025";
+    : "0.000";
 
   return (
     <DashboardLayout>

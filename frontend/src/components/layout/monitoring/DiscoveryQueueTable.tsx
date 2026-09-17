@@ -169,45 +169,4 @@ function StatusBadge({
     </span>
   );
 }
-
-// =======================================================
-// Temporary Mock Queue Generator
-// Will be replaced by backend pagination in Phase 4B.5
-// =======================================================
-
-export function generateMockQueue(total = 50): DiscoveryQueueRow[] {
-  const companies = [
-    ["INFY", "Infosys Limited"],
-    ["TCS", "Tata Consultancy Services"],
-    ["RELIANCE", "Reliance Industries Limited"],
-    ["HDFCBANK", "HDFC Bank Limited"],
-    ["ICICIBANK", "ICICI Bank Limited"],
-    ["SBIN", "State Bank of India"],
-    ["LT", "Larsen & Toubro Limited"],
-    ["ITC", "ITC Limited"],
-    ["BAJFINANCE", "Bajaj Finance Limited"],
-    ["BHARTIARTL", "Bharti Airtel Limited"],
-  ];
-
-  const statuses: DiscoveryQueueRow["status"][] = [
-    "COMPLETED",
-    "PENDING",
-    "RUNNING",
-    "FAILED",
-  ];
-
-  return Array.from({ length: total }, (_, index) => {
-    const company = companies[index % companies.length];
-
-    return {
-      symbol: company[0],
-      company: company[1],
-      exchange: "NSE",
-      status: statuses[index % statuses.length],
-      filings_discovered: (index % 7) + 1,
-      updated_at: new Date(
-        Date.now() - index * 60000
-      ).toLocaleString("en-IN"),
-    };
-  });
-}
+

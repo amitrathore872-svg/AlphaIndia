@@ -440,10 +440,28 @@ def get_quarterly_summary(db: Session = Depends(get_db)):
             "drift_days": eval_res["drift_days"],
         }
 
+    pead_candidates_count = (
+        db.query(func.count(Company.id))
+        .filter(Company.pat_growth.isnot(None), Company.pat_growth >= 25.0)
+        .scalar()
+        or 0
+    )
+    elite_pead_count = (
+        db.query(func.count(Company.id))
+        .filter(
+            Company.pat_growth.isnot(None),
+            Company.pat_growth >= 50.0,
+            Company.revenue_growth.isnot(None),
+            Company.revenue_growth >= 20.0,
+        )
+        .scalar()
+        or 0
+    )
+
     return {
         "total_filings": total,
-        "pead_candidates": int(total * 0.22),  # approx 22% qualify as PEAD candidates
-        "elite_pead": int(total * 0.08),       # approx 8% elite breakouts
+        "pead_candidates": pead_candidates_count,
+        "elite_pead": elite_pead_count,
         "nse_count": nse_count,
         "bse_count": bse_count,
         "latest_discovered_at": latest_filing.discovered_at.isoformat() if latest_filing and latest_filing.discovered_at else None,

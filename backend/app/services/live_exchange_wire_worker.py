@@ -115,6 +115,7 @@ class LiveExchangeWireWorker:
         Picks the next batch of companies from screener_growth_records,
         fetches their latest documents, processes fresh material catalysts, and upserts them.
         """
+        start_t = time.time()
         cls._last_poll_time = datetime.now(timezone.utc)
 
         # Get total stocks count
@@ -208,6 +209,28 @@ class LiveExchangeWireWorker:
                 logger.debug(f"[LiveExchangeWireWorker] Error scanning {sym}: {e}")
 
         db.commit()
+        duration_ms = (time.time() - start_t) * 1000.0
+
+        try:
+            from app.services.control_system_service import ControlSystemService
+            ControlSystemService.record_service_fetch(
+                service_id="exchange_live_wire",
+                records_count=discovered_in_batch,
+                status="SUCCESS",
+                duration_ms=duration_ms,
+            )
+            ControlSystemService.log_action(
+                service_id="exchange_live_wire",
+                service_name="NSE/BSE Live Exchange Wire",
+                level="SUCCESS" if discovered_in_batch > 0 else "INFO",
+                action="WIRE_POLL",
+                message=f"Polled batch of {len(records)} stocks. Discovered {discovered_in_batch} new high-alpha catalysts.",
+                duration_ms=duration_ms,
+                records_count=discovered_in_batch,
+            )
+        except Exception:
+            pass
+
         return {"scanned": len(records), "catalysts": discovered_in_batch}
 
     @classmethod

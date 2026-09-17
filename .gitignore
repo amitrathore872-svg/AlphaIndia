@@ -66,7 +66,14 @@ build/
 .cache/
 
 # -------------------------
-# Database / Temporary
+# Database / Temporary / Raw Storage Archive
 # -------------------------
 *.sqlite3
 *.db
+*.gz
+*.pdf
+*.pdf.gz
+data/archive/
+backend/data/archive/
+data/bronze/
+backend/data/bronze/

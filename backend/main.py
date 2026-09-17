@@ -26,11 +26,13 @@ from app.api.announcements import router as announcements_router
 from app.api.athena_omega import router as athena_omega_router
 from app.api.institutional_radar import router as institutional_radar_router
 from app.api.quarterly_results import router as quarterly_results_router
+from app.api.control_system import router as control_system_router
 
 # ---------------- Background Schedulers & Workers ----------------
 from app.services.screener_scheduler import ScreenerScheduler
 from app.services.early_stage_scheduler import EarlyStageScheduler
 from app.services.live_exchange_wire_worker import LiveExchangeWireWorker
+from app.services.raw_file_archiver import RawFileArchiveService
 
 
 @asynccontextmanager
@@ -40,15 +42,18 @@ async def lifespan(app: FastAPI):
     ScreenerScheduler.start()
     EarlyStageScheduler.start()
     LiveExchangeWireWorker.start(poll_interval_seconds=60)
+    RawFileArchiveService.start(interval_seconds=600)
     yield
     # Shutdown: graceful cleanup of background threads
     ScreenerScheduler.stop()
+    EarlyStageScheduler.stop()
     LiveExchangeWireWorker.stop()
+    RawFileArchiveService.stop()
 
 
 app = FastAPI(
     title="Alpha India API",
-    version="2.3.0-optimized",
+    version="2.3.1",
     description="AI Powered NSE/BSE Growth Scanner Backend",
     lifespan=lifespan,
 )
@@ -86,6 +91,7 @@ app.include_router(announcements_router)
 app.include_router(athena_omega_router)
 app.include_router(institutional_radar_router, prefix="/api/v1")
 app.include_router(quarterly_results_router)
+app.include_router(control_system_router)
 
 
 # ==========================================================

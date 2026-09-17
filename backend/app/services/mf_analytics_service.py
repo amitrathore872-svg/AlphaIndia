@@ -795,10 +795,10 @@ class MFAnalyticsService:
         latest_date = db.query(func.max(MFStockMonthlyAggregate.report_date)).scalar()
         if not latest_date:
             return {
-                "smart_money_avg": 72.4,
-                "total_inflows_cr": 4820.0,
-                "active_schemes_inflow_cr": 3950.0,
-                "stealth_alerts_count": 8,
+                "smart_money_avg": 0.0,
+                "total_inflows_cr": 0.0,
+                "active_schemes_inflow_cr": 0.0,
+                "stealth_alerts_count": 0,
                 "report_date": None,
             }
 
@@ -808,14 +808,29 @@ class MFAnalyticsService:
             .all()
         )
 
-        total_inflows = sum(a.net_value_flow_mom_cr for a in aggregates if a.net_value_flow_mom_cr > 0)
-        avg_score = sum(a.smart_money_score for a in aggregates) / len(aggregates) if aggregates else 70.0
+        total_inflows = sum(a.net_value_flow_mom_cr for a in aggregates if a.net_value_flow_mom_cr and a.net_value_flow_mom_cr > 0)
+        avg_score = sum(a.smart_money_score for a in aggregates) / len(aggregates) if aggregates else 0.0
         stealth_count = sum(1 for a in aggregates if a.is_stealth_accumulation)
+
+        # Dynamic query for active alpha scheme inflows
+        active_inflow_query = (
+            db.query(func.coalesce(func.sum(MFSchemeHolding.market_value_cr), 0.0))
+            .join(MFScheme, MFSchemeHolding.scheme_id == MFScheme.id)
+            .filter(
+                MFSchemeHolding.report_date == latest_date,
+                MFScheme.is_active_alpha.is_(True),
+                MFSchemeHolding.holding_status.in_(["NEW_ENTRY", "AGGRESSIVE_ADD", "ADD"]),
+            )
+            .scalar()
+        )
+        active_inflows = float(active_inflow_query or 0.0)
+        if active_inflows <= 0.0 and total_inflows > 0.0:
+            active_inflows = total_inflows
 
         return {
             "smart_money_avg": round(avg_score, 1),
             "total_inflows_cr": round(total_inflows, 1),
-            "active_schemes_inflow_cr": round(total_inflows * 0.82, 1),
+            "active_schemes_inflow_cr": round(active_inflows, 1),
             "stealth_alerts_count": stealth_count,
             "report_date": str(latest_date),
         }

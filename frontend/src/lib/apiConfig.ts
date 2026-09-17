@@ -5,6 +5,10 @@
 export const API_BASE: string =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+export function getBackendUrl(): string {
+  return API_BASE;
+}
+
 /**
  * Standard fetch helper with timeout and unified error handling.
  */
