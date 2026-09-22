@@ -40,6 +40,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Financial Results - Audited Q1 FY26",
         "pdf_url": "https://nsearchives.nseindia.com/corporate/DIXON_Q1FY26_Financial_Results.pdf",
         "financials": {
+            "current_price": 13005.00,
             "revenue": 12835.66,
             "pat": 224.97,
             "eps": 46.47,
@@ -72,6 +73,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Outcome of Board Meeting - Financial Results Q1 FY26",
         "pdf_url": "https://nsearchives.nseindia.com/corporate/KAYNES_Q1FY26_Outcome.pdf",
         "financials": {
+            "current_price": 3515.00,
             "revenue": 673.47,
             "pat": 74.61,
             "eps": 11.63,
@@ -104,6 +106,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Financial Results for the quarter ended June 30, 2025",
         "pdf_url": "https://nsearchives.nseindia.com/corporate/TRENT_Q1FY26_Results.pdf",
         "financials": {
+            "current_price": 2824.00,
             "revenue": 4883.48,
             "pat": 429.69,
             "eps": 8.06,
@@ -136,6 +139,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Outcome of Board Meeting - Unaudited Financial Results Q1 FY26",
         "pdf_url": "https://nsearchives.nseindia.com/corporate/PREMIERENE_Q1FY26.pdf",
         "financials": {
+            "current_price": 902.00,
             "revenue": 1820.74,
             "pat": 307.79,
             "eps": 6.83,
@@ -168,6 +172,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Financial Results - Audited Q1 FY26",
         "pdf_url": "https://nsearchives.nseindia.com/corporate/CERA_Q1FY26_Results.pdf",
         "financials": {
+            "current_price": 5645.00,
             "revenue": 406.81,
             "pat": 46.53,
             "eps": 36.08,
@@ -205,6 +210,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "BSE Disclosures - Financial Results for Q1 FY26",
         "pdf_url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/WAAREERTL_Q1FY26.pdf",
         "financials": {
+            "current_price": 819.65,
             "revenue": 603.19,
             "pat": 86.44,
             "eps": 8.29,
@@ -238,6 +244,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Financial Results - Unaudited Quarterly Q1 FY26",
         "pdf_url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/GENSOL_Q1FY26.pdf",
         "financials": {
+            "current_price": 17.10,
             "revenue": 485.50,
             "pat": 48.20,
             "eps": 12.75,
@@ -271,6 +278,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Outcome of Board Meeting - Financial Statements Q1 FY26",
         "pdf_url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/VISHNU_Q1FY26.pdf",
         "financials": {
+            "current_price": 722.15,
             "revenue": 345.95,
             "pat": 32.22,
             "eps": 4.79,
@@ -304,6 +312,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Financial Results - Audited Q1 FY26",
         "pdf_url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/KABRAEXTRU_Q1FY26.pdf",
         "financials": {
+            "current_price": 681.60,
             "revenue": 85.97,
             "pat": -7.61,
             "eps": -2.18,
@@ -337,6 +346,7 @@ EXCHANGE_FEED_DATASET: List[Dict[str, Any]] = [
         "filing_type": "Financial Results - Unaudited Quarterly Q1 FY26",
         "pdf_url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/TARAPUR_Q1FY26.pdf",
         "financials": {
+            "current_price": 12.55,
             "revenue": 0.0,
             "pat": 0.10,
             "eps": 0.05,

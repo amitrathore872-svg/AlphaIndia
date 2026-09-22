@@ -105,6 +105,13 @@ class ScreenerGrowthRecord(Base):
     high_52_week = Column(Float, nullable=True)
     low_52_week = Column(Float, nullable=True)
 
+    # Quantitative Risk, Cash Flow & Momentum Factors (Sprint 36.6)
+    fcf_yield = Column(Float, nullable=True, index=True)  # Free Cash Flow Yield (%) = (FCF / MCAP) * 100
+    rsi_14 = Column(Float, nullable=True, index=True)  # 14-Day Relative Strength Index (0 to 100)
+    beta = Column(Float, nullable=True, index=True)  # Market Beta (Sensitivity relative to Nifty 50)
+    distance_52w_high = Column(Float, nullable=True, index=True)  # Drawdown from 52-Week High (%)
+    cfo_to_pat = Column(Float, nullable=True)  # Cash Flow from Operations / PAT 12M (Earnings Quality Ratio)
+
     # Import Metadata
     import_source = Column(String(50), default="screener.in")
     import_timestamp = Column(DateTime, default=datetime.utcnow)

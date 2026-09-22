@@ -17,6 +17,7 @@ from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.models.watchlist import Watchlist, WatchlistItem
+from app.services.pead_engine import PEADEngine
 
 router = APIRouter(
     prefix="/growth-screener",
@@ -465,6 +466,24 @@ def growth_screener(
             res_date_str = scr.latest_quarter_name
 
 
+        # PEAD evaluation
+        pead_score_val = None
+        try:
+            pead_eval = PEADEngine.evaluate(
+                revenue_growth_yoy=float(sales_yoy) if sales_yoy is not None else None,
+                pat_growth_yoy=float(pat_yoy) if pat_yoy is not None else None,
+                roce=float(roce_val) if roce_val is not None else None,
+                opm=float(opm_val) if opm_val is not None else None,
+                current_price=float(cmp_val) if cmp_val is not None else None,
+                dma_50=float(scr.dma_50) if (scr and scr.dma_50 is not None) else None,
+                revenue_growth_qoq=float(sales_qoq) if sales_qoq is not None else None,
+                pat_growth_qoq=float(profit_qoq) if profit_qoq is not None else None,
+                symbol=company.symbol,
+            )
+            pead_score_val = pead_eval.get("pead_score")
+        except Exception:
+            pass
+
         results.append(
             {
                 "index": index,
@@ -500,8 +519,10 @@ def growth_screener(
                 "sales_cagr_3y": round(float(sales_cagr), 2) if sales_cagr is not None else None,
                 "profit_cagr_3y": round(float(profit_cagr), 2) if profit_cagr is not None else None,
 
-                # Quality / Health
+                # Quality / Health & PEAD Intelligence
                 "health_score": round(float(health), 1) if health is not None else None,
+                "pead_score": pead_score_val,
+                "announcement_date": res_date_str,
                 "piotroski_score": scr.piotroski_score if scr else None,
                 "result_date": res_date_str,
                 "last_updated": last_upd_dt.isoformat() if last_upd_dt else None,

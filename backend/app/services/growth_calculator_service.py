@@ -50,7 +50,27 @@ class GrowthCalculatorService:
             }
 
         latest = quarters[0]
-        previous_year = quarters[4]
+        previous_year = None
+
+        # Intelligently locate the matching quarter ~1 year prior (approx 365 days +/- 45 days)
+        if latest.period_end:
+            for q in quarters[1:]:
+                if q.period_end:
+                    days_diff = abs((latest.period_end - q.period_end).days - 365)
+                    if days_diff <= 45:
+                        previous_year = q
+                        break
+
+        # Fallback to index 4 if chronological match wasn't found but 5 quarters are present
+        if previous_year is None and len(quarters) >= 5:
+            previous_year = quarters[4]
+
+        if previous_year is None:
+            return {
+                "success": False,
+                "message": "Valid 1-year prior baseline quarter (Q-4) not found.",
+                "quarters_available": len(quarters),
+            }
 
         revenue_growth = cls.calculate_growth(
             latest.revenue,

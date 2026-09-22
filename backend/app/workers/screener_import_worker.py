@@ -358,13 +358,14 @@ class ScreenerImportWorker:
                 else:
                     run_record.status = "SUCCESS"
 
+            final_status = run_record.status
             db.commit()
             db.close()
 
-            ScreenerTelemetryService.set_idle(success=(run_record.status in ("SUCCESS", "PARTIAL")))
+            ScreenerTelemetryService.set_idle(success=(final_status in ("SUCCESS", "PARTIAL")))
             ScreenerTelemetryService.emit_event(
                 event_type="JOB_COMPLETE",
                 message=f"Import run {run_id} completed: {imported_count} new, {updated_count} updated, {failed_count} failed in {round(duration, 1)}s.",
-                level="INFO" if run_record.status in ("SUCCESS", "PARTIAL") else "ERROR",
+                level="INFO" if final_status in ("SUCCESS", "PARTIAL") else "ERROR",
                 run_id=run_id,
             )

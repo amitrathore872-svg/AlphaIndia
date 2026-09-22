@@ -108,7 +108,7 @@ def run_backtest_50():
                 "revenue_growth_pct": rec.quarterly_sales_yoy or 0.0,
                 "pat_growth_pct": rec.quarterly_pat_yoy or 0.0,
                 "eps_growth_pct": rec.quarterly_eps_yoy or rec.quarterly_pat_yoy or 0.0,
-                "current_price": rec.current_price or 100.0,
+                "current_price": rec.current_price,
                 "market_cap": rec.market_cap or 1000.0,
                 "pe": rec.stock_pe or 25.0,
             }

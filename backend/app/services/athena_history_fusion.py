@@ -102,6 +102,93 @@ class AthenaHistoryFusion:
     """
 
     @classmethod
+    def resolve_accurate_cmp(
+        cls,
+        db: Session,
+        symbol: str,
+        fresh_q0: Dict[str, Any],
+        s_record: Optional[ScreenerGrowthRecord] = None,
+    ) -> float:
+        """
+        Multi-tier institutional CMP resolver:
+        1. Explicit current_price in fresh_q0 (if valid and not 500.0/100.0 placeholder)
+        2. Database ScreenerGrowthRecord.current_price (if valid and not 500.0/100.0 placeholder)
+        3. Database CompanyMarketMetrics.cmp
+        4. Live Yahoo Finance fast quote (NSE: .NS, BSE: .BO, handling aliases like CPCL -> CHENNPETRO)
+        5. Persist the fetched real CMP into s_record.current_price so future queries are sub-millisecond
+        """
+        sym = symbol.strip().upper()
+
+        # Priority 1: fresh_q0 explicit price
+        raw_price = fresh_q0.get("current_price")
+        if raw_price is not None:
+            try:
+                p = float(raw_price)
+                if p > 0 and p not in (500.0, 100.0):
+                    return round(p, 2)
+            except (ValueError, TypeError):
+                pass
+
+        # Priority 2: ScreenerGrowthRecord
+        if s_record and s_record.current_price is not None:
+            try:
+                p = float(s_record.current_price)
+                if p > 0 and p not in (500.0, 100.0):
+                    return round(p, 2)
+            except (ValueError, TypeError):
+                pass
+
+        # Priority 3: CompanyMarketMetrics
+        try:
+            from app.models.company_market_metrics import CompanyMarketMetrics
+            mm = db.query(CompanyMarketMetrics).filter(CompanyMarketMetrics.symbol == sym).first()
+            if mm and mm.cmp and float(mm.cmp) > 0 and float(mm.cmp) not in (500.0, 100.0):
+                return round(float(mm.cmp), 2)
+        except Exception:
+            pass
+
+        # Priority 4: Live Yahoo Finance fast quote
+        lookup_sym = "CHENNPETRO" if sym == "CPCL" else sym
+        for suffix in [".NS", ".BO"]:
+            try:
+                import yfinance as yf
+                t = yf.Ticker(f"{lookup_sym}{suffix}")
+                fi = t.fast_info
+                lp = getattr(fi, "last_price", None)
+                if lp and lp == lp and float(lp) > 0:
+                    real_cmp = round(float(lp), 2)
+                    if s_record:
+                        s_record.current_price = real_cmp
+                        yh = getattr(fi, "year_high", None)
+                        yl = getattr(fi, "year_low", None)
+                        if yh and yh == yh:
+                            s_record.high_52_week = round(float(yh), 2)
+                        if yl and yl == yl:
+                            s_record.low_52_week = round(float(yl), 2)
+                    return real_cmp
+            except Exception:
+                pass
+
+        # Priority 5: Any non-zero price from input/DB as fallback
+        if raw_price is not None:
+            try:
+                p = float(raw_price)
+                if p > 0:
+                    return round(p, 2)
+            except Exception:
+                pass
+
+        if s_record and s_record.current_price is not None:
+            try:
+                p = float(s_record.current_price)
+                if p > 0:
+                    return round(p, 2)
+            except Exception:
+                pass
+
+        return 100.0
+
+    @classmethod
     def fuse(
         cls,
         db: Session,
@@ -212,15 +299,23 @@ class AthenaHistoryFusion:
         i_days = 60.0
         ccc = 60.0
         roce_val = 15.0
-        curr_price = float(fresh_q0.get("current_price") or 500.0)
-        mcap = float(fresh_q0.get("market_cap") or 2500.0)
-        mcap_cat = "SMALL"
-        s_pe = float(fresh_q0.get("pe") or 25.0)
-        ind_pe = 25.0
-        peg = 1.0
-        h_52 = curr_price * 1.2
-        l_52 = curr_price * 0.7
-        promoter = 55.0
+
+        # Multi-Tier Accurate Current Market Price Resolver
+        curr_price = cls.resolve_accurate_cmp(
+            db=db,
+            symbol=sym,
+            fresh_q0=fresh_q0,
+            s_record=s_record,
+        )
+
+        mcap = float(fresh_q0.get("market_cap") or (s_record.market_cap if s_record and s_record.market_cap else 2500.0))
+        mcap_cat = s_record.market_cap_category if (s_record and s_record.market_cap_category) else "SMALL"
+        s_pe = float(fresh_q0.get("pe") or (s_record.stock_pe if s_record and s_record.stock_pe else 25.0))
+        ind_pe = s_record.industry_pe if (s_record and s_record.industry_pe) else 25.0
+        peg = s_record.peg_ratio if (s_record and s_record.peg_ratio) else 1.0
+        h_52 = s_record.high_52_week if (s_record and s_record.high_52_week) else round(curr_price * 1.2, 2)
+        l_52 = s_record.low_52_week if (s_record and s_record.low_52_week) else round(curr_price * 0.7, 2)
+        promoter = s_record.promoter_holding if (s_record and s_record.promoter_holding) else 55.0
 
         if s_record:
             total_debt = s_record.borrowings or 0.0
@@ -232,9 +327,8 @@ class AthenaHistoryFusion:
             i_days = s_record.inventory_days or 60.0
             ccc = s_record.cash_conversion_cycle or 60.0
             roce_val = s_record.roce or 15.0
-            curr_price = s_record.current_price or curr_price
             mcap = s_record.market_cap or mcap
-            mcap_cat = s_record.market_cap_category or "SMALL"
+            mcap_cat = s_record.market_cap_category or mcap_cat
             s_pe = s_record.stock_pe or s_pe
             ind_pe = s_record.industry_pe or ind_pe
             peg = s_record.peg_ratio or peg

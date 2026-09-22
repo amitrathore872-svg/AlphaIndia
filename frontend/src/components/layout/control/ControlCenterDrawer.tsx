@@ -169,25 +169,25 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
       />
 
       <div className="fixed inset-y-0 right-0 flex max-w-full pl-6 sm:pl-10">
-        <div className="w-screen max-w-4xl bg-[#050B14] border-l border-slate-800 text-slate-100 shadow-2xl flex flex-col">
+        <div className="w-screen max-w-4xl bg-white dark:bg-[#050B14] border-l border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-2xl flex flex-col">
           {/* ====================================================
               DRAWER HEADER
           ==================================================== */}
-          <div className="flex items-center justify-between border-b border-slate-800/80 px-6 py-4 bg-slate-900/60 backdrop-blur-md">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 px-6 py-4 bg-slate-50 dark:bg-slate-900/60 backdrop-blur-md">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
                 <Server size={18} className="animate-pulse" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-white tracking-tight font-mono">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight font-mono">
                     UNIVERSAL CONTROL SYSTEM & LOGS
                   </h2>
-                  <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 font-mono">
+                  <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 font-mono">
                     LIVE
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Continuous multi-engine data scraping, intervals & real-time operational logs.
                 </p>
               </div>
@@ -197,7 +197,7 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
               <button
                 onClick={handleTriggerAll}
                 disabled={triggeringAll}
-                className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-bold font-mono text-cyan-300 hover:bg-cyan-500/20 transition disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-bold font-mono text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 transition disabled:opacity-50"
                 title="Trigger immediate fetch across all services"
               >
                 <RefreshCw size={13} className={triggeringAll ? "animate-spin" : ""} />
@@ -206,7 +206,7 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
 
               <button
                 onClick={onClose}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+                className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition"
                 aria-label="Close Control Center"
               >
                 <X size={18} />
@@ -217,28 +217,28 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
           {/* ====================================================
               TOP TELEMETRY RIBBON
           ==================================================== */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-[#081225] border-b border-slate-800/60 text-xs font-mono">
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
-              <p className="text-[10px] text-slate-400 uppercase">Active Engines</p>
-              <p className="text-base font-bold text-emerald-400 mt-0.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 dark:bg-[#081225] border-b border-slate-200 dark:border-slate-800/60 text-xs font-mono">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-2.5 shadow-xs">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Active Engines</p>
+              <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {data?.active_services || 0} / {data?.total_services || 6} RUNNING
               </p>
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
-              <p className="text-[10px] text-slate-400 uppercase">Latest Global Fetch</p>
-              <p className="text-base font-bold text-cyan-400 mt-0.5">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-2.5 shadow-xs">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Latest Global Fetch</p>
+              <p className="text-base font-bold text-cyan-600 dark:text-cyan-400 mt-0.5">
                 {formatRelativeTime(data?.latest_fetch_time || null)}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
-              <p className="text-[10px] text-slate-400 uppercase">Ingested Records Today</p>
-              <p className="text-base font-bold text-white mt-0.5">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-2.5 shadow-xs">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Ingested Records Today</p>
+              <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">
                 {data?.total_records_ingested_today?.toLocaleString() || 0}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
-              <p className="text-[10px] text-slate-400 uppercase">Auto Poller SLA</p>
-              <p className="text-base font-bold text-amber-400 mt-0.5">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-2.5 shadow-xs">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Auto Poller SLA</p>
+              <p className="text-base font-bold text-amber-600 dark:text-amber-400 mt-0.5">
                 60s Interval
               </p>
             </div>
@@ -251,11 +251,11 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
             {/* 1. DATA FETCHING SERVICES STATUS GRID */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                  <Activity size={14} className="text-cyan-400" />
+                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Activity size={14} className="text-cyan-600 dark:text-cyan-400" />
                   Continuous Ingestion Engines & Intervals
                 </h3>
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                   Auto-ticks every 4 seconds
                 </span>
               </div>
@@ -271,23 +271,23 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
                       key={srv.id}
                       className={`rounded-xl border p-4 transition-all duration-200 ${
                         isPaused
-                          ? "border-amber-500/20 bg-amber-950/5 opacity-75"
+                          ? "border-amber-300 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/5 opacity-80"
                           : isRunning
-                          ? "border-slate-800/90 bg-slate-900/70 hover:border-slate-700"
-                          : "border-red-500/20 bg-red-950/10"
+                          ? "border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/70 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs"
+                          : "border-red-300 dark:border-red-500/20 bg-red-50/50 dark:bg-red-950/10"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-white font-mono">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">
                               {srv.name}
                             </span>
-                            <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 uppercase">
+                            <span className="rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-[9px] font-mono text-slate-600 dark:text-slate-400 uppercase">
                               {srv.category}
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
                             {srv.description}
                           </p>
                         </div>
@@ -297,19 +297,19 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold font-mono uppercase ${
                               isPaused
-                                ? "bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                                ? "bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400"
                                 : isRunning
-                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                                : "bg-red-500/10 border border-red-500/30 text-red-400"
+                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                : "bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400"
                             }`}
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
                                 isPaused
-                                  ? "bg-amber-400"
+                                  ? "bg-amber-500"
                                   : isRunning
-                                  ? "bg-emerald-400 animate-pulse"
-                                  : "bg-red-400"
+                                  ? "bg-emerald-500 animate-pulse"
+                                  : "bg-red-500"
                               }`}
                             />
                             {srv.status}
@@ -318,41 +318,41 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
                       </div>
 
                       {/* Schedule & Last Fetch Metrics */}
-                      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-800/60 pt-2.5 text-[11px] font-mono">
+                      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-200 dark:border-slate-800/60 pt-2.5 text-[11px] font-mono">
                         <div>
-                          <span className="text-slate-500">Last Fetch: </span>
-                          <span className="text-cyan-300 font-semibold">
+                          <span className="text-slate-500 dark:text-slate-400">Last Fetch: </span>
+                          <span className="text-cyan-700 dark:text-cyan-300 font-semibold">
                             {formatRelativeTime(srv.last_fetch_time)}
                           </span>
                         </div>
                         <div className="text-right">
-                          <span className="text-slate-500">Interval: </span>
-                          <span className="text-slate-300">
+                          <span className="text-slate-500 dark:text-slate-400">Interval: </span>
+                          <span className="text-slate-700 dark:text-slate-300">
                             {formatInterval(srv.poll_interval_seconds)}
                           </span>
                         </div>
                       </div>
 
                       {/* Action Bar */}
-                      <div className="mt-3 flex items-center justify-between border-t border-slate-800/40 pt-2.5">
-                        <span className="text-[10px] font-mono text-slate-400">
+                      <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-800/40 pt-2.5">
+                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
                           {srv.records_ingested_today} records today
                         </span>
 
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleToggle(srv.id)}
-                            className="rounded px-2 py-1 text-[10px] font-mono font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                            className="rounded px-2 py-1 text-[10px] font-mono font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                             title={isPaused ? "Resume background polling" : "Pause polling"}
                           >
-                            {isPaused ? <Play size={11} className="inline mr-1 text-emerald-400" /> : <Pause size={11} className="inline mr-1 text-amber-400" />}
+                            {isPaused ? <Play size={11} className="inline mr-1 text-emerald-600 dark:text-emerald-400" /> : <Pause size={11} className="inline mr-1 text-amber-600 dark:text-amber-400" />}
                             {isPaused ? "Resume" : "Pause"}
                           </button>
 
                           <button
                             onClick={() => handleTriggerSingle(srv.id)}
                             disabled={isTriggering}
-                            className="flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-bold font-mono text-cyan-400 hover:bg-cyan-500/20 transition disabled:opacity-50"
+                            className="flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-bold font-mono text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 transition disabled:opacity-50"
                           >
                             <RefreshCw size={10} className={isTriggering ? "animate-spin" : ""} />
                             <span>{isTriggering ? "Fetching..." : "Fetch Now"}</span>
@@ -367,10 +367,10 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
 
             {/* 2. REAL-TIME ACTION LOGS TERMINAL */}
             <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800/80 pb-2">
                 <div className="flex items-center gap-2">
-                  <Terminal size={15} className="text-emerald-400" />
-                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
+                  <Terminal size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">
                     Live Operational Action Logs ({filteredLogs.length})
                   </h3>
                 </div>
@@ -378,25 +378,25 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Search filter */}
                   <div className="relative">
-                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                     <input
                       value={logSearchQuery}
                       onChange={(e) => setLogSearchQuery(e.target.value)}
                       placeholder="Filter log messages..."
-                      className="rounded-lg border border-slate-800 bg-slate-900/80 pl-7 pr-2 py-1 text-[11px] font-mono text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60 focus:outline-none w-44"
+                      className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 pl-7 pr-2 py-1 text-[11px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-cyan-500/60 focus:outline-none w-44"
                     />
                   </div>
 
                   {/* Level Filter Pills */}
-                  <div className="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-800 text-[10px] font-mono">
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-mono">
                     {["ALL", "SUCCESS", "INFO", "WARN", "ERROR"].map((lvl) => (
                       <button
                         key={lvl}
                         onClick={() => setSelectedLevelFilter(lvl)}
                         className={`px-2 py-0.5 rounded font-semibold transition ${
                           selectedLevelFilter === lvl
-                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                            : "text-slate-400 hover:text-white"
+                            ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40 font-bold"
+                            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                         }`}
                       >
                         {lvl}
@@ -472,14 +472,14 @@ export default function ControlCenterDrawer({ isOpen, onClose }: ControlCenterDr
           {/* ====================================================
               DRAWER FOOTER
           ==================================================== */}
-          <div className="border-t border-slate-800/80 px-6 py-3 bg-slate-900/60 flex items-center justify-between text-xs font-mono">
-            <span className="text-slate-400">
+          <div className="border-t border-slate-200 dark:border-slate-800/80 px-6 py-3 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between text-xs font-mono">
+            <span className="text-slate-600 dark:text-slate-400">
               Alpha India Control Engine · Active Polling Loop
             </span>
 
             <button
               onClick={loadStatusAndLogs}
-              className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 transition font-semibold"
+              className="flex items-center gap-1.5 text-cyan-700 dark:text-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-300 transition font-semibold"
             >
               <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
               <span>Refresh Now</span>

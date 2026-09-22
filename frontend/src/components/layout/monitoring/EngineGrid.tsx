@@ -1,8 +1,8 @@
 "use client";
 
 // =======================================================
-// Alpha India Mission Control
-// Sprint 23 — 5 Live Processing Engines
+// Alpha India Platform Health Monitor
+// 5 Live Processing Engines
 // Features: Discovery, Import, Reconciliation (NEW), Audit, AI Growth
 // =======================================================
 
@@ -156,7 +156,7 @@ export default function EngineGrid({ status }: EngineGridProps) {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">
-            Live Engine Grid • Sprint 23 Pipeline
+            Live Engine Grid • Pipeline Health Monitor
           </p>
 
           <h2 className="mt-2 text-2xl font-bold text-white">

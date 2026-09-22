@@ -31,6 +31,7 @@ export type VerticalArchetype =
 
 export type AbsorptionStatus = "FRESH_TRIGGER" | "IN_EXPANSION" | "PRICED_IN" | "STOPPED_OUT";
 export type TrendRegime = "GOLDEN_TREND" | "EARLY_BREAKOUT" | "CONSOLIDATING" | "DOWNTREND_TRAP";
+export type OrderSignificanceTier = "TRANSFORMATIONAL" | "HIGH_IMPACT" | "MODERATE" | "ROUTINE";
 
 export interface AnnouncementRadarItem {
   id: number;
@@ -78,6 +79,21 @@ export interface AnnouncementRadarItem {
   est_velocity_days?: string | null;
   dma_50?: number | null;
   dma_200?: number | null;
+
+  // Order Win Quantitative Intelligence (Sprint 36.5)
+  order_execution_months?: number | null;
+  order_quarterly_rev_cr?: number | null;
+  order_quarterly_rev_pct?: number | null;
+  order_earnings_impact_cr?: number | null;
+  order_significance_score?: number | null;
+  order_significance_tier?: OrderSignificanceTier | string | null;
+  order_upside_prob_pct?: number | null;
+  order_target_price_low?: number | null;
+  order_target_price_high?: number | null;
+  order_confidence_score?: number | null;
+  order_client_counterparty?: string | null;
+  order_historical_comparison?: string | null;
+  order_intelligence?: any;
 }
 
 export interface AnnouncementStats {
@@ -102,6 +118,7 @@ export interface AnnouncementQueryParams {
   impact_level?: string;
   recommendation?: string | string[];
   velocity?: string | string[];
+  order_tier?: OrderSignificanceTier | string | string[];
   feed_source?: "ALL" | "POLL_WIRE" | "CATALYST" | string;
   category?: string;
   search?: string;
@@ -152,6 +169,10 @@ export async function fetchAnnouncements(
   if (params.velocity) {
     const v = Array.isArray(params.velocity) ? params.velocity.join(",") : params.velocity;
     if (v) qs.set("velocity", v);
+  }
+  if (params.order_tier) {
+    const v = Array.isArray(params.order_tier) ? params.order_tier.join(",") : params.order_tier;
+    if (v) qs.set("order_tier", v);
   }
   if (params.feed_source && params.feed_source !== "ALL") {
     qs.set("feed_source", params.feed_source);
@@ -221,5 +242,29 @@ export async function addCatalystToWatchlist(
     `/announcements/${announcementId}/watchlist`,
     { method: "POST" }
   );
+}
+
+export async function triggerOrderWinsAnalysis(
+  limit: number = 1000
+): Promise<{ status: string; message: string; result: Record<string, unknown> }> {
+  return request<{ status: string; message: string; result: Record<string, unknown> }>(
+    `/announcements/order-wins/analyze-all?limit=${limit}`,
+    { method: "POST" }
+  );
+}
+
+export async function analyzeSingleOrderWin(
+  announcementId: number
+): Promise<AnnouncementRadarItem> {
+  return request<AnnouncementRadarItem>(
+    `/announcements/order-wins/${announcementId}/analyze`,
+    { method: "POST" }
+  );
+}
+
+export async function fetchAnnouncementById(
+  announcementId: number
+): Promise<AnnouncementRadarItem> {
+  return request<AnnouncementRadarItem>(`/announcements/${announcementId}`);
 }
 

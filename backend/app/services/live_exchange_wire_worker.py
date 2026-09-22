@@ -25,6 +25,7 @@ from app.services.announcements_ai_service import (
     classify_catalyst,
     generate_ai_insight,
 )
+from app.services.order_win_intelligence_service import OrderWinIntelligenceService
 from app.collectors.nse.announcements import NSEAnnouncementCollector
 
 logger = logging.getLogger(__name__)
@@ -112,101 +113,104 @@ class LiveExchangeWireWorker:
     @classmethod
     def poll_next_batch(cls, db: Session) -> Dict[str, Any]:
         """
-        Picks the next batch of companies from screener_growth_records,
-        fetches their latest documents, processes fresh material catalysts, and upserts them.
+        1. Ingests real-time market-wide NSE announcements stream via NSEClient (curl_cffi).
+        2. Cycles a targeted mini-batch of stocks to refresh BSE corporate filings.
+        3. Identifies and records high-alpha material catalysts into announcement_radars.
         """
         start_t = time.time()
         cls._last_poll_time = datetime.now(timezone.utc)
-
-        # Get total stocks count
-        total_stocks = db.query(ScreenerGrowthRecord).count()
-        if total_stocks == 0:
-            return {"scanned": 0, "catalysts": 0}
-
-        # Cycle cursor
-        if cls._current_offset >= total_stocks:
-            cls._current_offset = 0
-
-        # Prioritize stocks that are in active uptrend or breakout
-        records = (
-            db.query(ScreenerGrowthRecord)
-            .order_by(
-                (ScreenerGrowthRecord.current_price > ScreenerGrowthRecord.dma_50).desc(),
-                ScreenerGrowthRecord.return_3m.desc().nullslast(),
-                ScreenerGrowthRecord.id.asc(),
-            )
-            .offset(cls._current_offset)
-            .limit(cls._batch_size)
-            .all()
-        )
-
-        cls._current_offset += len(records)
         discovered_in_batch = 0
 
-        nse_collector = None
+        # -------------------------------------------------------------
+        # 1. Real-Time Global NSE Corporate Announcements Stream
+        # -------------------------------------------------------------
+        try:
+            nse_collector = NSEAnnouncementCollector()
+            global_filings = nse_collector.fetch_global_announcements()
+            cls._total_filings_scanned += len(global_filings)
 
-        for rec in records:
-            sym = rec.symbol.strip().upper()
-            try:
-                # 1. Fetch BSE Announcements via official attachment links
-                bse_announcements = cls.fetch_company_announcements(sym)
-                cls._total_filings_scanned += len(bse_announcements)
+            for gf in global_filings:
+                sym = gf.get("symbol", "").strip().upper()
+                if not sym:
+                    continue
 
-                for ann in bse_announcements:
-                    full_text = ann["headline"]
-                    # 80% Noise Filter
-                    if is_boilerplate_noise(full_text):
-                        continue
+                headline = gf.get("title") or gf.get("filing_type") or f"{sym} Corporate Announcement"
+                if is_boilerplate_noise(headline):
+                    continue
 
-                    # Classify Catalyst
-                    cat_type, impact_lvl, score, deal_val = classify_catalyst(full_text)
-                    if cat_type == "GENERAL" and score < 7.5:
-                        continue
+                cat_type, impact_lvl, score, deal_val = classify_catalyst(headline)
+                if cat_type == "GENERAL" and score < 7.0:
+                    continue
 
-                    inserted = cls._ingest_live_filing(
-                        db, rec, ann, cat_type, impact_lvl, score, deal_val, exchange="BSE"
-                    )
-                    if inserted:
-                        discovered_in_batch += 1
-                        cls._catalysts_discovered += 1
+                # Lookup corresponding tracked growth record if present
+                rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == sym).first()
 
-                # 2. Fetch Direct Official NSE Announcements for listed symbols
-                exch = getattr(rec, "exchange", "NSE") or "NSE"
-                if exch in ["NSE", "ALL"]:
-                    try:
-                        if nse_collector is None:
-                            nse_collector = NSEAnnouncementCollector()
-                        nse_filings = nse_collector.fetch_announcements(sym)
-                        cls._total_filings_scanned += len(nse_filings)
+                ann_payload = {
+                    "headline": headline,
+                    "pdf_url": gf.get("pdf_url"),
+                    "period": gf.get("period"),
+                    "date_str": gf.get("announcement_date").strftime("%d %b") if gf.get("announcement_date") else None,
+                    "company_name": gf.get("company_name"),
+                }
 
-                        for nf in nse_filings:
-                            headline = nf.get("title") or nf.get("filing_type") or f"{sym} Financial Results"
-                            if is_boilerplate_noise(headline):
-                                continue
+                inserted = cls._ingest_live_filing(
+                    db, rec, ann_payload, cat_type, impact_lvl, score, deal_val, exchange="NSE", fallback_symbol=sym
+                )
+                if inserted:
+                    discovered_in_batch += 1
+                    cls._catalysts_discovered += 1
 
-                            cat_type, impact_lvl, score, deal_val = classify_catalyst(headline)
-                            if cat_type == "GENERAL" and score < 7.5:
-                                continue
+        except Exception as nse_err:
+            logger.warning(f"[LiveExchangeWireWorker] Global NSE announcement stream notice: {nse_err}")
 
-                            ann_payload = {
-                                "headline": headline,
-                                "pdf_url": nf.get("pdf_url"),
-                                "period": nf.get("period"),
-                                "date_str": nf.get("announcement_date").strftime("%d %b") if nf.get("announcement_date") else None,
-                            }
-                            inserted = cls._ingest_live_filing(
-                                db, rec, ann_payload, cat_type, impact_lvl, score, deal_val, exchange="NSE"
-                            )
-                            if inserted:
-                                discovered_in_batch += 1
-                                cls._catalysts_discovered += 1
-                    except Exception as nse_err:
-                        logger.debug(f"[LiveExchangeWireWorker] NSE fetch notice for {sym}: {nse_err}")
+        # -------------------------------------------------------------
+        # 2. Targeted BSE Screener Documents Mini-Batch
+        # -------------------------------------------------------------
+        total_stocks = db.query(ScreenerGrowthRecord).count()
+        bse_batch_size = 5
 
-                # Polite delay between company requests
-                time.sleep(0.3)
-            except Exception as e:
-                logger.debug(f"[LiveExchangeWireWorker] Error scanning {sym}: {e}")
+        if total_stocks > 0:
+            if cls._current_offset >= total_stocks:
+                cls._current_offset = 0
+
+            records = (
+                db.query(ScreenerGrowthRecord)
+                .order_by(
+                    (ScreenerGrowthRecord.current_price > ScreenerGrowthRecord.dma_50).desc(),
+                    ScreenerGrowthRecord.return_3m.desc().nullslast(),
+                    ScreenerGrowthRecord.id.asc(),
+                )
+                .offset(cls._current_offset)
+                .limit(bse_batch_size)
+                .all()
+            )
+            cls._current_offset += len(records)
+
+            for rec in records:
+                sym = rec.symbol.strip().upper()
+                try:
+                    bse_announcements = cls.fetch_company_announcements(sym)
+                    cls._total_filings_scanned += len(bse_announcements)
+
+                    for ann in bse_announcements:
+                        full_text = ann["headline"]
+                        if is_boilerplate_noise(full_text):
+                            continue
+
+                        cat_type, impact_lvl, score, deal_val = classify_catalyst(full_text)
+                        if cat_type == "GENERAL" and score < 7.5:
+                            continue
+
+                        inserted = cls._ingest_live_filing(
+                            db, rec, ann, cat_type, impact_lvl, score, deal_val, exchange="BSE", fallback_symbol=sym
+                        )
+                        if inserted:
+                            discovered_in_batch += 1
+                            cls._catalysts_discovered += 1
+
+                    time.sleep(0.2)
+                except Exception as e:
+                    logger.debug(f"[LiveExchangeWireWorker] BSE notice for {sym}: {e}")
 
         db.commit()
         duration_ms = (time.time() - start_t) * 1000.0
@@ -224,14 +228,14 @@ class LiveExchangeWireWorker:
                 service_name="NSE/BSE Live Exchange Wire",
                 level="SUCCESS" if discovered_in_batch > 0 else "INFO",
                 action="WIRE_POLL",
-                message=f"Polled batch of {len(records)} stocks. Discovered {discovered_in_batch} new high-alpha catalysts.",
+                message=f"Global stream polled. Discovered {discovered_in_batch} new high-alpha catalysts.",
                 duration_ms=duration_ms,
                 records_count=discovered_in_batch,
             )
         except Exception:
             pass
 
-        return {"scanned": len(records), "catalysts": discovered_in_batch}
+        return {"scanned": cls._total_filings_scanned, "catalysts": discovered_in_batch}
 
     @classmethod
     def fetch_company_announcements(cls, symbol: str) -> List[Dict[str, Any]]:
@@ -274,18 +278,23 @@ class LiveExchangeWireWorker:
     def _ingest_live_filing(
         cls,
         db: Session,
-        rec: ScreenerGrowthRecord,
+        rec: Optional[ScreenerGrowthRecord],
         ann: Dict[str, Any],
         cat_type: str,
         impact_lvl: str,
         impact_score: float,
         deal_val: Optional[float],
         exchange: str = "BSE",
+        fallback_symbol: Optional[str] = None,
     ) -> bool:
         """
         Ingests a verified live material filing into announcements_radar and filing_registry.
+        Supports both tracked ScreenerGrowthRecord and newly discovered market-wide symbols.
         """
-        sym = rec.symbol.strip().upper()
+        sym = (rec.symbol.strip().upper() if rec else (fallback_symbol or "").strip().upper())
+        if not sym:
+            return False
+
         now = datetime.now(timezone.utc)
         headline = ann["headline"]
         pdf_url = ann.get("pdf_url")
@@ -313,14 +322,16 @@ class LiveExchangeWireWorker:
                 ann_date = now
 
         # Price at trigger (P0) & Live CMP
-        cmp_val = rec.current_price or 100.0
+        company = db.query(Company).filter(Company.symbol == sym).first()
+        company_name = (rec.company_name if rec else None) or ann.get("company_name") or (company.company if company else None) or sym
+        cmp_val = (rec.current_price if rec else None) or (getattr(company, "current_price", None) if company else None) or 100.0
         p0 = cmp_val  # Exact price captured at detection moment
         realized_pct = 0.0  # Fresh trigger!
         absorption = "FRESH_TRIGGER"
 
         # Trend Regime Gating
-        d50 = rec.dma_50
-        d200 = rec.dma_200
+        d50 = rec.dma_50 if rec else None
+        d200 = rec.dma_200 if rec else None
         if cmp_val > (d50 or 0) and (d200 is None or cmp_val > d200):
             regime = "GOLDEN_TREND"
         elif cmp_val < (d50 or float("inf")) and cmp_val < (d200 or float("inf")):
@@ -359,13 +370,40 @@ class LiveExchangeWireWorker:
             recommendation = "TACTICAL_BUY"
             conviction = 85.0
 
-        ai_insight = generate_ai_insight(rec.company_name or sym, cat_type, headline, deal_val)
-        buy_thesis = f"Fresh live exchange disclosure ({exchange}). Catalyst: {cat_type.replace('_', ' ')}. Trend regime: {regime}. Stop loss guardrail: Rs.{sl}."
+        order_intel = None
+        if cat_type == "ORDER_WIN" or OrderWinIntelligenceService.is_order_win_filing(headline):
+            cat_type = "ORDER_WIN"
+            order_intel = OrderWinIntelligenceService.analyze_order_win(
+                db=db,
+                symbol=sym,
+                company_name=company_name,
+                headline=headline,
+                filing_description=headline,
+                deal_value_cr=deal_val,
+                filing_date=ann_date,
+                cmp_override=cmp_val,
+            )
+            if order_intel.get("order_value_cr"):
+                deal_val = order_intel["order_value_cr"]
+            if order_intel.get("order_target_price_base"):
+                target_p = order_intel["order_target_price_base"]
+            if order_intel.get("upside_pct"):
+                upside_p = order_intel["upside_pct"]
+            if order_intel.get("investment_thesis"):
+                ai_insight = order_intel["investment_thesis"]
+                buy_thesis = order_intel["investment_thesis"]
+            conviction = min(96.0, max(75.0, order_intel.get("order_significance_score", 80.0)))
+            impact_lvl = "CRITICAL" if order_intel.get("order_significance_score", 0) >= 75 else "HIGH"
+            impact_score = round(min(9.9, max(7.5, (order_intel.get("order_significance_score", 70) / 10.0))), 1)
+            recommendation = "STRONG_BUY" if order_intel.get("order_significance_score", 0) >= 80 else "TACTICAL_BUY"
+
+        ai_insight = ai_insight or generate_ai_insight(company_name, cat_type, headline, deal_val)
+        buy_thesis = buy_thesis or f"Fresh live exchange disclosure ({exchange}). Catalyst: {cat_type.replace('_', ' ')}. Trend regime: {regime}. Stop loss guardrail: Rs.{sl}."
 
         # 1. Upsert into announcements_radar
         radar_item = AnnouncementRadar(
             symbol=sym,
-            company_name=rec.company_name or sym,
+            company_name=company_name,
             is_listed=True,
             category=f"Live {exchange} Filing",
             headline=headline,
@@ -394,11 +432,26 @@ class LiveExchangeWireWorker:
             target_price=target_p,
             upside_pct=upside_p,
             stop_loss=sl,
-            current_eps=rec.eps_12m,
-            forward_eps=round(rec.eps_12m * 1.30, 2) if rec.eps_12m else None,
-            valuation_pe=rec.stock_pe,
-            fair_pe=round(rec.stock_pe * 1.15, 1) if rec.stock_pe else 25.0,
+            current_eps=rec.eps_12m if rec else None,
+            forward_eps=round(rec.eps_12m * 1.30, 2) if (rec and rec.eps_12m) else None,
+            valuation_pe=rec.stock_pe if rec else None,
+            fair_pe=round(rec.stock_pe * 1.15, 1) if (rec and rec.stock_pe) else 25.0,
             buy_thesis=buy_thesis,
+            synergy_rev_addition_cr=deal_val if cat_type == "ORDER_WIN" else None,
+            synergy_rev_pct_ttm=order_intel.get("revenue_contribution_pct") if order_intel else None,
+            order_execution_months=order_intel.get("order_execution_months") if order_intel else None,
+            order_quarterly_rev_cr=order_intel.get("order_quarterly_rev_cr") if order_intel else None,
+            order_quarterly_rev_pct=order_intel.get("order_quarterly_rev_pct") if order_intel else None,
+            order_earnings_impact_cr=order_intel.get("order_earnings_impact_cr") if order_intel else None,
+            order_significance_score=order_intel.get("order_significance_score") if order_intel else None,
+            order_significance_tier=order_intel.get("order_significance_tier") if order_intel else None,
+            order_upside_prob_pct=order_intel.get("order_upside_prob_pct") if order_intel else None,
+            order_target_price_low=order_intel.get("order_target_price_low") if order_intel else None,
+            order_target_price_high=order_intel.get("order_target_price_high") if order_intel else None,
+            order_confidence_score=order_intel.get("order_confidence_score") if order_intel else None,
+            order_client_counterparty=order_intel.get("order_client_counterparty") if order_intel else None,
+            order_historical_comparison=order_intel.get("order_historical_comparison") if order_intel else None,
+            order_intelligence=order_intel,
         )
         db.add(radar_item)
 
@@ -423,11 +476,10 @@ class LiveExchangeWireWorker:
                 period_val = "LIVE_WIRE"
 
         # 3. Also register in filing_registry
-        company = db.query(Company).filter(Company.symbol == sym).first()
         if not company:
             company = Company(
                 symbol=sym,
-                company=rec.company_name or sym,
+                company=company_name,
                 exchange=exchange,
                 listing_status="ACTIVE",
             )
@@ -464,4 +516,32 @@ class LiveExchangeWireWorker:
             db.add(filing_reg)
 
         logger.info(f"[LiveExchangeWireWorker] 🚀 NEW LIVE CATALYST ({exchange}): {sym} | {cat_type} ({impact_score}/10) | {headline[:80]}")
+
+        # Real-time WebSocket dispatch to connected client terminals
+        try:
+            from app.core.websocket_manager import ws_manager
+            ws_manager.broadcast_sync("live_wire", {
+                "type": "CATALYST_DISCOVERED",
+                "symbol": sym,
+                "company_name": company_name,
+                "exchange": exchange,
+                "headline": headline,
+                "catalyst_type": cat_type,
+                "impact_level": impact_lvl,
+                "impact_score": impact_score,
+                "deal_value_cr": deal_val,
+                "price": cmp_val,
+                "target_price": target_p,
+                "upside_pct": upside_p,
+                "stop_loss": sl,
+                "trend_regime": regime,
+                "recommendation": recommendation,
+                "conviction_score": conviction,
+                "ai_insight": ai_insight,
+                "pdf_url": pdf_url,
+                "timestamp": now.isoformat(),
+            })
+        except Exception as ws_err:
+            logger.debug(f"[LiveExchangeWireWorker] WebSocket dispatch notice: {ws_err}")
+
         return True

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.3.2] - 2026-09-18
+
+### Added
+- **Techno-Funda Radar & Live Stock Charting Vertical**:
+  - Pre-breakout algorithmic screener at `/techno-funda` inspired by SwingEdge with Minervini VCP, Stage-2 Weinstein trend filters, and volume dry-up detection.
+  - Dedicated individual stock terminal at `/techno-funda/[symbol]` (e.g. `/techno-funda/METROPOLIS`) featuring setup readiness scores, model-derived scenario levels (Breakout Trigger, Pivot Reference, Stop Loss, Target 1 & 2), and automated Bullish & Risk factors checklists.
+  - Ultra-lightweight institutional TradingView live candlestick charting with real-time NSE/BSE feeds and zero backend database bloat.
+  - Automated Techno-Funda Buy/Sell signal generation matrix (`STRONG TECHNO-FUNDA BUY`, `PRE-BREAKOUT COILING`, `PULLBACK ENTRY`, `MOMENTUM CONTINUATION`, `PROFIT BOOKING / CAUTION`, `SELL / STOP HIT`).
+  - Slide-over live interactive chart drawer for rapid in-page setup preview without losing screener state.
+  - Added "Techno-Funda Radar" navigation item directly to `AppSidebar`.
+
 ## [2.3.1] - 2026-09-17
 
 ### Added

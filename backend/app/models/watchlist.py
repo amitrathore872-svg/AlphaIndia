@@ -29,10 +29,14 @@ class Watchlist(Base):
     color = Column(String(30), default="cyan")  # cyan, emerald, amber, purple, blue
     is_default = Column(Integer, default=0)
 
+    # Multi-tenant user ownership
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    user = relationship("User", backref="watchlists")
     items = relationship(
         "WatchlistItem",
         back_populates="watchlist",

@@ -35,7 +35,34 @@ from app.models.mf_models import (
     MFAccumulationSignal,
 )
 
+from app.models.notification import (
+    SystemNotification,
+    AlertChannelConfig,
+    AlertDispatchLog,
+)
+from app.models.vcp_models import (
+    VCPPattern,
+    VolumeAnalysis,
+    BreakoutSignal,
+    VCPAIScore,
+    VCPScanRejection,
+)
+from app.models.portfolio import (
+    Portfolio,
+    PortfolioHolding,
+    PortfolioStockAnalysisCache,
+)
+from app.models.swing_overlay import (
+    SwingPosition,
+    SwingQuantSignal,
+    SwingTradeLog,
+    SwingStockProfile,
+)
+from app.models.user import User, UserSession
+
 __all__ = [
+    "User",
+    "UserSession",
     "Company",
     "CompanyMarketMetrics",
     "FinancialMetric",
@@ -70,4 +97,19 @@ __all__ = [
     "MFStockMonthlyAggregate",
     "MFSectorFlow",
     "MFAccumulationSignal",
+    "SystemNotification",
+    "AlertChannelConfig",
+    "AlertDispatchLog",
+    "VCPPattern",
+    "VolumeAnalysis",
+    "BreakoutSignal",
+    "VCPAIScore",
+    "VCPScanRejection",
+    "Portfolio",
+    "PortfolioHolding",
+    "PortfolioStockAnalysisCache",
+    "SwingPosition",
+    "SwingQuantSignal",
+    "SwingTradeLog",
+    "SwingStockProfile",
 ]

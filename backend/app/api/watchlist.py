@@ -13,8 +13,12 @@ from sqlalchemy import func, or_
 
 from app.db.database import get_db
 from app.models.company import Company
+from app.models.company_market_metrics import CompanyMarketMetrics
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.models.watchlist import Watchlist, WatchlistItem
+from app.models.user import User
+from app.api.deps import get_optional_current_user
+from app.services.live_price_service import LivePriceService
 
 router = APIRouter(
     prefix="/watchlists",
@@ -73,9 +77,13 @@ def enrich_item(item: WatchlistItem, db: Session) -> Dict[str, Any]:
         or (comp.company if comp else clean_sym)
     )
 
-    cmp = screener_rec.current_price if screener_rec else None
+    # Query live market metrics
+    metrics = db.query(CompanyMarketMetrics).filter(CompanyMarketMetrics.symbol == clean_sym).first()
+
+    cmp = (metrics.cmp if metrics and metrics.cmp and metrics.cmp > 0 else None) or (screener_rec.current_price if screener_rec else None)
     sector = (
-        (screener_rec.sector if screener_rec and screener_rec.sector else None)
+        (metrics.sector if metrics and metrics.sector else None)
+        or (screener_rec.sector if screener_rec and screener_rec.sector else None)
         or (comp.sector if comp else None)
         or "Unknown"
     )
@@ -91,9 +99,9 @@ def enrich_item(item: WatchlistItem, db: Session) -> Dict[str, Any]:
     )
 
     market_cap = (
-        screener_rec.market_cap
-        if screener_rec and screener_rec.market_cap
-        else (comp.market_cap if comp else None)
+        (metrics.market_cap if metrics and metrics.market_cap else None)
+        or (screener_rec.market_cap if screener_rec and screener_rec.market_cap else None)
+        or (comp.market_cap if comp else None)
     )
     market_cap_category = (
         screener_rec.market_cap_category
@@ -143,12 +151,18 @@ def enrich_item(item: WatchlistItem, db: Session) -> Dict[str, Any]:
 # Watchlist Endpoints
 # ---------------------------------------------------------
 @router.get("")
-def list_watchlists(db: Session = Depends(get_db)):
+def list_watchlists(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
     """
     Returns all user watchlists with item counts, average confidence, and summary stats.
     Automatically creates a default 'Core Growth Ideas' watchlist if none exist.
     """
-    watchlists = db.query(Watchlist).order_by(Watchlist.id.asc()).all()
+    query = db.query(Watchlist)
+    if current_user:
+        query = query.filter(or_(Watchlist.user_id == current_user.id, Watchlist.user_id.is_(None)))
+    watchlists = query.order_by(Watchlist.id.asc()).all()
 
     # Seed initial watchlist if table is empty
     if not watchlists:
@@ -201,14 +215,19 @@ def list_watchlists(db: Session = Depends(get_db)):
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_watchlist(req: CreateWatchlistRequest, db: Session = Depends(get_db)):
+def create_watchlist(
+    req: CreateWatchlistRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
     """
-    Creates a new named watchlist.
+    Creates a new named watchlist, automatically scoped to current user.
     """
     wl = Watchlist(
         name=req.name.strip(),
         description=req.description.strip() if req.description else None,
         color=req.color or "cyan",
+        user_id=current_user.id if current_user else None,
     )
     db.add(wl)
     db.commit()
@@ -279,13 +298,22 @@ def search_stocks_for_watchlist(
 
 
 @router.get("/{watchlist_id}")
-def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
+def get_watchlist(
+    watchlist_id: int,
+    refresh: bool = Query(False, description="Force fresh live price resolution for all stocks"),
+    db: Session = Depends(get_db),
+):
     """
     Returns full watchlist details along with all stock items enriched with live metrics.
     """
     wl = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
     if not wl:
         raise HTTPException(status_code=404, detail="Watchlist not found.")
+
+    if refresh:
+        symbols = [item.symbol.strip().upper() for item in wl.items if item.symbol]
+        if symbols:
+            LivePriceService.get_batch_live_prices(symbols, force_refresh=True, db=db)
 
     items = [enrich_item(item, db) for item in wl.items]
 
@@ -320,6 +348,29 @@ def get_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
             "avg_roce": avg_roce,
             "high_conviction_count": high_conviction_count,
         },
+        "items": items,
+    }
+
+
+@router.post("/{watchlist_id}/refresh-prices")
+def refresh_watchlist_prices(watchlist_id: int, db: Session = Depends(get_db)):
+    """
+    Triggers batch live market quote fetching for all stocks in the specified watchlist.
+    """
+    wl = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not wl:
+        raise HTTPException(status_code=404, detail="Watchlist not found.")
+
+    symbols = [item.symbol.strip().upper() for item in wl.items if item.symbol]
+    quotes = {}
+    if symbols:
+        quotes = LivePriceService.get_batch_live_prices(symbols, force_refresh=True, db=db)
+
+    items = [enrich_item(item, db) for item in wl.items]
+
+    return {
+        "success": True,
+        "refreshed_count": len(symbols),
         "items": items,
     }
 

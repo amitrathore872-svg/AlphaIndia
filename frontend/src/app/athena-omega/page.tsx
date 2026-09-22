@@ -25,10 +25,12 @@ import {
   Activity,
   X,
   TrendingUp,
+  BookOpen,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import PeadDriftMatrix from "@/components/layout/earnings/PeadDriftMatrix";
+import KnowledgeCenter from "@/components/knowledge/KnowledgeCenter";
 import {
   fetchFlashDecisions,
   fetchFilingsFeed,
@@ -115,7 +117,7 @@ export default function AthenaOmegaPage() {
   const [selectedFreshness, setSelectedFreshness] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"conviction" | "freshness" | "upside" | "shock">("conviction");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"flash" | "pead" | "queue" | "about">("flash");
+  const [activeTab, setActiveTab] = useState<"flash" | "pead" | "queue" | "knowledge" | "about">("flash");
 
   // Read URL query params on mount for direct tab linking
   useEffect(() => {
@@ -126,6 +128,8 @@ export default function AthenaOmegaPage() {
         setActiveTab("pead");
       } else if (tabParam === "queue" || tabParam === "feed") {
         setActiveTab("queue");
+      } else if (tabParam === "knowledge" || tabParam === "about") {
+        setActiveTab("knowledge");
       }
     }
   }, []);
@@ -259,29 +263,23 @@ export default function AthenaOmegaPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-[#050B14] text-slate-100 p-4 md:p-6 space-y-6">
+      <div className="space-y-6">
         {/* =========================================================================
             HEADER & TELEMETRY BAR
         ========================================================================= */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-tr from-cyan-600/30 to-emerald-500/20 border border-cyan-500/40 text-cyan-400">
-                <Zap className="w-6 h-6 animate-pulse text-cyan-400" />
+              <div className="p-2 rounded-xl bg-gradient-to-tr from-cyan-600/20 to-emerald-500/15 dark:from-cyan-600/30 dark:to-emerald-500/20 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400">
+                <Zap className="w-6 h-6 animate-pulse text-cyan-600 dark:text-cyan-400" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-black tracking-tight text-white font-mono">
-                    ATHENA OMEGA <span className="text-cyan-400">v3.0</span>
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono">
+                    ATHENA
                   </h1>
-                  <span className="px-2 py-0.5 text-xs font-bold font-mono uppercase rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-400">
-                    Sprint 24 Official
-                  </span>
-                  <span className="px-2 py-0.5 text-xs font-bold font-mono uppercase rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
-                    4-Minute SLA Engine
-                  </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                   Pure Earnings Intelligence. No Market Noise. Exchange-First Filing Capture & Local Historical Fusion.
                 </p>
               </div>
@@ -290,21 +288,21 @@ export default function AthenaOmegaPage() {
 
           {/* Quick Metrics & Actions */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-mono">
-              <span className="text-slate-400">SLA Target:</span>
-              <span className="text-emerald-400 font-bold">&lt; 5m</span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-400">Avg Ingestion:</span>
-              <span className="text-cyan-400 font-bold">{avgProcessingTime}s</span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-400">AAA+ Today:</span>
-              <span className="text-rose-400 font-bold">{aaaPlusCount}</span>
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-mono">
+              <span className="text-slate-500 dark:text-slate-400">SLA Target:</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">&lt; 5m</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span className="text-slate-500 dark:text-slate-400">Avg Ingestion:</span>
+              <span className="text-cyan-600 dark:text-cyan-400 font-bold">{avgProcessingTime}s</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span className="text-slate-500 dark:text-slate-400">AAA+ Today:</span>
+              <span className="text-rose-600 dark:text-rose-400 font-bold">{aaaPlusCount}</span>
             </div>
 
             <button
               onClick={handleTriggerScan}
               disabled={scanning}
-              className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs uppercase px-4 py-2 rounded-lg transition-all shadow-lg shadow-cyan-950/50 disabled:opacity-50"
+              className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white dark:text-slate-950 font-bold text-xs uppercase px-4 py-2 rounded-lg transition-all shadow-xs dark:shadow-lg dark:shadow-cyan-950/50 disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`} />
               {scanning ? "Scanning Exchange Feeds..." : "Scan NSE & BSE"}
@@ -316,62 +314,62 @@ export default function AthenaOmegaPage() {
             NAVIGATION TABS & SEARCH
         ========================================================================= */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-slate-800">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-lg border border-slate-200 dark:border-slate-800">
             <button
               onClick={() => setActiveTab("flash")}
               className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === "flash"
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <Flame className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
               FLASH Conviction Decisions ({filteredDecisions.length})
             </button>
             <button
               onClick={() => setActiveTab("pead")}
               className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === "pead"
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
               PEAD Drift Matrix
             </button>
             <button
               onClick={() => setActiveTab("queue")}
               className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === "queue"
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              Live Feed & OMEGA Queue ({filings.length})
+              <Activity className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />
+              Live Feed & Athena Queue ({filings.length})
             </button>
             <button
-              onClick={() => setActiveTab("about")}
+              onClick={() => setActiveTab("knowledge")}
               className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === "about"
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                  : "text-slate-400 hover:text-white"
+                activeTab === "knowledge" || activeTab === "about"
+                  ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/40"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              5 Gates Architecture
+              <BookOpen className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />
+              Knowledge Center
             </button>
           </div>
 
           {/* Search Box */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search ticker, company..."
-              className="bg-slate-900/90 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-full md:w-64 font-mono"
+              className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-full md:w-64 font-mono shadow-xs"
             />
           </div>
         </div>
@@ -379,12 +377,12 @@ export default function AthenaOmegaPage() {
         {/* =========================================================================
             INSTITUTIONAL SCAN CONTROL & FRESHNESS FILTER TOOLBAR
         ========================================================================= */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-xs">
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Freshness Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-xs font-mono">
-              <span className="text-[10px] text-cyan-400 px-1.5 flex items-center gap-1 font-bold uppercase tracking-wider">
-                <Clock className="w-3 h-3 text-cyan-400" />
+            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950/80 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-mono">
+              <span className="text-[10px] text-cyan-600 dark:text-cyan-400 px-1.5 flex items-center gap-1 font-bold uppercase tracking-wider">
+                <Clock className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
                 Freshness:
               </span>
               {[
@@ -400,8 +398,8 @@ export default function AthenaOmegaPage() {
                   onClick={() => setSelectedFreshness(f.key)}
                   className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
                     selectedFreshness === f.key
-                      ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-black shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-black shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   {f.label}
@@ -410,8 +408,8 @@ export default function AthenaOmegaPage() {
             </div>
 
             {/* Conviction Grade Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-xs font-mono">
-              <span className="text-[10px] text-slate-400 px-1.5 font-bold uppercase">Grade:</span>
+            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950/80 p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-mono">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 font-bold uppercase">Grade:</span>
               {["", "AAA+", "AAA", "AA"].map((g) => (
                 <button
                   key={g}
@@ -419,7 +417,7 @@ export default function AthenaOmegaPage() {
                   className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
                     selectedGrade === g
                       ? "bg-cyan-500 text-slate-950 font-bold"
-                      : "text-slate-400 hover:text-white"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   {g || "ALL"}
@@ -672,21 +670,23 @@ export default function AthenaOmegaPage() {
                       </div>
 
                       {/* Valuation Strip: CMP, Fair Value, Upside */}
-                      {card.current_price && card.estimated_fair_value && (
+                      {card.current_price !== undefined && card.current_price !== null && card.estimated_fair_value !== undefined && card.estimated_fair_value !== null && (
                         <div className="mt-3 flex items-center justify-between text-xs font-mono text-slate-300 px-2 py-1.5 rounded bg-slate-900/60 border border-slate-800/60">
                           <div>
                             <span className="text-slate-500">CMP: </span>
-                            <span className="font-bold text-white">₹{card.current_price.toFixed(1)}</span>
+                            <span className="font-bold text-white">
+                              ₹{card.current_price.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+                            </span>
                           </div>
                           <div>
                             <span className="text-slate-500">Estimated Fair Value: </span>
                             <span className="font-bold text-cyan-400">
-                              ₹{card.estimated_fair_value.toFixed(1)}
+                              ₹{card.estimated_fair_value.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                           <div>
                             <span className="text-slate-500">Upside: </span>
-                            <span className="font-bold text-emerald-400">
+                            <span className={`font-bold ${card.upside_potential_pct !== undefined && card.upside_potential_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                               {card.upside_potential_pct !== undefined && card.upside_potential_pct > 0 ? "+" : ""}
                               {card.upside_potential_pct?.toFixed(1)}%
                             </span>
@@ -777,7 +777,7 @@ export default function AthenaOmegaPage() {
                 <div>
                   <h2 className="text-sm font-bold text-white font-mono flex items-center gap-2">
                     <Activity className="w-4 h-4 text-cyan-400" />
-                    Real-Time Corporate Disclosures & OMEGA Processing Queue
+                    Real-Time Corporate Disclosures & Athena Processing Queue
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Results detected on NSE/BSE feeds prioritized by Business Shock Score.
@@ -887,62 +887,10 @@ export default function AthenaOmegaPage() {
         )}
 
         {/* =========================================================================
-            TAB 3: 5 GATES ARCHITECTURE OVERVIEW
+            TAB 4: KNOWLEDGE CENTER MODULE (INCLUDING 5 GATES ARCHITECTURE)
         ========================================================================= */}
-        {activeTab === "about" && (
-          <div className="space-y-4 font-mono text-xs">
-            <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                ATHENA OMEGA v3.0 — The 5 Sequential Decision Gates
-              </h2>
-              <p className="text-slate-300 leading-relaxed font-sans">
-                Every quarterly result is analyzed on its business fundamentals, earnings quality, valuation opportunity, and AI conviction — before the market fully reacts.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-2">
-                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="text-[10px] text-cyan-400 font-bold uppercase">Gate 1 (0–120s)</div>
-                  <div className="font-bold text-white text-sm">200-Pt Business Shock</div>
-                  <p className="text-[11px] text-slate-400 font-sans leading-tight">
-                    Evaluates 45+ metrics across Revenue, EBITDA margins, PAT, CFO, and Order Book.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="text-[10px] text-emerald-400 font-bold uppercase">Gate 2 (120–180s)</div>
-                  <div className="font-bold text-white text-sm">Forensic Quality Engine</div>
-                  <p className="text-[11px] text-slate-400 font-sans leading-tight">
-                    Scrubs non-operating income, checks cash-backed conversion (CFO vs PAT), and runs Piotroski tests.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="text-[10px] text-amber-400 font-bold uppercase">Gate 3 (180–240s)</div>
-                  <div className="font-bold text-white text-sm">Valuation & Solvency Risk</div>
-                  <p className="text-[11px] text-slate-400 font-sans leading-tight">
-                    Computes Fair Value (₹), upside %, P/E vs Industry, and solvency risk penalties.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="text-[10px] text-purple-400 font-bold uppercase">Gate 4 (240–270s)</div>
-                  <div className="font-bold text-white text-sm">Master Conviction</div>
-                  <p className="text-[11px] text-slate-400 font-sans leading-tight">
-                    Weighted synthesis: 40% Shock + 35% Quality + 25% Valuation - Risk Penalty.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="text-[10px] text-rose-400 font-bold uppercase">Gate 5 (270–300s)</div>
-                  <div className="font-bold text-white text-sm">FLASH Decision Card</div>
-                  <p className="text-[11px] text-slate-400 font-sans leading-tight">
-                    Publishes BUY IMMEDIATELY / ACCUMULATE with Gap-Up, 1D, 1W, 1M move projections.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+        {(activeTab === "knowledge" || activeTab === "about") && (
+          <KnowledgeCenter />
         )}
 
         {/* =========================================================================
@@ -950,34 +898,34 @@ export default function AthenaOmegaPage() {
         ========================================================================= */}
         {selectedAnalysis && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-[#050B14] border border-cyan-500/40 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="bg-white dark:bg-[#050B14] border border-cyan-500/40 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
               {/* Modal Header */}
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
                 <div className="flex items-center gap-3">
-                  <span className="text-xl font-black font-mono text-white">
+                  <span className="text-xl font-black font-mono text-slate-900 dark:text-white">
                     {selectedAnalysis.filing.symbol}
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
                     {selectedAnalysis.filing.company_name}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-xs font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
+                  <span className="px-2 py-0.5 rounded text-xs font-mono bg-cyan-100 dark:bg-cyan-950 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800">
                     {selectedAnalysis.filing.fiscal_period}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                  <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-bold">
                     Grade: {selectedAnalysis.gate_4_5_flash.conviction_grade} (
                     {selectedAnalysis.gate_4_5_flash.conviction_score}/100)
                   </span>
                 </div>
                 <button
                   onClick={() => setSelectedAnalysis(null)}
-                  className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                  className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Gate Selector Tabs */}
-              <div className="flex border-b border-slate-800 bg-slate-900/60 px-4 pt-2 gap-2 text-xs font-mono">
+              <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900/60 px-4 pt-2 gap-2 text-xs font-mono">
                 <button
                   onClick={() => setModalGateTab("g1")}
                   className={`px-3 py-2 border-b-2 font-bold transition-all ${
@@ -1150,19 +1098,22 @@ export default function AthenaOmegaPage() {
                       <div className="p-3 rounded bg-slate-950 border border-slate-800 text-center">
                         <span className="text-slate-500 text-[10px] block">Current Market Price</span>
                         <span className="text-lg font-bold text-white">
-                          ₹{selectedAnalysis.gate_3_valuation_risk.current_price?.toFixed(1)}
+                          ₹{selectedAnalysis.gate_3_valuation_risk.current_price?.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="p-3 rounded bg-slate-950 border border-slate-800 text-center">
                         <span className="text-slate-500 text-[10px] block">Estimated Fair Value</span>
                         <span className="text-lg font-bold text-cyan-400">
-                          ₹{selectedAnalysis.gate_3_valuation_risk.estimated_fair_value?.toFixed(1)}
+                          ₹{selectedAnalysis.gate_3_valuation_risk.estimated_fair_value?.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="p-3 rounded bg-slate-950 border border-slate-800 text-center">
                         <span className="text-slate-500 text-[10px] block">Upside Potential</span>
-                        <span className="text-lg font-bold text-emerald-400">
-                          +{selectedAnalysis.gate_3_valuation_risk.upside_potential_pct?.toFixed(1)}%
+                        <span className={`text-lg font-bold ${
+                          (selectedAnalysis.gate_3_valuation_risk.upside_potential_pct || 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                        }`}>
+                          {(selectedAnalysis.gate_3_valuation_risk.upside_potential_pct || 0) > 0 ? "+" : ""}
+                          {selectedAnalysis.gate_3_valuation_risk.upside_potential_pct?.toFixed(1)}%
                         </span>
                       </div>
                     </div>

@@ -1,0 +1,5 @@
+Strategy,Initial Capital,Final Equity,Net Profit (INR),Total Return %,2Y CAGR %,Max Drawdown %,Sharpe Ratio,Sortino Ratio,Calmar Ratio,Total Trades,Win Rate %,Profit Factor,Avg Trade P&L (INR),Avg Holding Days
+1. Baseline Delivery Spike (10% Tgt / 4% SL),1000000.0,800644.77,-199355.23,-19.94,-10.52,-42.42,-0.51,-0.77,0.25,394,30.7,0.88,-516.72,4.6
+2. Supply Dry-Up Base Breakout (12% Tgt / 4% SL - 3:1 RR),1000000.0,876376.6,-123623.4,-12.36,-6.39,-33.81,-0.33,-0.51,0.19,293,29.7,0.91,-425.77,5.9
+3. Technico-Delivery RSI Sweet-Spot (52 <= RSI <= 68),1000000.0,983922.86,-16077.14,-1.61,-0.81,-24.06,0.01,0.02,0.03,219,32.4,0.98,-96.8,5.4
+"4. Apex Scale-Out Free Ride (50% @ +8%, 50% @ +16% Runner + RS)",1000000.0,863152.67,-136847.33,-13.68,-7.09,-42.82,-0.19,-0.23,0.17,246,32.5,0.72,-1243.75,6.4

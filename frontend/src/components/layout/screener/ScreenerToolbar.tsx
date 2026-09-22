@@ -14,9 +14,11 @@ import {
   ChevronDown,
   ChevronUp,
   Star,
+  Terminal,
 } from "lucide-react";
 import type { ScreenerFiltersState } from "@/lib/api";
 import type { TableDensity } from "./GrowthTable";
+import { FormulaScreenerModal } from "@/components/screener/FormulaScreenerModal";
 
 interface ScreenerToolbarProps {
   search: string;
@@ -50,6 +52,7 @@ export default function ScreenerToolbar({
   onDensityChange,
 }: ScreenerToolbarProps) {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
 
   // Count active non-default filters
   const activeFilterCount =
@@ -191,9 +194,23 @@ export default function ScreenerToolbar({
               </div>
             )}
 
+            {/* Formula Screener Launcher */}
+            <button
+              type="button"
+              onClick={() => setIsFormulaModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-600 hover:bg-cyan-500/20 hover:border-cyan-400 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:hover:border-cyan-300 shadow-xs transition cursor-pointer"
+              title="Build custom quantitative screener queries with AST formula builder"
+            >
+              <Terminal size={12} className="text-cyan-600 dark:text-cyan-400" />
+              <span className="hidden xs:inline">Formula Builder</span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
+                PRO
+              </span>
+            </button>
+
             <button
               onClick={onExportCSV}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-700/60 dark:hover:text-white"
+              className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-700/60 dark:hover:text-white cursor-pointer"
               title="Export filtered results to CSV"
             >
               <Download size={12} className="text-cyan-600 dark:text-cyan-400" />
@@ -364,6 +381,12 @@ export default function ScreenerToolbar({
           />
         </div>
       </div>
+
+      {/* Formula Screener Modal */}
+      <FormulaScreenerModal
+        isOpen={isFormulaModalOpen}
+        onClose={() => setIsFormulaModalOpen(false)}
+      />
     </div>
   );
 }

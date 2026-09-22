@@ -41,6 +41,8 @@ export interface GrowthCompany {
   profit_cagr_3y: number | null;
 
   health_score: number | null;
+  pead_score?: number | null;
+  announcement_date?: string | null;
   result_date: string | null;
   last_updated?: string | null;
 

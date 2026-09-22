@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, Index
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, Index, JSON
 from sqlalchemy.sql import func
 
 from app.db.database import Base
@@ -75,8 +75,24 @@ class AnnouncementRadar(Base):
     dma_50 = Column(Float, nullable=True)
     dma_200 = Column(Float, nullable=True)
 
+    # Order Win Quantitative Intelligence (Sprint 36.5)
+    order_execution_months = Column(Integer, nullable=True)                  # Realization timeline in months (e.g. 18)
+    order_quarterly_rev_cr = Column(Float, nullable=True)                    # Incremental Quarterly Revenue (₹ Cr)
+    order_quarterly_rev_pct = Column(Float, nullable=True)                   # Quarterly Revenue Lift % vs Avg Quarterly Sales
+    order_earnings_impact_cr = Column(Float, nullable=True)                  # Incremental Annualized PAT (₹ Cr)
+    order_significance_score = Column(Float, nullable=True, index=True)      # 0 to 100 Multi-factor Quant Score
+    order_significance_tier = Column(String(40), nullable=True, index=True)  # TRANSFORMATIONAL | HIGH_IMPACT | MODERATE | ROUTINE
+    order_upside_prob_pct = Column(Float, nullable=True)                     # AI Upside Probability % (e.g. 82.5%)
+    order_target_price_low = Column(Float, nullable=True)                    # Conservative Target Price (₹)
+    order_target_price_high = Column(Float, nullable=True)                   # Bull Case Target Price (₹)
+    order_confidence_score = Column(Float, nullable=True)                    # Model Confidence % (e.g. 94.0%)
+    order_client_counterparty = Column(String(255), nullable=True)           # Client / Agency (e.g. AP TRANSCO, ONGC)
+    order_historical_comparison = Column(Text, nullable=True)                # Historical comparison vs previous orders
+    order_intelligence = Column(JSON, nullable=True)                         # Detailed structured calculation payload
+
     __table_args__ = (
         Index("ix_announcements_radar_symbol_pub", "symbol", "published_at"),
         Index("ix_announcements_radar_catalyst_score", "catalyst_type", "impact_score"),
         Index("ix_announcements_radar_vertical_regime", "vertical_archetype", "trend_regime"),
+        Index("ix_announcements_radar_order_sig", "catalyst_type", "order_significance_score"),
     )

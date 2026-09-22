@@ -1,0 +1,628 @@
+{
+  "period": "2-Year Empirical Backtest (2024\u20132026)",
+  "benchmark": "176 Liquid NSE Equities (Stage-2 Breakouts)",
+  "total_signals": 82,
+  "profitable_signals": 32,
+  "loss_signals": 50,
+  "win_rate": 39.0,
+  "profit_factor": 0.76,
+  "average_gain_pct": 6.29,
+  "average_loss_pct": -5.27,
+  "maximum_drawdown_pct": 110.98,
+  "false_breakout_pct": 61.0,
+  "volume_dryup_accuracy_pct": 87.5,
+  "holding_period_returns": {
+    "10_days": -0.8,
+    "20_days": -0.1,
+    "40_days": 1.1,
+    "60_days": 1.5
+  },
+  "score_distribution": [
+    {
+      "tier": "3-Wave Contractions (T3)",
+      "count": 82,
+      "win_rate": 39.0,
+      "avg_gain": 6.29
+    }
+  ],
+  "sector_performance": [
+    {
+      "sector": "Capital Goods & Power",
+      "win_rate": 57.1,
+      "avg_gain": 5.6,
+      "count": 7
+    },
+    {
+      "sector": "Consumer Discretionary",
+      "win_rate": 50.0,
+      "avg_gain": 1.0,
+      "count": 2
+    },
+    {
+      "sector": "Diversified / Midcap",
+      "win_rate": 43.3,
+      "avg_gain": 6.4,
+      "count": 60
+    },
+    {
+      "sector": "Pharma & Healthcare",
+      "win_rate": 25.0,
+      "avg_gain": 10.5,
+      "count": 4
+    },
+    {
+      "sector": "BFSI & Fintech",
+      "win_rate": 0.0,
+      "avg_gain": 0.0,
+      "count": 6
+    }
+  ],
+  "optimal_thresholds": {
+    "min_contractions": 3,
+    "min_vcp_score": 80.0,
+    "min_dryup_ratio": 0.7,
+    "min_breakout_volume_ratio": 1.8,
+    "max_risk_pct": 5.0,
+    "recommended_composite_threshold": 88.0
+  },
+  "case_studies": [
+    {
+      "symbol": "ASHOKLEY",
+      "company": "ASHOKLEY",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-11-14",
+      "pivot": 146.49,
+      "max_gain_pct": 16.8,
+      "holding_days": 25,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 4.47,
+      "score": 93.4
+    },
+    {
+      "symbol": "EXIDEIND",
+      "company": "EXIDEIND",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2026-07-03",
+      "pivot": 421.15,
+      "max_gain_pct": 16.8,
+      "holding_days": 25,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 8.82,
+      "score": 93.4
+    },
+    {
+      "symbol": "FEDERALBNK",
+      "company": "FEDERALBNK",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-10-10",
+      "pivot": 206.21,
+      "max_gain_pct": 16.8,
+      "holding_days": 25,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 2.36,
+      "score": 93.4
+    },
+    {
+      "symbol": "HINDPETRO",
+      "company": "HINDPETRO",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-09-24",
+      "pivot": 400.95,
+      "max_gain_pct": 16.8,
+      "holding_days": 32,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 1.93,
+      "score": 93.4
+    },
+    {
+      "symbol": "POLYCAB",
+      "company": "POLYCAB",
+      "sector": "Capital Goods & Power",
+      "breakout_date": "2025-06-24",
+      "pivot": 6279.21,
+      "max_gain_pct": 13.46,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 3.43,
+      "score": 91.7
+    },
+    {
+      "symbol": "APOLLOHOSP",
+      "company": "APOLLOHOSP",
+      "sector": "Pharma & Healthcare",
+      "breakout_date": "2026-05-11",
+      "pivot": 8036.64,
+      "max_gain_pct": 10.47,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 2.59,
+      "score": 90.2
+    },
+    {
+      "symbol": "IDFCFIRSTB",
+      "company": "IDFCFIRSTB",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-10-10",
+      "pivot": 73.19,
+      "max_gain_pct": 10.23,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 1.57,
+      "score": 90.1
+    },
+    {
+      "symbol": "DABUR",
+      "company": "DABUR",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-07-08",
+      "pivot": 498.28,
+      "max_gain_pct": 8.93,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 4.22,
+      "score": 89.5
+    },
+    {
+      "symbol": "JSWSTEEL",
+      "company": "JSWSTEEL",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-08-19",
+      "pivot": 1073.83,
+      "max_gain_pct": 8.53,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 1.92,
+      "score": 89.3
+    },
+    {
+      "symbol": "TATASTEEL",
+      "company": "TATASTEEL",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-09-04",
+      "pivot": 165.59,
+      "max_gain_pct": 8.09,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 3.71,
+      "score": 89.0
+    },
+    {
+      "symbol": "BPCL",
+      "company": "BPCL",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-09-30",
+      "pivot": 323.69,
+      "max_gain_pct": 7.89,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 2.22,
+      "score": 88.9
+    },
+    {
+      "symbol": "RELIANCE",
+      "company": "RELIANCE",
+      "sector": "Diversified / Midcap",
+      "breakout_date": "2025-10-20",
+      "pivot": 1433.37,
+      "max_gain_pct": 7.25,
+      "holding_days": 40,
+      "status": "WIN",
+      "dryup_pct": 74.5,
+      "vol_ratio": 1.81,
+      "score": 88.6
+    }
+  ],
+  "trades_sample": [
+    {
+      "symbol": "ICICIBANK",
+      "sector": "BFSI & Fintech",
+      "entry_date": "2026-09-01",
+      "exit_date": "2026-09-15",
+      "entry_price": 1442.9,
+      "exit_price": 1356.33,
+      "pnl_pct": -6.0,
+      "days_held": 10,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        13.6,
+        7.7,
+        4.7
+      ],
+      "vol_20d_ratio": 1.67,
+      "cum_pnl": 20.720000000000002,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "CDSL",
+      "sector": "BFSI & Fintech",
+      "entry_date": "2026-08-27",
+      "exit_date": "2026-09-10",
+      "entry_price": 1440.0,
+      "exit_price": 1353.6,
+      "pnl_pct": -6.0,
+      "days_held": 10,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        15.3,
+        10.9,
+        6.9
+      ],
+      "vol_20d_ratio": 3.18,
+      "cum_pnl": -56.25,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "HAL",
+      "sector": "EMS & Defense Tech",
+      "entry_date": "2026-08-07",
+      "exit_date": "2026-09-16",
+      "entry_price": 4915.04,
+      "exit_price": 4620.14,
+      "pnl_pct": -6.0,
+      "days_held": 28,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        13.7,
+        8.5,
+        8.4
+      ],
+      "vol_20d_ratio": 7.53,
+      "cum_pnl": 25.460000000000004,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "ESCORTS",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-08-03",
+      "exit_date": "2026-09-11",
+      "entry_price": 3110.0,
+      "exit_price": 2923.4,
+      "pnl_pct": -6.0,
+      "days_held": 29,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        19.3,
+        10.7,
+        5.2
+      ],
+      "vol_20d_ratio": 3.39,
+      "cum_pnl": 15.130000000000003,
+      "peak": 21.130000000000003
+    },
+    {
+      "symbol": "GAIL",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-08-03",
+      "exit_date": "2026-08-10",
+      "entry_price": 181.57,
+      "exit_price": 170.68,
+      "pnl_pct": -6.0,
+      "days_held": 5,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        11.3,
+        9.7,
+        5.5
+      ],
+      "vol_20d_ratio": 5.46,
+      "cum_pnl": 30.730000000000004,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "M&M",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-08-03",
+      "exit_date": "2026-09-01",
+      "entry_price": 3465.0,
+      "exit_price": 3257.1,
+      "pnl_pct": -6.0,
+      "days_held": 21,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        11.6,
+        9.6,
+        7.8
+      ],
+      "vol_20d_ratio": 2.53,
+      "cum_pnl": 4.3700000000000045,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "NESTLEIND",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-07-23",
+      "exit_date": "2026-09-03",
+      "entry_price": 1500.1,
+      "exit_price": 1410.09,
+      "pnl_pct": -6.0,
+      "days_held": 30,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        7.7,
+        6.0,
+        6.9
+      ],
+      "vol_20d_ratio": 3.73,
+      "cum_pnl": -10.309999999999997,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "ULTRACEMCO",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-07-21",
+      "exit_date": "2026-09-08",
+      "entry_price": 11828.56,
+      "exit_price": 11118.85,
+      "pnl_pct": -6.0,
+      "days_held": 35,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        8.4,
+        9.2,
+        5.4
+      ],
+      "vol_20d_ratio": 2.07,
+      "cum_pnl": -44.25,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "SBIN",
+      "sector": "BFSI & Fintech",
+      "entry_date": "2026-07-21",
+      "exit_date": "2026-09-09",
+      "entry_price": 1056.2,
+      "exit_price": 992.83,
+      "pnl_pct": -6.0,
+      "days_held": 36,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        15.2,
+        9.6,
+        4.6
+      ],
+      "vol_20d_ratio": 1.62,
+      "cum_pnl": -11.279999999999994,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "ABB",
+      "sector": "Capital Goods & Power",
+      "entry_date": "2026-07-17",
+      "exit_date": "2026-07-28",
+      "entry_price": 7578.29,
+      "exit_price": 7123.59,
+      "pnl_pct": -6.0,
+      "days_held": 7,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        20.8,
+        15.2,
+        8.1
+      ],
+      "vol_20d_ratio": 9.13,
+      "cum_pnl": -6.0,
+      "peak": -6.0
+    },
+    {
+      "symbol": "SRF",
+      "sector": "Specialty Chemicals",
+      "entry_date": "2026-07-17",
+      "exit_date": "2026-07-23",
+      "entry_price": 2893.7,
+      "exit_price": 2720.08,
+      "pnl_pct": -6.0,
+      "days_held": 4,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        13.4,
+        6.7,
+        7.4
+      ],
+      "vol_20d_ratio": 3.72,
+      "cum_pnl": -17.279999999999994,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "SUNPHARMA",
+      "sector": "Pharma & Healthcare",
+      "entry_date": "2026-07-10",
+      "exit_date": "2026-09-04",
+      "entry_price": 1942.8,
+      "exit_price": 1899.0,
+      "pnl_pct": -2.25,
+      "days_held": 40,
+      "exit_reason": "TIME_EXPIRY",
+      "is_win": false,
+      "contractions": [
+        13.1,
+        8.3,
+        8.3
+      ],
+      "vol_20d_ratio": 2.53,
+      "cum_pnl": -19.529999999999994,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "EXIDEIND",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-07-03",
+      "exit_date": "2026-08-07",
+      "entry_price": 421.15,
+      "exit_price": 491.9,
+      "pnl_pct": 16.8,
+      "days_held": 25,
+      "exit_reason": "TARGET_HIT",
+      "is_win": true,
+      "contractions": [
+        22.5,
+        16.1,
+        8.0
+      ],
+      "vol_20d_ratio": 8.82,
+      "cum_pnl": 31.930000000000003,
+      "peak": 31.930000000000003
+    },
+    {
+      "symbol": "GRANULES",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-06-30",
+      "exit_date": "2026-08-25",
+      "entry_price": 796.29,
+      "exit_price": 845.95,
+      "pnl_pct": 6.24,
+      "days_held": 40,
+      "exit_reason": "TIME_EXPIRY",
+      "is_win": true,
+      "contractions": [
+        19.1,
+        11.4,
+        8.4
+      ],
+      "vol_20d_ratio": 2.95,
+      "cum_pnl": 30.970000000000006,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "INDUSINDBK",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-06-22",
+      "exit_date": "2026-08-17",
+      "entry_price": 945.47,
+      "exit_price": 1010.6,
+      "pnl_pct": 6.89,
+      "days_held": 40,
+      "exit_reason": "TIME_EXPIRY",
+      "is_win": true,
+      "contractions": [
+        12.5,
+        12.4,
+        7.6
+      ],
+      "vol_20d_ratio": 3.72,
+      "cum_pnl": 31.840000000000003,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "TATASTEEL",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-05-14",
+      "exit_date": "2026-05-18",
+      "entry_price": 217.81,
+      "exit_price": 204.74,
+      "pnl_pct": -6.0,
+      "days_held": 2,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        11.5,
+        12.2,
+        8.1
+      ],
+      "vol_20d_ratio": 2.0,
+      "cum_pnl": -40.45,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "APOLLOHOSP",
+      "sector": "Pharma & Healthcare",
+      "entry_date": "2026-05-11",
+      "exit_date": "2026-07-06",
+      "entry_price": 8036.64,
+      "exit_price": 8878.17,
+      "pnl_pct": 10.47,
+      "days_held": 40,
+      "exit_reason": "TIME_EXPIRY",
+      "is_win": true,
+      "contractions": [
+        14.1,
+        10.0,
+        8.4
+      ],
+      "vol_20d_ratio": 2.59,
+      "cum_pnl": 3.6000000000000005,
+      "peak": 3.6000000000000005
+    },
+    {
+      "symbol": "MARICO",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-05-06",
+      "exit_date": "2026-07-01",
+      "entry_price": 822.44,
+      "exit_price": 847.13,
+      "pnl_pct": 3.0,
+      "days_held": 40,
+      "exit_reason": "TIME_EXPIRY",
+      "is_win": true,
+      "contractions": [
+        12.9,
+        10.8,
+        8.2
+      ],
+      "vol_20d_ratio": 3.13,
+      "cum_pnl": 1.7500000000000044,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "IOC",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-02-06",
+      "exit_date": "2026-03-09",
+      "entry_price": 173.24,
+      "exit_price": 162.85,
+      "pnl_pct": -6.0,
+      "days_held": 20,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        7.4,
+        7.5,
+        8.3
+      ],
+      "vol_20d_ratio": 2.96,
+      "cum_pnl": 19.840000000000003,
+      "peak": 48.730000000000004
+    },
+    {
+      "symbol": "ULTRACEMCO",
+      "sector": "Diversified / Midcap",
+      "entry_date": "2026-01-19",
+      "exit_date": "2026-03-09",
+      "entry_price": 12102.96,
+      "exit_price": 11376.78,
+      "pnl_pct": -6.0,
+      "days_held": 33,
+      "exit_reason": "STOP_LOSS",
+      "is_win": false,
+      "contractions": [
+        6.0,
+        6.3,
+        6.8
+      ],
+      "vol_20d_ratio": 2.22,
+      "cum_pnl": -38.25,
+      "peak": 48.730000000000004
+    }
+  ]
+}

@@ -16,6 +16,8 @@ import {
   stopAuditEngine,
 } from "@/lib/monitoringApi";
 
+import { useLiveWireStream } from "@/hooks/useLiveWireStream";
+
 export interface WarehouseData {
   total_companies: number;
   imported_companies: number;
@@ -41,6 +43,7 @@ interface MonitoringRibbonProps {
 }
 
 export default function MonitoringRibbon({ warehouse: propWarehouse, audit: propAudit }: MonitoringRibbonProps = {}) {
+  const { isConnected } = useLiveWireStream();
   const [internalWarehouse, setInternalWarehouse] = useState<WarehouseData | null>(null);
   const [internalAudit, setInternalAudit] = useState<AuditData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,8 +81,10 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
     setLoading(true);
 
     try {
-      await startAuditEngine(25, 1);
+      await startAuditEngine();
       await loadStatus();
+    } catch (error) {
+      console.error("Start audit failed:", error);
     } finally {
       setLoading(false);
     }
@@ -91,36 +96,56 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
     try {
       await stopAuditEngine();
       await loadStatus();
+    } catch (error) {
+      console.error("Stop audit failed:", error);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-white shadow-lg">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 text-slate-900 dark:text-white shadow-xs dark:shadow-lg">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-emerald-400">
+          <h2 className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
             Alpha India Mission Control
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Live Warehouse + Financial Audit Engine
           </p>
         </div>
 
-        <button
-          onClick={loadStatus}
-          className="rounded-lg bg-slate-800 p-2 hover:bg-slate-700"
-        >
-          <RefreshCcw className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-wider uppercase transition-colors ${
+              isConnected
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "border-slate-300 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-500"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isConnected ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+              }`}
+            />
+            <span>{isConnected ? "LIVE STREAM ACTIVE" : "STREAM DISCONNECTED"}</span>
+          </div>
+
+          <button
+            onClick={loadStatus}
+            className="rounded-lg bg-slate-100 dark:bg-slate-800 p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            title="Refresh"
+          >
+            <RefreshCcw className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card
-          icon={<Database className="h-5 w-5 text-cyan-400" />}
+          icon={<Database className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
           label="Warehouse Coverage"
           value={
             warehouse
@@ -133,14 +158,14 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
         />
 
         <Card
-          icon={<Activity className="h-5 w-5 text-emerald-400" />}
+          icon={<Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
           label="Quarterly Records"
           value={warehouse?.quarterly_records ?? "--"}
           sub="Imported financial records"
         />
 
         <Card
-          icon={<ShieldCheck className="h-5 w-5 text-yellow-400" />}
+          icon={<ShieldCheck className="h-5 w-5 text-amber-600 dark:text-yellow-400" />}
           label="Audit Progress"
           value={
             audit ? `${audit.progress_percent.toFixed(1)}%` : "--"
@@ -149,7 +174,7 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
         />
 
         <Card
-          icon={<ShieldCheck className="h-5 w-5 text-green-400" />}
+          icon={<ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" />}
           label="Audit Engine"
           value={audit?.running ? "RUNNING" : "STOPPED"}
           sub={audit?.last_symbol ?? "Waiting..."}
@@ -158,12 +183,12 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
 
       {/* Progress Bar */}
       <div className="mt-5">
-        <div className="mb-2 flex justify-between text-xs text-slate-400">
+        <div className="mb-2 flex justify-between text-xs text-slate-500 dark:text-slate-400">
           <span>Warehouse Coverage</span>
           <span>{warehouse?.coverage_percent.toFixed(2) ?? 0}%</span>
         </div>
 
-        <div className="h-2 w-full rounded-full bg-slate-800">
+        <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
           <div
             className="h-2 rounded-full bg-emerald-500 transition-all duration-500"
             style={{
@@ -175,15 +200,15 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
 
       {/* Audit Breakdown */}
       <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-        <Stat color="text-green-400" label="PASS" value={audit?.passed ?? 0} />
+        <Stat color="text-green-600 dark:text-green-400" label="PASS" value={audit?.passed ?? 0} />
 
         <Stat
-          color="text-yellow-400"
+          color="text-amber-600 dark:text-yellow-400"
           label="WARNING"
           value={audit?.warning ?? 0}
         />
 
-        <Stat color="text-red-400" label="FAIL" value={audit?.failed ?? 0} />
+        <Stat color="text-rose-600 dark:text-red-400" label="FAIL" value={audit?.failed ?? 0} />
       </div>
 
       {/* Controls */}
@@ -191,7 +216,7 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
         <button
           disabled={loading}
           onClick={handleStartAudit}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium hover:bg-emerald-500 disabled:opacity-60"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white hover:bg-emerald-500 transition disabled:opacity-60"
         >
           <Play className="h-4 w-4" />
           Start Audit
@@ -200,7 +225,7 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
         <button
           disabled={loading}
           onClick={handleStopAudit}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 font-medium hover:bg-red-500 disabled:opacity-60"
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 font-medium text-white hover:bg-rose-500 transition disabled:opacity-60"
         >
           <Square className="h-4 w-4" />
           Stop Audit
@@ -224,15 +249,15 @@ function Card({
   sub: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-      <div className="mb-3 flex items-center gap-2 text-slate-400">
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900 p-3 shadow-2xs">
+      <div className="mb-3 flex items-center gap-2 text-slate-500 dark:text-slate-400">
         {icon}
         <span className="text-xs">{label}</span>
       </div>
 
-      <div className="text-xl font-bold">{value}</div>
+      <div className="text-xl font-bold text-slate-900 dark:text-white">{value}</div>
 
-      <div className="mt-1 text-xs text-slate-500">{sub}</div>
+      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{sub}</div>
     </div>
   );
 }
@@ -247,10 +272,10 @@ function Stat({
   color: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900 p-4 shadow-2xs">
       <div className={`text-2xl font-bold ${color}`}>{value}</div>
 
-      <div className="mt-1 text-xs text-slate-400">{label}</div>
+      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</div>
     </div>
   );
 }

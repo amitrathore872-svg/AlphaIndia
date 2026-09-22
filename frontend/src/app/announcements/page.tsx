@@ -7,6 +7,7 @@
 // =======================================================
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   Radio,
   RefreshCw,
@@ -48,12 +49,15 @@ import {
   ArrowUp,
   ArrowDown,
   Gauge,
+  Award,
   type LucideIcon,
 } from "lucide-react";
 
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import TerminalSearch from "@/components/common/TerminalSearch";
+import OrderWinCard from "@/components/announcements/OrderWinCard";
+import OrderWaterfallDrawer from "@/components/announcements/OrderWaterfallDrawer";
 import {
   fetchAnnouncements,
   fetchAnnouncementStats,
@@ -62,9 +66,11 @@ import {
   triggerAnnouncementsSync,
   sendTelegramAlert,
   addCatalystToWatchlist,
+  triggerOrderWinsAnalysis,
   type AnnouncementRadarItem,
   type AnnouncementStats,
   type CatalystType,
+  type OrderSignificanceTier,
   type LiveWireTelemetry,
 } from "@/lib/announcementsApi";
 
@@ -716,9 +722,11 @@ export default function AnnouncementsRadarPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(30);
-  const [viewMode, setViewMode] = useState<"list" | "cards">("list");
+  const [viewMode, setViewMode] = useState<"list" | "cards">("cards");
   const [liveWire, setLiveWire] = useState<LiveWireTelemetry | null>(null);
   const [wirePolling, setWirePolling] = useState(false);
+  const [selectedOrderTier, setSelectedOrderTier] = useState<string>("");
+  const [analyzingOrderWins, setAnalyzingOrderWins] = useState(false);
 
   // ─── Table Column Sorting Handler ─────────────────────
   const handleSort = (column: string) => {
@@ -779,6 +787,7 @@ export default function AnnouncementsRadarPage() {
           limit: pageSize,
           feed_source: feedSource !== "ALL" ? feedSource : undefined,
           catalyst_type: activeCatalyst || undefined,
+          order_tier: selectedOrderTier || undefined,
           vertical_archetype: selectedVerticals.length > 0 ? selectedVerticals : undefined,
           absorption_status: selectedHorizons.length > 0 ? selectedHorizons : undefined,
           velocity: selectedVelocities.length > 0 ? selectedVelocities : undefined,
@@ -804,7 +813,7 @@ export default function AnnouncementsRadarPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, feedSource, activeCatalyst, selectedVerticals, selectedHorizons, selectedRecommendations, selectedVelocities, impactFilter, search, listedOnly, announcementDateFrom, announcementDateTo, recommendationDateFrom, recommendationDateTo, sortBy, sortOrder, showToast]);
+  }, [page, pageSize, feedSource, activeCatalyst, selectedOrderTier, selectedVerticals, selectedHorizons, selectedRecommendations, selectedVelocities, impactFilter, search, listedOnly, announcementDateFrom, announcementDateTo, recommendationDateFrom, recommendationDateTo, sortBy, sortOrder, showToast]);
 
   useEffect(() => {
     loadData();
@@ -826,6 +835,21 @@ export default function AnnouncementsRadarPage() {
       showToast("Live wire poll failed", "err");
     } finally {
       setWirePolling(false);
+    }
+  };
+
+  // ─── Trigger Order Wins AI Analysis ──────────────────
+  const handleAnalyzeAllOrderWins = async () => {
+    setAnalyzingOrderWins(true);
+    try {
+      const res = await triggerOrderWinsAnalysis();
+      showToast(`Transformed ${res.result?.total_analyzed ?? 0} Order Wins into AI Investment Cards!`, "ok");
+      loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to analyze order wins";
+      showToast(msg, "err");
+    } finally {
+      setAnalyzingOrderWins(false);
     }
   };
 
@@ -944,6 +968,16 @@ export default function AnnouncementsRadarPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              id="btn-analyze-order-wins"
+              onClick={handleAnalyzeAllOrderWins}
+              disabled={analyzingOrderWins}
+              className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-semibold text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50 shadow-sm"
+              title="Transform all Order Wins into quantitative AI investment cards"
+            >
+              {analyzingOrderWins ? <Loader2 size={14} className="animate-spin text-amber-400" /> : <Zap size={14} className="text-amber-400 fill-amber-400" />}
+              {analyzingOrderWins ? "Analyzing Orders…" : "Analyze Order Wins"}
+            </button>
             <button
               id="btn-poll-live-wire"
               onClick={handleTriggerWirePoll}
@@ -1116,6 +1150,38 @@ export default function AnnouncementsRadarPage() {
             );
           })}
         </div>
+
+        {/* ── Order Significance Tier Filter Ribbon ───────────────── */}
+        {activeCatalyst === "ORDER_WIN" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-950/20 p-2.5 text-xs animate-in fade-in duration-200">
+            <span className="font-bold uppercase tracking-wider text-amber-400 text-[11px] flex items-center gap-1.5 mr-1">
+              <Award size={13} />
+              <span>Order Significance:</span>
+            </span>
+            {[
+              { id: "", label: "All Tiers", color: "bg-slate-800 text-slate-300" },
+              { id: "TRANSFORMATIONAL", label: "⚡ Transformational (80+)", color: "bg-purple-500/20 text-purple-300 border-purple-500/40" },
+              { id: "HIGH_IMPACT", label: "🔥 High Impact (65–79)", color: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+              { id: "MODERATE", label: "💎 Moderate (45–64)", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" },
+              { id: "ROUTINE", label: "📋 Routine (<45)", color: "bg-slate-800 text-slate-400 border-slate-700" },
+            ].map((tierOpt) => (
+              <button
+                key={tierOpt.id}
+                onClick={() => {
+                  setSelectedOrderTier(tierOpt.id);
+                  setPage(1);
+                }}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all border ${
+                  selectedOrderTier === tierOpt.id
+                    ? "bg-white text-slate-950 border-white shadow-sm font-bold"
+                    : `${tierOpt.color} hover:bg-slate-800`
+                }`}
+              >
+                {tierOpt.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── Unified High-Density Filter Toolbar ──────────────────── */}
         <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-slate-800 bg-[#0A1628] p-2.5">
@@ -1601,12 +1667,26 @@ export default function AnnouncementsRadarPage() {
                     const p0 = item.price_at_announcement ?? item.current_price;
                     const cmp = item.current_price;
                     const movePct = item.realized_move_pct;
+                    const isOrderWin = item.catalyst_type === "ORDER_WIN" || !!item.order_significance_tier;
+                    const dealVal = item.deal_value_cr ?? item.synergy_rev_addition_cr ?? 0;
+                    const isMegaWin =
+                      isOrderWin &&
+                      (item.order_significance_tier === "TRANSFORMATIONAL" ||
+                        dealVal >= 500 ||
+                        (item.synergy_rev_pct_ttm ?? 0) >= 25 ||
+                        (item.order_significance_score ?? 0) >= 75);
 
                     return (
                       <tr
                         key={item.id}
                         onClick={() => setSelectedDrawerItem(item)}
-                        className="group transition-colors hover:bg-cyan-950/25 cursor-pointer"
+                        className={`group transition-all cursor-pointer border-l-4 ${
+                          isMegaWin
+                            ? "border-l-amber-400 bg-amber-950/20 hover:bg-amber-950/35"
+                            : isOrderWin
+                            ? "border-l-cyan-500/70 bg-cyan-950/15 hover:bg-cyan-950/25"
+                            : "border-l-transparent hover:bg-cyan-950/25"
+                        }`}
                       >
                         {/* Company / Symbol */}
                         <td className="sticky left-0 bg-[#07111F] z-10 py-3 px-4 shadow-[3px_0_8px_rgba(0,0,0,0.6)]">
@@ -1620,7 +1700,19 @@ export default function AnnouncementsRadarPage() {
                                   {item.symbol}
                                 </span>
                               )}
+                              {isMegaWin && (
+                                <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 text-[8px] font-black text-amber-300 tracking-wider">
+                                  <Zap size={8} className="fill-amber-400 text-amber-400" />
+                                  MEGA WIN
+                                </span>
+                              )}
                             </div>
+                            {isOrderWin && item.order_client_counterparty && (
+                              <div className="text-[9px] text-slate-400 truncate max-w-[210px] mt-0.5">
+                                <span className="text-slate-500">Client: </span>
+                                <span className="text-cyan-300 font-medium">{item.order_client_counterparty}</span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 mt-0.5">
                               {item.is_listed && (
                                 <span className="text-[9px] font-mono font-medium text-emerald-400">
@@ -1656,11 +1748,29 @@ export default function AnnouncementsRadarPage() {
                         {/* Vertical / Catalyst */}
                         <td className="py-3 px-3">
                           <div className="flex flex-col gap-1 items-start">
-                            {item.vertical_archetype && (
+                            {isOrderWin && item.order_significance_tier ? (
+                              <span
+                                className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                  item.order_significance_tier === "TRANSFORMATIONAL"
+                                    ? "border-purple-500/40 bg-purple-500/20 text-purple-300"
+                                    : item.order_significance_tier === "HIGH_IMPACT"
+                                    ? "border-amber-500/40 bg-amber-500/20 text-amber-300"
+                                    : item.order_significance_tier === "MODERATE"
+                                    ? "border-cyan-500/40 bg-cyan-500/20 text-cyan-300"
+                                    : "border-slate-700 bg-slate-800 text-slate-400"
+                                }`}
+                              >
+                                <Award size={9} />
+                                <span>{item.order_significance_tier.replace(/_/g, " ")}</span>
+                                {item.order_significance_score ? (
+                                  <span className="font-mono opacity-80">{Math.round(item.order_significance_score)}</span>
+                                ) : null}
+                              </span>
+                            ) : item.vertical_archetype ? (
                               <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-cyan-300">
                                 {item.vertical_archetype.replace(/_/g, " ")}
                               </span>
-                            )}
+                            ) : null}
                             <span className="text-[10px] text-slate-400 font-medium">
                               {item.catalyst_type.replace(/_/g, " ")}
                             </span>
@@ -1687,20 +1797,50 @@ export default function AnnouncementsRadarPage() {
                           )}
                         </td>
 
-                        {/* Trigger P0 -> CMP */}
+                        {/* Trigger P0 -> CMP / Deal Sizing */}
                         <td className="py-3 px-3 text-right whitespace-nowrap">
-                          <div className="font-mono text-xs font-semibold text-white">
-                            {cmp ? `₹${cmp.toLocaleString("en-IN")}` : "—"}
-                          </div>
-                          {p0 && (
-                            <div className="font-mono text-[10px] text-slate-500">
-                              P₀: ₹{p0.toLocaleString("en-IN")}
+                          {isOrderWin && dealVal > 0 ? (
+                            <div>
+                              <div className="font-mono text-xs font-bold text-amber-300">
+                                ₹{dealVal.toLocaleString("en-IN")} Cr
+                                {item.synergy_rev_pct_ttm ? (
+                                  <span className="text-[10px] font-bold text-emerald-400 ml-1">
+                                    (+{item.synergy_rev_pct_ttm.toFixed(1)}% TTM)
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-400">
+                                CMP: {cmp ? `₹${cmp.toLocaleString("en-IN")}` : "—"}
+                                {p0 && p0 !== cmp ? ` · P₀: ₹${p0.toLocaleString("en-IN")}` : ""}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-mono text-xs font-semibold text-white">
+                                {cmp ? `₹${cmp.toLocaleString("en-IN")}` : "—"}
+                              </div>
+                              {p0 && (
+                                <div className="font-mono text-[10px] text-slate-500">
+                                  P₀: ₹{p0.toLocaleString("en-IN")}
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>
 
-                        {/* Move / Status */}
+                        {/* Move / Status & Execution Runway */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
+                          {isOrderWin && item.order_execution_months ? (
+                            <div className="font-mono text-[11px] font-semibold text-cyan-300 flex items-center justify-center gap-1">
+                              <Clock size={10} className="text-cyan-400" />
+                              <span>{item.order_execution_months}M Runway</span>
+                            </div>
+                          ) : null}
+                          {isOrderWin && item.order_quarterly_rev_cr ? (
+                            <div className="font-mono text-[9px] text-slate-300">
+                              +₹{item.order_quarterly_rev_cr.toFixed(0)} Cr/qtr
+                            </div>
+                          ) : null}
                           {movePct != null && (
                             <div className={`font-mono text-xs font-bold ${movePct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                               {movePct >= 0 ? `+${movePct.toFixed(1)}%` : `${movePct.toFixed(1)}%`}
@@ -1719,11 +1859,11 @@ export default function AnnouncementsRadarPage() {
                               {item.absorption_status.replace(/_/g, " ")}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-slate-600">—</span>
+                            !isOrderWin && <span className="text-[10px] text-slate-600">—</span>
                           )}
                         </td>
 
-                        {/* Conviction */}
+                        {/* Conviction & PAT Accretion */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
                           {item.recommendation ? (
                             <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
@@ -1741,6 +1881,16 @@ export default function AnnouncementsRadarPage() {
                           ) : (
                             <span className="text-slate-600">—</span>
                           )}
+                          {isOrderWin && item.order_earnings_impact_cr ? (
+                            <div className="text-[9px] font-mono font-bold text-emerald-400 mt-0.5">
+                              PAT +₹{item.order_earnings_impact_cr.toFixed(1)} Cr
+                            </div>
+                          ) : null}
+                          {isOrderWin && item.order_confidence_score ? (
+                            <div className="text-[9px] font-mono text-cyan-400/80">
+                              {Math.round(item.order_confidence_score)}% Model Conf
+                            </div>
+                          ) : null}
                         </td>
 
                         {/* Target & Upside */}
@@ -1750,11 +1900,18 @@ export default function AnnouncementsRadarPage() {
                               <div className="font-mono text-xs font-bold text-emerald-400">
                                 +{item.upside_pct.toFixed(1)}%
                               </div>
-                              {item.target_price && (
-                                <div className="font-mono text-[10px] text-slate-400">
-                                  ₹{item.target_price.toLocaleString("en-IN")}
+                              {(item.order_target_price_low || item.target_price) && (
+                                <div className="font-mono text-[10px] text-slate-300">
+                                  {item.order_target_price_low
+                                    ? `₹${item.order_target_price_low.toLocaleString("en-IN")}–₹${item.order_target_price_high?.toLocaleString("en-IN")}`
+                                    : `₹${item.target_price?.toLocaleString("en-IN")}`}
                                 </div>
                               )}
+                              {isOrderWin && item.order_upside_prob_pct ? (
+                                <div className="text-[9px] font-mono font-bold text-purple-400">
+                                  {Math.round(item.order_upside_prob_pct)}% Win Prob
+                                </div>
+                              ) : null}
                             </>
                           ) : (
                             <span className="text-slate-600">—</span>
@@ -1817,16 +1974,30 @@ export default function AnnouncementsRadarPage() {
                         {/* Actions */}
                         <td className="py-3 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
+                            {/* Deep Dive Page Link */}
+                            <Link
+                              href={`/announcements/${item.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/50 bg-cyan-500/20 px-2.5 py-1 text-[10px] font-bold text-cyan-300 transition-all hover:bg-cyan-500/30 hover:border-cyan-400 hover:text-white shadow-sm"
+                              title="Open full dedicated Deep Dive page"
+                            >
+                              <span>Details</span>
+                              <ArrowUpRight size={11} />
+                            </Link>
+
+                            {/* Quick Drawer Button */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedDrawerItem(item);
                               }}
-                              className="rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[10px] font-semibold text-cyan-300 transition-colors hover:border-cyan-500 hover:bg-cyan-950/40"
-                              title="Open Deep Dive Drawer"
+                              className="rounded-lg border border-slate-700 bg-slate-800/80 p-1 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+                              title="Open Quick Waterfall Drawer"
                             >
-                              Deep Dive
+                              <Layers size={12} />
                             </button>
+
+                            {/* PDF Link */}
                             {item.pdf_url && (
                               <a
                                 href={item.pdf_url}
@@ -1853,6 +2024,17 @@ export default function AnnouncementsRadarPage() {
           {!loading && items.length > 0 && viewMode === "cards" && (
             <div className="flex flex-col gap-4">
               {items.map((item) => {
+                if (item.catalyst_type === "ORDER_WIN" || item.order_significance_tier) {
+                  return (
+                    <OrderWinCard
+                      key={item.id}
+                      item={item}
+                      onSelectDrawer={setSelectedDrawerItem}
+                      onSendAlert={handleSendTelegram}
+                    />
+                  );
+                }
+
                 const screenerUrl = `https://www.screener.in/company/${item.symbol ? item.symbol : encodeURIComponent(item.company_name)}/consolidated/#documents`;
                 const impactCfg = IMPACT_COLORS[item.impact_level] ?? IMPACT_COLORS.MEDIUM;
 
@@ -2200,13 +2382,23 @@ export default function AnnouncementsRadarPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* Deep Dive Page Link */}
+                        <Link
+                          href={`/announcements/${item.id}`}
+                          className="flex items-center gap-1.5 rounded-lg border border-purple-500/50 bg-purple-500/20 px-3 py-1 text-[11px] font-bold text-purple-200 transition-all hover:bg-purple-500/30 hover:border-purple-400"
+                          title="Open dedicated Deep Dive page"
+                        >
+                          <ArrowUpRight size={11} />
+                          <span>Details</span>
+                        </Link>
+
                         {/* Slide-over Drawer Trigger */}
                         <button
                           onClick={() => setSelectedDrawerItem(item)}
                           className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold text-cyan-300 transition-all hover:bg-cyan-500/20"
                         >
                           <Maximize2 size={11} />
-                          <span>Filing Analysis</span>
+                          <span>Waterfall</span>
                         </button>
 
                         {/* PDF Filing Link */}
@@ -2275,12 +2467,22 @@ export default function AnnouncementsRadarPage() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setSelectedDrawerItem(null)}
-                className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-slate-400 hover:text-white"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/announcements/${selectedDrawerItem.id}`}
+                  className="flex items-center gap-1.5 rounded-xl border border-cyan-500/50 bg-cyan-500/20 px-3 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 hover:text-white transition-all shadow-sm"
+                  title="Open full dedicated Deep Dive page"
+                >
+                  <span>Full Deep Dive Page</span>
+                  <ArrowUpRight size={13} />
+                </Link>
+                <button
+                  onClick={() => setSelectedDrawerItem(null)}
+                  className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-slate-400 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-5 py-5">
@@ -2349,6 +2551,24 @@ export default function AnnouncementsRadarPage() {
                   {selectedDrawerItem.headline}
                 </p>
               </div>
+
+              {/* ── Order Win Execution Waterfall & Scenario Matrix (Sprint 36.5) ── */}
+              {(selectedDrawerItem.catalyst_type === "ORDER_WIN" || selectedDrawerItem.order_significance_tier) && (
+                <div className="rounded-2xl border border-amber-500/30 bg-[#061422] p-4 shadow-xl animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-amber-500/20 pb-2 mb-3">
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <Zap size={14} className="fill-amber-400" />
+                      Order Realization Waterfall & Sensitivity
+                    </span>
+                    {selectedDrawerItem.order_significance_tier && (
+                      <span className="rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 text-[10px] font-black uppercase font-mono">
+                        {selectedDrawerItem.order_significance_tier.replace(/_/g, " ")} · {selectedDrawerItem.order_significance_score?.toFixed(0) || 80}/100
+                      </span>
+                    )}
+                  </div>
+                  <OrderWaterfallDrawer item={selectedDrawerItem} />
+                </div>
+              )}
 
               {/* AI Growth Takeaway */}
               {selectedDrawerItem.ai_insight && (

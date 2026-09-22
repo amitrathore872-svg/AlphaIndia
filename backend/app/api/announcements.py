@@ -71,6 +71,21 @@ class AnnouncementOut(BaseModel):
     dma_50:                     Optional[float] = None
     dma_200:                    Optional[float] = None
 
+    # Order Win Quantitative Intelligence (Sprint 36.5)
+    order_execution_months:     Optional[int] = None
+    order_quarterly_rev_cr:     Optional[float] = None
+    order_quarterly_rev_pct:    Optional[float] = None
+    order_earnings_impact_cr:   Optional[float] = None
+    order_significance_score:   Optional[float] = None
+    order_significance_tier:    Optional[str] = None
+    order_upside_prob_pct:      Optional[float] = None
+    order_target_price_low:     Optional[float] = None
+    order_target_price_high:    Optional[float] = None
+    order_confidence_score:     Optional[float] = None
+    order_client_counterparty:  Optional[str] = None
+    order_historical_comparison: Optional[str] = None
+    order_intelligence:         Optional[dict] = None
+
     class Config:
         from_attributes = True
 
@@ -96,6 +111,7 @@ class RunResponse(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("", response_model=List[AnnouncementOut])
 @router.get("/radar", response_model=List[AnnouncementOut])
 def get_announcements_radar(
     page:               int = Query(default=1, ge=1),
@@ -107,6 +123,7 @@ def get_announcements_radar(
     impact_level:       Optional[str] = Query(default=None, description="CRITICAL | HIGH | MEDIUM"),
     recommendation:     Optional[str] = Query(default=None, description="STRONG_BUY | TACTICAL_BUY | ACCUMULATE | WATCHLIST_ONLY"),
     velocity:           Optional[str] = Query(default=None, description="FAST_UNDER_30D | SWING_30_60D | CYCLE_60_120D | 10-25 | 15-35 | 20-50 | 30-65 | 40-75 | 60-120"),
+    order_tier:         Optional[str] = Query(default=None, description="TRANSFORMATIONAL | HIGH_IMPACT | MODERATE | ROUTINE"),
     feed_source:        Optional[str] = Query(default=None, description="ALL | POLL_WIRE | CATALYST"),
     category:           Optional[str] = Query(default=None, description="Raw category filter"),
     search:             Optional[str] = Query(default=None, description="Search company name, symbol or headline"),
@@ -203,6 +220,13 @@ def get_announcements_radar(
         if vel_conditions:
             query = query.filter(or_(*vel_conditions))
 
+    if order_tier:
+        tier_list = [t.strip().upper() for t in order_tier.split(",") if t.strip()]
+        if len(tier_list) == 1:
+            query = query.filter(AnnouncementRadar.order_significance_tier == tier_list[0])
+        elif len(tier_list) > 1:
+            query = query.filter(AnnouncementRadar.order_significance_tier.in_(tier_list))
+
     if listed_only:
         query = query.filter(AnnouncementRadar.is_listed.is_(True))
 
@@ -211,7 +235,8 @@ def get_announcements_radar(
         query = query.filter(
             (AnnouncementRadar.company_name.ilike(s)) |
             (AnnouncementRadar.symbol.ilike(s)) |
-            (AnnouncementRadar.headline.ilike(s))
+            (AnnouncementRadar.headline.ilike(s)) |
+            (AnnouncementRadar.order_client_counterparty.ilike(s))
         )
 
     # Date Filtering
@@ -258,7 +283,8 @@ def get_announcements_radar(
         "published_at", "announcement_date", "recommendation_date", "impact_score", "deal_value_cr",
         "company_name", "symbol", "upside_pct", "conviction_score", "realized_move_pct",
         "current_price", "price_at_announcement", "target_price", "vertical_archetype",
-        "catalyst_type", "trend_regime", "absorption_status", "recommendation", "est_velocity_days"
+        "catalyst_type", "trend_regime", "absorption_status", "recommendation", "est_velocity_days",
+        "order_significance_score", "order_quarterly_rev_cr", "order_upside_prob_pct", "order_earnings_impact_cr"
     }
     if sort_by not in allowed_sort:
         sort_by = "announcement_date"
@@ -273,6 +299,7 @@ def get_announcements_radar(
     offset = (page - 1) * limit
     results = query.offset(offset).limit(limit).all()
     return results
+
 
 
 @router.get("/stats", response_model=AnnouncementStatsOut)
@@ -425,5 +452,88 @@ def trigger_live_wire_poll(db: Session = Depends(get_db)):
         "result": res,
         "telemetry": LiveExchangeWireWorker.get_telemetry(),
     }
+
+
+@router.post("/order-wins/analyze-all")
+def analyze_all_order_wins(limit: int = Query(default=1000, ge=1, le=5000), db: Session = Depends(get_db)):
+    """
+    Triggers systematic quantitative investment analysis across all Order Win filings in the system.
+    """
+    from app.services.order_win_intelligence_service import OrderWinIntelligenceService
+    result = OrderWinIntelligenceService.process_all_order_wins(db, limit=limit)
+    return {
+        "status": "success",
+        "message": f"Processed {result.get('total_analyzed', 0)} order wins into AI investment cards.",
+        "result": result,
+    }
+
+
+@router.post("/order-wins/{announcement_id}/analyze", response_model=AnnouncementOut)
+def analyze_single_order_win(announcement_id: int, db: Session = Depends(get_db)):
+    """
+    Evaluates or recalculates order win investment intelligence for a specific announcement.
+    """
+    from app.services.order_win_intelligence_service import OrderWinIntelligenceService
+    ann = db.query(AnnouncementRadar).filter(AnnouncementRadar.id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+
+    analysis = OrderWinIntelligenceService.analyze_order_win(
+        db=db,
+        symbol=ann.symbol,
+        company_name=ann.company_name,
+        headline=ann.headline,
+        filing_description=ann.filing_description,
+        deal_value_cr=ann.deal_value_cr,
+        filing_date=ann.announcement_date or ann.published_at,
+        cmp_override=ann.current_price,
+    )
+
+    if analysis["order_value_cr"]:
+        ann.deal_value_cr = analysis["order_value_cr"]
+        ann.synergy_rev_addition_cr = analysis["order_value_cr"]
+
+    ann.catalyst_type = "ORDER_WIN"
+    ann.synergy_rev_pct_ttm = analysis["revenue_contribution_pct"]
+    ann.order_execution_months = analysis["order_execution_months"]
+    ann.order_quarterly_rev_cr = analysis["order_quarterly_rev_cr"]
+    ann.order_quarterly_rev_pct = analysis["order_quarterly_rev_pct"]
+    ann.order_earnings_impact_cr = analysis["order_earnings_impact_cr"]
+    ann.order_significance_score = analysis["order_significance_score"]
+    ann.order_significance_tier = analysis["order_significance_tier"]
+    ann.order_upside_prob_pct = analysis["order_upside_prob_pct"]
+    ann.order_target_price_low = analysis["order_target_price_low"]
+    ann.order_target_price_high = analysis["order_target_price_high"]
+    ann.order_confidence_score = analysis["order_confidence_score"]
+    ann.order_client_counterparty = analysis["order_client_counterparty"]
+    ann.order_historical_comparison = analysis["order_historical_comparison"]
+    ann.order_intelligence = analysis
+
+    ann.target_price = analysis["order_target_price_base"]
+    ann.current_price = analysis["cmp"]
+    ann.upside_pct = analysis["upside_pct"]
+    ann.stop_loss = analysis["stop_loss"]
+    ann.buy_thesis = analysis["investment_thesis"]
+    ann.ai_insight = analysis["investment_thesis"]
+    ann.conviction_score = min(96.0, max(75.0, analysis["order_significance_score"]))
+    ann.recommendation = "STRONG_BUY" if analysis["order_significance_score"] >= 80 else "TACTICAL_BUY"
+    ann.impact_level = "CRITICAL" if analysis["order_significance_score"] >= 75 else "HIGH"
+    ann.impact_score = round(min(9.9, max(7.5, (analysis["order_significance_score"] / 10.0))), 1)
+
+    db.commit()
+    db.refresh(ann)
+    return ann
+
+
+@router.get("/{announcement_id}", response_model=AnnouncementOut)
+def get_announcement_by_id(announcement_id: int, db: Session = Depends(get_db)):
+    """
+    Returns complete intelligence payload for a specific announcement / order win.
+    """
+    ann = db.query(AnnouncementRadar).filter(AnnouncementRadar.id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return ann
+
 
 

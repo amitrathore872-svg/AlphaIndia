@@ -27,7 +27,7 @@ class QuarterlyResult(Base):
     # ----------------------------------------------------------------
     # Legacy Compatibility
     # ----------------------------------------------------------------
-    quarter = Column(String(20), nullable=False)
+    quarter = Column(String(20), nullable=True)
 
     # ----------------------------------------------------------------
     # Financial Warehouse

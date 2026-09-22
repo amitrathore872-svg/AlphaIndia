@@ -6,9 +6,6 @@ import {
   LayoutDashboard,
   TrendingUp,
   FileText,
-  Gem,
-  BrainCircuit,
-  Scale,
   Star,
   Radar,
   Radio,
@@ -20,12 +17,20 @@ import {
   TableProperties,
   Sparkles,
   Zap,
+  BookOpen,
   X,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
   Sliders,
+  BellRing,
+  Target,
+  Flame,
+  Award,
+  Compass,
+  Crosshair,
+  Briefcase,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -39,20 +44,31 @@ const navigation = [
   {
     title: "RADARS & ENGINES",
     items: [
-      { name: "Growth Screener", href: "/", icon: TrendingUp },
-      { name: "Earnings & PEAD Terminal", href: "/athena-omega", icon: Zap },
+      { name: "Executive Terminal", href: "/home", icon: LayoutDashboard },
+      { name: "Athena Omega AI", href: "/athena-omega", icon: Zap },
+      { name: "Growth Screener PRO", href: "/growth-screener", icon: TrendingUp },
+      { name: "MF Fresh Entries Radar", href: "/institutional-radar/fresh-entries", icon: Sparkles },
       { name: "Corporate Catalysts", href: "/announcements", icon: Radio },
-      { name: "Mutual Fund Radar", href: "/institutional-radar", icon: ShieldCheck },
-      { name: "Hidden Gems", href: "/hidden-gems", icon: Gem },
+    ],
+  },
+  {
+    title: "FAST OPPORTUNITY SCREENER",
+    items: [
+      { name: "Techno-Funda Radar", href: "/techno-funda", icon: Target },
+      { name: "Super Momentum Radar", href: "/momentum-radar", icon: Zap },
+      { name: "Pre-Breakout Radar", href: "/pre-breakout-radar", icon: Crosshair },
+      { name: "Trend Genesis (Ignition)", href: "/trend-genesis", icon: Flame },
+      { name: "Delivery Breakout", href: "/delivery-radar", icon: Radar },
+      { name: "VCP Breakout Engine", href: "/vcp-discovery", icon: Sparkles },
+      { name: "↳ VCP Track Record", href: "/vcp-signals", icon: Award },
+      { name: "Tomorrow 5% Move", href: "/intraday-radar", icon: Flame },
     ],
   },
   {
     title: "INSTITUTIONAL RESEARCH",
     items: [
-      { name: "AI Growth Rankings", href: "/ai-rankings", icon: BrainCircuit },
-      { name: "Company Comparison", href: "/comparison", icon: Scale },
+      { name: "Mutual Fund Radar", href: "/institutional-radar", icon: ShieldCheck },
       { name: "AMC Scheme Matrix", href: "/institutional-radar/matrix", icon: TableProperties },
-      { name: "Fresh Entries Radar", href: "/institutional-radar/fresh-entries", icon: Sparkles },
     ],
   },
   {
@@ -60,12 +76,21 @@ const navigation = [
     items: [
       { name: "Discovery Incubator", href: "/early-stage", icon: Telescope },
       { name: "Quarterly Results", href: "/quarterly-results", icon: FileText },
-      { name: "Watchlist Builder", href: "/watchlist", icon: Star },
     ],
   },
   {
     title: "PORTFOLIO",
     items: [
+      {
+        name: "Portfolio Intelligence",
+        href: "/portfolio",
+        icon: Briefcase,
+      },
+      {
+        name: "Alpha Swing Overlay",
+        href: "/portfolio/swing-overlay",
+        icon: Zap,
+      },
       {
         name: "Watchlist Builder",
         href: "/watchlist",
@@ -77,7 +102,7 @@ const navigation = [
     title: "MONITORING",
     items: [
       {
-        name: "Monitoring Center",
+        name: "Mission Control Overview",
         href: "/monitoring",
         icon: Radar,
       },
@@ -85,11 +110,6 @@ const navigation = [
         name: "Control & Action Logs",
         href: "/monitoring/control",
         icon: Sliders,
-      },
-      {
-        name: "Pipeline Validation",
-        href: "/monitoring/validation",
-        icon: ShieldCheck,
       },
       {
         name: "Activity Timeline",
@@ -110,6 +130,16 @@ const navigation = [
         name: "System Settings",
         href: "/settings",
         icon: Settings,
+      },
+      {
+        name: "Knowledge Center",
+        href: "/knowledge-center",
+        icon: BookOpen,
+      },
+      {
+        name: "Alert Center",
+        href: "/alerts",
+        icon: BellRing,
       },
     ],
   },
@@ -154,7 +184,7 @@ export default function AppSidebar({
             }`}
           >
             <Link
-              href="/"
+              href="/home"
               className="flex items-center gap-3 group shrink-0"
               title="Alpha India — AI Growth Platform"
             >

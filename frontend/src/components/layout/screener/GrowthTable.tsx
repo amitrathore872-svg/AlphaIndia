@@ -7,6 +7,7 @@
 // =======================================================
 
 import React from "react";
+import Link from "next/link";
 import {
   ArrowDown,
   ArrowUp,
@@ -507,20 +508,28 @@ export default function GrowthTable({
 
                     {/* Company (Sticky Column 2) */}
                     <td className={`sticky left-11 sm:left-12 z-10 bg-white group-hover:bg-slate-50 dark:bg-[#080E1A] dark:group-hover:bg-[#0D1829] px-3 sm:px-4 ${cellPy} border-r border-slate-200/80 dark:border-slate-800/60 shadow-[4px_0_8px_rgba(0,0,0,0.04)] dark:shadow-[4px_0_8px_rgba(0,0,0,0.4)] transition-colors`}>
-                      <a
-                        href={`https://www.screener.in/company/${company.symbol}/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${
-                          isCompact
-                            ? "text-xs font-semibold"
-                            : "text-xs sm:text-sm font-semibold"
-                        } text-slate-900 group-hover:text-cyan-600 dark:text-slate-100 dark:group-hover:text-cyan-400 transition inline-flex items-center gap-1.5`}
-                        title={`View ${company.company} (${company.symbol}) on Screener`}
-                      >
-                        <span className={`truncate ${isCompact ? "max-w-[140px] sm:max-w-[190px]" : "max-w-[160px] sm:max-w-[220px]"}`}>{company.company}</span>
-                        <ExternalLink size={isCompact ? 10 : 11} className="text-slate-400 group-hover:text-cyan-600 dark:text-slate-600 dark:group-hover:text-cyan-400 shrink-0" />
-                      </a>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/stocks/${company.symbol}`}
+                          className={`${
+                            isCompact
+                              ? "text-xs font-semibold"
+                              : "text-xs sm:text-sm font-semibold"
+                          } text-slate-900 group-hover:text-cyan-600 dark:text-slate-100 dark:group-hover:text-cyan-400 transition inline-flex items-center gap-1.5`}
+                          title={`Open complete Technical Overview for ${company.company} (${company.symbol})`}
+                        >
+                          <span className={`truncate ${isCompact ? "max-w-[130px] sm:max-w-[180px]" : "max-w-[150px] sm:max-w-[210px]"}`}>{company.company}</span>
+                        </Link>
+                        <a
+                          href={`https://www.screener.in/company/${company.symbol}/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-slate-400 hover:text-cyan-600 dark:text-slate-600 dark:hover:text-cyan-400 p-0.5 rounded transition shrink-0"
+                          title="Open on Screener.in"
+                        >
+                          <ExternalLink size={isCompact ? 10 : 11} />
+                        </a>
+                      </div>
                     </td>
 
                     {/* Conviction Score & Watchlist Star Action */}

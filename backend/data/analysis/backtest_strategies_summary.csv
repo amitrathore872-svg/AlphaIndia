@@ -1,0 +1,8 @@
+Strategy,Total Trades,Win Rate %,Avg Return %,Profit Factor,Target Hit %,Stop Hit %,Time Exit %,Max Win %,Max Loss %,Avg Hold Days
+"S1: Baseline Delivery (Deliv>=50%, Spike>=2x)",13713,36.5,-0.09,0.96,24.3,56.3,19.4,8.0,-4.0,4.9
+"S2: Momentum Markup (Deliv>=55%, Spike>=2x, +1.5%, >20SMA)",2406,37.1,0.04,1.02,26.8,57.4,15.8,8.0,-4.0,4.5
+"S3: Elite Absorption (Deliv>=65%, Spike>=3x, >20SMA)",733,37.9,0.1,1.04,27.7,57.4,14.9,8.0,-4.0,4.3
+S4: Asymmetric 2.5:1 (S2 Entry with 10% Target / 4% SL),2406,34.5,0.14,1.06,22.8,61.0,16.2,10.0,-4.0,5.2
+"S5: Bullish Close Climax (CloseLoc>=75%, Deliv>=60%, Spike>=2.5x)",714,34.9,0.13,1.06,26.3,62.2,11.5,8.0,-3.5,3.8
+"S6: Fast Quick-Strike (6% Target / 3% SL, 6-Day Hold)",2406,35.0,-0.14,0.92,25.6,61.1,13.3,6.0,-3.0,2.7
+"S7: Extreme 5x Surge Anomaly (Deliv Spike >= 5x, >20SMA)",803,35.1,-0.08,0.97,27.8,61.3,11.0,8.0,-4.0,3.8

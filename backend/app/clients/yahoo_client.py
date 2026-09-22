@@ -145,15 +145,13 @@ class YahooClient:
                 return df.fillna(0)
 
             except Exception:
-
                 if attempt == self.RETRIES - 1:
-
                     if dataset == "cashflow":
                         return pd.DataFrame()
-
                     raise
 
-                time.sleep(self.RETRY_DELAY)
+                backoff = self.RETRY_DELAY * (2 ** attempt)
+                time.sleep(backoff)
 
         return pd.DataFrame()
 

@@ -7,7 +7,7 @@ Version: v2.1.0
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from app.core.config import DATABASE_URL, DEBUG_SQL
+from app.core.config import settings, DATABASE_URL, DEBUG_SQL
 
 # ==========================================================
 # SQLAlchemy Engine
@@ -20,9 +20,9 @@ engine_kwargs = {
 
 if "sqlite" not in DATABASE_URL:
     engine_kwargs.update({
-        "pool_size": 10,
-        "max_overflow": 20,
-        "pool_recycle": 1800,
+        "pool_size": settings.DB_POOL_SIZE,
+        "max_overflow": settings.DB_MAX_OVERFLOW,
+        "pool_recycle": settings.DB_POOL_RECYCLE,
     })
 
 engine = create_engine(

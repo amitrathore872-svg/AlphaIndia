@@ -13,6 +13,8 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import NotificationDrawer from "./notifications/NotificationDrawer";
+import { notificationsApi } from "@/lib/notificationsApi";
 
 interface TopHeaderProps {
   onOpenSidebar?: () => void;
@@ -28,6 +30,8 @@ export default function TopHeader({
   onOpenControlCenter,
 }: TopHeaderProps) {
   const [time, setTime] = useState("");
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const updateClock = () => {
@@ -46,6 +50,21 @@ export default function TopHeader({
 
     const timer = setInterval(updateClock, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const fetchUnreadStats = async () => {
+      try {
+        const stats = await notificationsApi.getStats();
+        setUnreadCount(stats.unread_count || 0);
+      } catch {
+        // Silently fail if backend is restarting
+      }
+    };
+
+    fetchUnreadStats();
+    const interval = setInterval(fetchUnreadStats, 12000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -135,10 +154,18 @@ export default function TopHeader({
           <ThemeToggle />
 
           <button
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-xs transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
+            onClick={() => setIsNotificationOpen((prev) => !prev)}
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-xs transition hover:border-cyan-500/50 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-cyan-500/50 dark:hover:bg-slate-800 dark:hover:text-white"
             aria-label="Notifications"
+            title="Notification Center"
           >
             <Bell size={16} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-bold text-black shadow-xs ring-2 ring-white dark:ring-[#081225]">
+                {unreadCount > 99 ? "99+" : unreadCount}
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
+              </span>
+            )}
           </button>
 
           <div className="flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white p-1 sm:px-2.5 sm:py-1.5 shadow-xs dark:border-slate-700 dark:bg-slate-900">
@@ -157,6 +184,13 @@ export default function TopHeader({
           </div>
         </div>
       </div>
+
+      {/* Slide-out Notification Drawer */}
+      <NotificationDrawer
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        onStatsUpdated={(stats) => setUnreadCount(stats.unread_count)}
+      />
     </header>
   );
 }

@@ -17,6 +17,7 @@ from app.models.company import Company
 from app.models.company_market_metrics import CompanyMarketMetrics
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.screener_client import ScreenerClient
+from app.services.order_win_intelligence_service import OrderWinIntelligenceService
 
 logger = logging.getLogger(__name__)
 
@@ -643,6 +644,37 @@ def run_announcements_ingestion(db: Optional[Session] = None) -> Dict[str, Any]:
             cat_type, impact_lvl, score, deal_val = classify_catalyst(full_text)
             ai_insight = generate_ai_insight(comp_name, cat_type, enriched_item["headline"], deal_val)
 
+            # Order Win Quantitative Intelligence (Sprint 36.5)
+            order_intel = None
+            if cat_type == "ORDER_WIN" or OrderWinIntelligenceService.is_order_win_filing(enriched_item["headline"], enriched_item.get("category"), enriched_item.get("description")):
+                cat_type = "ORDER_WIN"
+                order_intel = OrderWinIntelligenceService.analyze_order_win(
+                    db=db,
+                    symbol=sym,
+                    company_name=comp_name,
+                    headline=enriched_item["headline"],
+                    filing_description=enriched_item.get("description"),
+                    deal_value_cr=deal_val or enriched_item.get("synergy_rev_addition_cr"),
+                    filing_date=enriched_item.get("published_at"),
+                    cmp_override=enriched_item.get("current_price"),
+                )
+                if order_intel.get("order_value_cr"):
+                    deal_val = order_intel["order_value_cr"]
+                    enriched_item["synergy_rev_addition_cr"] = deal_val
+                if order_intel.get("revenue_contribution_pct"):
+                    enriched_item["synergy_rev_pct_ttm"] = order_intel["revenue_contribution_pct"]
+                if order_intel.get("incremental_ebitda_cr"):
+                    enriched_item["synergy_ebitda_addition_cr"] = order_intel["incremental_ebitda_cr"]
+                if order_intel.get("order_target_price_base"):
+                    enriched_item["target_price"] = order_intel["order_target_price_base"]
+                if order_intel.get("upside_pct"):
+                    enriched_item["upside_pct"] = order_intel["upside_pct"]
+                if order_intel.get("investment_thesis"):
+                    ai_insight = order_intel["investment_thesis"]
+                    enriched_item["buy_thesis"] = order_intel["investment_thesis"]
+                impact_lvl = "CRITICAL" if order_intel.get("order_significance_score", 0) >= 75 else "HIGH"
+                score = round(min(9.9, max(7.5, (order_intel.get("order_significance_score", 70) / 10.0))), 1)
+
             # Step 5: Upsert into DB
             existing = db.query(AnnouncementRadar).filter(
                 (AnnouncementRadar.symbol == sym) & (AnnouncementRadar.headline == enriched_item["headline"])
@@ -688,6 +720,22 @@ def run_announcements_ingestion(db: Optional[Session] = None) -> Dict[str, Any]:
                 existing.est_velocity_days = enriched_item.get("est_velocity_days", existing.est_velocity_days or "40-75 Days (Execution Milestone)")
                 existing.dma_50 = enriched_item.get("dma_50", existing.dma_50)
                 existing.dma_200 = enriched_item.get("dma_200", existing.dma_200)
+
+                if order_intel:
+                    existing.order_execution_months = order_intel.get("order_execution_months")
+                    existing.order_quarterly_rev_cr = order_intel.get("order_quarterly_rev_cr")
+                    existing.order_quarterly_rev_pct = order_intel.get("order_quarterly_rev_pct")
+                    existing.order_earnings_impact_cr = order_intel.get("order_earnings_impact_cr")
+                    existing.order_significance_score = order_intel.get("order_significance_score")
+                    existing.order_significance_tier = order_intel.get("order_significance_tier")
+                    existing.order_upside_prob_pct = order_intel.get("order_upside_prob_pct")
+                    existing.order_target_price_low = order_intel.get("order_target_price_low")
+                    existing.order_target_price_high = order_intel.get("order_target_price_high")
+                    existing.order_confidence_score = order_intel.get("order_confidence_score")
+                    existing.order_client_counterparty = order_intel.get("order_client_counterparty")
+                    existing.order_historical_comparison = order_intel.get("order_historical_comparison")
+                    existing.order_intelligence = order_intel
+
                 updated += 1
             else:
                 ann = AnnouncementRadar(
@@ -735,6 +783,19 @@ def run_announcements_ingestion(db: Optional[Session] = None) -> Dict[str, Any]:
                     valuation_pe=enriched_item.get("valuation_pe"),
                     fair_pe=enriched_item.get("fair_pe"),
                     buy_thesis=enriched_item.get("buy_thesis"),
+                    order_execution_months=order_intel.get("order_execution_months") if order_intel else None,
+                    order_quarterly_rev_cr=order_intel.get("order_quarterly_rev_cr") if order_intel else None,
+                    order_quarterly_rev_pct=order_intel.get("order_quarterly_rev_pct") if order_intel else None,
+                    order_earnings_impact_cr=order_intel.get("order_earnings_impact_cr") if order_intel else None,
+                    order_significance_score=order_intel.get("order_significance_score") if order_intel else None,
+                    order_significance_tier=order_intel.get("order_significance_tier") if order_intel else None,
+                    order_upside_prob_pct=order_intel.get("order_upside_prob_pct") if order_intel else None,
+                    order_target_price_low=order_intel.get("order_target_price_low") if order_intel else None,
+                    order_target_price_high=order_intel.get("order_target_price_high") if order_intel else None,
+                    order_confidence_score=order_intel.get("order_confidence_score") if order_intel else None,
+                    order_client_counterparty=order_intel.get("order_client_counterparty") if order_intel else None,
+                    order_historical_comparison=order_intel.get("order_historical_comparison") if order_intel else None,
+                    order_intelligence=order_intel,
                 )
                 db.add(ann)
                 inserted += 1

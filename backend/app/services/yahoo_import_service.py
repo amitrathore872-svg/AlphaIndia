@@ -84,80 +84,61 @@ class YahooImportService:
                 .first()
             )
 
-            if exists:
-                duplicates_skipped += 1
-                continue
-
             revenue = cls.value(income_df, "Total Revenue", period)
-
             if revenue is None:
                 revenue = cls.value(income_df, "Operating Revenue", period)
 
-            net_profit = cls.value(
-                income_df,
-                "Net Income",
-                period,
-            )
-
+            net_profit = cls.value(income_df, "Net Income", period)
             if net_profit is None:
-                net_profit = cls.value(
-                    income_df,
-                    "Net Income Common Stockholders",
-                    period,
-                )
+                net_profit = cls.value(income_df, "Net Income Common Stockholders", period)
 
-            eps = cls.value(
-                income_df,
-                "Diluted EPS",
-                period,
-            )
-
+            eps = cls.value(income_df, "Diluted EPS", period)
             if eps is None:
-                eps = cls.value(
-                    income_df,
-                    "Basic EPS",
-                    period,
-                )
+                eps = cls.value(income_df, "Basic EPS", period)
 
-            interest_income = cls.value(
-                income_df,
-                "Interest Income",
-                period,
-            )
-
-            interest_expense = cls.value(
-                income_df,
-                "Interest Expense",
-                period,
-            )
-
-            net_interest_income = cls.value(
-                income_df,
-                "Net Interest Income",
-                period,
-            )
+            interest_income = cls.value(income_df, "Interest Income", period)
+            interest_expense = cls.value(income_df, "Interest Expense", period)
+            net_interest_income = cls.value(income_df, "Net Interest Income", period)
 
             book_value = None
-
             if not balance_df.empty:
-                equity = cls.value(
-                    balance_df,
-                    "Stockholders Equity",
-                    period,
-                )
-
-                shares = cls.value(
-                    balance_df,
-                    "Ordinary Shares Number",
-                    period,
-                )
-
+                equity = cls.value(balance_df, "Stockholders Equity", period)
+                shares = cls.value(balance_df, "Ordinary Shares Number", period)
                 if equity and shares and shares != 0:
                     book_value = equity / shares
 
+            q_name = f"Q{((period_date.month-1)//3)+1} {period_date.year}"
+            f_period = f"Q{((period_date.month-1)//3)+1}-{period_date.year}"
+
+            if exists:
+                # Idempotent enrichment: update null metrics if newly available
+                updated = False
+                if revenue is not None and exists.revenue is None:
+                    exists.revenue = revenue
+                    updated = True
+                if net_profit is not None and exists.net_profit is None:
+                    exists.net_profit = net_profit
+                    updated = True
+                if eps is not None and exists.eps is None:
+                    exists.eps = eps
+                    updated = True
+                if book_value is not None and exists.book_value is None:
+                    exists.book_value = book_value
+                    updated = True
+                if exists.quarter is None:
+                    exists.quarter = q_name
+                    updated = True
+                if exists.fiscal_period is None:
+                    exists.fiscal_period = f_period
+                    updated = True
+
+                duplicates_skipped += 1
+                continue
+
             record = QuarterlyResult(
                 company_id=company.id,
-                fiscal_period=f"Q{((period_date.month-1)//3)+1}-{period_date.year}",
+                quarter=q_name,
+                fiscal_period=f_period,
                 period_end=period_date,
                 revenue=revenue,
                 net_profit=net_profit,

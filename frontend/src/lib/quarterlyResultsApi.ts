@@ -1,16 +1,24 @@
 // =======================================================
 // Alpha India — Exchange Quarterly Results & PEAD API Client
-// Sprint 34 Production Client
+// Sprint 36.4 — Dual-Feed Intelligence Upgrade
 // =======================================================
 
 import { API_BASE } from "@/lib/apiConfig";
 
 
 export interface PillarBreakdown {
-  earnings_power: number;
-  operating_leverage: number;
-  capital_efficiency: number;
-  trend_drift: number;
+  rank1_operating_leverage?: number;
+  rank2_run_rate_surprise?: number;
+  rank3_pat_velocity?: number;
+  rank4_sales_expansion?: number;
+  rank5_operating_margin?: number;
+  rank6_capital_quality?: number;
+  rank7_freshness_drift?: number;
+  trap_penalties?: number;
+  earnings_power?: number;
+  operating_leverage?: number;
+  capital_efficiency?: number;
+  trend_drift?: number;
 }
 
 export interface QuarterlyResultItem {
@@ -29,6 +37,11 @@ export interface QuarterlyResultItem {
   pdf_url: string | null;
   download_status: string;
   parse_status: string;
+  tradingview_url?: string;
+
+  // Feed classification (Sprint 36.4)
+  feed_type: "RESULT" | "ANNOUNCEMENT";
+  is_pre_announcement: boolean;
 
   // Financial metrics
   revenue: number | null;
@@ -37,21 +50,35 @@ export interface QuarterlyResultItem {
   opm: number | null;
   revenue_growth: number | null;
   pat_growth: number | null;
+  revenue_growth_qoq?: number | null;
+  pat_growth_qoq?: number | null;
   roce: number | null;
   current_price: number | null;
   dma_50: number | null;
 
-  // PEAD Intelligence
+  // Post-results PEAD Intelligence
   pead_score: number;
   pead_tier: string;
   pead_tier_label: string;
   pead_color: string;
   drift_days: string;
   operating_leverage_ratio: number;
+  run_rate_beat_pct?: number | null;
+  is_turnaround?: boolean | null;
   is_pead_candidate: boolean;
   is_elite_pead: boolean;
   pead_thesis: string;
   pillar_breakdown: PillarBreakdown;
+
+  // Pre-announcement Pre-Beat Intelligence (Sprint 36.4)
+  pre_beat_score: number | null;
+  beat_tier: string | null;
+  beat_tier_label: string | null;
+  beat_color: string | null;
+  beat_velocity: string | null;
+  beat_thesis: string | null;
+  beat_count_of_4: number | null;
+  avg_pat_growth_trailing: number | null;
 
   // Athena Omega Intelligence
   athena_conviction_score?: number | null;
@@ -66,6 +93,8 @@ export interface QuarterlyResultsResponse {
   pages: number;
   pead_candidates_count: number;
   elite_pead_count: number;
+  results_count: number;         // Sprint 36.4
+  announcements_count: number;   // Sprint 36.4
   results: QuarterlyResultItem[];
 }
 
@@ -75,6 +104,8 @@ export interface QuarterlySummaryResponse {
   elite_pead: number;
   nse_count: number;
   bse_count: number;
+  results_filings_count: number;        // Sprint 36.4
+  announcements_filings_count: number;  // Sprint 36.4
   latest_discovered_at: string | null;
   available_periods: string[];
   top_pead_pick: {
@@ -85,6 +116,7 @@ export interface QuarterlySummaryResponse {
     pead_score: number;
     pead_tier: string;
     drift_days: string;
+    tradingview_url?: string;
   } | null;
 }
 
@@ -94,6 +126,7 @@ export interface QuarterlyResultsFilters {
   search?: string;
   exchange?: string;
   period?: string;
+  feed_type?: "RESULTS" | "ANNOUNCEMENTS" | "ALL";  // Sprint 36.4
   pead_only?: boolean;
   pead_tier?: string;
   sort_by?: string;
@@ -112,6 +145,8 @@ export async function fetchQuarterlyResults(
     params.set("exchange", filters.exchange);
   if (filters.period && filters.period !== "ALL")
     params.set("period", filters.period);
+  if (filters.feed_type && filters.feed_type !== "ALL")
+    params.set("feed_type", filters.feed_type);
   if (filters.pead_only) params.set("pead_only", "true");
   if (filters.pead_tier && filters.pead_tier !== "ALL")
     params.set("pead_tier", filters.pead_tier);
