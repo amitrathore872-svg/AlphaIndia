@@ -47,19 +47,14 @@ def get_value(row, *columns):
 # -------------------------------------------------------
 # Main Import Function
 # -------------------------------------------------------
+import csv
+
 def import_nse_companies():
     if not CSV_PATH.exists():
-        print(f"❌ CSV not found: {CSV_PATH}")
+        print(f"[ERROR] CSV not found: {CSV_PATH}")
         return
 
-    print("🇮🇳 Loading NSE Master CSV...")
-    df = pd.read_csv(CSV_PATH)
-
-    # Standardize headers
-    df.columns = [c.strip().upper() for c in df.columns]
-
-    print(f"📦 CSV Loaded: {len(df)} companies")
-
+    print("[INFO] Loading NSE Master CSV (streaming)...")
     db: Session = SessionLocal()
 
     inserted = 0
@@ -67,66 +62,71 @@ def import_nse_companies():
     skipped = 0
 
     try:
-        for _, row in df.iterrows():
+        # Pre-fetch existing symbols in one fast query
+        existing_symbols = {row[0].strip().upper(): True for row in db.query(Company.symbol).all() if row[0]}
+        print(f"Current existing symbols in database: {len(existing_symbols)}")
 
-            symbol = get_value(row, "SYMBOL")
+        with open(CSV_PATH, mode="r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            # Normalize fieldnames to uppercase
+            if reader.fieldnames:
+                reader.fieldnames = [fn.strip().upper() for fn in reader.fieldnames]
 
-            if not symbol:
-                skipped += 1
-                continue
+            batch_count = 0
+            for row in reader:
+                symbol = (row.get("SYMBOL") or "").strip().upper()
+                if not symbol:
+                    skipped += 1
+                    continue
 
-            company_name = get_value(
-                row,
-                "NAME OF COMPANY",
-                "COMPANY NAME",
-            )
+                company_name = (row.get("NAME OF COMPANY") or row.get("COMPANY NAME") or symbol).strip()
+                isin = (row.get("ISIN NUMBER") or row.get("ISIN") or "").strip() or None
+                series = (row.get("SERIES") or "EQ").strip() or "EQ"
+                listing_date_raw = (row.get("DATE OF LISTING") or "").strip()
 
-            existing = (
-                db.query(Company)
-                .filter(Company.symbol == symbol)
-                .first()
-            )
+                if symbol in existing_symbols:
+                    # Update status to Active
+                    db.query(Company).filter(Company.symbol == symbol).update(
+                        {"listing_status": "Active", "is_growth_eligible": True}
+                    )
+                    updated += 1
+                else:
+                    payload = {
+                        "symbol": symbol,
+                        "company": company_name,
+                        "isin": isin,
+                        "series": series,
+                        "sector": "Unknown",
+                        "industry": "Unknown",
+                        "market_cap": "Unknown",
+                        "listing_status": "Active",
+                        "is_growth_eligible": True,
+                        "revenue_growth": 0,
+                        "pat_growth": 0,
+                        "roce": 0,
+                        "ai_score": 0,
+                    }
+                    db.add(Company(**payload))
+                    existing_symbols[symbol] = True
+                    inserted += 1
 
-            payload = {
-                "symbol": symbol,
-                "company": company_name,
-                "isin": get_value(row, "ISIN NUMBER", "ISIN"),
-                "series": get_value(row, "SERIES"),
-                "listing_date": get_value(row, "DATE OF LISTING"),
-                # Filled later by Live NSE APIs
-                "sector": "Unknown",
-                "industry": "Unknown",
-                "market_cap": "Unknown",
-                "revenue_growth": 0,
-                "pat_growth": 0,
-                "roce": 0,
-                "ai_score": 0,
-            }
+                batch_count += 1
+                if batch_count % 100 == 0:
+                    db.commit()
 
-            if existing:
-                for key, value in payload.items():
-                    setattr(existing, key, value)
-                updated += 1
-            else:
-                db.add(Company(**payload))
-                inserted += 1
-
-        db.commit()
+            db.commit()
 
         print("\n" + "=" * 60)
-        print("✅ Alpha India NSE Master Import Complete")
+        print("[OK] Alpha India NSE Master Import Complete")
         print("=" * 60)
         print(f"Inserted Companies : {inserted}")
         print(f"Updated Companies  : {updated}")
         print(f"Skipped Rows       : {skipped}")
-        print(f"Total CSV Rows     : {len(df)}")
         print("=" * 60)
 
     except Exception as e:
         db.rollback()
-        print("❌ Import Failed")
-        print(e)
-
+        print(f"[ERROR] Import Failed: {e}")
     finally:
         db.close()
 

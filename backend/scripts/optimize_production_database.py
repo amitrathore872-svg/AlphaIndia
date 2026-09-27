@@ -15,7 +15,7 @@ from sqlalchemy import text
 def optimize_database():
     db = SessionLocal()
     print("=" * 60)
-    print("ALPHA INDIA — DATABASE OPTIMIZATION & CLEANUP")
+    print("ALPHA INDIA - DATABASE OPTIMIZATION & CLEANUP")
     print("=" * 60)
 
     try:
