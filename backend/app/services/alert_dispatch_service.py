@@ -6,7 +6,7 @@ Sprint 34 — Institutional Alerts & Multi-Channel Broadcasting
 import logging
 import urllib.parse
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import requests
 from sqlalchemy.orm import Session
 
