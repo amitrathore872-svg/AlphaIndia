@@ -26,6 +26,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Settings,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -37,6 +40,15 @@ import {
 } from "@/lib/quarterlyResultsApi";
 import TerminalSearch from "@/components/common/TerminalSearch";
 import { ExchangeBadge } from "@/components/common/ExchangeBadge";
+import QuarterlyColumnCustomizerModal from "./QuarterlyColumnCustomizerModal";
+import {
+  ALL_AVAILABLE_COLUMNS,
+  DEFAULT_SCREENER_COLUMN_IDS,
+  loadSavedColumns,
+  saveColumns,
+  resetDefaultColumns,
+  type ColumnDefinition,
+} from "./quarterlyColumnsConfig";
 
 // ---------------------------------------------------------------------------
 // Helpers & Formatters
@@ -85,39 +97,82 @@ function getTradingViewUrl(symbol: string, exchange?: string | null): string {
   return `https://in.tradingview.com/chart/?symbol=${ex}:${encodeURIComponent(cleanSym)}`;
 }
 
-function getPeadTierBadge(tier: string, score?: number) {
+function getPeadTierBadge(
+  tier: string,
+  score?: number,
+  isTechnoFunda?: boolean | null,
+  guardFlags?: string[] | null
+) {
   const scoreTag = score !== undefined ? ` (${score.toFixed(0)})` : "";
+  let baseBadge;
   switch (tier) {
     case "ELITE":
     case "ELITE_PEAD":
-      return (
+      baseBadge = (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300">
           <Zap className="w-2.5 h-2.5 text-emerald-500 dark:text-emerald-400" />
           Elite PEAD{scoreTag}
         </span>
       );
+      break;
     case "STRONG":
     case "STRONG_PEAD":
-      return (
+      baseBadge = (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-300">
           <Sparkles className="w-2.5 h-2.5 text-cyan-500 dark:text-cyan-400" />
           Strong{scoreTag}
         </span>
       );
+      break;
     case "MODERATE":
     case "MODERATE_PEAD":
-      return (
+      baseBadge = (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-300">
           Moderate{scoreTag}
         </span>
       );
+      break;
     default:
-      return (
+      baseBadge = (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400">
           Neutral{scoreTag}
         </span>
       );
+      break;
   }
+
+  // Systematic Failure Protection Badge for Elite / Strong candidates
+  if (isTechnoFunda === false && (tier === "ELITE" || tier === "ELITE_PEAD" || tier === "STRONG" || tier === "STRONG_PEAD")) {
+    return (
+      <div className="inline-flex items-center gap-1.5 flex-wrap">
+        {baseBadge}
+        <span
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/15 border border-rose-500/40 text-rose-500 dark:text-rose-400 cursor-help"
+          title="Techno-Funda Warning: Trading below 50-DMA or High Debt (Exit Liquidity Trap Risk)"
+        >
+          <AlertTriangle className="w-2.5 h-2.5" />
+          Below 50-DMA
+        </span>
+      </div>
+    );
+  }
+
+  if (isTechnoFunda === true && (tier === "ELITE" || tier === "ELITE_PEAD")) {
+    return (
+      <div className="inline-flex items-center gap-1.5 flex-wrap">
+        {baseBadge}
+        <span
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/50 text-emerald-600 dark:text-emerald-300 cursor-help"
+          title="Shield Confirmed: Stage-2 Uptrend (Above 50-DMA) + Solvency Verified"
+        >
+          <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+          Stage-2
+        </span>
+      </div>
+    );
+  }
+
+  return baseBadge;
 }
 
 function SortHeader({
@@ -195,6 +250,154 @@ function getPreBeatBadge(tier: string | null, score: number | null) {
   }
 }
 
+function renderDynamicCell(col: ColumnDefinition, row: QuarterlyResultItem) {
+  const val = (row as any)[col.id];
+
+  if (col.id === "period") {
+    return (
+      <span className="inline-block px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+        {row.period && row.period.toLowerCase() !== "unknown" && row.period.toLowerCase() !== "live_wire"
+          ? row.period
+          : "Q3 FY26"}
+      </span>
+    );
+  }
+
+  if (col.id === "announcement_date") {
+    return (
+      <div className="flex items-center gap-1.5 font-mono text-xs text-slate-700 dark:text-slate-300">
+        <Calendar className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400 shrink-0" />
+        <span className="font-semibold">{formatAnnouncementDate(row.announcement_date)}</span>
+      </div>
+    );
+  }
+
+  if (col.id === "pead_score") {
+    if (row.is_pre_announcement) {
+      return (
+        <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center justify-center min-w-[38px] h-7 rounded-lg font-mono font-black text-xs px-2 shadow-xs ${
+              (row.pre_beat_score ?? 0) >= 80
+                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40"
+                : (row.pre_beat_score ?? 0) >= 65
+                ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
+                : "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40"
+            }`}
+          >
+            {(row.pre_beat_score ?? 0).toFixed(0)}%
+          </div>
+          {getPreBeatBadge(row.beat_tier, row.pre_beat_score)}
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <div
+          className={`flex items-center justify-center min-w-[38px] h-7 rounded-lg font-mono font-black text-xs px-2 shadow-xs ${
+            row.pead_score >= 85
+              ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40"
+              : row.pead_score >= 70
+              ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
+              : row.pead_score >= 55
+              ? "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
+          }`}
+        >
+          {row.pead_score.toFixed(0)}
+        </div>
+        {getPeadTierBadge(row.pead_tier, undefined, row.is_techno_funda_confirmed, row.guard_flags)}
+      </div>
+    );
+  }
+
+  if (col.id === "pead_tier") {
+    return getPeadTierBadge(row.pead_tier, row.pead_score, row.is_techno_funda_confirmed, row.guard_flags);
+  }
+
+  if (col.id === "athena_conviction_grade") {
+    return row.athena_conviction_grade ? (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black font-mono uppercase bg-cyan-100 dark:bg-cyan-950/80 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300"
+        title={`Athena Conviction: ${row.athena_conviction_score}/100`}
+      >
+        <Zap className="w-2.5 h-2.5 text-cyan-500" />
+        {row.athena_conviction_grade} ({row.athena_conviction_score?.toFixed(0)})
+      </span>
+    ) : (
+      <span className="text-slate-400 font-mono text-xs">—</span>
+    );
+  }
+
+  if (col.id === "piotroski_score") {
+    const s = row.piotroski_score;
+    if (s === null || s === undefined) return <span className="text-slate-400 font-mono text-xs">—</span>;
+    return (
+      <span
+        className={`inline-block px-2 py-0.5 rounded font-mono font-bold text-xs ${
+          s >= 7
+            ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30"
+            : s >= 5
+            ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30"
+            : "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30"
+        }`}
+      >
+        {s}/9
+      </span>
+    );
+  }
+
+  if (col.id === "operating_leverage_ratio") {
+    return (
+      <span
+        className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
+          row.operating_leverage_ratio >= 1.5
+            ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30"
+            : row.operating_leverage_ratio > 1.0
+            ? "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15 border border-cyan-500/30"
+            : "text-slate-500 dark:text-slate-400"
+        }`}
+      >
+        {row.operating_leverage_ratio > 0 ? `${row.operating_leverage_ratio}x` : "—"}
+      </span>
+    );
+  }
+
+  if (val === null || val === undefined || (typeof val === "number" && isNaN(val))) {
+    return <span className="text-slate-400 font-mono text-xs">—</span>;
+  }
+
+  switch (col.format) {
+    case "currency_cr":
+      return <span className="font-mono font-bold text-slate-900 dark:text-white">{formatINR(val)}</span>;
+
+    case "currency_rs":
+      return (
+        <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+          ₹{typeof val === "number" ? val.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : val}
+        </span>
+      );
+
+    case "growth_percent":
+      return formatGrowth(val);
+
+    case "percent":
+      return <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{val.toFixed(1)}%</span>;
+
+    case "ratio":
+      return <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{val.toFixed(2)}</span>;
+
+    case "multiple":
+      return <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{val.toFixed(1)}x</span>;
+
+    case "integer":
+      return <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{Math.round(val)}</span>;
+
+    default:
+      return <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{String(val)}</span>;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types & Props
 // ---------------------------------------------------------------------------
@@ -237,6 +440,32 @@ export default function PeadDriftMatrix({
 
   // Selected item for detail inspection drawer
   const [selectedItem, setSelectedItem] = useState<QuarterlyResultItem | null>(null);
+
+  // Column Customizer State & Persistence
+  const [selectedColumnIds, setSelectedColumnIds] = useState<string[]>(DEFAULT_SCREENER_COLUMN_IDS);
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedColumnIds(loadSavedColumns());
+  }, []);
+
+  const handleSaveColumns = (newCols: string[]) => {
+    setSelectedColumnIds(newCols);
+    saveColumns(newCols);
+  };
+
+  const handleResetColumns = () => {
+    const defaults = resetDefaultColumns();
+    setSelectedColumnIds(defaults);
+  };
+
+  const activeColumnDefs = useMemo(() => {
+    const map = new Map<string, ColumnDefinition>();
+    ALL_AVAILABLE_COLUMNS.forEach((c) => map.set(c.id, c));
+    return selectedColumnIds
+      .map((id) => map.get(id))
+      .filter((c): c is ColumnDefinition => c !== undefined);
+  }, [selectedColumnIds]);
 
   // Sync initialSearch if passed
   useEffect(() => {
@@ -331,101 +560,7 @@ export default function PeadDriftMatrix({
   return (
     <div className="space-y-4">
       {/* ================================================================= */}
-      {/* 1. COMPACT KPI STRIP                                              */}
-      {/* ================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Total Filings */}
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-[#07111F]/80 p-3.5 shadow-xs backdrop-blur-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase text-slate-500 dark:text-slate-400 font-semibold">
-              Total Filings
-            </span>
-            <span className="text-[10px] font-mono text-slate-400">Live Wire</span>
-          </div>
-          <p className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1">
-            {summary?.total_filings ? summary.total_filings.toLocaleString() : "—"}
-          </p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            NSE ({summary?.nse_count ?? 0}) · BSE ({summary?.bse_count ?? 0})
-          </p>
-        </div>
-
-        {/* PEAD Candidates */}
-        <div className="rounded-xl border border-cyan-500/20 bg-cyan-50/50 dark:bg-cyan-950/20 p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase text-cyan-700 dark:text-cyan-400 font-semibold">
-              PEAD Candidates
-            </span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-700 dark:text-cyan-300">
-              Drift &gt;25%
-            </span>
-          </div>
-          <p className="text-2xl font-black font-mono text-cyan-800 dark:text-cyan-300 mt-1">
-            {summary?.pead_candidates ? summary.pead_candidates.toLocaleString() : "—"}
-          </p>
-          <p className="text-[11px] text-cyan-700/80 dark:text-cyan-400/80 mt-0.5">
-            {summary?.elite_pead ?? 0} Elite Top-Tier Picks
-          </p>
-        </div>
-
-        {/* Board Meeting Notices */}
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/20 p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase text-emerald-700 dark:text-emerald-400 font-semibold">
-              Board Meetings
-            </span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
-              Pre-Beat
-            </span>
-          </div>
-          <p className="text-2xl font-black font-mono text-emerald-800 dark:text-emerald-300 mt-1">
-            {summary?.announcements_filings_count ?? "—"}
-          </p>
-          <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-            1–3 Day Anticipation Window
-          </p>
-        </div>
-
-        {/* Top Pick */}
-        <div className="rounded-xl border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/20 p-3.5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase text-amber-700 dark:text-amber-400 font-semibold">
-              Top PEAD Pick
-            </span>
-            {summary?.top_pead_pick && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                Score {summary.top_pead_pick.pead_score.toFixed(0)}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <p className="text-xl font-black font-mono text-amber-800 dark:text-amber-300 truncate">
-              {summary?.top_pead_pick?.symbol || "—"}
-            </p>
-            {summary?.top_pead_pick && (
-              <a
-                href={summary.top_pead_pick.tradingview_url || getTradingViewUrl(summary.top_pead_pick.symbol)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 transition-all cursor-pointer shadow-2xs"
-                title={`Open ${summary.top_pead_pick.symbol} Chart on TradingView`}
-              >
-                <TrendingUp className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                <span>TV Chart</span>
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            )}
-          </div>
-          <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 truncate">
-            {summary?.top_pead_pick?.pat_growth != null
-              ? `PAT Growth: +${summary.top_pead_pick.pat_growth.toFixed(0)}% YoY`
-              : "Institutional Leader"}
-          </p>
-        </div>
-      </div>
-
-      {/* ================================================================= */}
-      {/* 2. UNIFIED SINGLE-ROW CONTROL RIBBON                             */}
+      {/* UNIFIED SINGLE-ROW CONTROL RIBBON                                 */}
       {/* ================================================================= */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-[#07111F]/90 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-xs">
         {/* Segmented View Pills */}
@@ -546,6 +681,16 @@ export default function PeadDriftMatrix({
             <RefreshCw className={`w-3 h-3 ${scanning ? "animate-spin" : ""}`} />
             <span>{scanning ? "Scanning..." : "Scan Wire"}</span>
           </button>
+
+          {/* Screener.in Style Edit Columns Button */}
+          <button
+            onClick={() => setIsCustomizerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/50 bg-cyan-50/70 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300 text-xs font-bold uppercase font-mono transition-all cursor-pointer shadow-xs whitespace-nowrap"
+            title="Add, remove or reorder financial columns like Screener.in"
+          >
+            <Settings className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+            <span>EDIT COLUMNS</span>
+          </button>
         </div>
       </div>
 
@@ -557,6 +702,7 @@ export default function PeadDriftMatrix({
           <table className="w-full text-left text-xs border-collapse font-sans">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/90 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono select-none">
+                <th className="py-3 px-2 text-center w-10 text-[11px]">#</th>
                 <th className="py-3 px-3 min-w-[170px]">
                   <SortHeader
                     label="Company / Equities"
@@ -568,87 +714,33 @@ export default function PeadDriftMatrix({
                   />
                 </th>
                 <th className="py-3 px-2 text-center w-14">Exch</th>
-                <th className="py-3 px-2.5 min-w-[85px]">
-                  <SortHeader
-                    label="Period"
-                    column="period"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="left"
-                  />
-                </th>
-                <th className="py-3 px-3 min-w-[130px]">
-                  <SortHeader
-                    label={isAnnouncements ? "Meeting Date" : "Announcement Date"}
-                    column="announcement_date"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="left"
-                  />
-                </th>
-                <th className="py-3 px-3 min-w-[140px]">
-                  <SortHeader
-                    label={isAnnouncements ? "Pre-Beat Score" : "PEAD Score"}
-                    column="pead_score"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="left"
-                  />
-                </th>
-                <th className="py-3 px-3 text-right min-w-[110px]">
-                  <SortHeader
-                    label={isAnnouncements ? "Historical PAT" : "Net Profit & YoY"}
-                    column="net_profit"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                </th>
-                <th className="py-3 px-3 text-right min-w-[105px]">
-                  <SortHeader
-                    label="QoQ Profit"
-                    column="pat_growth_qoq"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                </th>
-                <th className="py-3 px-3 text-right min-w-[110px]">
-                  <SortHeader
-                    label={isAnnouncements ? "Catalyst / Status" : "Revenue & YoY"}
-                    column="revenue"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                </th>
-                <th className="py-3 px-3 text-right min-w-[105px]">
-                  <SortHeader
-                    label="QoQ Sales"
-                    column="revenue_growth_qoq"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                </th>
-                <th className="py-3 px-2 text-center min-w-[90px]">
-                  {isAnnouncements ? "Beat Track" : "Op. Leverage"}
-                </th>
-                <th className="py-3 px-2 text-center min-w-[100px]">Athena Conviction</th>
+
+                {/* Dynamically configured financial columns */}
+                {activeColumnDefs.map((col) => (
+                  <th
+                    key={col.id}
+                    className={`py-3 px-3 min-w-[${col.minWidth || "95px"}] ${
+                      col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
+                    }`}
+                  >
+                    <SortHeader
+                      label={col.shortLabel}
+                      column={col.sortKey}
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      align={col.align}
+                    />
+                  </th>
+                ))}
+
                 <th className="py-3 px-3 text-center min-w-[80px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="py-14 text-center text-slate-400">
+                  <td colSpan={activeColumnDefs.length + 4} className="py-14 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-5 h-5 text-cyan-500 animate-spin" />
                       <span className="text-xs font-mono">
@@ -661,7 +753,7 @@ export default function PeadDriftMatrix({
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-16 text-center text-slate-400">
+                  <td colSpan={activeColumnDefs.length + 4} className="py-16 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       {isAnnouncements ? (
                         <CalendarClock className="w-8 h-8 text-slate-500" />
@@ -680,8 +772,9 @@ export default function PeadDriftMatrix({
                   </td>
                 </tr>
               ) : (
-                items.map((row) => {
+                items.map((row, idx) => {
                   const isSelected = selectedItem?.id === row.id;
+                  const rowNumber = (page - 1) * limit + idx + 1;
                   return (
                     <tr
                       key={`${row.id}-${row.symbol}`}
@@ -690,6 +783,11 @@ export default function PeadDriftMatrix({
                         isSelected ? "bg-cyan-50/50 dark:bg-cyan-950/30 border-l-2 border-cyan-500" : ""
                       }`}
                     >
+                      {/* S.No. */}
+                      <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px] font-semibold w-10">
+                        {rowNumber}.
+                      </td>
+
                       {/* Company & Symbol */}
                       <td className="py-2.5 px-3">
                         <div className="flex flex-col">
@@ -730,198 +828,19 @@ export default function PeadDriftMatrix({
                         <ExchangeBadge exchange={row.exchange} />
                       </td>
 
-                      {/* Period */}
-                      <td className="py-2.5 px-2.5 font-mono">
-                        <span className="inline-block px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                          {row.period && row.period.toLowerCase() !== "unknown" && row.period.toLowerCase() !== "live_wire"
-                            ? row.period
-                            : "Q1 FY27"}
-                        </span>
-                      </td>
+                      {/* Dynamic Columns configured by User */}
+                      {activeColumnDefs.map((col) => (
+                        <td
+                          key={col.id}
+                          className={`py-2.5 px-3 font-mono text-xs ${
+                            col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
+                          }`}
+                        >
+                          {renderDynamicCell(col, row)}
+                        </td>
+                      ))}
 
-                      {/* Announcement Date (Dedicated Column) */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 font-mono text-xs text-slate-700 dark:text-slate-300">
-                          <Calendar className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400 shrink-0" />
-                          <span className="font-semibold">{formatAnnouncementDate(row.announcement_date)}</span>
-                        </div>
-                      </td>
-
-                      {/* PEAD Score (Dedicated Column) */}
-                      <td className="py-2.5 px-3">
-                        {isAnnouncements ? (
-                          <div className="flex items-center gap-2">
-                            <div className={`flex items-center justify-center min-w-[42px] h-7 rounded-lg font-mono font-black text-xs px-2 shadow-xs ${
-                              (row.pre_beat_score ?? 0) >= 80
-                                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40"
-                                : (row.pre_beat_score ?? 0) >= 65
-                                ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
-                                : "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40"
-                            }`}>
-                              {(row.pre_beat_score ?? 0).toFixed(0)}%
-                            </div>
-                            <div className="flex flex-col">
-                              {getPreBeatBadge(row.beat_tier, row.pre_beat_score)}
-                              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400/80 mt-0.5">
-                                Anticipation window
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <div className={`flex items-center justify-center min-w-[38px] h-7 rounded-lg font-mono font-black text-xs px-2 shadow-xs ${
-                              row.pead_score >= 85
-                                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40"
-                                : row.pead_score >= 70
-                                ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
-                                : row.pead_score >= 55
-                                ? "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40"
-                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
-                            }`}>
-                              {row.pead_score.toFixed(0)}
-                            </div>
-                            <div className="flex flex-col">
-                              {getPeadTierBadge(row.pead_tier)}
-                              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-0.5">
-                                {row.drift_days}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Column 5: Net Profit & YoY */}
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {isAnnouncements ? (
-                          <div className="flex flex-col items-end">
-                            {formatGrowth(row.avg_pat_growth_trailing)}
-                            <span className="text-[10px] text-slate-500">Trailing Avg</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-end">
-                            <span className="font-bold text-slate-900 dark:text-white">
-                              {formatINR(row.net_profit)}
-                            </span>
-                            {formatGrowth(row.pat_growth)}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Column 6: QoQ Profit (Dedicated Column) */}
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {isAnnouncements ? (
-                          <span className="text-slate-500 text-xs">—</span>
-                        ) : (
-                          <div className="flex flex-col items-end">
-                            {row.pat_growth_qoq !== undefined && row.pat_growth_qoq !== null ? (
-                              <span
-                                className={`font-black font-mono text-xs ${
-                                  row.pat_growth_qoq > 0
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : row.pat_growth_qoq < 0
-                                    ? "text-rose-600 dark:text-rose-400"
-                                    : "text-slate-400"
-                                }`}
-                              >
-                                {row.pat_growth_qoq > 0 ? "+" : ""}
-                                {row.pat_growth_qoq.toFixed(1)}%
-                              </span>
-                            ) : (
-                              <span className="text-slate-500 text-xs">—</span>
-                            )}
-                            {row.run_rate_beat_pct !== undefined && row.run_rate_beat_pct !== null && row.run_rate_beat_pct >= 10 && (
-                              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black uppercase font-mono tracking-wider bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300 mt-0.5">
-                                +{row.run_rate_beat_pct.toFixed(0)}% Beat
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Column 7: Revenue & YoY */}
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {isAnnouncements ? (
-                          <div className="flex flex-col items-end">
-                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold truncate max-w-[130px]">
-                              {row.beat_velocity || "Results Meeting"}
-                            </span>
-                            <span className="text-[10px] text-slate-500">Scheduled</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-end">
-                            <span className="font-bold text-slate-700 dark:text-slate-300">
-                              {formatINR(row.revenue)}
-                            </span>
-                            {formatGrowth(row.revenue_growth)}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Column 8: QoQ Sales (Dedicated Column) */}
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {isAnnouncements ? (
-                          <span className="text-slate-500 text-xs">—</span>
-                        ) : row.revenue_growth_qoq !== undefined && row.revenue_growth_qoq !== null ? (
-                          <span
-                            className={`font-black font-mono text-xs ${
-                              row.revenue_growth_qoq > 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : row.revenue_growth_qoq < 0
-                                ? "text-rose-600 dark:text-rose-400"
-                                : "text-slate-400"
-                            }`}
-                          >
-                            {row.revenue_growth_qoq > 0 ? "+" : ""}
-                            {row.revenue_growth_qoq.toFixed(1)}%
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 text-xs">—</span>
-                        )}
-                      </td>
-
-                      {/* Column 7: Leverage / Consistency */}
-                      <td className="py-2.5 px-2 text-center font-mono">
-                        {isAnnouncements ? (
-                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            {row.beat_count_of_4 ?? 0}/4 Beats
-                          </span>
-                        ) : row.is_turnaround ? (
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase font-mono tracking-wider bg-purple-500/15 border border-purple-500/40 text-purple-600 dark:text-purple-300">
-                            Turnaround
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
-                              row.operating_leverage_ratio >= 1.5
-                                ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30"
-                                : row.operating_leverage_ratio > 1.0
-                                ? "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15 border border-cyan-500/30"
-                                : "text-slate-500 dark:text-slate-400"
-                            }`}
-                          >
-                            {row.operating_leverage_ratio > 0
-                              ? `${row.operating_leverage_ratio}x Op.Lev`
-                              : "—"}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Column 8: Athena Conviction */}
-                      <td className="py-2.5 px-2 text-center">
-                        {row.athena_conviction_grade ? (
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black font-mono uppercase bg-cyan-100 dark:bg-cyan-950/80 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300"
-                            title={`Athena Conviction: ${row.athena_conviction_score}/100`}
-                          >
-                            <Zap className="w-2.5 h-2.5 text-cyan-500" />
-                            {row.athena_conviction_grade} ({row.athena_conviction_score?.toFixed(0)})
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-mono text-xs">—</span>
-                        )}
-                      </td>
-
-                      {/* Column 9: Actions */}
+                      {/* Actions */}
                       <td className="py-2.5 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -964,6 +883,49 @@ export default function PeadDriftMatrix({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Detailed Peer Comparison Search (Screener.in style) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-[#07111F] text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-700 dark:text-slate-300">Detailed Comparison with:</span>
+            <div className="relative w-48 sm:w-64">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="eg. Infosys, TCS, HCL..."
+                className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 font-mono shadow-2xs"
+              />
+              {search && (
+                <button
+                  onClick={() => {
+                    setSearch("");
+                    setPage(1);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500">
+              Showing {activeColumnDefs.length} custom columns
+            </span>
+            <button
+              onClick={() => setIsCustomizerOpen(true)}
+              className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <Settings className="w-3 h-3" />
+              <span>Modify Columns</span>
+            </button>
+          </div>
         </div>
 
         {/* Pagination Bar */}
@@ -1018,7 +980,7 @@ export default function PeadDriftMatrix({
                   <ExchangeBadge exchange={selectedItem.exchange} />
                   {selectedItem.is_pre_announcement
                     ? getPreBeatBadge(selectedItem.beat_tier, selectedItem.pre_beat_score)
-                    : getPeadTierBadge(selectedItem.pead_tier, selectedItem.pead_score)}
+                    : getPeadTierBadge(selectedItem.pead_tier, selectedItem.pead_score, selectedItem.is_techno_funda_confirmed, selectedItem.guard_flags)}
                   <span
                     className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase border ${
                       selectedItem.is_pre_announcement
@@ -1239,6 +1201,15 @@ export default function PeadDriftMatrix({
           </div>
         </div>
       )}
+
+      {/* Screener.in Style Column Customizer Modal */}
+      <QuarterlyColumnCustomizerModal
+        isOpen={isCustomizerOpen}
+        onClose={() => setIsCustomizerOpen(false)}
+        selectedColumnIds={selectedColumnIds}
+        onSave={handleSaveColumns}
+        onResetDefaults={handleResetColumns}
+      />
     </div>
   );
 }

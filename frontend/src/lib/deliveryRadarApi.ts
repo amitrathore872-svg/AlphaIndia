@@ -8,11 +8,13 @@ import { fetchJson } from "@/lib/apiConfig";
 export interface TradeBlueprint {
   entry_price: number;
   stop_loss: number;
+  breakeven_trigger: number;
   target_1: number;
   target_2: number;
   risk_pct: number;
   reward_pct: number;
   rr_ratio: string;
+  win_rate_expectation?: string;
   recommended_slot_allocation: string;
   holding_horizon: string;
   trail_rule: string;
@@ -28,14 +30,17 @@ export interface DeliveryOpportunity {
   turnover_cr: number;
   delivery_per: number;
   delivery_spike_x: number;
+  deliv_flow_20d: number;
+  dist_to_ema20_pct: number;
+  close_location: number;
   vol_dryup_ratio: number;
   rsi_14: number;
   "50d_high": number;
   pivot_distance_pct: number;
   is_50d_breakout: boolean;
-  setup_type: "50D_BREAKOUT" | "NEAR_PIVOT_BASE";
+  setup_type: "50D_BREAKOUT" | "EMA20_PULLBACK" | "NEAR_PIVOT_BASE";
   conviction_score: number;
-  conviction_tier: "ELITE_ACCUMULATION" | "HIGH_CONVICTION" | "DEVELOPING_SETUP";
+  conviction_tier: "APEX_SNIPER" | "ACTIVE_SWING" | "BASE_ACCUMULATION" | string;
   blueprint: TradeBlueprint;
 }
 
@@ -43,15 +48,21 @@ export interface DeliveryRadarMetadata {
   latest_session_date: string;
   total_scanned_symbols: number;
   qualifying_setups_count: number;
-  elite_setups_count: number;
+  apex_sniper_count?: number;
+  active_swing_count?: number;
+  base_accumulation_count?: number;
   confirmed_breakouts_count: number;
+  ema_pullback_count?: number;
   near_pivot_count: number;
   scan_duration_seconds: number;
   backtest_proven_stats: {
+    win_rate_apex?: string;
+    win_rate_swing?: string;
     profit_factor: number;
     cagr_2y: number;
     max_drawdown: number;
-    sharpe: number;
+    be_lock_efficiency?: string;
+    sharpe?: number;
     risk_reward: string;
   };
 }
@@ -71,6 +82,7 @@ export interface DeliveryOpportunitiesParams {
   min_deliv_per?: number;
   search?: string;
   sector?: string;
+  tier?: string;
   setup_type?: string;
   min_conviction?: number;
   sort_by?: string;
@@ -88,6 +100,7 @@ export async function fetchDeliveryOpportunities(
   if (params.min_deliv_per !== undefined) query.append("min_deliv_per", String(params.min_deliv_per));
   if (params.search) query.append("search", params.search);
   if (params.sector) query.append("sector", params.sector);
+  if (params.tier) query.append("tier", params.tier);
   if (params.setup_type) query.append("setup_type", params.setup_type);
   if (params.min_conviction !== undefined) query.append("min_conviction", String(params.min_conviction));
   if (params.sort_by) query.append("sort_by", params.sort_by);
@@ -95,7 +108,10 @@ export async function fetchDeliveryOpportunities(
   if (params.page) query.append("page", String(params.page));
   if (params.limit) query.append("limit", String(params.limit));
 
-  return fetchJson<DeliveryOpportunitiesResponse>(`/api/v1/delivery-radar/opportunities?${query.toString()}`);
+  return fetchJson<DeliveryOpportunitiesResponse>(
+    `/api/v1/delivery-radar/opportunities?${query.toString()}`,
+    { timeoutMs: 35000 }
+  );
 }
 
 export async function triggerDeliveryScan(
@@ -106,9 +122,14 @@ export async function triggerDeliveryScan(
   if (params.min_spike) query.append("min_spike", String(params.min_spike));
   if (params.min_deliv_per) query.append("min_deliv_per", String(params.min_deliv_per));
 
-  return fetchJson(`/api/v1/delivery-radar/scan?${query.toString()}`, { method: "POST" });
+  return fetchJson(`/api/v1/delivery-radar/scan?${query.toString()}`, {
+    method: "POST",
+    timeoutMs: 35000,
+  });
 }
 
 export async function fetchDeliveryStats(): Promise<DeliveryRadarMetadata> {
-  return fetchJson<DeliveryRadarMetadata>("/api/v1/delivery-radar/stats");
+  return fetchJson<DeliveryRadarMetadata>("/api/v1/delivery-radar/stats", {
+    timeoutMs: 35000,
+  });
 }

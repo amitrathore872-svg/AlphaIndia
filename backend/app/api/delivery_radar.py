@@ -17,13 +17,14 @@ router = APIRouter(
 @router.get("/opportunities", summary="Get Institutional Delivery Breakout Opportunities")
 def get_delivery_opportunities(
     lookback_sessions: int = Query(1, ge=1, le=10, description="Number of recent market sessions to scan (1 = latest session)"),
-    min_spike: float = Query(2.5, ge=1.0, description="Minimum delivery volume multiplier (e.g. 2.5x 10-day SMA)"),
-    min_deliv_per: float = Query(65.0, ge=30.0, le=100.0, description="Minimum delivery percentage (e.g. 65%)"),
+    min_spike: float = Query(1.6, ge=1.0, description="Minimum delivery volume multiplier (e.g. 1.6x 10-day SMA)"),
+    min_deliv_per: float = Query(55.0, ge=30.0, le=100.0, description="Minimum delivery percentage (e.g. 55%)"),
     search: Optional[str] = Query(None, description="Search symbol or company name"),
     sector: Optional[str] = Query(None, description="Filter by sector name"),
-    setup_type: Optional[str] = Query("ALL", description="ALL, 50D_BREAKOUT, NEAR_PIVOT_BASE"),
+    tier: Optional[str] = Query("ALL", description="ALL, APEX_SNIPER, ACTIVE_SWING, BASE_ACCUMULATION"),
+    setup_type: Optional[str] = Query("ALL", description="ALL, 50D_BREAKOUT, EMA20_PULLBACK, NEAR_PIVOT_BASE"),
     min_conviction: Optional[float] = Query(None, description="Minimum conviction score (0 - 100)"),
-    sort_by: str = Query("conviction_score", description="conviction_score, delivery_per, delivery_spike_x, current_price, day_change_pct"),
+    sort_by: str = Query("conviction_score", description="conviction_score, delivery_per, delivery_spike_x, current_price, day_change_pct, turnover_cr, deliv_flow_20d"),
     sort_order: str = Query("desc", description="asc or desc"),
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
@@ -49,17 +50,21 @@ def get_delivery_opportunities(
     if sector and sector.upper() != "ALL":
         items = [x for x in items if x.get("sector", "").lower() == sector.lower()]
 
-    # 3. Setup type filter
-    if setup_type and setup_type.upper() != "ALL":
-        items = [x for x in items if x["setup_type"] == setup_type.upper()]
+    # 3. Tier filter
+    if tier and tier.upper() != "ALL":
+        items = [x for x in items if x.get("conviction_tier", "").upper() == tier.upper()]
 
-    # 4. Conviction filter
+    # 4. Setup type filter
+    if setup_type and setup_type.upper() != "ALL":
+        items = [x for x in items if x.get("setup_type", "").upper() == setup_type.upper()]
+
+    # 5. Conviction filter
     if min_conviction is not None:
         items = [x for x in items if x["conviction_score"] >= min_conviction]
 
-    # 5. Sorting
+    # 6. Sorting
     reverse_sort = (sort_order.lower() == "desc")
-    if sort_by in ["conviction_score", "delivery_per", "delivery_spike_x", "current_price", "day_change_pct", "turnover_cr"]:
+    if sort_by in ["conviction_score", "delivery_per", "delivery_spike_x", "current_price", "day_change_pct", "turnover_cr", "deliv_flow_20d"]:
         items.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse_sort)
 
     total_count = len(items)
@@ -80,8 +85,8 @@ def get_delivery_opportunities(
 @router.post("/scan", summary="Trigger Fresh Delivery Scan")
 def trigger_fresh_scan(
     lookback_sessions: int = Query(1, ge=1, le=10),
-    min_spike: float = Query(2.5, ge=1.0),
-    min_deliv_per: float = Query(65.0, ge=30.0),
+    min_spike: float = Query(1.6, ge=1.0),
+    min_deliv_per: float = Query(55.0, ge=30.0),
 ) -> Dict[str, Any]:
     """Forces recalculation of the latest delivery breakouts."""
     raw_data = DeliveryScreenerService.scan_opportunities(

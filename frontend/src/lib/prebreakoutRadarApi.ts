@@ -109,16 +109,20 @@ export async function fetchPrebreakoutOpportunities(
   if (params.limit !== undefined) query.set("limit", String(params.limit));
 
   return fetchJson<PreBreakoutResponse>(
-    `/api/v1/pre-breakout-radar?${query.toString()}`
+    `/api/v1/pre-breakout-radar?${query.toString()}`,
+    { timeoutMs: 35000 }
   );
 }
 
 export async function triggerPrebreakoutScan(): Promise<any> {
   return fetchJson(`/api/v1/pre-breakout-radar/scan`, {
     method: "POST",
+    timeoutMs: 35000,
   });
 }
 
 export async function fetchPrebreakoutFilterOptions(): Promise<PrebreakoutFilterOptionsResponse> {
-  return fetchJson<PrebreakoutFilterOptionsResponse>(`/api/v1/pre-breakout-radar/filters`);
+  return fetchJson<PrebreakoutFilterOptionsResponse>(`/api/v1/pre-breakout-radar/filters`, {
+    timeoutMs: 35000,
+  });
 }

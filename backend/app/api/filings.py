@@ -5,19 +5,12 @@ Sprint 28.3A
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.models.filing_registry import FilingRegistry
 
 router = APIRouter(prefix="/filings", tags=["Filings"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.get("/company/{symbol}")
@@ -49,30 +42,16 @@ def company_filings(symbol: str, db: Session = Depends(get_db)):
 
 @router.get("/summary")
 def filing_summary(db: Session = Depends(get_db)):
-
-    total = db.query(FilingRegistry).count()
-
-    downloaded = (
-        db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "DOWNLOADED")
-        .count()
-    )
-
-    parsed = (
-        db.query(FilingRegistry)
-        .filter(FilingRegistry.parse_status == "COMPLETED")
-        .count()
-    )
-
-    pending = (
-        db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "PENDING")
-        .count()
-    )
+    stats = db.query(
+        func.count(FilingRegistry.id).label("total"),
+        func.count().filter(FilingRegistry.download_status == "DOWNLOADED").label("downloaded"),
+        func.count().filter(FilingRegistry.parse_status == "COMPLETED").label("parsed"),
+        func.count().filter(FilingRegistry.download_status == "PENDING").label("pending"),
+    ).one()
 
     return {
-        "total_filings": total,
-        "pending_downloads": pending,
-        "downloaded": downloaded,
-        "parsed": parsed,
+        "total_filings": stats.total or 0,
+        "pending_downloads": stats.pending or 0,
+        "downloaded": stats.downloaded or 0,
+        "parsed": stats.parsed or 0,
     }

@@ -7,7 +7,7 @@ Version: v0.9.6-dev
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
 
@@ -19,9 +19,6 @@ from app.services.financial_queue_manager import FinancialQueueManager
 from app.services.financial_progress_service import FinancialProgressService
 from app.services.financial_import_engine import FinancialImportEngine
 from app.services.financial_audit_service import FinancialAuditService
-from app.services.financial_audit_engine import FinancialAuditEngine
-
-# NEW — Sprint 32.7.2
 from app.services.financial_audit_backfill_engine import (
     FinancialAuditBackfillEngine,
 )
@@ -30,17 +27,6 @@ router = APIRouter(
     prefix="/financials",
     tags=["Financial Warehouse"],
 )
-
-
-# ==========================================================
-# Database Dependency
-# ==========================================================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # ==========================================================
@@ -246,7 +232,7 @@ def start_audit_engine(
             detail="batch_size must be between 1 and 500",
         )
 
-    return FinancialAuditEngine.start(
+    return FinancialAuditBackfillEngine.start(
         batch_size=batch_size,
         sleep_seconds=sleep_seconds,
     )
@@ -258,7 +244,7 @@ def start_audit_engine(
 @router.get("/audit/engine/status")
 def audit_engine_status(db: Session = Depends(get_db)):
     return {
-        "engine": FinancialAuditEngine.status(),
+        "engine": FinancialAuditBackfillEngine.status(),
         "audit_summary": FinancialAuditService.audit_summary(db),
         "warehouse": FinancialAuditService.warehouse_summary(db),
     }
@@ -269,7 +255,7 @@ def audit_engine_status(db: Session = Depends(get_db)):
 # ==========================================================
 @router.post("/audit/engine/stop")
 def stop_audit_engine():
-    return FinancialAuditEngine.stop()
+    return FinancialAuditBackfillEngine.stop()
 
 
 # ==========================================================

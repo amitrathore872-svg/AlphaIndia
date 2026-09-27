@@ -6,7 +6,7 @@ Exposes endpoints for querying high-alpha corporate announcements, AI growth ins
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import desc, asc, func, or_
 from sqlalchemy.orm import Session
 
@@ -85,9 +85,7 @@ class AnnouncementOut(BaseModel):
     order_client_counterparty:  Optional[str] = None
     order_historical_comparison: Optional[str] = None
     order_intelligence:         Optional[dict] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AnnouncementStatsOut(BaseModel):
@@ -124,6 +122,9 @@ def get_announcements_radar(
     recommendation:     Optional[str] = Query(default=None, description="STRONG_BUY | TACTICAL_BUY | ACCUMULATE | WATCHLIST_ONLY"),
     velocity:           Optional[str] = Query(default=None, description="FAST_UNDER_30D | SWING_30_60D | CYCLE_60_120D | 10-25 | 15-35 | 20-50 | 30-65 | 40-75 | 60-120"),
     order_tier:         Optional[str] = Query(default=None, description="TRANSFORMATIONAL | HIGH_IMPACT | MODERATE | ROUTINE"),
+    deal_value_min:     Optional[float] = Query(default=None, description="Min deal value in ₹ Cr"),
+    deal_value_max:     Optional[float] = Query(default=None, description="Max deal value in ₹ Cr"),
+    rev_pct_min:        Optional[float] = Query(default=None, description="Min revenue contribution % of TTM sales"),
     feed_source:        Optional[str] = Query(default=None, description="ALL | POLL_WIRE | CATALYST"),
     category:           Optional[str] = Query(default=None, description="Raw category filter"),
     search:             Optional[str] = Query(default=None, description="Search company name, symbol or headline"),
@@ -226,6 +227,15 @@ def get_announcements_radar(
             query = query.filter(AnnouncementRadar.order_significance_tier == tier_list[0])
         elif len(tier_list) > 1:
             query = query.filter(AnnouncementRadar.order_significance_tier.in_(tier_list))
+
+    if deal_value_min is not None:
+        query = query.filter(AnnouncementRadar.deal_value_cr >= deal_value_min)
+
+    if deal_value_max is not None:
+        query = query.filter(AnnouncementRadar.deal_value_cr <= deal_value_max)
+
+    if rev_pct_min is not None:
+        query = query.filter(AnnouncementRadar.synergy_rev_pct_ttm >= rev_pct_min)
 
     if listed_only:
         query = query.filter(AnnouncementRadar.is_listed.is_(True))
@@ -523,6 +533,167 @@ def analyze_single_order_win(announcement_id: int, db: Session = Depends(get_db)
     db.commit()
     db.refresh(ann)
     return ann
+
+
+@router.get("/order-wins/cumulative-backlog")
+def get_cumulative_order_books(
+    min_deal_cr: Optional[float] = Query(default=None, description="Min cumulative deal value in ₹ Cr"),
+    min_book_to_bill: Optional[float] = Query(default=None, description="Min Book-to-Bill multiple vs TTM sales (e.g. 0.5)"),
+    order_velocity: Optional[str] = Query(default=None, description="ALL | SURGING_30D | ACCELERATING | ESTABLISHED"),
+    strength_tier: Optional[str] = Query(default=None, description="ALL | TRANSFORMATIONAL_SURGE | HIGH_VISIBILITY | EXPANDING_BACKLOG | STEADY_REPLENISHMENT"),
+    sovereign_only: bool = Query(default=False, description="Filter only companies with sovereign / PSU client backing"),
+    search: Optional[str] = Query(default=None, description="Search symbol, company name or counterparty"),
+    sort_by: str = Query(default="total_deal_cr", description="total_deal_cr | book_to_bill_multiple | order_count | latest_order_date | total_quarterly_run_rate_cr"),
+    sort_order: str = Query(default="desc", description="desc | asc"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=30, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns company-level aggregated order backlog strength, Book-to-Bill coverage,
+    order intake velocity, and sovereign backing across all listed equities.
+    """
+    from app.services.order_win_intelligence_service import OrderWinIntelligenceService
+    return OrderWinIntelligenceService.get_cumulative_order_books(
+        db=db,
+        min_deal_cr=min_deal_cr,
+        min_book_to_bill=min_book_to_bill,
+        order_velocity=order_velocity,
+        strength_tier=strength_tier,
+        sovereign_only=sovereign_only,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/order-wins/analytics")
+def get_order_wins_analytics(db: Session = Depends(get_db)):
+    """
+    Returns aggregate institutional intelligence & impact analytics across all verified Order Wins.
+    """
+    base_query = db.query(AnnouncementRadar).filter(
+        (AnnouncementRadar.catalyst_type == "ORDER_WIN") |
+        (AnnouncementRadar.order_significance_score.isnot(None))
+    )
+
+    total_orders = base_query.count()
+
+    # Financial metrics aggregates
+    total_deal_value_cr = db.query(func.sum(AnnouncementRadar.deal_value_cr)).filter(
+        (AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))
+    ).scalar() or 0.0
+
+    total_quarterly_run_rate_cr = db.query(func.sum(AnnouncementRadar.order_quarterly_rev_cr)).filter(
+        (AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))
+    ).scalar() or 0.0
+
+    total_annualized_pat_cr = db.query(func.sum(AnnouncementRadar.order_earnings_impact_cr)).filter(
+        (AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))
+    ).scalar() or 0.0
+
+    avg_rev_pct = db.query(func.avg(AnnouncementRadar.synergy_rev_pct_ttm)).filter(
+        ((AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))),
+        AnnouncementRadar.synergy_rev_pct_ttm.isnot(None)
+    ).scalar() or 0.0
+
+    avg_months = db.query(func.avg(AnnouncementRadar.order_execution_months)).filter(
+        ((AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))),
+        AnnouncementRadar.order_execution_months.isnot(None)
+    ).scalar() or 18.0
+
+    # By Tier
+    tier_rows = db.query(
+        AnnouncementRadar.order_significance_tier,
+        func.count(AnnouncementRadar.id),
+        func.sum(func.coalesce(AnnouncementRadar.deal_value_cr, 0.0)),
+        func.avg(func.coalesce(AnnouncementRadar.order_significance_score, 0.0))
+    ).filter(
+        (AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))
+    ).group_by(AnnouncementRadar.order_significance_tier).all()
+
+    by_tier = {}
+    for t, count, deal_sum, avg_score in tier_rows:
+        key = t or "UNCLASSIFIED"
+        by_tier[key] = {
+            "count": count,
+            "total_deal_cr": round(float(deal_sum or 0), 1),
+            "avg_score": round(float(avg_score or 0), 1),
+        }
+
+    # Top counterparties
+    counterparty_rows = db.query(
+        AnnouncementRadar.order_client_counterparty,
+        func.count(AnnouncementRadar.id),
+        func.sum(func.coalesce(AnnouncementRadar.deal_value_cr, 0.0))
+    ).filter(
+        ((AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None))),
+        AnnouncementRadar.order_client_counterparty.isnot(None),
+        AnnouncementRadar.order_client_counterparty != ""
+    ).group_by(AnnouncementRadar.order_client_counterparty).order_by(
+        desc(func.sum(func.coalesce(AnnouncementRadar.deal_value_cr, 0.0)))
+    ).limit(8).all()
+
+    top_counterparties = [
+        {
+            "counterparty": r[0],
+            "order_count": r[1],
+            "total_deal_cr": round(float(r[2] or 0), 1)
+        }
+        for r in counterparty_rows
+    ]
+
+    # Largest Deals
+    largest_deal_rows = base_query.filter(
+        AnnouncementRadar.deal_value_cr.isnot(None)
+    ).order_by(desc(AnnouncementRadar.deal_value_cr)).limit(6).all()
+
+    largest_deals = [
+        {
+            "id": d.id,
+            "symbol": d.symbol,
+            "company_name": d.company_name,
+            "deal_value_cr": d.deal_value_cr,
+            "rev_pct_ttm": d.synergy_rev_pct_ttm,
+            "counterparty": d.order_client_counterparty,
+            "tier": d.order_significance_tier,
+            "date": (d.announcement_date or d.published_at).isoformat() if (d.announcement_date or d.published_at) else None
+        }
+        for d in largest_deal_rows
+    ]
+
+    # Highest Revenue Lifts (% of TTM)
+    highest_lift_rows = base_query.filter(
+        AnnouncementRadar.synergy_rev_pct_ttm.isnot(None)
+    ).order_by(desc(AnnouncementRadar.synergy_rev_pct_ttm)).limit(6).all()
+
+    highest_revenue_lifts = [
+        {
+            "id": d.id,
+            "symbol": d.symbol,
+            "company_name": d.company_name,
+            "deal_value_cr": d.deal_value_cr,
+            "rev_pct_ttm": d.synergy_rev_pct_ttm,
+            "tier": d.order_significance_tier,
+            "date": (d.announcement_date or d.published_at).isoformat() if (d.announcement_date or d.published_at) else None
+        }
+        for d in highest_lift_rows
+    ]
+
+    return {
+        "total_orders": total_orders,
+        "total_order_value_cr": round(float(total_deal_value_cr), 1),
+        "total_quarterly_run_rate_cr": round(float(total_quarterly_run_rate_cr), 1),
+        "total_annualized_pat_cr": round(float(total_annualized_pat_cr), 1),
+        "avg_revenue_pct_ttm": round(float(avg_rev_pct), 1),
+        "avg_execution_months": round(float(avg_months), 1),
+        "by_tier": by_tier,
+        "top_counterparties": top_counterparties,
+        "largest_deals": largest_deals,
+        "highest_revenue_lifts": highest_revenue_lifts,
+    }
 
 
 @router.get("/{announcement_id}", response_model=AnnouncementOut)

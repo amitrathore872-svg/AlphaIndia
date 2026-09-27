@@ -370,6 +370,8 @@ class LiveExchangeWireWorker:
             recommendation = "TACTICAL_BUY"
             conviction = 85.0
 
+        ai_insight = None
+        buy_thesis = None
         order_intel = None
         if cat_type == "ORDER_WIN" or OrderWinIntelligenceService.is_order_win_filing(headline):
             cat_type = "ORDER_WIN"
@@ -543,5 +545,13 @@ class LiveExchangeWireWorker:
             })
         except Exception as ws_err:
             logger.debug(f"[LiveExchangeWireWorker] WebSocket dispatch notice: {ws_err}")
+
+        # Real-time Multi-Channel Alert Dispatch for High-Impact Order Wins
+        if cat_type == "ORDER_WIN" and order_intel and order_intel.get("order_significance_score", 0) >= 65.0:
+            try:
+                from app.services.opportunity_alert_service import OpportunityAlertService
+                OpportunityAlertService.scan_order_win_radar_alerts(db)
+            except Exception as alert_err:
+                logger.error(f"[LiveExchangeWireWorker] Auto alert dispatch error for {sym}: {alert_err}")
 
         return True

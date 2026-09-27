@@ -6,7 +6,7 @@ Sprint 34 — Institutional Notification Engine
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, JSON, ForeignKey
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class SystemNotification(Base):
@@ -25,7 +25,7 @@ class SystemNotification(Base):
     metadata_json = Column(JSON, nullable=True)                 # Structured payload e.g. symbol, conviction, score, pivot_price
     is_read = Column(Boolean, default=False, index=True)
     is_archived = Column(Boolean, default=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)
 
     def to_dict(self):
         return {
@@ -67,7 +67,7 @@ class AlertChannelConfig(Base):
     # e.g. { "pead_min_conviction": 80, "catalyst_min_cr": 1000, "growth_min_pat_pct": 50, "vcp_min_score": 90, "vcp_enabled": true, "auto_broadcast": true }
     auto_rules = Column(JSON, nullable=True)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self, mask_secrets: bool = True):
         token_masked = None
@@ -105,7 +105,7 @@ class AlertDispatchLog(Base):
     payload_preview = Column(Text, nullable=False)
     status = Column(String(20), default="SENT", index=True)    # SUCCESS, FAILED, SIMULATED
     error_message = Column(Text, nullable=True)
-    dispatched_at = Column(DateTime, default=datetime.utcnow, index=True)
+    dispatched_at = Column(DateTime, default=utc_now, index=True)
 
     def to_dict(self):
         return {

@@ -4,7 +4,7 @@ export interface ControlSystemServiceItem {
   id: string;
   name: string;
   category: string;
-  status: "RUNNING" | "POLLING" | "IDLE" | "PAUSED" | "ERROR";
+  status: "RUNNING" | "POLLING" | "IDLE" | "PAUSED" | "STOPPED" | "ERROR";
   poll_interval_seconds: number;
   last_fetch_time: string | null;
   next_run_time: string | null;
@@ -82,6 +82,46 @@ export async function toggleService(serviceId: string): Promise<{ success: boole
   });
   if (!res.ok) {
     throw new Error(`Failed to toggle service ${serviceId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function startService(serviceId: string): Promise<{ success: boolean; new_status: string; message: string }> {
+  const res = await fetch(`${getBackendUrl()}/control-system/start/${serviceId}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to start service ${serviceId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function stopService(serviceId: string): Promise<{ success: boolean; new_status: string; message: string }> {
+  const res = await fetch(`${getBackendUrl()}/control-system/stop/${serviceId}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to stop service ${serviceId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function startAllServices(): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
+  const res = await fetch(`${getBackendUrl()}/control-system/start-all`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to start all services: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function stopAllServices(): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
+  const res = await fetch(`${getBackendUrl()}/control-system/stop-all`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to stop all services: ${res.statusText}`);
   }
   return res.json();
 }

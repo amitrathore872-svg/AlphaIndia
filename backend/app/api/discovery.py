@@ -9,12 +9,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.database import SessionLocal
+from app.db.database import get_db, SessionLocal
 from app.collectors.nse.announcements import NSEAnnouncementCollector
-
 from app.models.company import Company
 from app.models.filing_registry import FilingRegistry
-
 from app.services.discovery_service import DiscoveryService
 from app.services.queue_manager import QueueManager
 
@@ -22,17 +20,6 @@ router = APIRouter(
     prefix="/discovery",
     tags=["Historical Discovery Engine"],
 )
-
-
-# ==========================================================
-# Database Dependency
-# ==========================================================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # ==========================================================

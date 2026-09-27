@@ -14,6 +14,14 @@ import GrowthTable, {
   type TableDensity,
 } from "@/components/layout/screener/GrowthTable";
 import WatchlistModal from "@/components/layout/screener/WatchlistModal";
+import QuarterlyColumnCustomizerModal from "@/components/layout/earnings/QuarterlyColumnCustomizerModal";
+import {
+  DEFAULT_SCREENER_COLUMN_IDS,
+  GROWTH_SCREENER_STORAGE_KEY,
+  loadSavedColumns,
+  saveColumns,
+  resetDefaultColumns,
+} from "@/components/layout/earnings/quarterlyColumnsConfig";
 
 import {
   fetchGrowthScreener,
@@ -89,6 +97,26 @@ export default function GrowthScreenerPage() {
     } catch {
       // ignore
     }
+  };
+
+  // =====================================================
+  // Dynamic Column Customizer State & Persistence
+  // =====================================================
+  const [selectedColumnIds, setSelectedColumnIds] = useState<string[]>(DEFAULT_SCREENER_COLUMN_IDS);
+  const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedColumnIds(loadSavedColumns(GROWTH_SCREENER_STORAGE_KEY));
+  }, []);
+
+  const handleSaveColumns = (newCols: string[]) => {
+    setSelectedColumnIds(newCols);
+    saveColumns(newCols, GROWTH_SCREENER_STORAGE_KEY);
+  };
+
+  const handleResetColumns = () => {
+    const defaults = resetDefaultColumns(GROWTH_SCREENER_STORAGE_KEY);
+    setSelectedColumnIds(defaults);
   };
 
   // =====================================================
@@ -292,6 +320,7 @@ export default function GrowthScreenerPage() {
           totalResults={totalCompanies}
           density={density}
           onDensityChange={handleDensityChange}
+          onOpenColumnCustomizer={() => setIsColumnCustomizerOpen(true)}
         />
 
         {/* Background Revalidation Indicator */}
@@ -324,6 +353,7 @@ export default function GrowthScreenerPage() {
             setSelectedCompanyForWatchlist(company);
             setIsWatchlistModalOpen(true);
           }}
+          selectedColumnIds={selectedColumnIds}
         />
 
         {/* Watchlist & Conviction Score Modal */}
@@ -334,6 +364,15 @@ export default function GrowthScreenerPage() {
           watchlists={watchlists}
           onWatchlistUpdated={handleWatchlistUpdated}
           onRefreshWatchlists={() => queryClient.invalidateQueries({ queryKey: ["watchlists"] })}
+        />
+
+        {/* Screener.in Style Column Customizer Modal */}
+        <QuarterlyColumnCustomizerModal
+          isOpen={isColumnCustomizerOpen}
+          onClose={() => setIsColumnCustomizerOpen(false)}
+          selectedColumnIds={selectedColumnIds}
+          onSave={handleSaveColumns}
+          onResetDefaults={handleResetColumns}
         />
 
         {/* Floating Toast Notification */}

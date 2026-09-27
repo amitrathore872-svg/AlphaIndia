@@ -18,7 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class MFScheme(Base):
@@ -33,7 +33,7 @@ class MFScheme(Base):
     is_active_alpha = Column(Boolean, default=True, index=True)  # False for Index/ETF/Arbitrage
     fund_manager_name = Column(String(150), index=True, nullable=True)
     aum_cr = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     holdings = relationship("MFSchemeHolding", back_populates="scheme", cascade="all, delete-orphan")
@@ -56,7 +56,7 @@ class MFSchemeHolding(Base):
     prev_shares_held = Column(BigInteger, nullable=True, default=0)
     mom_shares_change_pct = Column(Float, default=0.0)
     holding_status = Column(String(50), default="HOLD", index=True)  # NEW_ENTRY, AGGRESSIVE_ADD, ADD, HOLD, TRIMMED, EXIT
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     scheme = relationship("MFScheme", back_populates="holdings")
@@ -90,7 +90,7 @@ class MFStockMonthlyAggregate(Base):
     star_manager_count = Column(Integer, default=0)
     is_stealth_accumulation = Column(Boolean, default=False, index=True)
     is_consensus_bet = Column(Boolean, default=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     company = relationship("Company")
 
@@ -115,7 +115,7 @@ class MFSectorFlow(Base):
     trend = Column(String(20), default="UP")  # UP, DOWN, STABLE
     top_accumulated_stock = Column(String(100), nullable=True)
     top_trimmed_stock = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (
         UniqueConstraint("sector_name", "report_date", name="uq_sector_month_flow"),
@@ -138,6 +138,6 @@ class MFAccumulationSignal(Base):
     action_recommendation = Column(String(50), default="ACCUMULATE")  # STRONG BUY, ACCUMULATE, HOLD
     ai_thesis_summary = Column(Text, nullable=True)
     primary_driver = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     company = relationship("Company")

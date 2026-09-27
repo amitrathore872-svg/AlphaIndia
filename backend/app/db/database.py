@@ -4,10 +4,15 @@ Sprint 31.5.1 — Production Database Layer
 Version: v2.1.0
 """
 
+from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings, DATABASE_URL, DEBUG_SQL
+
+def utc_now() -> datetime:
+    """Return timezone-naive UTC datetime for standard SQL DateTime columns without deprecation warnings."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # ==========================================================
 # SQLAlchemy Engine

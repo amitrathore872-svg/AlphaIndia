@@ -67,12 +67,40 @@ def get_channel_configs(db: Session = Depends(get_db)):
             "bot_token": None,
             "chat_id": None,
             "auto_rules": {
+                "pead_enabled": True,
                 "pead_min_conviction": 80,
+                "catalyst_enabled": True,
                 "catalyst_min_cr": 1000,
+                "growth_enabled": True,
                 "growth_min_pat_pct": 50,
                 "vcp_enabled": True,
                 "vcp_min_score": 90,
                 "vcp_elite_only": False,
+                "prebreakout_a_plus_enabled": True,
+                "prebreakout_min_conviction": 80,
+                "momentum_match_9_enabled": True,
+                "momentum_min_matches": 9,
+                "momentum_conviction_79_enabled": True,
+                "momentum_min_conviction": 79,
+                "tomorrow_radar_enabled": True,
+                "tomorrow_min_conviction": 90,
+                "order_win_enabled": True,
+                "order_win_min_significance": 65,
+                "order_win_min_deal_cr": 25,
+                "techno_funda_enabled": True,
+                "techno_funda_min_score": 85,
+                "techno_funda_max_pivot_dist": 4.0,
+                "delivery_breakout_enabled": True,
+                "delivery_tier": "ACTIVE_SWING",
+                "delivery_min_spike": 1.6,
+                "delivery_min_pct": 55.0,
+                "delivery_min_flow_20d": 1.15,
+                "institutional_mf_enabled": True,
+                "institutional_min_schemes": 3,
+                "institutional_min_smart_money_score": 80,
+                "growth_screener_enabled": True,
+                "growth_min_sales_pct": 25,
+                "breakout_execution_enabled": True,
             },
         }
 
@@ -84,11 +112,17 @@ def get_channel_configs(db: Session = Depends(get_db)):
             "phone_number_id": None,
             "target_recipient": None,
             "auto_rules": {
+                "pead_enabled": True,
                 "pead_min_conviction": 85,
+                "catalyst_enabled": True,
                 "catalyst_min_cr": 2000,
                 "vcp_enabled": True,
                 "vcp_min_score": 90,
                 "vcp_elite_only": False,
+                "order_win_enabled": True,
+                "order_win_min_significance": 70,
+                "techno_funda_enabled": True,
+                "delivery_breakout_enabled": True,
             },
         }
 
@@ -302,6 +336,28 @@ def generate_brief_and_links(req: GenerateBriefRequest):
             upside_pct=d.get("upside_pct", 0.0),
             thesis=d.get("thesis", "Earnings acceleration with margin expansion."),
         )
+    elif req.alert_type in ["ORDER_WIN", "ORDER_WIN_RADAR"]:
+        d = req.data
+        memo = AlertDispatchService.format_order_win_alert(
+            symbol=req.symbol,
+            company_name=req.company_name or req.symbol,
+            deal_value_cr=d.get("deal_value_cr"),
+            significance_score=float(d.get("significance_score", d.get("order_significance_score", 85.0))),
+            significance_tier=d.get("significance_tier", d.get("order_significance_tier", "HIGH_IMPACT")),
+            client_counterparty=d.get("client_counterparty", d.get("order_client_counterparty")),
+            rev_pct_ttm=d.get("rev_pct_ttm", d.get("synergy_rev_pct_ttm")),
+            execution_months=d.get("execution_months", d.get("order_execution_months")),
+            quarterly_rev_cr=d.get("quarterly_rev_cr", d.get("order_quarterly_rev_cr")),
+            earnings_impact_cr=d.get("earnings_impact_cr", d.get("order_earnings_impact_cr")),
+            cmp=d.get("cmp", d.get("current_price")),
+            target_price=d.get("target_price"),
+            upside_pct=d.get("upside_pct"),
+            stop_loss=d.get("stop_loss"),
+            upside_prob_pct=d.get("upside_prob_pct", d.get("order_upside_prob_pct")),
+            headline=d.get("headline"),
+            thesis=d.get("thesis", d.get("buy_thesis")),
+            source_url=d.get("source_url"),
+        )
     elif req.alert_type == "CATALYST":
         d = req.data
         memo = AlertDispatchService.format_catalyst_alert(
@@ -343,6 +399,44 @@ def generate_brief_and_links(req: GenerateBriefRequest):
             thesis=d.get("thesis", "Tight volatility compression with institutional volume expansion."),
             why_selected=d.get("why_selected", []),
             action_url="http://localhost:3000/vcp-discovery",
+        )
+    elif req.alert_type in ["TECHNO_FUNDA", "TECHNO"]:
+        d = req.data
+        memo = AlertDispatchService.format_techno_funda_alert(
+            symbol=req.symbol,
+            company_name=req.company_name or req.symbol,
+            setup_score=float(d.get("setup_score", 88.0)),
+            cmp=float(d.get("cmp", d.get("current_price", 0.0))),
+            pivot_price=float(d.get("pivot_price", d.get("model_pivot", 0.0))),
+            distance_to_pivot_pct=float(d.get("distance_to_pivot_pct", 2.5)),
+            sector=d.get("sector", "Diversified"),
+            health_score=float(d.get("health_score", 75.0)),
+            signal=d.get("signal", "PRE_BREAKOUT"),
+            pattern=d.get("pattern", "VCP Base"),
+        )
+    elif req.alert_type in ["DELIVERY", "DELIVERY_BREAKOUT"]:
+        d = req.data
+        memo = AlertDispatchService.format_delivery_breakout_alert(
+            symbol=req.symbol,
+            company_name=req.company_name or req.symbol,
+            delivery_per=float(d.get("delivery_per", 72.0)),
+            delivery_spike_x=float(d.get("delivery_spike_x", 3.2)),
+            cmp=float(d.get("cmp", d.get("current_price", 0.0))),
+            setup_type=d.get("setup_type", "50D_BREAKOUT"),
+            conviction_score=float(d.get("conviction_score", 85.0)),
+            sector=d.get("sector", "Diversified"),
+            target_price=float(d.get("target_price", 0.0)) if d.get("target_price") else None,
+            stop_loss=float(d.get("stop_loss", 0.0)) if d.get("stop_loss") else None,
+        )
+    elif req.alert_type in ["INSTITUTIONAL", "INSTITUTIONAL_MF", "SMART_MONEY"]:
+        d = req.data
+        memo = AlertDispatchService.format_institutional_mf_alert(
+            symbol=req.symbol,
+            company_name=req.company_name or req.symbol,
+            smart_money_score=float(d.get("smart_money_score", 84.0)),
+            schemes_count=int(d.get("schemes_count", d.get("mf_count", 4))),
+            net_shares_change_pct=float(d.get("net_shares_change_pct", 18.5)),
+            sector=d.get("sector", "Diversified"),
         )
     else:
         memo = f"⚡ *ALPHA INDIA ALERT | {req.symbol}*\n\n{req.data.get('message', '')}"
@@ -544,6 +638,30 @@ def trigger_vcp_scan_alerts(
     }
 
 
+@router.post("/trigger-order-win-scan-alerts", summary="Trigger Alerts for Top Active Order Wins")
+def trigger_order_win_scan_alerts(
+    force_broadcast: bool = Query(True, description="Broadcast to enabled external channels"),
+    min_score: float = Query(65.0, description="Minimum significance score (65=High Impact, 80=Transformational)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Scans and broadcasts top active Order Win contracts to Telegram and in-app notifications.
+    """
+    rules = OpportunityAlertService.get_opportunity_thresholds(db)
+    rules["order_win_enabled"] = True
+    rules["order_win_min_significance"] = min_score
+    if not force_broadcast:
+        rules["auto_broadcast_telegram"] = False
+        rules["auto_broadcast_whatsapp"] = False
+
+    dispatched = OpportunityAlertService.scan_order_win_radar_alerts(db=db, rules=rules, force_top_recent=True)
+    return {
+        "status": "ok",
+        "count": len(dispatched),
+        "alerts": dispatched,
+    }
+
+
 # ==========================================================
 # 6. High-Conviction Opportunity Radar Alerts Engine
 # ==========================================================
@@ -553,6 +671,7 @@ from app.services.opportunity_alert_service import OpportunityAlertService
 class OpportunityRuleUpdateRequest(BaseModel):
     vcp_signals_enabled: Optional[bool] = None
     vcp_min_score: Optional[float] = None
+    vcp_elite_only: Optional[bool] = None
     prebreakout_a_plus_enabled: Optional[bool] = None
     prebreakout_min_conviction: Optional[int] = None
     momentum_match_9_enabled: Optional[bool] = None
@@ -565,6 +684,33 @@ class OpportunityRuleUpdateRequest(BaseModel):
     athena_min_shock_score: Optional[float] = None
     catalysts_enabled: Optional[bool] = None
     catalysts_min_impact: Optional[float] = None
+    order_win_enabled: Optional[bool] = None
+    order_win_min_significance: Optional[float] = None
+    order_win_min_deal_cr: Optional[float] = None
+    techno_funda_enabled: Optional[bool] = None
+    techno_funda_min_score: Optional[float] = None
+    techno_funda_max_pivot_dist: Optional[float] = None
+    delivery_breakout_enabled: Optional[bool] = None
+    delivery_tier: Optional[str] = None
+    delivery_min_spike: Optional[float] = None
+    delivery_min_pct: Optional[float] = None
+    delivery_min_flow_20d: Optional[float] = None
+    institutional_mf_enabled: Optional[bool] = None
+    institutional_min_schemes: Optional[int] = None
+    institutional_min_smart_money_score: Optional[float] = None
+    growth_screener_enabled: Optional[bool] = None
+    growth_min_pat_pct: Optional[float] = None
+    growth_min_sales_pct: Optional[float] = None
+    breakout_execution_enabled: Optional[bool] = None
+    # Tab 2 backwards-compatibility aliases
+    pead_enabled: Optional[bool] = None
+    pead_min_conviction: Optional[int] = None
+    catalyst_enabled: Optional[bool] = None
+    catalyst_min_cr: Optional[float] = None
+    growth_enabled: Optional[bool] = None
+    smart_money_enabled: Optional[bool] = None
+    system_alerts_enabled: Optional[bool] = None
+    vcp_enabled: Optional[bool] = None
     auto_broadcast_telegram: Optional[bool] = None
     auto_broadcast_whatsapp: Optional[bool] = None
 

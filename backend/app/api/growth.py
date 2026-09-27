@@ -279,10 +279,14 @@ def growth_screener(
         "last_updated": func.coalesce(ScreenerGrowthRecord.last_updated, Company.updated_at),
     }
 
-    sort_column = sortable_columns.get(
-        sort_by,
-        ScreenerGrowthRecord.market_cap,
-    )
+    if sort_by in sortable_columns:
+        sort_column = sortable_columns[sort_by]
+    elif hasattr(ScreenerGrowthRecord, sort_by):
+        sort_column = getattr(ScreenerGrowthRecord, sort_by)
+    elif hasattr(Company, sort_by):
+        sort_column = getattr(Company, sort_by)
+    else:
+        sort_column = ScreenerGrowthRecord.market_cap
 
     ordering = (
         asc(sort_column).nullslast()
@@ -518,6 +522,62 @@ def growth_screener(
                 # Compounders
                 "sales_cagr_3y": round(float(sales_cagr), 2) if sales_cagr is not None else None,
                 "profit_cagr_3y": round(float(profit_cagr), 2) if profit_cagr is not None else None,
+
+                # Comprehensive Screener.in Fundamentals & Ratios
+                "current_price": cmp_val,
+                "stock_pe": pe_val,
+                "price_to_book": pb_val,
+                "book_value": scr.book_value if scr else None,
+                "dividend_yield": scr.dividend_yield if scr else None,
+                "latest_quarter_sales": scr.latest_quarter_sales if scr else None,
+                "latest_quarter_net_profit": scr.latest_quarter_net_profit if scr else None,
+                "opm_latest": round(float(opm_val), 2) if opm_val is not None else None,
+                "operating_profit": scr.operating_profit if scr else None,
+                "quarterly_sales_yoy": round(float(sales_yoy), 2) if sales_yoy is not None else None,
+                "quarterly_pat_yoy": round(float(pat_yoy), 2) if pat_yoy is not None else None,
+                "revenue_growth_qoq": sales_qoq,
+                "pat_growth_qoq": profit_qoq,
+                "latest_quarter_eps": scr.latest_quarter_eps if scr else None,
+                "quarterly_eps_yoy": scr.quarterly_eps_yoy if scr else None,
+                "pat_12m": scr.pat_12m if scr else None,
+                "eps_12m": scr.eps_12m if scr else None,
+                "sales_growth_ttm": scr.sales_growth_ttm if scr else None,
+                "profit_growth_ttm": scr.profit_growth_ttm if scr else None,
+                "opm_ttm": scr.opm_ttm if scr else None,
+                "sales_growth_3yr": scr.sales_growth_3yr if scr else None,
+                "sales_growth_5yr": scr.sales_growth_5yr if scr else None,
+                "sales_growth_10yr": scr.sales_growth_10yr if scr else None,
+                "profit_growth_3yr": scr.profit_growth_3yr if scr else None,
+                "profit_growth_5yr": scr.profit_growth_5yr if scr else None,
+                "profit_growth_10yr": scr.profit_growth_10yr if scr else None,
+                "debt_to_equity": scr.debt_to_equity if scr else None,
+                "interest_coverage": scr.interest_coverage if scr else None,
+                "debtor_days": scr.debtor_days if scr else None,
+                "inventory_days": scr.inventory_days if scr else None,
+                "cash_conversion_cycle": scr.cash_conversion_cycle if scr else None,
+                "cfo_to_pat": scr.cfo_to_pat if scr else None,
+                "return_3m": scr.return_3m if scr else None,
+                "return_6m": scr.return_6m if scr else None,
+                "return_1y": scr.return_1y if scr else None,
+                "stock_cagr_3yr": scr.stock_cagr_3yr if scr else None,
+                "stock_cagr_5yr": scr.stock_cagr_5yr if scr else None,
+                "dma_50": scr.dma_50 if scr else None,
+                "dma_200": scr.dma_200 if scr else None,
+                "high_52_week": scr.high_52_week if scr else None,
+                "low_52_week": scr.low_52_week if scr else None,
+                "distance_52w_high": scr.distance_52w_high if scr else None,
+                "rsi_14": scr.rsi_14 if scr else None,
+                "beta": scr.beta if scr else None,
+                "borrowings": scr.borrowings if scr else None,
+                "reserves": scr.reserves if scr else None,
+                "total_assets": scr.total_assets if scr else None,
+                "cfo_latest": scr.cfo_latest if scr else None,
+                "free_cash_flow": scr.free_cash_flow if scr else None,
+                "fcf_yield": scr.fcf_yield if scr else None,
+                "promoter_holding": scr.promoter_holding if scr else None,
+                "fii_holding": scr.fii_holding if scr else None,
+                "dii_holding": scr.dii_holding if scr else None,
+                "public_holding": scr.public_holding if scr else None,
 
                 # Quality / Health & PEAD Intelligence
                 "health_score": round(float(health), 1) if health is not None else None,

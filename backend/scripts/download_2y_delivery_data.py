@@ -8,11 +8,14 @@ import datetime
 import concurrent.futures
 from curl_cffi import requests
 
+from pathlib import Path
+
 def download_2y_data():
-    os.makedirs("data/nse_delivery", exist_ok=True)
-    base = datetime.date(2026, 9, 20)
-    # 740 calendar days covers 2 full years
-    all_dates = [base - datetime.timedelta(days=i) for i in range(1, 740)]
+    base_dir = Path(__file__).resolve().parent.parent / "data" / "nse_delivery"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    base = datetime.date.today()
+    # 740 calendar days covers 2 full years up to today
+    all_dates = [base - datetime.timedelta(days=i) for i in range(0, 740)]
     trading_days = [d for d in all_dates if d.weekday() < 5]
 
     headers = {
@@ -20,12 +23,12 @@ def download_2y_data():
         "Accept": "*/*",
     }
 
-    print(f"Targeting {len(trading_days)} weekdays over 2 full years (Sep 2024 - Sep 2026)...")
+    print(f"Targeting {len(trading_days)} weekdays over 2 full years up to {base.strftime('%Y-%m-%d')}...")
 
     def fetch_date(d):
         d_str = d.strftime("%d%m%Y")
-        cache_file = f"data/nse_delivery/sec_bhavdata_full_{d_str}.csv"
-        if os.path.exists(cache_file) and os.path.getsize(cache_file) > 10000:
+        cache_file = base_dir / f"sec_bhavdata_full_{d_str}.csv"
+        if cache_file.exists() and cache_file.stat().st_size > 10000:
             return d_str, True, "cached"
 
         url = f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d_str}.csv"

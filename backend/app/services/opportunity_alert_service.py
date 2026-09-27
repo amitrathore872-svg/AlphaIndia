@@ -13,9 +13,9 @@ import logging
 from datetime import datetime, date
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 
-from app.models.notification import SystemNotification, AlertChannelConfig
+from app.models.notification import SystemNotification, AlertChannelConfig, AlertDispatchLog
 from app.models.athena_models import AthenaConvictionFlash, AthenaQuarterlyMetrics, AthenaValuationRisk
 from app.models.announcement_radar import AnnouncementRadar
 from app.services.alert_dispatch_service import AlertDispatchService
@@ -23,6 +23,10 @@ from app.services.vcp_engine_service import VCPEngineService
 from app.services.prebreakout_radar_service import PreBreakoutRadarService
 from app.services.momentum_screener_service import MomentumScreenerService
 from app.services.intraday_opportunity_service import IntradayOpportunityService
+from app.services.techno_funda_service import TechnoFundaService
+from app.services.delivery_screener_service import DeliveryScreenerService
+from app.services.mf_analytics_service import MFAnalyticsService
+from app.models.screener_growth_record import ScreenerGrowthRecord
 
 logger = logging.getLogger("alpha_india.opportunity_alerts")
 
@@ -37,6 +41,7 @@ class OpportunityAlertService:
     DEFAULT_RULES = {
         "vcp_signals_enabled": True,
         "vcp_min_score": 90.0,
+        "vcp_elite_only": False,
         "prebreakout_a_plus_enabled": True,
         "prebreakout_min_conviction": 80,
         "momentum_match_9_enabled": True,
@@ -49,6 +54,24 @@ class OpportunityAlertService:
         "athena_min_shock_score": 75.0,
         "catalysts_enabled": True,
         "catalysts_min_impact": 8.5,
+        "order_win_enabled": True,
+        "order_win_min_significance": 65.0,
+        "order_win_min_deal_cr": 25.0,
+        "techno_funda_enabled": True,
+        "techno_funda_min_score": 85.0,
+        "techno_funda_max_pivot_dist": 4.0,
+        "delivery_breakout_enabled": True,
+        "delivery_tier": "ACTIVE_SWING",
+        "delivery_min_spike": 1.6,
+        "delivery_min_pct": 55.0,
+        "delivery_min_flow_20d": 1.15,
+        "institutional_mf_enabled": True,
+        "institutional_min_schemes": 3,
+        "institutional_min_smart_money_score": 80.0,
+        "growth_screener_enabled": True,
+        "growth_min_pat_pct": 50.0,
+        "growth_min_sales_pct": 25.0,
+        "breakout_execution_enabled": True,
         "auto_broadcast_telegram": True,
         "auto_broadcast_whatsapp": True,
     }
@@ -98,8 +121,7 @@ class OpportunityAlertService:
         performs daily deduplication, and generates in-app notifications + channel broadcasts.
         """
         rules = cls.get_opportunity_thresholds(db)
-        from datetime import timezone
-        today_start = datetime.combine(datetime.now(timezone.utc).date(), datetime.min.time())
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
 
         dispatched_alerts: List[Dict[str, Any]] = []
         skipped_duplicates: List[Dict[str, Any]] = []
@@ -122,13 +144,18 @@ class OpportunityAlertService:
                     if total_score < min_vcp_score:
                         continue
 
-                    # Daily Deduplication check
+                    # Daily Deduplication check (timezone-proof session window)
                     existing = (
                         db.query(SystemNotification)
                         .filter(
                             SystemNotification.category == "VCP_BREAKOUT",
                             SystemNotification.created_at >= today_start,
-                            SystemNotification.title.like(f"%{sym}%"),
+                            or_(
+                                SystemNotification.title.like(f"%: {sym} %"),
+                                SystemNotification.title.like(f"%: {sym}(%"),
+                                SystemNotification.title.like(f"% {sym} %"),
+                                SystemNotification.title.like(f"%{sym}%"),
+                            ),
                         )
                         .first()
                     )
@@ -234,7 +261,12 @@ class OpportunityAlertService:
                         .filter(
                             SystemNotification.category == "PRE_BREAKOUT",
                             SystemNotification.created_at >= today_start,
-                            SystemNotification.title.like(f"%{sym}%"),
+                            or_(
+                                SystemNotification.title.like(f"%: {sym} %"),
+                                SystemNotification.title.like(f"%: {sym}(%"),
+                                SystemNotification.title.like(f"% {sym} %"),
+                                SystemNotification.title.like(f"%{sym}%"),
+                            ),
                         )
                         .first()
                     )
@@ -341,7 +373,12 @@ class OpportunityAlertService:
                         .filter(
                             SystemNotification.category == "MOMENTUM_RADAR",
                             SystemNotification.created_at >= today_start,
-                            SystemNotification.title.like(f"%{sym}%"),
+                            or_(
+                                SystemNotification.title.like(f"%: {sym} %"),
+                                SystemNotification.title.like(f"%: {sym}(%"),
+                                SystemNotification.title.like(f"% {sym} %"),
+                                SystemNotification.title.like(f"%{sym}%"),
+                            ),
                         )
                         .first()
                     )
@@ -461,6 +498,56 @@ class OpportunityAlertService:
         except Exception as c_err:
             logger.error(f"Error evaluating catalyst radar alerts in master scan: {c_err}", exc_info=True)
 
+        # ==================================================================
+        # 7. /announcements — High-Impact Order Win Radar
+        # ==================================================================
+        try:
+            order_res = cls.scan_order_win_radar_alerts(db=db, rules=rules)
+            for item in order_res:
+                dispatched_alerts.append(item)
+        except Exception as ow_err:
+            logger.error(f"Error evaluating order win radar alerts in master scan: {ow_err}", exc_info=True)
+
+        # ==================================================================
+        # 8. /techno-funda — Techno-Funda Near-Pivot Breakouts
+        # ==================================================================
+        try:
+            tf_res = cls.scan_techno_funda_alerts(db=db, rules=rules)
+            for item in tf_res:
+                dispatched_alerts.append(item)
+        except Exception as tf_err:
+            logger.error(f"Error evaluating techno-funda alerts in master scan: {tf_err}", exc_info=True)
+
+        # ==================================================================
+        # 9. /delivery-radar — Institutional Delivery Surge Breakouts
+        # ==================================================================
+        try:
+            deliv_res = cls.scan_delivery_breakout_alerts(db=db, rules=rules)
+            for item in deliv_res:
+                dispatched_alerts.append(item)
+        except Exception as del_err:
+            logger.error(f"Error evaluating delivery breakout alerts in master scan: {del_err}", exc_info=True)
+
+        # ==================================================================
+        # 10. /institutional-radar — Mutual Fund Smart Money & Fresh Entries
+        # ==================================================================
+        try:
+            mf_res = cls.scan_institutional_mf_alerts(db=db, rules=rules)
+            for item in mf_res:
+                dispatched_alerts.append(item)
+        except Exception as mf_err:
+            logger.error(f"Error evaluating institutional MF alerts in master scan: {mf_err}", exc_info=True)
+
+        # ==================================================================
+        # 11. /growth-screener — Fundamental PAT & Sales Acceleration
+        # ==================================================================
+        try:
+            growth_res = cls.scan_growth_screener_alerts(db=db, rules=rules)
+            for item in growth_res:
+                dispatched_alerts.append(item)
+        except Exception as gr_err:
+            logger.error(f"Error evaluating growth screener alerts in master scan: {gr_err}", exc_info=True)
+
         return {
             "status": "SUCCESS",
             "timestamp": datetime.utcnow().isoformat(),
@@ -480,26 +567,42 @@ class OpportunityAlertService:
     ) -> None:
         """
         Broadcasts formatted memo to Telegram and WhatsApp if channels are active.
+        Enforces strict deduplication via AlertDispatchLog so symbols aren't broadcast twice.
         """
+        cutoff_time = AlertDispatchService.get_dedup_cutoff(hours=18)
+
         # Telegram Dispatch
         if rules.get("auto_broadcast_telegram", True):
             try:
                 tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
                 if tg_cfg and tg_cfg.is_enabled and tg_cfg.bot_token and tg_cfg.chat_id:
-                    res = AlertDispatchService.dispatch_telegram(
-                        bot_token=tg_cfg.bot_token,
-                        chat_id=tg_cfg.chat_id,
-                        text=memo_text,
+                    already_sent_tg = (
+                        db.query(AlertDispatchLog)
+                        .filter(
+                            AlertDispatchLog.channel == "TELEGRAM",
+                            AlertDispatchLog.symbol == symbol,
+                            AlertDispatchLog.status == "SUCCESS",
+                            AlertDispatchLog.dispatched_at >= cutoff_time,
+                        )
+                        .first()
                     )
-                    AlertDispatchService.log_dispatch(
-                        db=db,
-                        channel="TELEGRAM",
-                        recipient=tg_cfg.chat_id,
-                        symbol=symbol,
-                        payload_preview=memo_text,
-                        status="SUCCESS" if res.get("success") else "FAILED",
-                        error_message=res.get("error"),
-                    )
+                    if already_sent_tg:
+                        logger.info(f"Skipping Telegram dispatch: {symbol} already dispatched at {already_sent_tg.dispatched_at}")
+                    else:
+                        res = AlertDispatchService.dispatch_telegram(
+                            bot_token=tg_cfg.bot_token,
+                            chat_id=tg_cfg.chat_id,
+                            text=memo_text,
+                        )
+                        AlertDispatchService.log_dispatch(
+                            db=db,
+                            channel="TELEGRAM",
+                            recipient=tg_cfg.chat_id,
+                            symbol=symbol,
+                            payload_preview=memo_text,
+                            status="SUCCESS" if res.get("success") else "FAILED",
+                            error_message=res.get("error"),
+                        )
             except Exception as ex:
                 logger.error(f"External Telegram dispatch failed for {symbol}: {ex}")
 
@@ -508,21 +611,34 @@ class OpportunityAlertService:
             try:
                 wa_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "WHATSAPP").first()
                 if wa_cfg and wa_cfg.is_enabled and wa_cfg.api_key and wa_cfg.phone_number_id and wa_cfg.target_recipient:
-                    res = AlertDispatchService.dispatch_whatsapp_cloud(
-                        api_key=wa_cfg.api_key,
-                        phone_number_id=wa_cfg.phone_number_id,
-                        recipient=wa_cfg.target_recipient,
-                        text=memo_text,
+                    already_sent_wa = (
+                        db.query(AlertDispatchLog)
+                        .filter(
+                            AlertDispatchLog.channel == "WHATSAPP",
+                            AlertDispatchLog.symbol == symbol,
+                            AlertDispatchLog.status == "SUCCESS",
+                            AlertDispatchLog.dispatched_at >= cutoff_time,
+                        )
+                        .first()
                     )
-                    AlertDispatchService.log_dispatch(
-                        db=db,
-                        channel="WHATSAPP",
-                        recipient=wa_cfg.target_recipient,
-                        symbol=symbol,
-                        payload_preview=memo_text,
-                        status="SUCCESS" if res.get("success") else "FAILED",
-                        error_message=res.get("error"),
-                    )
+                    if already_sent_wa:
+                        logger.info(f"Skipping WhatsApp dispatch: {symbol} already dispatched at {already_sent_wa.dispatched_at}")
+                    else:
+                        res = AlertDispatchService.dispatch_whatsapp_cloud(
+                            api_key=wa_cfg.api_key,
+                            phone_number_id=wa_cfg.phone_number_id,
+                            recipient=wa_cfg.target_recipient,
+                            text=memo_text,
+                        )
+                        AlertDispatchService.log_dispatch(
+                            db=db,
+                            channel="WHATSAPP",
+                            recipient=wa_cfg.target_recipient,
+                            symbol=symbol,
+                            payload_preview=memo_text,
+                            status="SUCCESS" if res.get("success") else "FAILED",
+                            error_message=res.get("error"),
+                        )
             except Exception as ex:
                 logger.error(f"External WhatsApp dispatch failed for {symbol}: {ex}")
 
@@ -543,8 +659,7 @@ class OpportunityAlertService:
         if not rules.get("tomorrow_radar_enabled", True):
             return []
 
-        from datetime import timezone
-        today_start = datetime.combine(datetime.now(timezone.utc).date(), datetime.min.time())
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
 
         # Check if already alerted today for tomorrow radar
         existing_today = (
@@ -668,8 +783,7 @@ class OpportunityAlertService:
         if not rules.get("athena_pead_enabled", True):
             return []
 
-        from datetime import timezone
-        today_start = datetime.combine(datetime.now(timezone.utc).date(), datetime.min.time())
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
 
         dispatched = []
         try:
@@ -778,8 +892,7 @@ class OpportunityAlertService:
         if not rules.get("catalysts_enabled", True):
             return []
 
-        from datetime import timezone
-        today_start = datetime.combine(datetime.now(timezone.utc).date(), datetime.min.time())
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
 
         dispatched = []
         try:
@@ -862,11 +975,638 @@ class OpportunityAlertService:
         return dispatched
 
     @classmethod
+    def scan_order_win_radar_alerts(
+        cls,
+        db: Session,
+        rules: Optional[Dict[str, Any]] = None,
+        force_top_recent: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans AnnouncementRadar for high-impact Order Win contract awards meeting significance & size thresholds.
+        Evaluates quant significance scores (>= 65 by default), deduplicates daily per symbol,
+        generates in-app SystemNotification (category ORDER_WIN_RADAR), and broadcasts to Telegram / WhatsApp.
+        """
+        if rules is None:
+            rules = cls.get_opportunity_thresholds(db)
+
+        if not rules.get("order_win_enabled", True):
+            return []
+
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        dispatched = []
+
+        try:
+            min_score = float(rules.get("order_win_min_significance", 65.0))
+            min_deal = float(rules.get("order_win_min_deal_cr", 25.0))
+
+            query = (
+                db.query(AnnouncementRadar)
+                .filter(
+                    (AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None)),
+                    AnnouncementRadar.order_significance_score >= min_score,
+                )
+            )
+
+            if not force_top_recent:
+                # Normal operational scan: check announcements published within active session window
+                query = query.filter(AnnouncementRadar.published_at >= today_start)
+
+            order_wins = query.order_by(desc(AnnouncementRadar.order_significance_score)).limit(10).all()
+
+            # Fallback if testing/forcing and no orders in last 18h
+            if not order_wins and force_top_recent:
+                order_wins = (
+                    db.query(AnnouncementRadar)
+                    .filter(
+                        (AnnouncementRadar.catalyst_type == "ORDER_WIN") | (AnnouncementRadar.order_significance_score.isnot(None)),
+                        AnnouncementRadar.order_significance_score >= min_score,
+                    )
+                    .order_by(desc(AnnouncementRadar.order_significance_score))
+                    .limit(3)
+                    .all()
+                )
+
+            for item in order_wins:
+                sym = (item.symbol or "").strip().upper()
+                if not sym:
+                    continue
+
+                deal_val = float(item.deal_value_cr) if item.deal_value_cr is not None else 0.0
+                if deal_val > 0 and deal_val < min_deal:
+                    continue
+
+                # Deduplication check
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category == "ORDER_WIN_RADAR",
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                score = float(item.order_significance_score or 70.0)
+                tier = item.order_significance_tier or ("TRANSFORMATIONAL" if score >= 80 else "HIGH_IMPACT")
+                tier_clean = tier.replace("_", " ").upper()
+                deal_str = f" ₹{deal_val:,.1f} Cr" if deal_val > 0 else ""
+                client = item.order_client_counterparty or ""
+                client_str = f" from {client}" if client else ""
+
+                severity = "critical" if score >= 80.0 else "warning"
+                title = f"🏆 ORDER WIN RADAR: {sym} ({tier_clean} • {score:.0f} PTS)"
+                message = (
+                    f"Secured commercial contract{deal_str}{client_str}. "
+                    f"Significance: {score:.1f}/100. Target: ₹{float(item.target_price or 0):,.1f} "
+                    f"(+{float(item.upside_pct or 0):.1f}%), Win Prob: {float(item.order_upside_prob_pct or 75):.1f}%."
+                )
+
+                metadata = {
+                    "rule_type": "ORDER_WIN_CONTRACT",
+                    "symbol": sym,
+                    "company_name": item.company_name or sym,
+                    "catalyst_type": "ORDER_WIN",
+                    "order_significance_score": score,
+                    "order_significance_tier": tier,
+                    "deal_value_cr": deal_val,
+                    "client_counterparty": client,
+                    "order_execution_months": item.order_execution_months,
+                    "order_quarterly_rev_cr": item.order_quarterly_rev_cr,
+                    "order_earnings_impact_cr": item.order_earnings_impact_cr,
+                    "current_price": item.current_price,
+                    "target_price": item.target_price,
+                    "upside_pct": item.upside_pct,
+                    "stop_loss": item.stop_loss,
+                    "win_probability": item.order_upside_prob_pct,
+                    "action_url": "/announcements?catalyst_type=ORDER_WIN",
+                }
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="ORDER_WIN_RADAR",
+                    severity=severity,
+                    action_url="/announcements?catalyst_type=ORDER_WIN",
+                    metadata=metadata,
+                )
+
+                memo = AlertDispatchService.format_order_win_alert(
+                    symbol=sym,
+                    company_name=item.company_name or sym,
+                    deal_value_cr=deal_val if deal_val > 0 else None,
+                    significance_score=score,
+                    significance_tier=tier,
+                    client_counterparty=client,
+                    rev_pct_ttm=item.synergy_rev_pct_ttm,
+                    execution_months=item.order_execution_months,
+                    quarterly_rev_cr=item.order_quarterly_rev_cr,
+                    earnings_impact_cr=item.order_earnings_impact_cr,
+                    cmp=item.current_price,
+                    target_price=item.target_price,
+                    upside_pct=item.upside_pct,
+                    stop_loss=item.stop_loss,
+                    upside_prob_pct=item.order_upside_prob_pct,
+                    headline=item.headline,
+                    thesis=item.buy_thesis or item.ai_insight,
+                    source_url=item.source_url,
+                )
+
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "order-win-radar", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Order Win Radar for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
+    def scan_techno_funda_alerts(
+        cls,
+        db: Session,
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans TechnoFundaService for high setup scores and near-pivot setups.
+        """
+        if rules is None:
+            rules = cls.get_opportunity_thresholds(db)
+
+        if not rules.get("techno_funda_enabled", True):
+            return []
+
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        dispatched = []
+
+        try:
+            min_score = float(rules.get("techno_funda_min_score", 85.0))
+            max_pivot_dist = float(rules.get("techno_funda_max_pivot_dist", 4.0))
+
+            screener_data = TechnoFundaService.get_screener_results(
+                db=db,
+                limit=35,
+                sort_by="setup_score",
+                sort_order="desc",
+            )
+            items = screener_data.get("items", [])
+
+            for item in items:
+                sym = (item.get("symbol") or "").strip().upper()
+                if not sym:
+                    continue
+
+                setup_sc = float(item.get("setup_score", 0.0))
+                pivot_dist = float(item.get("distance_to_pivot_pct", 999.0))
+
+                if setup_sc < min_score or pivot_dist > max_pivot_dist:
+                    continue
+
+                # Deduplication check
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category == "TECHNO_FUNDA",
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                cmp_val = float(item.get("current_price") or 0.0)
+                pivot_val = float(item.get("model_pivot") or item.get("pivot_price") or cmp_val * 1.02)
+                co_name = item.get("company_name") or sym
+                sec = item.get("sector") or "Diversified"
+                hlth = float(item.get("health_score") or 70.0)
+                sig = item.get("signal") or "PRE_BREAKOUT"
+                pat = item.get("primary_pattern") or item.get("pattern") or "VCP Base"
+
+                severity = "critical" if setup_sc >= 90.0 else "warning"
+                title = f"🎯 TECHNO-FUNDA: {sym} (Score {setup_sc:.1f} • {pivot_dist:+.1f}% from Pivot)"
+                message = (
+                    f"Setup Score {setup_sc:.1f}/100 with Stage-2 confirmation. "
+                    f"CMP ₹{cmp_val:,.2f} | Model Pivot: ₹{pivot_val:,.2f} ({pivot_dist:+.1f}% away). "
+                    f"Pattern: {pat}, Signal: {sig}, Health: {hlth:.0f}/100."
+                )
+
+                metadata = {
+                    "rule_type": "TECHNO_FUNDA_SCREENER",
+                    "symbol": sym,
+                    "company_name": co_name,
+                    "setup_score": setup_sc,
+                    "distance_to_pivot_pct": pivot_dist,
+                    "cmp": cmp_val,
+                    "model_pivot": pivot_val,
+                    "signal": sig,
+                    "health_score": hlth,
+                    "action_url": "/techno-funda",
+                }
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="TECHNO_FUNDA",
+                    severity=severity,
+                    action_url="/techno-funda",
+                    metadata=metadata,
+                )
+
+                memo = AlertDispatchService.format_techno_funda_alert(
+                    symbol=sym,
+                    company_name=co_name,
+                    setup_score=setup_sc,
+                    cmp=cmp_val,
+                    pivot_price=pivot_val,
+                    distance_to_pivot_pct=pivot_dist,
+                    sector=sec,
+                    health_score=hlth,
+                    signal=sig,
+                    pattern=pat,
+                    action_url="http://localhost:3000/techno-funda",
+                )
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "techno-funda", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Techno-Funda for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
+    def scan_delivery_breakout_alerts(
+        cls,
+        db: Session,
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans DeliveryScreenerService for institutional delivery volume surge candidates.
+        """
+        if rules is None:
+            rules = cls.get_opportunity_thresholds(db)
+
+        if not rules.get("delivery_breakout_enabled", True):
+            return []
+
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        dispatched = []
+
+        try:
+            tier_filter = str(rules.get("delivery_tier", "ACTIVE_SWING")).upper()
+            min_spike = float(rules.get("delivery_min_spike", 1.6))
+            min_pct = float(rules.get("delivery_min_pct", 55.0))
+            min_flow_20d = float(rules.get("delivery_min_flow_20d", 1.15))
+
+            deliv_data = DeliveryScreenerService.scan_opportunities(
+                force_refresh=False,
+                min_spike=min_spike,
+                min_deliv_per=min_pct,
+                lookback_sessions=1,
+            )
+            items = deliv_data.get("opportunities", [])
+
+            for item in items:
+                sym = (item.get("symbol") or "").strip().upper()
+                if not sym:
+                    continue
+
+                tier = item.get("conviction_tier", "ACTIVE_SWING").upper()
+                # Tier Filter Evaluation
+                if tier_filter == "APEX_SNIPER" and tier != "APEX_SNIPER":
+                    continue
+                elif tier_filter == "ACTIVE_SWING" and tier not in ["APEX_SNIPER", "ACTIVE_SWING"]:
+                    continue
+
+                spike = float(item.get("delivery_spike_x", 0.0))
+                deliv_per = float(item.get("delivery_per", 0.0))
+                flow_20d = float(item.get("deliv_flow_20d", 1.0))
+                conv_score = float(item.get("conviction_score", 80.0))
+
+                if spike < min_spike or deliv_per < min_pct or flow_20d < min_flow_20d:
+                    continue
+
+                # Deduplication check
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category == "DELIVERY_BREAKOUT",
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                cmp_val = float(item.get("current_price") or 0.0)
+                co_name = item.get("company_name") or sym
+                sec = item.get("sector") or "Diversified"
+                stype = item.get("setup_type") or "50D_BREAKOUT"
+
+                # Unpack tailored execution blueprint
+                bp = item.get("blueprint") or {}
+                t1 = float(bp.get("target_1") or cmp_val * 1.055)
+                t2 = float(bp.get("target_2") or cmp_val * 1.11)
+                sl = float(bp.get("stop_loss") or cmp_val * 0.965)
+                be_trigger = float(bp.get("breakeven_trigger") or cmp_val * 1.02)
+                risk_pct = float(bp.get("risk_pct") or 3.5)
+                rr_str = bp.get("rr_ratio") or "1:3.1"
+                win_rate_exp = bp.get("win_rate_expectation") or ("68% - 72%" if tier == "APEX_SNIPER" else "60% - 63%")
+                trail_rule = bp.get("trail_rule") or ""
+
+                tier_icon = "🎯" if tier == "APEX_SNIPER" else ("⚡" if tier == "ACTIVE_SWING" else "📡")
+                severity = "critical" if tier == "APEX_SNIPER" or spike >= 3.0 else "warning"
+
+                title = f"{tier_icon} {tier.replace('_', ' ')}: {sym} ({flow_20d:.1f}x Flow • {deliv_per:.0f}% Deliv)"
+                message = (
+                    f"Institutional delivery surge on {co_name} ({deliv_per:.1f}% delivery, {spike:.2f}x spike, {flow_20d:.2f}x 20D flow). "
+                    f"CMP ₹{cmp_val:,.2f} | Setup: {stype.replace('_', ' ')}. "
+                    f"SL: ₹{sl:,.2f} (-{risk_pct}%) | BE Lock: ₹{be_trigger:,.2f} (+2.0%) | "
+                    f"Targets: T1 ₹{t1:,.2f} / T2 ₹{t2:,.2f} | R:R {rr_str} (Exp WR: {win_rate_exp})."
+                )
+
+                metadata = {
+                    "rule_type": "DELIVERY_SPIKE_ACCUMULATION",
+                    "symbol": sym,
+                    "company_name": co_name,
+                    "conviction_tier": tier,
+                    "delivery_spike_x": spike,
+                    "delivery_per": deliv_per,
+                    "deliv_flow_20d": flow_20d,
+                    "setup_type": stype,
+                    "cmp": cmp_val,
+                    "target_1": t1,
+                    "target_2": t2,
+                    "breakeven_trigger": be_trigger,
+                    "stop_loss": sl,
+                    "risk_reward": rr_str,
+                    "win_rate_expectation": win_rate_exp,
+                    "trail_rule": trail_rule,
+                    "action_url": "/delivery-radar",
+                }
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="DELIVERY_BREAKOUT",
+                    severity=severity,
+                    action_url="/delivery-radar",
+                    metadata=metadata,
+                )
+
+                memo = AlertDispatchService.format_delivery_breakout_alert(
+                    symbol=sym,
+                    company_name=co_name,
+                    delivery_per=deliv_per,
+                    delivery_spike_x=spike,
+                    cmp=cmp_val,
+                    setup_type=stype,
+                    conviction_score=conv_score,
+                    sector=sec,
+                    tier=tier,
+                    deliv_flow_20d=flow_20d,
+                    target_1=t1,
+                    target_2=t2,
+                    breakeven_trigger=be_trigger,
+                    stop_loss=sl,
+                    risk_pct=risk_pct,
+                    risk_reward=rr_str,
+                    win_rate_expectation=win_rate_exp,
+                    trail_rule=trail_rule,
+                    action_url="http://localhost:3000/delivery-radar",
+                )
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "delivery-radar", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Delivery Radar for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
+    def scan_institutional_mf_alerts(
+        cls,
+        db: Session,
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans MFAnalyticsService for institutional mutual fund accumulation and fresh AMC entries.
+        """
+        if rules is None:
+            rules = cls.get_opportunity_thresholds(db)
+
+        if not rules.get("institutional_mf_enabled", True):
+            return []
+
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        dispatched = []
+
+        try:
+            min_schemes = int(rules.get("institutional_min_schemes", 3))
+            min_smart_score = float(rules.get("institutional_min_smart_money_score", 80.0))
+
+            screener_data = MFAnalyticsService.get_institutional_radar_screener(
+                db=db,
+                limit=25,
+                sort_by="smart_money_score",
+                sort_order="desc",
+            )
+            items = screener_data.get("items", [])
+
+            for item in items:
+                sym = (item.get("symbol") or "").strip().upper()
+                if not sym:
+                    continue
+
+                sm_score = float(item.get("smart_money_score") or 0.0)
+                mf_cnt = int(item.get("mf_count") or item.get("schemes_count") or 0)
+
+                if sm_score < min_smart_score and mf_cnt < min_schemes:
+                    continue
+
+                # Deduplication check
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category == "INSTITUTIONAL_MF",
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                co_name = item.get("company_name") or sym
+                sec = item.get("sector") or "Diversified"
+                net_chg = float(item.get("net_change_shares_pct") or 5.0)
+
+                title = f"🏛️ SMART MONEY RADAR: {sym} (Score {sm_score:.1f} • {mf_cnt} Schemes)"
+                message = (
+                    f"Strong institutional float absorption across {mf_cnt} domestic mutual fund portfolios. "
+                    f"Smart Money Score: {sm_score:.1f}/100. Net shares accumulated: {net_chg:+.1f}%."
+                )
+
+                metadata = {
+                    "rule_type": "INSTITUTIONAL_MF_ACCUMULATION",
+                    "symbol": sym,
+                    "company_name": co_name,
+                    "smart_money_score": sm_score,
+                    "mf_count": mf_cnt,
+                    "net_change_shares_pct": net_chg,
+                    "action_url": "/institutional-radar",
+                }
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="INSTITUTIONAL_MF",
+                    severity="critical" if sm_score >= 88.0 else "info",
+                    action_url="/institutional-radar",
+                    metadata=metadata,
+                )
+
+                memo = AlertDispatchService.format_institutional_mf_alert(
+                    symbol=sym,
+                    company_name=co_name,
+                    smart_money_score=sm_score,
+                    schemes_count=mf_cnt,
+                    net_shares_change_pct=net_chg,
+                    sector=sec,
+                    action_url="http://localhost:3000/institutional-radar",
+                )
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "institutional-radar", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Institutional MF Radar for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
+    def scan_growth_screener_alerts(
+        cls,
+        db: Session,
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans fundamental growth acceleration leaders (YoY PAT and Sales breakout).
+        """
+        if rules is None:
+            rules = cls.get_opportunity_thresholds(db)
+
+        if not rules.get("growth_screener_enabled", True):
+            return []
+
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        dispatched = []
+
+        try:
+            min_pat = float(rules.get("growth_min_pat_pct", 50.0))
+            min_sales = float(rules.get("growth_min_sales_pct", 25.0))
+
+            records = (
+                db.query(ScreenerGrowthRecord)
+                .filter(
+                    ScreenerGrowthRecord.profit_growth_ttm >= min_pat,
+                    ScreenerGrowthRecord.sales_growth_ttm >= min_sales,
+                )
+                .order_by(desc(ScreenerGrowthRecord.profit_growth_ttm))
+                .limit(10)
+                .all()
+            )
+
+            for rec in records:
+                sym = (rec.symbol or "").strip().upper()
+                if not sym:
+                    continue
+
+                pat_g = float(rec.profit_growth_ttm or 0.0)
+                sales_g = float(rec.sales_growth_ttm or 0.0)
+
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category == "GROWTH_SCREENER",
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                co_name = rec.company_name or sym
+                opm_val = float(rec.opm_ttm or rec.opm_latest or 15.0)
+                pe_val = float(rec.stock_pe) if rec.stock_pe else None
+
+                title = f"🚀 GROWTH BREAKOUT: {sym} (PAT +{pat_g:.1f}% YoY • Sales +{sales_g:.1f}%)"
+                message = (
+                    f"Exceptional quarterly fundamental acceleration. "
+                    f"YoY PAT: +{pat_g:.1f}%, YoY Sales: +{sales_g:.1f}%, OPM: {opm_val:.1f}%."
+                )
+
+                metadata = {
+                    "rule_type": "GROWTH_SCREENER_ACCELERATION",
+                    "symbol": sym,
+                    "company_name": co_name,
+                    "profit_growth_ttm": pat_g,
+                    "sales_growth_ttm": sales_g,
+                    "opm_ttm": opm_val,
+                    "stock_pe": pe_val,
+                    "action_url": "/growth-screener",
+                }
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="GROWTH_SCREENER",
+                    severity="critical" if pat_g >= 100.0 else "info",
+                    action_url="/growth-screener",
+                    metadata=metadata,
+                )
+
+                memo = AlertDispatchService.format_growth_breakout_alert(
+                    symbol=sym,
+                    company_name=co_name,
+                    pat_growth_yoy=pat_g,
+                    rev_growth_yoy=sales_g,
+                    opm=opm_val,
+                    pe=pe_val,
+                )
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "growth-screener", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Growth Screener for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
     def get_recent_opportunity_alerts(cls, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Returns recent opportunity notifications across all key radar categories.
         """
-        categories = ["VCP_BREAKOUT", "PRE_BREAKOUT", "MOMENTUM_RADAR", "TOMORROW_RADAR", "ATHENA_PEAD", "CATALYST_ORDER"]
+        categories = [
+            "VCP_BREAKOUT",
+            "PRE_BREAKOUT",
+            "MOMENTUM_RADAR",
+            "TOMORROW_RADAR",
+            "ATHENA_PEAD",
+            "CATALYST_ORDER",
+            "ORDER_WIN_RADAR",
+            "TECHNO_FUNDA",
+            "DELIVERY_BREAKOUT",
+            "INSTITUTIONAL_MF",
+            "GROWTH_SCREENER",
+            "BREAKOUT_EXECUTION",
+        ]
         items = (
             db.query(SystemNotification)
             .filter(

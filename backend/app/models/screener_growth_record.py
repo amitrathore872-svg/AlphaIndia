@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class ScreenerGrowthRecord(Base):
@@ -114,6 +114,6 @@ class ScreenerGrowthRecord(Base):
 
     # Import Metadata
     import_source = Column(String(50), default="screener.in")
-    import_timestamp = Column(DateTime, default=datetime.utcnow)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    import_timestamp = Column(DateTime, default=utc_now)
+    last_updated = Column(DateTime, default=utc_now, onupdate=utc_now)
     data_completeness_score = Column(Float, default=0.0)  # Percentage of non-null metrics

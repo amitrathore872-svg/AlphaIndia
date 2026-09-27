@@ -119,6 +119,9 @@ export interface AnnouncementQueryParams {
   recommendation?: string | string[];
   velocity?: string | string[];
   order_tier?: OrderSignificanceTier | string | string[];
+  deal_value_min?: number;
+  deal_value_max?: number;
+  rev_pct_min?: number;
   feed_source?: "ALL" | "POLL_WIRE" | "CATALYST" | string;
   category?: string;
   search?: string;
@@ -174,6 +177,9 @@ export async function fetchAnnouncements(
     const v = Array.isArray(params.order_tier) ? params.order_tier.join(",") : params.order_tier;
     if (v) qs.set("order_tier", v);
   }
+  if (params.deal_value_min !== undefined) qs.set("deal_value_min", String(params.deal_value_min));
+  if (params.deal_value_max !== undefined) qs.set("deal_value_max", String(params.deal_value_max));
+  if (params.rev_pct_min !== undefined)    qs.set("rev_pct_min",    String(params.rev_pct_min));
   if (params.feed_source && params.feed_source !== "ALL") {
     qs.set("feed_source", params.feed_source);
   }
@@ -194,6 +200,141 @@ export async function fetchAnnouncements(
   if (params.sort_order)               qs.set("sort_order",               params.sort_order);
 
   return request<AnnouncementRadarItem[]>(`/announcements/radar?${qs.toString()}`);
+}
+
+export interface OrderWinAnalytics {
+  total_orders: number;
+  total_order_value_cr: number;
+  total_quarterly_run_rate_cr: number;
+  total_annualized_pat_cr: number;
+  avg_revenue_pct_ttm: number;
+  avg_execution_months: number;
+  by_tier: Record<string, { count: number; total_deal_cr: number; avg_score: number }>;
+  top_counterparties: Array<{ counterparty: string; order_count: number; total_deal_cr: number }>;
+  largest_deals: Array<{
+    id: number;
+    symbol: string | null;
+    company_name: string;
+    deal_value_cr: number | null;
+    rev_pct_ttm: number | null;
+    counterparty: string | null;
+    tier: string | null;
+    date: string | null;
+  }>;
+  highest_revenue_lifts: Array<{
+    id: number;
+    symbol: string | null;
+    company_name: string;
+    deal_value_cr: number | null;
+    rev_pct_ttm: number | null;
+    tier: string | null;
+    date: string | null;
+  }>;
+}
+
+export async function fetchOrderWinAnalytics(): Promise<OrderWinAnalytics> {
+  return request<OrderWinAnalytics>("/announcements/order-wins/analytics");
+}
+
+export interface CumulativeOrderSummary {
+  id: number;
+  headline: string;
+  filing_date: string | null;
+  deal_value_cr: number | null;
+  rev_pct_ttm: number | null;
+  counterparty: string | null;
+  execution_months: number;
+  quarterly_rev_cr: number | null;
+  pat_impact_cr: number | null;
+  significance_tier: string;
+  significance_score: number;
+  pdf_url: string | null;
+  source_url: string | null;
+  ai_insight: string | null;
+}
+
+export interface CumulativeCompanyOrderBook {
+  symbol: string | null;
+  company_name: string;
+  tradingview_symbol: string | null;
+  exchange: string;
+  sector: string;
+  industry: string;
+  is_listed: boolean;
+  cmp: number | null;
+  market_cap_category: string;
+  high_52w: number | null;
+  low_52w: number | null;
+  pe_ratio: number | null;
+  roce: number | null;
+  ttm_revenue_cr: number;
+  order_count: number;
+  total_deal_cr: number;
+  total_quarterly_run_rate_cr: number;
+  total_annualized_pat_cr: number;
+  book_to_bill_multiple: number | null;
+  backlog_coverage_years: number | null;
+  strength_tier: "TRANSFORMATIONAL_SURGE" | "HIGH_VISIBILITY" | "EXPANDING_BACKLOG" | "STEADY_REPLENISHMENT" | string;
+  order_velocity_signal: "SURGING_30D" | "ACCELERATING" | "ESTABLISHED" | string;
+  sovereign_client_pct: number;
+  sovereign_deal_cr: number;
+  sovereign_orders_count: number;
+  avg_execution_months: number;
+  latest_order_date: string | null;
+  oldest_order_date: string | null;
+  top_counterparties: string[];
+  orders: CumulativeOrderSummary[];
+}
+
+export interface CumulativeBacklogSummary {
+  total_tracked_backlog_cr: number;
+  total_orders_tracked: number;
+  total_companies_tracked: number;
+  transformational_companies_count: number;
+  high_visibility_companies_count: number;
+  sovereign_backed_backlog_cr: number;
+  sovereign_share_pct: number;
+  surging_velocity_count: number;
+}
+
+export interface CumulativeBacklogResponse {
+  items: CumulativeCompanyOrderBook[];
+  total_companies: number;
+  summary: CumulativeBacklogSummary;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface CumulativeBacklogQueryParams {
+  min_deal_cr?: number;
+  min_book_to_bill?: number;
+  order_velocity?: string;
+  strength_tier?: string;
+  sovereign_only?: boolean;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}
+
+export async function fetchCumulativeOrderBooks(
+  params: CumulativeBacklogQueryParams = {}
+): Promise<CumulativeBacklogResponse> {
+  const qs = new URLSearchParams();
+  if (params.page !== undefined) qs.set("page", String(params.page));
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.min_deal_cr !== undefined) qs.set("min_deal_cr", String(params.min_deal_cr));
+  if (params.min_book_to_bill !== undefined) qs.set("min_book_to_bill", String(params.min_book_to_bill));
+  if (params.order_velocity && params.order_velocity !== "ALL") qs.set("order_velocity", params.order_velocity);
+  if (params.strength_tier && params.strength_tier !== "ALL") qs.set("strength_tier", params.strength_tier);
+  if (params.sovereign_only) qs.set("sovereign_only", "true");
+  if (params.search) qs.set("search", params.search);
+  if (params.sort_by) qs.set("sort_by", params.sort_by);
+  if (params.sort_order) qs.set("sort_order", params.sort_order);
+
+  return request<CumulativeBacklogResponse>(`/announcements/order-wins/cumulative-backlog?${qs.toString()}`);
 }
 
 export async function fetchAnnouncementStats(): Promise<AnnouncementStats> {

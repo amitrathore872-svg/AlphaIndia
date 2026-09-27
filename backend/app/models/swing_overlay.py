@@ -19,7 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class SwingPosition(Base):
@@ -59,8 +59,8 @@ class SwingPosition(Base):
     unrealized_swing_pnl = Column(Float, default=0.0)
     alpha_yield_pct = Column(Float, default=0.0)         # Excess % return added on top of B&H
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     __table_args__ = (
         Index("ix_swing_pos_port_sym", "portfolio_id", "symbol"),
@@ -105,7 +105,7 @@ class SwingQuantSignal(Base):
     target_2_price = Column(Float, nullable=True)
     reward_risk_ratio = Column(Float, default=0.0)
 
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utc_now, index=True)
 
 
 class SwingTradeLog(Base):
@@ -130,7 +130,7 @@ class SwingTradeLog(Base):
     holding_hours = Column(Float, default=0.0)
     setup_dna = Column(String(100), nullable=True) # Trend_Supertrend, EMA_Pullback, RSI_Momentum
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class SwingStockProfile(Base):
@@ -152,4 +152,4 @@ class SwingStockProfile(Base):
     historical_win_rate = Column(Float, default=60.0)
     historical_profit_factor = Column(Float, default=2.5)
     
-    last_profiled_at = Column(DateTime, default=datetime.utcnow)
+    last_profiled_at = Column(DateTime, default=utc_now)

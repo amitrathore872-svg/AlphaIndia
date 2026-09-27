@@ -5,7 +5,7 @@ Typed Pydantic BaseSettings with backward-compatible attribute exports.
 """
 
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     NSE_USE_CURL_CFFI: bool = Field(
         default=True,
         description="Use curl_cffi with browser TLS impersonation to avoid Akamai 403 blocks",
+    )
+
+    # DhanHQ Live Market Feed Credentials
+    DHAN_CLIENT_ID: Optional[str] = Field(
+        default=None,
+        description="Dhan 10-digit Client ID for real-time market data",
+    )
+    DHAN_ACCESS_TOKEN: Optional[str] = Field(
+        default=None,
+        description="DhanHQ JWT Access Token",
     )
 
     # CORS Settings

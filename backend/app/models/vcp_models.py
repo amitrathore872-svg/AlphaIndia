@@ -19,7 +19,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class VCPPattern(Base):
@@ -58,7 +58,7 @@ class VCPPattern(Base):
     vcp_score = Column(Float, nullable=False, default=0.0)  # 0-100, reject < 80
     vcp_stage = Column(String(50), default="STAGE_3_CONTRACTION")  # e.g. "3-Stage VCP", "4-Stage VCP"
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (
         Index("ix_vcp_pattern_sym_date", "symbol", "scan_date"),
@@ -93,7 +93,7 @@ class VolumeAnalysis(Base):
     # Gate 3 Score
     volume_score = Column(Float, nullable=False, default=0.0)  # 0-100, reject < 75
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (
         Index("ix_vcp_vol_sym_date", "symbol", "scan_date"),
@@ -131,7 +131,7 @@ class BreakoutSignal(Base):
     # Status: CONFIRMED_BREAKOUT, PRE_BREAKOUT_COILING, POCKET_PIVOT
     status = Column(String(50), default="PRE_BREAKOUT_COILING", index=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (
         Index("ix_vcp_breakout_sym_date", "symbol", "breakout_date"),
@@ -184,7 +184,7 @@ class VCPAIScore(Base):
     mf_holding_change = Column(Float, default=0.0)
     catalyst_summary = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (
         Index("ix_vcp_ai_sym_date", "symbol", "scan_date"),
@@ -205,7 +205,7 @@ class VCPScanRejection(Base):
     reason = Column(Text, nullable=False)
     gate_details = Column(JSON, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     __table_args__ = (
         Index("ix_vcp_rejection_sym_date", "symbol", "scan_date"),

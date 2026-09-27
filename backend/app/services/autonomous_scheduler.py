@@ -35,6 +35,7 @@ class AutonomousEngineScheduler:
     INTERVAL_DISCOVERY_ATHENA = 180   # 3 mins
     INTERVAL_VCP_SCAN = 300           # 5 mins
     INTERVAL_GROWTH_IMPORT = 900      # 15 mins
+    INTERVAL_CPR_SCAN = 300           # 5 mins
 
     # Execution telemetry state
     _engine_telemetry: Dict[str, Dict[str, Any]] = {
@@ -78,12 +79,45 @@ class AutonomousEngineScheduler:
             "last_records": 0,
             "last_error": None,
         },
+        "cpr_engine": {
+            "name": "CPR Compression & Alert Engine",
+            "interval_sec": 300,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
     }
+
+    _disabled_engines: set = set()
 
     @classmethod
     def is_running(cls) -> bool:
         with cls._lock:
             return cls._is_running and cls._thread is not None and cls._thread.is_alive()
+
+    @classmethod
+    def is_engine_enabled(cls, engine_key: str) -> bool:
+        with cls._lock:
+            return engine_key not in cls._disabled_engines
+
+    @classmethod
+    def enable_engine(cls, engine_key: str):
+        with cls._lock:
+            cls._disabled_engines.discard(engine_key)
+            if engine_key in cls._engine_telemetry:
+                cls._engine_telemetry[engine_key]["status"] = "IDLE"
+            logger.info(f"[AutonomousEngineScheduler] Engine '{engine_key}' enabled.")
+
+    @classmethod
+    def disable_engine(cls, engine_key: str):
+        with cls._lock:
+            cls._disabled_engines.add(engine_key)
+            if engine_key in cls._engine_telemetry:
+                cls._engine_telemetry[engine_key]["status"] = "STOPPED"
+            logger.info(f"[AutonomousEngineScheduler] Engine '{engine_key}' disabled.")
 
     @classmethod
     def start(cls):
@@ -131,6 +165,7 @@ class AutonomousEngineScheduler:
         next_wire = now + 5               # 5s warmup
         next_discovery = now + 15         # 15s warmup
         next_vcp = now + 30               # 30s warmup
+        next_cpr = now + 45               # 45s warmup
         next_growth = now + 60            # 60s warmup
 
         while not cls._stop_event.is_set():
@@ -140,7 +175,8 @@ class AutonomousEngineScheduler:
             # Cycle 1: Live Exchange Wire & CMP Price Refresher
             # -------------------------------------------------------------
             if current_time >= next_wire:
-                cls._execute_wire_prices_cycle()
+                if cls.is_engine_enabled("wire_prices"):
+                    cls._execute_wire_prices_cycle()
                 next_wire = time.time() + cls.INTERVAL_WIRE_PRICES
                 cls._update_next_run("wire_prices", cls.INTERVAL_WIRE_PRICES)
 
@@ -148,7 +184,8 @@ class AutonomousEngineScheduler:
             # Cycle 2: Results Discovery & Athena Omega 5-Gate Evaluator
             # -------------------------------------------------------------
             if current_time >= next_discovery:
-                cls._execute_discovery_athena_cycle()
+                if cls.is_engine_enabled("discovery_athena"):
+                    cls._execute_discovery_athena_cycle()
                 next_discovery = time.time() + cls.INTERVAL_DISCOVERY_ATHENA
                 cls._update_next_run("discovery_athena", cls.INTERVAL_DISCOVERY_ATHENA)
 
@@ -156,15 +193,26 @@ class AutonomousEngineScheduler:
             # Cycle 3: Minervini VCP Breakout & Volume Surge Engine
             # -------------------------------------------------------------
             if current_time >= next_vcp:
-                cls._execute_vcp_cycle()
+                if cls.is_engine_enabled("vcp_engine"):
+                    cls._execute_vcp_cycle()
                 next_vcp = time.time() + cls.INTERVAL_VCP_SCAN
                 cls._update_next_run("vcp_engine", cls.INTERVAL_VCP_SCAN)
 
             # -------------------------------------------------------------
-            # Cycle 4: Financial Importer & Growth Calculation Engine
+            # Cycle 4: CPR Compression Scanner & Intraday Alert Engine
+            # -------------------------------------------------------------
+            if current_time >= next_cpr:
+                if cls.is_engine_enabled("cpr_engine"):
+                    cls._execute_cpr_cycle()
+                next_cpr = time.time() + cls.INTERVAL_CPR_SCAN
+                cls._update_next_run("cpr_engine", cls.INTERVAL_CPR_SCAN)
+
+            # -------------------------------------------------------------
+            # Cycle 5: Financial Importer & Growth Calculation Engine
             # -------------------------------------------------------------
             if current_time >= next_growth:
-                cls._execute_growth_cycle()
+                if cls.is_engine_enabled("growth_engine"):
+                    cls._execute_growth_cycle()
                 next_growth = time.time() + cls.INTERVAL_GROWTH_IMPORT
                 cls._update_next_run("growth_engine", cls.INTERVAL_GROWTH_IMPORT)
 
@@ -211,6 +259,17 @@ class AutonomousEngineScheduler:
                     logger.info(f"[AutonomousEngineScheduler] Dispatched {len(cat_alerts)} material catalyst alerts.")
             except Exception as cat_err:
                 logger.warning(f"[AutonomousEngineScheduler] Catalyst alert check notice: {cat_err}")
+
+            # 4. Breakout Execution Engine Autonomous Live Watcher
+            try:
+                from app.services.breakout_execution_service import BreakoutExecutionService
+                breakout_res = BreakoutExecutionService.evaluate_watched_candidates(db)
+                if breakout_res and breakout_res.get("evaluated_count", 0) > 0:
+                    records_count += breakout_res.get("evaluated_count", 0)
+                    if breakout_res.get("newly_triggered"):
+                        logger.info(f"[AutonomousEngineScheduler] BREAKOUT TRIGGERED for: {breakout_res.get('newly_triggered')}")
+            except Exception as b_err:
+                logger.debug(f"[AutonomousEngineScheduler] Breakout execution notice: {b_err}")
 
             ControlSystemService.record_service_fetch(
                 service_id="exchange_live_wire",
@@ -307,7 +366,19 @@ class AutonomousEngineScheduler:
             except Exception as intra_err:
                 logger.warning(f"[AutonomousEngineScheduler] Intraday radar pre-warm failed: {intra_err}")
 
-            # 3. Master Autonomous Opportunity Radar Dispatch (VCP, Pre-Breakout, Momentum, Tomorrow Radar)
+            # 3. Pre-warm Momentum, Pre-Breakout, and Delivery Radar caches
+            try:
+                from app.services.momentum_screener_service import MomentumScreenerService
+                from app.services.prebreakout_radar_service import PreBreakoutRadarService
+                from app.services.delivery_screener_service import DeliveryScreenerService
+
+                MomentumScreenerService.trigger_background_scan(db=db)
+                PreBreakoutRadarService.trigger_background_scan(db=db)
+                DeliveryScreenerService.trigger_background_scan()
+            except Exception as warm_err:
+                logger.warning(f"[AutonomousEngineScheduler] Radar cache pre-warm notice: {warm_err}")
+
+            # 4. Master Autonomous Opportunity Radar Dispatch (VCP, Pre-Breakout, Momentum, Tomorrow Radar)
             try:
                 from app.services.opportunity_alert_service import OpportunityAlertService
                 alert_res = OpportunityAlertService.scan_and_dispatch_opportunity_alerts(db, force_scan=False)
@@ -375,6 +446,41 @@ class AutonomousEngineScheduler:
             logger.error(f"[AutonomousEngineScheduler] Growth cycle error: {exc}", exc_info=True)
             ControlSystemService.record_service_fetch(
                 service_id="screener_financial_importer",
+                records_count=0,
+                status="ERROR",
+                error_msg=error_msg,
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        finally:
+            db.close()
+
+        cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_cpr_cycle(cls):
+        key = "cpr_engine"
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        db = SessionLocal()
+        try:
+            from app.services.cpr_alert_service import CPRAlertService
+            alerts = CPRAlertService.evaluate_live_cpr_alerts(db)
+            records_count = len(alerts)
+
+            ControlSystemService.record_service_fetch(
+                service_id="cpr_compression_engine",
+                records_count=records_count,
+                status="SUCCESS",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] CPR cycle error: {exc}", exc_info=True)
+            ControlSystemService.record_service_fetch(
+                service_id="cpr_compression_engine",
                 records_count=0,
                 status="ERROR",
                 error_msg=error_msg,

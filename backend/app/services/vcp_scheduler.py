@@ -37,8 +37,12 @@ class VCPScheduler:
     last_weekend_run: datetime = None
 
     @classmethod
+    def is_running(cls) -> bool:
+        return cls._is_running and cls._thread is not None and cls._thread.is_alive()
+
+    @classmethod
     def start(cls):
-        if cls._is_running:
+        if cls._is_running and cls._thread is not None and cls._thread.is_alive():
             return
         cls._is_running = True
         cls._stop_event.clear()

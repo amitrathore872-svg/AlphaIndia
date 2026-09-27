@@ -6,7 +6,7 @@ Parallel Architecture - Audit & Job History for Screener.in Imports
 from datetime import datetime
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class ScreenerImportRun(Base):
@@ -18,7 +18,7 @@ class ScreenerImportRun(Base):
     # Status: RUNNING, SUCCESS, PARTIAL, FAILED, ABORTED
     status = Column(String(20), default="RUNNING", index=True)
 
-    start_time = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime, default=utc_now)
     end_time = Column(DateTime, nullable=True)
     duration_seconds = Column(Float, default=0.0)
 
@@ -30,4 +30,4 @@ class ScreenerImportRun(Base):
     success_rate_percent = Column(Float, default=0.0)
 
     error_summary = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)

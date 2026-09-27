@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class CompanyMarketMetrics(Base):
@@ -55,7 +55,7 @@ class CompanyMarketMetrics(Base):
     industry = Column(String(100), nullable=True, index=True)
     exchange = Column(String(20), default="NSE", index=True)
 
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationship to Company
     company = relationship("Company", back_populates="market_metrics")

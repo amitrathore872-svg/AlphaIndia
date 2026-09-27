@@ -14,15 +14,19 @@ institutional investment card with:
 8. Historical Comparison with Previous Order Wins
 """
 
+from collections import defaultdict
+from datetime import datetime as dt_cls, timezone as tz_cls, timedelta as td_cls
 import datetime
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
 from app.models.announcement_radar import AnnouncementRadar
 from app.models.company import Company
+from app.models.company_market_metrics import CompanyMarketMetrics
+from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
 
 logger = logging.getLogger(__name__)
@@ -616,3 +620,341 @@ class OrderWinIntelligenceService:
         db.commit()
         logger.info(f"[OrderWinIntelligenceService] Successfully processed {analyzed} order wins.")
         return {"total_analyzed": analyzed, "updated": updated}
+
+    @classmethod
+    def get_cumulative_order_books(
+        cls,
+        db: Session,
+        min_deal_cr: Optional[float] = None,
+        min_book_to_bill: Optional[float] = None,
+        order_velocity: Optional[str] = None,
+        strength_tier: Optional[str] = None,
+        sovereign_only: bool = False,
+        search: Optional[str] = None,
+        sort_by: str = "total_deal_cr",
+        sort_order: str = "desc",
+        page: int = 1,
+        limit: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        Calculates cumulative order book strength, multi-quarter backlog visibility,
+        Book-to-Bill multiple against TTM Revenue, sovereign client trust ratings,
+        and velocity metrics across all tracked corporate entities.
+        """
+        # 1. Fetch all order win announcements
+        orders = (
+            db.query(AnnouncementRadar)
+            .filter(
+                (AnnouncementRadar.catalyst_type == "ORDER_WIN") |
+                (AnnouncementRadar.order_significance_score.isnot(None))
+            )
+            .order_by(desc(AnnouncementRadar.announcement_date), desc(AnnouncementRadar.published_at))
+            .all()
+        )
+
+        if not orders:
+            return {
+                "items": [],
+                "total_companies": 0,
+                "summary": {
+                    "total_tracked_backlog_cr": 0.0,
+                    "total_orders_tracked": 0,
+                    "total_companies_tracked": 0,
+                    "transformational_companies_count": 0,
+                    "high_visibility_companies_count": 0,
+                    "sovereign_backed_backlog_cr": 0.0,
+                    "sovereign_share_pct": 0.0,
+                    "surging_velocity_count": 0,
+                },
+                "page": page,
+                "limit": limit,
+                "total_pages": 1,
+            }
+
+        # 2. Index companies and market metrics
+        companies = db.query(
+            Company.id, Company.symbol, Company.company, Company.sector, Company.industry, Company.exchange
+        ).all()
+        comp_by_clean = {}
+        for c in companies:
+            if c.symbol:
+                clean_sym = c.symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+                comp_by_clean[clean_sym] = c
+                comp_by_clean[c.symbol.strip().upper()] = c
+
+        # Market metrics
+        cmm_rows = db.query(
+            CompanyMarketMetrics.company_id,
+            CompanyMarketMetrics.cmp,
+            CompanyMarketMetrics.market_cap_category,
+            CompanyMarketMetrics.fifty_two_week_high,
+            CompanyMarketMetrics.fifty_two_week_low,
+            CompanyMarketMetrics.pe_ratio,
+            CompanyMarketMetrics.roce,
+        ).all()
+        cmm_map = {
+            r[0]: {
+                "cmp": r[1],
+                "market_cap_category": r[2],
+                "high_52w": r[3],
+                "low_52w": r[4],
+                "pe_ratio": r[5],
+                "roce": r[6],
+            }
+            for r in cmm_rows
+        }
+
+        # 3. Match company IDs and compute bulk TTM Revenue from QuarterlyResult
+        matched_comp_ids = set()
+        for o in orders:
+            sym = (o.symbol or "").replace(".NS", "").replace(".BO", "").strip().upper()
+            c = comp_by_clean.get(sym)
+            if c:
+                matched_comp_ids.add(c.id)
+
+        comp_q_rev = defaultdict(list)
+        if matched_comp_ids:
+            q_rows = (
+                db.query(QuarterlyResult.company_id, QuarterlyResult.revenue, QuarterlyResult.period_end)
+                .filter(QuarterlyResult.company_id.in_(list(matched_comp_ids)))
+                .order_by(QuarterlyResult.company_id, desc(QuarterlyResult.period_end))
+                .all()
+            )
+            for cid, rev, pend in q_rows:
+                if len(comp_q_rev[cid]) < 4 and rev is not None:
+                    comp_q_rev[cid].append(float(rev))
+
+        comp_ttm = {cid: sum(revs) for cid, revs in comp_q_rev.items()}
+
+        # 4. Group orders by company entity
+        now_ref = dt_cls.now(tz_cls.utc)
+        d30 = now_ref - td_cls(days=30)
+        d90 = now_ref - td_cls(days=90)
+
+        SOVEREIGN_KEYWORDS = [
+            "railway", "railways", "rvnl", "irfc", "ircon", "nhai", "ongc", "ntpc", "seci",
+            "defence", "defense", "mod", "army", "navy", "air force", "isro", "drdo", "bhel",
+            "sail", "gail", "iocl", "bpcl", "hpcl", "coal india", "powergrid", "pgcil",
+            "transco", "discom", "genco", "government", "ministry", "cpwd", "pwd",
+            "municipal", "metro", "mmrda", "dmrc", "bmrcl", "bel", "hal", "mazagon",
+            "rites", "psu", "ap transco", "cidco", "esic"
+        ]
+
+        def _is_sovereign(client: Optional[str], headline: str, filing: Optional[str]) -> bool:
+            c_str = f"{client or ''} {headline or ''} {filing or ''}".lower()
+            return any(k in c_str for k in SOVEREIGN_KEYWORDS)
+
+        company_map: Dict[str, Dict[str, Any]] = {}
+
+        for o in orders:
+            sym = (o.symbol or "").replace(".NS", "").replace(".BO", "").strip().upper()
+            comp_obj = comp_by_clean.get(sym)
+            key = sym if sym else (o.company_name or "").strip()
+            if not key:
+                continue
+
+            if key not in company_map:
+                metrics = cmm_map.get(comp_obj.id, {}) if comp_obj else {}
+                cmp_val = metrics.get("cmp") or o.current_price
+                ttm_val = comp_ttm.get(comp_obj.id, 0.0) if comp_obj else 0.0
+
+                company_map[key] = {
+                    "symbol": sym if sym else None,
+                    "company_name": (comp_obj.company if comp_obj else o.company_name) or o.company_name,
+                    "tradingview_symbol": sym if sym else None,
+                    "exchange": (comp_obj.exchange if comp_obj else "NSE") or "NSE",
+                    "sector": (comp_obj.sector if comp_obj else "Unknown") or "Unknown",
+                    "industry": (comp_obj.industry if comp_obj else "Unknown") or "Unknown",
+                    "is_listed": True if (sym or o.is_listed) else False,
+                    "cmp": round(float(cmp_val), 1) if cmp_val else None,
+                    "market_cap_category": metrics.get("market_cap_category", "MID_CAP"),
+                    "high_52w": metrics.get("high_52w"),
+                    "low_52w": metrics.get("low_52w"),
+                    "pe_ratio": metrics.get("pe_ratio"),
+                    "roce": metrics.get("roce"),
+                    "ttm_revenue_cr": round(float(ttm_val), 1),
+                    "orders": [],
+                    "order_count": 0,
+                    "total_deal_cr": 0.0,
+                    "total_quarterly_run_rate_cr": 0.0,
+                    "total_annualized_pat_cr": 0.0,
+                    "sovereign_deal_cr": 0.0,
+                    "sovereign_orders_count": 0,
+                    "counterparties": set(),
+                    "execution_months_list": [],
+                    "latest_order_date": None,
+                    "oldest_order_date": None,
+                }
+
+            rec = company_map[key]
+            deal = o.deal_value_cr or 0.0
+            rec["order_count"] += 1
+            rec["total_deal_cr"] += deal
+            rec["total_quarterly_run_rate_cr"] += (o.order_quarterly_rev_cr or (round(deal / 6.0, 1) if deal else 0.0))
+            rec["total_annualized_pat_cr"] += (o.order_earnings_impact_cr or 0.0)
+
+            if _is_sovereign(o.order_client_counterparty, o.headline, o.filing_description):
+                rec["sovereign_deal_cr"] += deal
+                rec["sovereign_orders_count"] += 1
+
+            if o.order_client_counterparty:
+                clean_cp = o.order_client_counterparty.strip()
+                if clean_cp:
+                    rec["counterparties"].add(clean_cp)
+
+            if o.order_execution_months:
+                rec["execution_months_list"].append(o.order_execution_months)
+
+            fdate = o.announcement_date or o.published_at
+            if fdate:
+                if rec["latest_order_date"] is None or fdate > rec["latest_order_date"]:
+                    rec["latest_order_date"] = fdate
+                if rec["oldest_order_date"] is None or fdate < rec["oldest_order_date"]:
+                    rec["oldest_order_date"] = fdate
+
+            # Embed single order contract
+            rec["orders"].append({
+                "id": o.id,
+                "headline": o.headline,
+                "filing_date": fdate.isoformat() if fdate else None,
+                "deal_value_cr": o.deal_value_cr,
+                "rev_pct_ttm": o.synergy_rev_pct_ttm,
+                "counterparty": o.order_client_counterparty,
+                "execution_months": o.order_execution_months or 18,
+                "quarterly_rev_cr": o.order_quarterly_rev_cr,
+                "pat_impact_cr": o.order_earnings_impact_cr,
+                "significance_tier": o.order_significance_tier or "HIGH_IMPACT",
+                "significance_score": o.order_significance_score or 80.0,
+                "pdf_url": o.pdf_url,
+                "source_url": o.source_url,
+                "ai_insight": o.ai_insight or o.buy_thesis,
+            })
+
+        # 5. Compute derived metrics per company
+        all_companies_list = list(company_map.values())
+        for item in all_companies_list:
+            ttm = item["ttm_revenue_cr"]
+            tot_deal = item["total_deal_cr"]
+            b2b = round(tot_deal / ttm, 2) if ttm > 0 else (None if tot_deal == 0 else 1.0)
+            item["book_to_bill_multiple"] = b2b
+
+            # Backlog coverage years
+            if b2b is not None:
+                item["backlog_coverage_years"] = b2b
+            elif item["execution_months_list"]:
+                item["backlog_coverage_years"] = round((sum(item["execution_months_list"]) / len(item["execution_months_list"])) / 12.0, 1)
+            else:
+                item["backlog_coverage_years"] = 1.5
+
+            # Order velocity
+            latest_dt = item["latest_order_date"]
+            if latest_dt:
+                aware_dt = latest_dt.replace(tzinfo=tz_cls.utc) if latest_dt.tzinfo is None else latest_dt
+                if aware_dt >= d30:
+                    item["order_velocity_signal"] = "SURGING_30D"
+                elif aware_dt >= d90:
+                    item["order_velocity_signal"] = "ACCELERATING"
+                else:
+                    item["order_velocity_signal"] = "ESTABLISHED"
+            else:
+                item["order_velocity_signal"] = "ESTABLISHED"
+
+            # Strength Tier
+            if (b2b is not None and b2b >= 1.5) or tot_deal >= 2000.0:
+                item["strength_tier"] = "TRANSFORMATIONAL_SURGE"
+            elif (b2b is not None and b2b >= 0.75) or tot_deal >= 750.0:
+                item["strength_tier"] = "HIGH_VISIBILITY"
+            elif (b2b is not None and b2b >= 0.30) or tot_deal >= 200.0:
+                item["strength_tier"] = "EXPANDING_BACKLOG"
+            else:
+                item["strength_tier"] = "STEADY_REPLENISHMENT"
+
+            item["sovereign_client_pct"] = (
+                round((item["sovereign_deal_cr"] / tot_deal * 100.0), 1)
+                if tot_deal > 0
+                else (100.0 if item["sovereign_orders_count"] > 0 else 0.0)
+            )
+            item["avg_execution_months"] = (
+                round(sum(item["execution_months_list"]) / len(item["execution_months_list"]), 1)
+                if item["execution_months_list"]
+                else 18.0
+            )
+            item["top_counterparties"] = list(item["counterparties"])[:4]
+            item["total_deal_cr"] = round(tot_deal, 1)
+            item["total_quarterly_run_rate_cr"] = round(item["total_quarterly_run_rate_cr"], 1)
+            item["total_annualized_pat_cr"] = round(item["total_annualized_pat_cr"], 1)
+            item["latest_order_date"] = item["latest_order_date"].isoformat() if item["latest_order_date"] else None
+            item["oldest_order_date"] = item["oldest_order_date"].isoformat() if item["oldest_order_date"] else None
+            del item["counterparties"]
+            del item["execution_months_list"]
+
+        # Global Summary (before user filters)
+        total_tracked_backlog_cr = round(sum(c["total_deal_cr"] for c in all_companies_list), 1)
+        total_orders_tracked = sum(c["order_count"] for c in all_companies_list)
+        sovereign_backed_backlog_cr = round(sum(c["sovereign_deal_cr"] for c in all_companies_list), 1)
+        sovereign_share_pct = round((sovereign_backed_backlog_cr / total_tracked_backlog_cr * 100.0), 1) if total_tracked_backlog_cr > 0 else 0.0
+        transformational_count = sum(1 for c in all_companies_list if c["strength_tier"] == "TRANSFORMATIONAL_SURGE")
+        high_visibility_count = sum(1 for c in all_companies_list if c["strength_tier"] in ("TRANSFORMATIONAL_SURGE", "HIGH_VISIBILITY"))
+        surging_velocity_count = sum(1 for c in all_companies_list if c["order_velocity_signal"] == "SURGING_30D")
+
+        # 6. Apply User Filters
+        filtered = all_companies_list
+
+        if min_deal_cr is not None:
+            filtered = [c for c in filtered if c["total_deal_cr"] >= min_deal_cr]
+
+        if min_book_to_bill is not None:
+            filtered = [c for c in filtered if (c["book_to_bill_multiple"] or 0.0) >= min_book_to_bill]
+
+        if order_velocity and order_velocity != "ALL":
+            filtered = [c for c in filtered if c["order_velocity_signal"] == order_velocity]
+
+        if strength_tier and strength_tier != "ALL":
+            filtered = [c for c in filtered if c["strength_tier"] == strength_tier]
+
+        if sovereign_only:
+            filtered = [c for c in filtered if c["sovereign_client_pct"] >= 40.0 or c["sovereign_orders_count"] > 0]
+
+        if search:
+            s = search.strip().lower()
+            filtered = [
+                c for c in filtered
+                if (s in (c["symbol"] or "").lower())
+                or (s in (c["company_name"] or "").lower())
+                or any(s in cp.lower() for cp in c.get("top_counterparties", []))
+            ]
+
+        # 7. Sorting
+        def _sort_key(item: Dict[str, Any]):
+            val = item.get(sort_by)
+            if val is None:
+                return -9999999.0 if sort_order == "desc" else 9999999.0
+            return val
+
+        reverse = (sort_order == "desc")
+        filtered.sort(key=_sort_key, reverse=reverse)
+
+        # 8. Pagination
+        total_matched = len(filtered)
+        total_pages = max(1, (total_matched + limit - 1) // limit)
+        offset = (page - 1) * limit
+        paged_items = filtered[offset : offset + limit]
+
+        return {
+            "items": paged_items,
+            "total_companies": total_matched,
+            "summary": {
+                "total_tracked_backlog_cr": total_tracked_backlog_cr,
+                "total_orders_tracked": total_orders_tracked,
+                "total_companies_tracked": len(all_companies_list),
+                "transformational_companies_count": transformational_count,
+                "high_visibility_companies_count": high_visibility_count,
+                "sovereign_backed_backlog_cr": sovereign_backed_backlog_cr,
+                "sovereign_share_pct": sovereign_share_pct,
+                "surging_velocity_count": surging_velocity_count,
+            },
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+        }
+

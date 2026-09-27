@@ -7,86 +7,35 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.models.company import Company
 
 router = APIRouter(tags=["Companies"])
 
 
 # ==========================================================
-# Database Dependency
+# Dashboard Summary API (Consolidated Single DB Query)
 # ==========================================================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# ==========================================================
-# Dashboard Summary API
-# ==========================================================
-import pandas as pd
-from pathlib import Path
-
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-
-
 @router.get("/companies/dashboard-summary")
 def dashboard_summary(db: Session = Depends(get_db)):
-    total_companies = db.query(func.count(Company.id)).scalar() or 0
-    active_companies = (
-        db.query(func.count(Company.id))
-        .filter(Company.listing_status == "Active")
-        .filter(Company.is_growth_eligible.is_(True))
-        .scalar()
-        or 0
-    )
-    unlisted_companies = (
-        db.query(func.count(Company.id))
-        .filter(Company.listing_status != "Active")
-        .scalar()
-        or 0
-    )
-    mutual_funds = (
-        db.query(func.count(Company.id))
-        .filter(Company.security_type == "MUTUAL_FUND")
-        .scalar()
-        or 0
-    )
-    debt_instruments = (
-        db.query(func.count(Company.id))
-        .filter(Company.security_type == "DEBT")
-        .scalar()
-        or 0
-    )
-
-    nse_companies = 0
-    bse_companies = 0
-
-    try:
-        nse_file = DATA_DIR / "nse_companies_master.csv"
-        if nse_file.exists():
-            nse_companies = len(pd.read_csv(nse_file))
-    except Exception:
-        pass
-
-    try:
-        bse_file = DATA_DIR / "bse_companies_master.csv"
-        if bse_file.exists():
-            bse_companies = len(pd.read_csv(bse_file))
-    except Exception:
-        pass
+    stats = db.query(
+        func.count(Company.id).label("total_companies"),
+        func.count().filter(Company.listing_status == "Active", Company.is_growth_eligible.is_(True)).label("active_companies"),
+        func.count().filter(Company.listing_status != "Active").label("unlisted_companies"),
+        func.count().filter(Company.security_type == "MUTUAL_FUND").label("mutual_funds"),
+        func.count().filter(Company.security_type == "DEBT").label("debt_instruments"),
+        func.count().filter(Company.exchange == "NSE").label("nse_companies"),
+        func.count().filter(Company.exchange == "BSE").label("bse_companies"),
+    ).one()
 
     return {
-        "total_companies": total_companies,
-        "active_companies": active_companies,
-        "unlisted_companies": unlisted_companies,
-        "mutual_funds": mutual_funds,
-        "debt_instruments": debt_instruments,
-        "nse_companies": nse_companies,
-        "bse_companies": bse_companies,
+        "total_companies": stats.total_companies or 0,
+        "active_companies": stats.active_companies or 0,
+        "unlisted_companies": stats.unlisted_companies or 0,
+        "mutual_funds": stats.mutual_funds or 0,
+        "debt_instruments": stats.debt_instruments or 0,
+        "nse_companies": stats.nse_companies or 0,
+        "bse_companies": stats.bse_companies or 0,
     }
 
 # ==========================================================

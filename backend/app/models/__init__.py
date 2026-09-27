@@ -59,6 +59,8 @@ from app.models.swing_overlay import (
     SwingStockProfile,
 )
 from app.models.user import User, UserSession
+from app.models.breakout_execution import BreakoutExecutionCandidate
+from app.models.cpr_models import CPRScannerDaily
 
 __all__ = [
     "User",
@@ -112,4 +114,6 @@ __all__ = [
     "SwingQuantSignal",
     "SwingTradeLog",
     "SwingStockProfile",
+    "BreakoutExecutionCandidate",
+    "CPRScannerDaily",
 ]

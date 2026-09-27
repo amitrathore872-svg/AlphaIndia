@@ -6,7 +6,7 @@ Parallel Architecture - Real-time activity logs for Screener.in telemetry & cons
 from datetime import datetime
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class ScreenerImportEvent(Base):
@@ -27,4 +27,4 @@ class ScreenerImportEvent(Base):
     parse_time_ms = Column(Float, nullable=True)
     db_write_time_ms = Column(Float, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)

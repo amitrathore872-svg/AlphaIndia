@@ -111,13 +111,35 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Company Name & Symbol */}
-          <span className="text-base font-black tracking-tight text-white group-hover:text-cyan-300 transition-colors">
-            {item.company_name}
-          </span>
-          {item.symbol && (
-            <span className="rounded bg-slate-800/90 border border-slate-700 px-2 py-0.5 text-xs font-mono font-bold text-cyan-400">
-              {item.symbol}
+          {/* Company Name & Symbol with TradingView chart link */}
+          {item.symbol ? (
+            <a
+              href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, ""))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-base font-black tracking-tight text-white hover:text-cyan-300 hover:underline transition-colors"
+              title={`Open ${item.symbol} chart on TradingView`}
+            >
+              <span>{item.company_name}</span>
+              <ExternalLink size={12} className="opacity-60 hover:opacity-100 text-cyan-400 shrink-0" />
+            </a>
+          ) : (
+            <span className="text-base font-black tracking-tight text-white group-hover:text-cyan-300 transition-colors">
+              {item.company_name}
             </span>
+          )}
+          {item.symbol && (
+            <a
+              href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, ""))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="rounded bg-slate-800/90 border border-slate-700 px-2 py-0.5 text-xs font-mono font-bold text-cyan-400 hover:border-cyan-500/50 hover:bg-slate-800 transition-all"
+              title={`TradingView Chart: ${item.symbol}`}
+            >
+              {item.symbol}
+            </a>
           )}
           {item.is_listed && (
             <span className="rounded bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-mono font-semibold text-emerald-400">

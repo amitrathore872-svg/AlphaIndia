@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class FinancialImportAudit(Base):
@@ -58,18 +58,18 @@ class FinancialImportAudit(Base):
 
     audited_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     created_at = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
     )
 
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
     )
 
     company = relationship("Company")

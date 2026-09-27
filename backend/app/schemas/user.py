@@ -4,7 +4,7 @@ Sprint 36.5 Production Auth
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserRegister(BaseModel):
@@ -39,9 +39,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_verified: bool
     created_at: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):

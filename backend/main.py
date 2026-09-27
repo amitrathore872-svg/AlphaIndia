@@ -35,6 +35,7 @@ from app.api.stocks import router as stocks_router
 from app.api.delivery_radar import router as delivery_radar_router
 from app.api.momentum_screener import router as momentum_screener_router
 from app.api.prebreakout_radar import router as prebreakout_radar_router
+from app.api.breakout_execution import router as breakout_execution_router
 from app.api.portfolio import router as portfolio_router
 from app.api.swing_overlay import router as swing_overlay_router
 from app.api.auth import router as auth_router
@@ -44,6 +45,8 @@ from app.core.websocket_manager import ws_manager
 from app.api.metrics import router as metrics_router
 from app.core.telemetry import telemetry
 from app.api.screener_formula import router as screener_formula_router
+from app.api.live_intraday import router as live_intraday_router
+from app.api.cpr_scanner import router as cpr_scanner_router
 import time
 from fastapi import Request
 
@@ -139,6 +142,7 @@ app.include_router(watchlist_router)
 app.include_router(early_stage_router)
 app.include_router(monitoring_early_stage_router)
 app.include_router(announcements_router)
+app.include_router(announcements_router, prefix="/api/v1")
 app.include_router(athena_omega_router)
 app.include_router(institutional_radar_router, prefix="/api/v1")
 app.include_router(quarterly_results_router)
@@ -151,11 +155,16 @@ app.include_router(stocks_router)
 app.include_router(delivery_radar_router, prefix="/api/v1")
 app.include_router(momentum_screener_router, prefix="/api/v1")
 app.include_router(prebreakout_radar_router, prefix="/api/v1")
+app.include_router(breakout_execution_router, prefix="/api/v1")
 app.include_router(portfolio_router)
 app.include_router(swing_overlay_router)
 app.include_router(auth_router)
 app.include_router(websockets_router)
 app.include_router(screener_formula_router)
+app.include_router(live_intraday_router)
+app.include_router(live_intraday_router, prefix="/api/v1")
+app.include_router(cpr_scanner_router)
+app.include_router(cpr_scanner_router, prefix="/api/v1")
 
 
 # ==========================================================

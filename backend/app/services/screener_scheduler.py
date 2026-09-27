@@ -9,6 +9,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
+from app.db.database import utc_now
 from app.services.screener_telemetry_service import ScreenerTelemetryService
 from app.workers.screener_import_worker import ScreenerImportWorker
 
@@ -37,8 +38,15 @@ class ScreenerScheduler:
             logger.info(f"ScreenerScheduler interval updated to {cls._interval_seconds}s.")
 
     @classmethod
-    def start(cls):
+    def is_running(cls) -> bool:
         with cls._lock:
+            return cls._enabled and cls._thread is not None and cls._thread.is_alive()
+
+    @classmethod
+    def start(cls, interval_seconds: Optional[int] = None):
+        with cls._lock:
+            if interval_seconds:
+                cls._interval_seconds = max(60, interval_seconds)
             if cls._thread is not None and cls._thread.is_alive():
                 return
 
@@ -71,7 +79,7 @@ class ScreenerScheduler:
         from app.db.database import SessionLocal
         from app.models.screener_import_run import ScreenerImportRun
 
-        now = datetime.utcnow()
+        now = utc_now()
         warmup_delay = 20  # seconds
 
         try:

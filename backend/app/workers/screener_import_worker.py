@@ -12,7 +12,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, utc_now
 from app.models.company import Company
 from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
@@ -79,6 +79,25 @@ class ScreenerImportWorker:
             return {"status": "STOPPING", "message": "Stop signal sent to worker."}
 
     @classmethod
+    def run_import_cycle(
+        cls,
+        db: Optional[Session] = None,
+        batch_size: int = 10,
+        delay_seconds: float = 0.5,
+        symbols_override: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Synchronously runs an import cycle for a small batch of targets.
+        Used by AutonomousEngineScheduler and ControlSystemService.
+        """
+        with cls._lock:
+            if cls._thread is not None and cls._thread.is_alive():
+                return {"status": "ALREADY_RUNNING", "imported_count": 0, "updated_count": 0}
+
+        run_id = f"cycle_{uuid.uuid4().hex[:10]}"
+        return cls._run_batch(run_id, batch_size, delay_seconds, symbols_override, db)
+
+    @classmethod
     def _run_loop(
         cls,
         run_id: str,
@@ -86,8 +105,20 @@ class ScreenerImportWorker:
         delay_seconds: float,
         symbols_override: Optional[List[str]],
     ):
-        db: Session = SessionLocal()
-        start_time = datetime.utcnow()
+        cls._run_batch(run_id, batch_size, delay_seconds, symbols_override)
+
+    @classmethod
+    def _run_batch(
+        cls,
+        run_id: str,
+        batch_size: int,
+        delay_seconds: float,
+        symbols_override: Optional[List[str]],
+        passed_db: Optional[Session] = None,
+    ) -> Dict[str, Any]:
+        db: Session = passed_db if passed_db is not None else SessionLocal()
+        should_close_db = passed_db is None
+        start_time = utc_now()
 
         run_record = ScreenerImportRun(
             run_id=run_id,
@@ -191,14 +222,14 @@ class ScreenerImportWorker:
                         .first()
                     )
                     if existing_stub:
-                        existing_stub.last_updated = datetime.utcnow()
+                        existing_stub.last_updated = utc_now()
                     else:
                         stub = ScreenerGrowthRecord(
                             symbol=sym,
                             company_name=name_hint or sym,
                             import_source="screener.in (unavailable)",
                             data_completeness_score=0.0,
-                            last_updated=datetime.utcnow(),
+                            last_updated=utc_now(),
                         )
                         db.add(stub)
                     db.commit()
@@ -228,7 +259,7 @@ class ScreenerImportWorker:
                     for k, v in profile.items():
                         if hasattr(existing, k) and k not in ("id", "import_timestamp", "quarters_history"):
                             setattr(existing, k, v)
-                    existing.last_updated = datetime.utcnow()
+                    existing.last_updated = utc_now()
                     updated_count += 1
                 else:
                     is_new = True
@@ -275,7 +306,7 @@ class ScreenerImportWorker:
                             existing_q.revenue_growth = q.get("revenue_growth")
                             existing_q.pat_growth = q.get("pat_growth")
                             existing_q.source = "SCREENER.IN"
-                            existing_q.imported_at = datetime.utcnow()
+                            existing_q.imported_at = utc_now()
                         else:
                             new_q = QuarterlyResult(
                                 company_id=company.id,
@@ -291,7 +322,7 @@ class ScreenerImportWorker:
                                 revenue_growth=q.get("revenue_growth"),
                                 pat_growth=q.get("pat_growth"),
                                 source="SCREENER.IN",
-                                imported_at=datetime.utcnow(),
+                                imported_at=utc_now(),
                             )
                             db.add(new_q)
                         quarters_imported_count += 1
@@ -311,7 +342,7 @@ class ScreenerImportWorker:
                         company.roce = profile.get("roce")
                     if profile.get("health_score") is not None:
                         company.health_score = profile.get("health_score")
-                    company.updated_at = datetime.utcnow()
+                    company.updated_at = utc_now()
 
                 db.commit()
                 w1 = time.perf_counter()
@@ -337,7 +368,7 @@ class ScreenerImportWorker:
             run_record.error_summary = str(e)
             ScreenerTelemetryService.set_failed(str(e))
         finally:
-            end_time = datetime.utcnow()
+            end_time = utc_now()
             duration = (end_time - start_time).total_seconds()
             run_record.end_time = end_time
             run_record.duration_seconds = round(duration, 1)
@@ -360,7 +391,8 @@ class ScreenerImportWorker:
 
             final_status = run_record.status
             db.commit()
-            db.close()
+            if should_close_db:
+                db.close()
 
             ScreenerTelemetryService.set_idle(success=(final_status in ("SUCCESS", "PARTIAL")))
             ScreenerTelemetryService.emit_event(
@@ -369,3 +401,13 @@ class ScreenerImportWorker:
                 level="INFO" if final_status in ("SUCCESS", "PARTIAL") else "ERROR",
                 run_id=run_id,
             )
+
+        return {
+            "status": final_status,
+            "run_id": run_id,
+            "imported_count": imported_count,
+            "updated_count": updated_count,
+            "failed_count": failed_count,
+            "skipped_count": skipped_count,
+            "duration_seconds": round(duration, 1),
+        }

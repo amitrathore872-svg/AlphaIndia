@@ -14,7 +14,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -58,9 +58,7 @@ class CandidateOut(BaseModel):
     last_seen:        str
     source_url:       Optional[str]   # direct link to triggering article
     is_listed:        bool            # True = matched in NSE/BSE companies
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StatusUpdate(BaseModel):

@@ -102,7 +102,7 @@ class QuarterlyResultItem(BaseModel):
     feed_type: str = "RESULT"               # "RESULT" | "ANNOUNCEMENT"
     is_pre_announcement: bool = False
 
-    # Financial metrics
+    # Financial metrics (Screener.in & Financial Warehouse)
     revenue: Optional[float] = None
     net_profit: Optional[float] = None
     eps: Optional[float] = None
@@ -114,6 +114,78 @@ class QuarterlyResultItem(BaseModel):
     roce: Optional[float] = None
     current_price: Optional[float] = None
     dma_50: Optional[float] = None
+
+    # Valuation & Price
+    stock_pe: Optional[float] = None
+    industry_pe: Optional[float] = None
+    price_to_book: Optional[float] = None
+    book_value: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    face_value: Optional[float] = None
+    peg_ratio: Optional[float] = None
+
+    # Trailing 12M & Profitability
+    pat_12m: Optional[float] = None
+    eps_12m: Optional[float] = None
+    opm_latest: Optional[float] = None
+    opm_ttm: Optional[float] = None
+    sales_growth_ttm: Optional[float] = None
+    profit_growth_ttm: Optional[float] = None
+
+    # Historical Multi-Year Growth
+    sales_growth_3yr: Optional[float] = None
+    sales_growth_5yr: Optional[float] = None
+    sales_growth_10yr: Optional[float] = None
+    profit_growth_3yr: Optional[float] = None
+    profit_growth_5yr: Optional[float] = None
+    profit_growth_10yr: Optional[float] = None
+
+    # Stock Price Returns & Technicals
+    return_3m: Optional[float] = None
+    return_6m: Optional[float] = None
+    return_1y: Optional[float] = None
+    stock_cagr_3yr: Optional[float] = None
+    stock_cagr_5yr: Optional[float] = None
+    dma_200: Optional[float] = None
+    high_52_week: Optional[float] = None
+    low_52_week: Optional[float] = None
+    distance_52w_high: Optional[float] = None
+    rsi_14: Optional[float] = None
+    beta: Optional[float] = None
+
+    # Ratios, Solvency & Health
+    roe: Optional[float] = None
+    debt_to_equity: Optional[float] = None
+    interest_coverage: Optional[float] = None
+    debtor_days: Optional[float] = None
+    inventory_days: Optional[float] = None
+    cash_conversion_cycle: Optional[float] = None
+    cfo_to_pat: Optional[float] = None
+    piotroski_score: Optional[float] = None
+    health_score: Optional[float] = None
+
+    # Balance Sheet & Cash Flows
+    borrowings: Optional[float] = None
+    reserves: Optional[float] = None
+    total_assets: Optional[float] = None
+    cfo_latest: Optional[float] = None
+    free_cash_flow: Optional[float] = None
+    fcf_yield: Optional[float] = None
+
+    # Shareholding Pattern (%)
+    promoter_holding: Optional[float] = None
+    fii_holding: Optional[float] = None
+    dii_holding: Optional[float] = None
+    public_holding: Optional[float] = None
+
+    # Quarterly Metrics Breakdown
+    latest_quarter_sales: Optional[float] = None
+    latest_quarter_net_profit: Optional[float] = None
+    operating_profit: Optional[float] = None
+    latest_quarter_eps: Optional[float] = None
+    quarterly_sales_yoy: Optional[float] = None
+    quarterly_pat_yoy: Optional[float] = None
+    quarterly_eps_yoy: Optional[float] = None
 
     # PEAD Intelligence (post-results)
     pead_score: float
@@ -128,6 +200,11 @@ class QuarterlyResultItem(BaseModel):
     is_elite_pead: bool
     pead_thesis: str
     pillar_breakdown: PillarBreakdown
+
+    # Systematic Failure Protection (New in Sprint 36.5)
+    guard_status: Optional[str] = "PASSED"
+    is_techno_funda_confirmed: Optional[bool] = True
+    guard_flags: Optional[List[str]] = []
 
     # Pre-Beat Intelligence (pre-announcement — new in Sprint 36.4)
     pre_beat_score: Optional[float] = None
@@ -568,6 +645,70 @@ def get_quarterly_results(
             "roce": roce,
             "current_price": cur_price,
             "dma_50": dma_50,
+            # Valuation & Multiples
+            "stock_pe": scr.stock_pe if scr else None,
+            "industry_pe": scr.industry_pe if scr else None,
+            "price_to_book": scr.price_to_book if scr else None,
+            "book_value": scr.book_value if scr else (matched_qr.book_value if matched_qr else None),
+            "dividend_yield": scr.dividend_yield if scr else None,
+            "face_value": scr.face_value if scr else None,
+            "peg_ratio": scr.peg_ratio if scr else None,
+            # Trailing 12M & Profitability
+            "pat_12m": pat_12m_val,
+            "eps_12m": scr.eps_12m if scr else None,
+            "opm_latest": scr.opm_latest if scr else opm,
+            "opm_ttm": scr.opm_ttm if scr else None,
+            "sales_growth_ttm": scr.sales_growth_ttm if scr else None,
+            "profit_growth_ttm": scr.profit_growth_ttm if scr else None,
+            # Historical Multi-Year Growth
+            "sales_growth_3yr": scr.sales_growth_3yr if scr else None,
+            "sales_growth_5yr": scr.sales_growth_5yr if scr else None,
+            "sales_growth_10yr": scr.sales_growth_10yr if scr else None,
+            "profit_growth_3yr": scr.profit_growth_3yr if scr else None,
+            "profit_growth_5yr": scr.profit_growth_5yr if scr else None,
+            "profit_growth_10yr": scr.profit_growth_10yr if scr else None,
+            # Returns & Technicals
+            "return_3m": scr.return_3m if scr else None,
+            "return_6m": scr.return_6m if scr else None,
+            "return_1y": scr.return_1y if scr else None,
+            "stock_cagr_3yr": scr.stock_cagr_3yr if scr else None,
+            "stock_cagr_5yr": scr.stock_cagr_5yr if scr else None,
+            "dma_200": scr.dma_200 if scr else None,
+            "high_52_week": scr.high_52_week if scr else None,
+            "low_52_week": scr.low_52_week if scr else None,
+            "distance_52w_high": scr.distance_52w_high if scr else None,
+            "rsi_14": scr.rsi_14 if scr else None,
+            "beta": scr.beta if scr else None,
+            # Ratios, Solvency & Health
+            "roe": scr.roe if scr else None,
+            "debt_to_equity": d_e,
+            "interest_coverage": scr.interest_coverage if scr else None,
+            "debtor_days": scr.debtor_days if scr else None,
+            "inventory_days": scr.inventory_days if scr else None,
+            "cash_conversion_cycle": scr.cash_conversion_cycle if scr else None,
+            "cfo_to_pat": scr.cfo_to_pat if scr else None,
+            "piotroski_score": scr.piotroski_score if scr else None,
+            "health_score": scr.health_score if scr else comp.ai_score,
+            # Balance Sheet & Cash Flows
+            "borrowings": scr.borrowings if scr else (matched_qr.total_debt if matched_qr else None),
+            "reserves": scr.reserves if scr else None,
+            "total_assets": scr.total_assets if scr else (matched_qr.total_assets if matched_qr else None),
+            "cfo_latest": scr.cfo_latest if scr else (matched_qr.operating_cash_flow if matched_qr else None),
+            "free_cash_flow": scr.free_cash_flow if scr else (matched_qr.free_cash_flow if matched_qr else None),
+            "fcf_yield": scr.fcf_yield if scr else None,
+            # Shareholding
+            "promoter_holding": scr.promoter_holding if scr else None,
+            "fii_holding": scr.fii_holding if scr else None,
+            "dii_holding": scr.dii_holding if scr else None,
+            "public_holding": scr.public_holding if scr else None,
+            # Quarterly specifics
+            "latest_quarter_sales": rev,
+            "latest_quarter_net_profit": pat,
+            "operating_profit": scr.operating_profit if scr else (matched_qr.operating_income if matched_qr else None),
+            "latest_quarter_eps": eps,
+            "quarterly_sales_yoy": rev_growth,
+            "quarterly_pat_yoy": pat_growth,
+            "quarterly_eps_yoy": scr.quarterly_eps_yoy if scr else None,
             # Post-results PEAD
             "pead_score": pead_res["pead_score"],
             "pead_tier": pead_res["pead_tier"],
@@ -579,6 +720,9 @@ def get_quarterly_results(
             "is_turnaround": pead_res.get("is_turnaround", False),
             "is_pead_candidate": pead_res["is_pead_candidate"],
             "is_elite_pead": pead_res["is_elite_pead"],
+            "guard_status": pead_res.get("guard_status", "PASSED"),
+            "is_techno_funda_confirmed": pead_res.get("is_techno_funda_confirmed", True),
+            "guard_flags": pead_res.get("guard_flags", []),
             "pead_thesis": pead_res["thesis"],
             "pillar_breakdown": pead_res["pillar_breakdown"],
             # Pre-Beat (announcement phase)
@@ -643,6 +787,16 @@ def get_quarterly_results(
         enriched_items.sort(key=lambda x: (x["revenue"] or 0.0), reverse=reverse)
     elif sort_by == "net_profit":
         enriched_items.sort(key=lambda x: (x["net_profit"] or -9999.0), reverse=reverse)
+    elif enriched_items and sort_by in enriched_items[0]:
+        # Generic sorting for any requested Screener/Warehouse metric
+        def _get_sort_val(row):
+            val = row.get(sort_by)
+            if val is None:
+                return -999999999.0 if reverse else 999999999.0
+            if isinstance(val, (int, float)):
+                return float(val)
+            return str(val).lower()
+        enriched_items.sort(key=_get_sort_val, reverse=reverse)
     else:  # discovered_at (default)
         enriched_items.sort(key=lambda x: (x["discovered_at"] or ""), reverse=reverse)
 

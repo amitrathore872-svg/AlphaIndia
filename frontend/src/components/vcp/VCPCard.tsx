@@ -34,7 +34,9 @@ export default function VCPCard({ stock, onOpenChart }: VCPCardProps) {
 
   const handleShareWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const memo = `🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *${stock.company_name || stock.symbol}* (\`${stock.symbol}\`)\n⭐ *Score:* ${stock.final_ai_score}/100 — ${stock.verdict}\n📐 *Pattern:* ${stock.vcp_stage}\n🎯 *Pivot Price:* ₹${stock.pivot_price.toLocaleString()}\n🚪 *Entry Zone:* ${stock.entry_zone}\n🛡️ *Stop Loss:* ₹${stock.stop_loss.toLocaleString()}\n🚀 *Targets:* T1: ₹${stock.target_1.toLocaleString()} | T2: ₹${stock.target_2.toLocaleString()}\n⚖️ *Risk/Reward:* ${stock.reward_risk}x | Vol: ${stock.volume_breakout_ratio}x 20DMA\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* http://localhost:3000/vcp-discovery`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const radarUrl = origin ? `${origin}/vcp-discovery` : "/vcp-discovery";
+    const memo = `🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *${stock.company_name || stock.symbol}* (\`${stock.symbol}\`)\n⭐ *Score:* ${stock.final_ai_score}/100 — ${stock.verdict}\n📐 *Pattern:* ${stock.vcp_stage}\n🎯 *Pivot Price:* ₹${stock.pivot_price.toLocaleString()}\n🚪 *Entry Zone:* ${stock.entry_zone}\n🛡️ *Stop Loss:* ₹${stock.stop_loss.toLocaleString()}\n🚀 *Targets:* T1: ₹${stock.target_1.toLocaleString()} | T2: ₹${stock.target_2.toLocaleString()}\n⚖️ *Risk/Reward:* ${stock.reward_risk}x | Vol: ${stock.volume_breakout_ratio}x 20DMA\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${radarUrl}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(memo)}`, "_blank");
   };
 

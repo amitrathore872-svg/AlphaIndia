@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, String
 from sqlalchemy.orm import relationship
 
@@ -41,12 +41,12 @@ class Company(Base):
     exchange = Column(String(20), default="NSE")
     bse_code = Column(String(20), nullable=True)
     market_cap_category = Column(String(30), nullable=True)
-    listing_status = Column(String(20), default="ACTIVE")
+    listing_status = Column(String(20), default="Active")
     revenue_growth = Column(Float, default=0)
     pat_growth = Column(Float, default=0)
     roce = Column(Float, default=0)
     ai_score = Column(Float, default=0)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
 
     # ---------------------------------------------------------
     # Market Intelligence Metrics

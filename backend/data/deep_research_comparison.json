@@ -1,0 +1,57 @@
+[
+  {
+    "name": "STRATEGY 1: Open=Low Float Squeeze (Contraction Ignition)",
+    "total_trades": 8,
+    "trades_per_day": 0.18,
+    "win_rate": 25.0,
+    "profit_factor": 0.45,
+    "avg_r": -0.28,
+    "t1_rate": 12.5,
+    "t2_rate": 0.0,
+    "avg_risk_pct": 0.89
+  },
+  {
+    "name": "STRATEGY 2: Judas Swing Fakeout Liquidity Sweep (Short the Trap)",
+    "total_trades": 306,
+    "trades_per_day": 6.8,
+    "win_rate": 43.8,
+    "profit_factor": 1.37,
+    "avg_r": 0.19,
+    "t1_rate": 33.7,
+    "t2_rate": 14.7,
+    "avg_risk_pct": 0.5
+  },
+  {
+    "name": "STRATEGY 3: Institutional VWAP Pullback Spring (Dry-Volume Retest)",
+    "total_trades": 174,
+    "trades_per_day": 3.87,
+    "win_rate": 46.0,
+    "profit_factor": 1.55,
+    "avg_r": 0.28,
+    "t1_rate": 40.2,
+    "t2_rate": 16.7,
+    "avg_risk_pct": 0.56
+  },
+  {
+    "name": "STRATEGY 4: Mid-Day European Open Squeeze (Consolidation Explosion)",
+    "total_trades": 53,
+    "trades_per_day": 1.18,
+    "win_rate": 39.6,
+    "profit_factor": 1.09,
+    "avg_r": 0.04,
+    "t1_rate": 18.9,
+    "t2_rate": 11.3,
+    "avg_risk_pct": 0.4
+  },
+  {
+    "name": "STRATEGY 5: Apex Sniper (Prior Compression + Open=Low + Clean Break)",
+    "total_trades": 5,
+    "trades_per_day": 0.11,
+    "win_rate": 40.0,
+    "profit_factor": 0.88,
+    "avg_r": -0.05,
+    "t1_rate": 20.0,
+    "t2_rate": 0.0,
+    "avg_risk_pct": 0.69
+  }
+]

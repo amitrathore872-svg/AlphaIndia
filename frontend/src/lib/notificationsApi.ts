@@ -9,7 +9,7 @@ export interface SystemNotificationItem {
   id: number;
   title: string;
   message: string;
-  category: "ATHENA_PEAD" | "GROWTH_BREAKOUT" | "VCP_BREAKOUT" | "CATALYST_ORDER" | "SMART_MONEY" | "SYSTEM_ALERT" | string;
+  category: "ATHENA_PEAD" | "GROWTH_BREAKOUT" | "VCP_BREAKOUT" | "CATALYST_ORDER" | "ORDER_WIN_RADAR" | "SMART_MONEY" | "SYSTEM_ALERT" | string;
   severity: "critical" | "warning" | "info" | "success";
   action_url?: string | null;
   metadata?: Record<string, unknown>;
@@ -222,7 +222,7 @@ export const notificationsApi = {
   },
 
   async generateBrief(data: {
-    alert_type: "PEAD" | "CATALYST" | "GROWTH" | "VCP" | "VCP_BREAKOUT" | "CUSTOM";
+    alert_type: "PEAD" | "CATALYST" | "ORDER_WIN" | "GROWTH" | "VCP" | "VCP_BREAKOUT" | "CUSTOM";
     symbol: string;
     company_name?: string;
     data: Record<string, unknown>;
@@ -240,6 +240,16 @@ export const notificationsApi = {
     notifications: SystemNotificationItem[];
   }> {
     return fetchJson(`${API_BASE}/alerts/trigger-vcp-scan-alerts?force_broadcast=${forceBroadcast}`, {
+      method: "POST",
+    });
+  },
+
+  async triggerOrderWinScanAlerts(forceBroadcast: boolean = true, minScore: number = 65): Promise<{
+    status: string;
+    count: number;
+    alerts: Array<{ engine: string; symbol: string; title: string; notif_id: number }>;
+  }> {
+    return fetchJson(`${API_BASE}/alerts/trigger-order-win-scan-alerts?force_broadcast=${forceBroadcast}&min_score=${minScore}`, {
       method: "POST",
     });
   },
@@ -282,12 +292,46 @@ export const notificationsApi = {
 export interface OpportunityThresholds {
   vcp_signals_enabled: boolean;
   vcp_min_score: number;
+  vcp_elite_only?: boolean;
   prebreakout_a_plus_enabled: boolean;
   prebreakout_min_conviction: number;
   momentum_match_9_enabled: boolean;
   momentum_min_matches: number;
   momentum_conviction_79_enabled: boolean;
   momentum_min_conviction: number;
+  tomorrow_radar_enabled?: boolean;
+  tomorrow_min_conviction?: number;
+  order_win_enabled?: boolean;
+  order_win_min_significance?: number;
+  order_win_min_deal_cr?: number;
+  catalysts_enabled?: boolean;
+  catalysts_min_impact?: number;
+  athena_pead_enabled?: boolean;
+  athena_min_shock_score?: number;
+  techno_funda_enabled?: boolean;
+  techno_funda_min_score?: number;
+  techno_funda_max_pivot_dist?: number;
+  delivery_breakout_enabled?: boolean;
+  delivery_tier?: "ALL" | "APEX_SNIPER" | "ACTIVE_SWING" | string;
+  delivery_min_spike?: number;
+  delivery_min_pct?: number;
+  delivery_min_flow_20d?: number;
+  institutional_mf_enabled?: boolean;
+  institutional_min_schemes?: number;
+  institutional_min_smart_money_score?: number;
+  growth_screener_enabled?: boolean;
+  growth_min_pat_pct?: number;
+  growth_min_sales_pct?: number;
+  breakout_execution_enabled?: boolean;
+  // Legacy Tab 2 aliases for backward compatibility
+  pead_enabled?: boolean;
+  pead_min_conviction?: number;
+  catalyst_enabled?: boolean;
+  catalyst_min_cr?: number;
+  growth_enabled?: boolean;
+  smart_money_enabled?: boolean;
+  vcp_enabled?: boolean;
+  system_alerts_enabled?: boolean;
   auto_broadcast_telegram: boolean;
   auto_broadcast_whatsapp: boolean;
 }

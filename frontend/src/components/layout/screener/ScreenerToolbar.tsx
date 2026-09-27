@@ -36,6 +36,7 @@ interface ScreenerToolbarProps {
 
   density?: TableDensity;
   onDensityChange?: (density: TableDensity) => void;
+  onOpenColumnCustomizer?: () => void;
 }
 
 export default function ScreenerToolbar({
@@ -50,6 +51,7 @@ export default function ScreenerToolbar({
   totalResults,
   density = "default",
   onDensityChange,
+  onOpenColumnCustomizer,
 }: ScreenerToolbarProps) {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
@@ -192,6 +194,19 @@ export default function ScreenerToolbar({
                   Default
                 </button>
               </div>
+            )}
+
+            {/* Edit Columns Modal Launcher */}
+            {onOpenColumnCustomizer && (
+              <button
+                type="button"
+                onClick={onOpenColumnCustomizer}
+                className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-600 hover:bg-cyan-500/20 hover:border-cyan-400 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 dark:hover:border-cyan-300 shadow-xs transition cursor-pointer"
+                title="Customize columns (Add / Remove any financial metric from database)"
+              >
+                <SlidersHorizontal size={12} className="text-cyan-600 dark:text-cyan-400" />
+                <span className="hidden xs:inline">Edit Columns</span>
+              </button>
             )}
 
             {/* Formula Screener Launcher */}

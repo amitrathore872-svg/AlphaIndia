@@ -56,6 +56,78 @@ export interface QuarterlyResultItem {
   current_price: number | null;
   dma_50: number | null;
 
+  // Valuation & Multiples
+  stock_pe?: number | null;
+  industry_pe?: number | null;
+  price_to_book?: number | null;
+  book_value?: number | null;
+  dividend_yield?: number | null;
+  face_value?: number | null;
+  peg_ratio?: number | null;
+
+  // Trailing 12M & Profitability
+  pat_12m?: number | null;
+  eps_12m?: number | null;
+  opm_latest?: number | null;
+  opm_ttm?: number | null;
+  sales_growth_ttm?: number | null;
+  profit_growth_ttm?: number | null;
+
+  // Historical Multi-Year Growth
+  sales_growth_3yr?: number | null;
+  sales_growth_5yr?: number | null;
+  sales_growth_10yr?: number | null;
+  profit_growth_3yr?: number | null;
+  profit_growth_5yr?: number | null;
+  profit_growth_10yr?: number | null;
+
+  // Returns & Technicals
+  return_3m?: number | null;
+  return_6m?: number | null;
+  return_1y?: number | null;
+  stock_cagr_3yr?: number | null;
+  stock_cagr_5yr?: number | null;
+  dma_200?: number | null;
+  high_52_week?: number | null;
+  low_52_week?: number | null;
+  distance_52w_high?: number | null;
+  rsi_14?: number | null;
+  beta?: number | null;
+
+  // Ratios, Solvency & Health
+  roe?: number | null;
+  debt_to_equity?: number | null;
+  interest_coverage?: number | null;
+  debtor_days?: number | null;
+  inventory_days?: number | null;
+  cash_conversion_cycle?: number | null;
+  cfo_to_pat?: number | null;
+  piotroski_score?: number | null;
+  health_score?: number | null;
+
+  // Balance Sheet & Cash Flows
+  borrowings?: number | null;
+  reserves?: number | null;
+  total_assets?: number | null;
+  cfo_latest?: number | null;
+  free_cash_flow?: number | null;
+  fcf_yield?: number | null;
+
+  // Shareholding
+  promoter_holding?: number | null;
+  fii_holding?: number | null;
+  dii_holding?: number | null;
+  public_holding?: number | null;
+
+  // Quarterly specifics
+  latest_quarter_sales?: number | null;
+  latest_quarter_net_profit?: number | null;
+  operating_profit?: number | null;
+  latest_quarter_eps?: number | null;
+  quarterly_sales_yoy?: number | null;
+  quarterly_pat_yoy?: number | null;
+  quarterly_eps_yoy?: number | null;
+
   // Post-results PEAD Intelligence
   pead_score: number;
   pead_tier: string;
@@ -67,6 +139,9 @@ export interface QuarterlyResultItem {
   is_turnaround?: boolean | null;
   is_pead_candidate: boolean;
   is_elite_pead: boolean;
+  guard_status?: "PASSED" | "FLAGGED" | string | null;
+  is_techno_funda_confirmed?: boolean | null;
+  guard_flags?: string[] | null;
   pead_thesis: string;
   pillar_breakdown: PillarBreakdown;
 

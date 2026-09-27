@@ -25,7 +25,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class AthenaOmegaFiling(Base):
@@ -53,7 +53,7 @@ class AthenaOmegaFiling(Base):
     processing_time_sec = Column(Float, default=0.0)
     sla_met = Column(Boolean, default=True)
 
-    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+    detected_at = Column(DateTime, default=utc_now, index=True)
     parsed_at = Column(DateTime, nullable=True)
     analyzed_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
@@ -264,6 +264,6 @@ class AthenaConvictionFlash(Base):
     key_drivers = Column(JSON, nullable=True)
 
     is_published = Column(Boolean, default=True, index=True)
-    published_at = Column(DateTime, default=datetime.utcnow, index=True)
+    published_at = Column(DateTime, default=utc_now, index=True)
 
     filing = relationship("AthenaOmegaFiling", back_populates="flash_decision")

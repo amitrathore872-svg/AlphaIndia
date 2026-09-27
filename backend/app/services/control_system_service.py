@@ -106,6 +106,48 @@ class ControlSystemService:
             "last_error": None,
             "description": "Compresses extracted filing documents (.gz) and purges uncompressed heavy files.",
         },
+        "cpr_compression_engine": {
+            "id": "cpr_compression_engine",
+            "name": "CPR Compression Scanner (Engine #11)",
+            "category": "Quant Compression",
+            "status": "RUNNING",
+            "poll_interval_seconds": 300,
+            "last_fetch_time": None,
+            "next_run_time": None,
+            "total_fetches": 0,
+            "records_ingested_today": 0,
+            "last_status": "IDLE",
+            "last_error": None,
+            "description": "Scans 4,500 NSE equities for narrow Central Pivot Range, Triple CPR confluence, and volatility breakout readiness.",
+        },
+        "vcp_breakout_engine": {
+            "id": "vcp_breakout_engine",
+            "name": "Minervini VCP Breakout Scanner",
+            "category": "Quant Breakout",
+            "status": "RUNNING",
+            "poll_interval_seconds": 300,
+            "last_fetch_time": None,
+            "next_run_time": None,
+            "total_fetches": 0,
+            "records_ingested_today": 0,
+            "last_status": "IDLE",
+            "last_error": None,
+            "description": "Scans volatility contraction patterns, volume dry-up, and institutional pivot breakout triggers.",
+        },
+        "master_scheduler": {
+            "id": "master_scheduler",
+            "name": "Master Autonomous Scheduler",
+            "category": "Autonomous Supervisor",
+            "status": "RUNNING",
+            "poll_interval_seconds": 5,
+            "last_fetch_time": None,
+            "next_run_time": None,
+            "total_fetches": 0,
+            "records_ingested_today": 0,
+            "last_status": "IDLE",
+            "last_error": None,
+            "description": "Master daemon orchestrator coordinating all autonomous scanner cycles across equities.",
+        },
     }
 
     @classmethod
@@ -313,39 +355,186 @@ class ControlSystemService:
         }
 
     @classmethod
+    def start_service(cls, service_id: str) -> Dict[str, Any]:
+        """
+        Explicitly starts a specific background worker or scheduler thread.
+        """
+        with cls._lock:
+            srv = cls._services.get(service_id)
+            if not srv:
+                return {"success": False, "message": f"Service '{service_id}' not found."}
+
+        try:
+            if service_id == "exchange_live_wire":
+                from app.services.live_exchange_wire_worker import LiveExchangeWireWorker
+                LiveExchangeWireWorker.start(poll_interval_seconds=srv.get("poll_interval_seconds", 60))
+            elif service_id == "screener_financial_importer":
+                from app.services.screener_scheduler import ScreenerScheduler
+                ScreenerScheduler.start(interval_seconds=srv.get("poll_interval_seconds", 1800))
+            elif service_id == "early_stage_discovery":
+                from app.services.early_stage_scheduler import EarlyStageScheduler
+                EarlyStageScheduler.start()
+            elif service_id == "raw_file_archiver":
+                from app.services.raw_file_archiver import RawFileArchiveService
+                RawFileArchiveService.start(interval_seconds=srv.get("poll_interval_seconds", 600))
+            elif service_id == "vcp_breakout_engine":
+                from app.services.vcp_scheduler import VCPScheduler
+                VCPScheduler.start()
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.enable_engine("vcp_engine")
+            elif service_id == "cpr_compression_engine":
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.enable_engine("cpr_engine")
+            elif service_id in ("results_discovery", "athena_omega_watcher"):
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.enable_engine("discovery_athena")
+            elif service_id == "master_scheduler":
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.start()
+
+            with cls._lock:
+                srv["status"] = "RUNNING"
+                cls.log_action(
+                    service_id=service_id,
+                    service_name=srv["name"],
+                    level="SUCCESS",
+                    action="ENGINE_START",
+                    message=f"Engine '{srv['name']}' started successfully.",
+                )
+            return {
+                "success": True,
+                "service_id": service_id,
+                "status": "RUNNING",
+                "new_status": "RUNNING",
+                "message": f"Engine '{srv['name']}' started.",
+            }
+        except Exception as exc:
+            logger.error(f"[ControlSystemService] Failed to start {service_id}: {exc}", exc_info=True)
+            return {"success": False, "service_id": service_id, "status": "ERROR", "new_status": "ERROR", "message": str(exc)}
+
+    @classmethod
+    def stop_service(cls, service_id: str) -> Dict[str, Any]:
+        """
+        Explicitly stops a specific background worker or scheduler thread.
+        """
+        with cls._lock:
+            srv = cls._services.get(service_id)
+            if not srv:
+                return {"success": False, "message": f"Service '{service_id}' not found."}
+
+        try:
+            if service_id == "exchange_live_wire":
+                from app.services.live_exchange_wire_worker import LiveExchangeWireWorker
+                LiveExchangeWireWorker.stop()
+            elif service_id == "screener_financial_importer":
+                from app.services.screener_scheduler import ScreenerScheduler
+                from app.workers.screener_import_worker import ScreenerImportWorker
+                ScreenerScheduler.stop()
+                ScreenerImportWorker.stop()
+            elif service_id == "early_stage_discovery":
+                from app.services.early_stage_scheduler import EarlyStageScheduler
+                EarlyStageScheduler.stop()
+            elif service_id == "raw_file_archiver":
+                from app.services.raw_file_archiver import RawFileArchiveService
+                RawFileArchiveService.stop()
+            elif service_id == "vcp_breakout_engine":
+                from app.services.vcp_scheduler import VCPScheduler
+                VCPScheduler.stop()
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.disable_engine("vcp_engine")
+            elif service_id == "cpr_compression_engine":
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.disable_engine("cpr_engine")
+            elif service_id in ("results_discovery", "athena_omega_watcher"):
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.disable_engine("discovery_athena")
+            elif service_id == "master_scheduler":
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                AutonomousEngineScheduler.stop()
+
+            with cls._lock:
+                srv["status"] = "STOPPED"
+                cls.log_action(
+                    service_id=service_id,
+                    service_name=srv["name"],
+                    level="WARN",
+                    action="ENGINE_STOP",
+                    message=f"Engine '{srv['name']}' stopped by operator.",
+                )
+            return {
+                "success": True,
+                "service_id": service_id,
+                "status": "STOPPED",
+                "new_status": "STOPPED",
+                "message": f"Engine '{srv['name']}' stopped.",
+            }
+        except Exception as exc:
+            logger.error(f"[ControlSystemService] Failed to stop {service_id}: {exc}", exc_info=True)
+            return {"success": False, "service_id": service_id, "status": "ERROR", "new_status": "ERROR", "message": str(exc)}
+
+    @classmethod
     def toggle_service(cls, service_id: str) -> Dict[str, Any]:
+        """
+        Toggles an engine: stops it if running/idle, or starts it if stopped/paused.
+        """
         with cls._lock:
             srv = cls._services.get(service_id)
             if not srv:
                 return {"success": False, "message": "Service not found"}
-
             current_status = srv["status"]
-            new_status = "PAUSED" if current_status in ("RUNNING", "POLLING") else "RUNNING"
-            srv["status"] = new_status
 
-            cls.log_action(
-                service_id=service_id,
-                service_name=srv["name"],
-                level="INFO",
-                action="STATUS_TOGGLE",
-                message=f"Service state changed to {new_status} by admin.",
-            )
+        if current_status in ("RUNNING", "POLLING", "IDLE"):
+            return cls.stop_service(service_id)
+        else:
+            return cls.start_service(service_id)
 
-            return {
-                "success": True,
-                "service_id": service_id,
-                "previous_status": current_status,
-                "new_status": new_status,
-            }
+    @classmethod
+    def start_all_services(cls) -> Dict[str, Any]:
+        """
+        Master Start: Ignites all registered ingestion engines and background schedulers.
+        """
+        results = {}
+        for s_id in list(cls._services.keys()):
+            results[s_id] = cls.start_service(s_id)
+
+        cls.log_action(
+            service_id="ALL",
+            service_name="Master Supervisor",
+            level="SUCCESS",
+            action="ALL_ENGINES_STARTED",
+            message="Master Command: All ingestion engines and autonomous schedulers started.",
+        )
+        return {"success": True, "message": "All engines started.", "results": results}
+
+    @classmethod
+    def stop_all_services(cls) -> Dict[str, Any]:
+        """
+        Safety Halt: Stops all registered ingestion engines and background schedulers.
+        """
+        results = {}
+        for s_id in list(cls._services.keys()):
+            results[s_id] = cls.stop_service(s_id)
+
+        cls.log_action(
+            service_id="ALL",
+            service_name="Master Supervisor",
+            level="WARN",
+            action="ALL_ENGINES_STOPPED",
+            message="Safety Halt: All ingestion engines and autonomous schedulers stopped by operator.",
+        )
+        return {"success": True, "message": "All engines stopped.", "results": results}
 
     @classmethod
     def _sync_live_worker_states(cls):
         """Reflects actual background thread states into service dictionary."""
+        # 1. Live Exchange Wire
         try:
             from app.services.live_exchange_wire_worker import LiveExchangeWireWorker
             wire_running = LiveExchangeWireWorker.is_running()
-            if cls._services["exchange_live_wire"]["status"] != "PAUSED":
+            if cls._services["exchange_live_wire"]["status"] not in ("STOPPED", "PAUSED"):
                 cls._services["exchange_live_wire"]["status"] = "RUNNING" if wire_running else "IDLE"
+            elif wire_running:
+                cls._services["exchange_live_wire"]["status"] = "RUNNING"
             telemetry = LiveExchangeWireWorker.get_telemetry()
             if telemetry.get("last_poll_time"):
                 cls._services["exchange_live_wire"]["last_fetch_time"] = telemetry["last_poll_time"]
@@ -353,22 +542,63 @@ class ControlSystemService:
         except Exception:
             pass
 
+        # 2. Screener Financial Warehouse Importer
         try:
             from app.services.screener_scheduler import ScreenerScheduler
-            screener_running = getattr(ScreenerScheduler, "_thread", None) is not None and ScreenerScheduler._thread.is_alive()
-            if cls._services["screener_financial_importer"]["status"] != "PAUSED":
+            from app.workers.screener_import_worker import ScreenerImportWorker
+            screener_running = ScreenerScheduler.is_running() or ScreenerImportWorker.is_running()
+            if cls._services["screener_financial_importer"]["status"] not in ("STOPPED", "PAUSED"):
                 cls._services["screener_financial_importer"]["status"] = "RUNNING" if screener_running else "IDLE"
+            elif screener_running:
+                cls._services["screener_financial_importer"]["status"] = "RUNNING"
         except Exception:
             pass
 
+        # 3. Early Stage News/Social Scanner
+        try:
+            from app.services.early_stage_scheduler import EarlyStageScheduler
+            early_running = EarlyStageScheduler.is_running()
+            if cls._services["early_stage_discovery"]["status"] not in ("STOPPED", "PAUSED"):
+                cls._services["early_stage_discovery"]["status"] = "RUNNING" if early_running else "IDLE"
+            elif early_running:
+                cls._services["early_stage_discovery"]["status"] = "RUNNING"
+        except Exception:
+            pass
+
+        # 4. Raw File Archiver
         try:
             from app.services.raw_file_archiver import RawFileArchiveService
             archiver_running = RawFileArchiveService.is_running()
-            if cls._services["raw_file_archiver"]["status"] != "PAUSED":
+            if cls._services["raw_file_archiver"]["status"] not in ("STOPPED", "PAUSED"):
                 cls._services["raw_file_archiver"]["status"] = "RUNNING" if archiver_running else "IDLE"
+            elif archiver_running:
+                cls._services["raw_file_archiver"]["status"] = "RUNNING"
             arch_tel = RawFileArchiveService.get_telemetry()
             if arch_tel.get("last_run_time"):
                 cls._services["raw_file_archiver"]["last_fetch_time"] = arch_tel["last_run_time"]
             cls._services["raw_file_archiver"]["records_ingested_today"] = arch_tel.get("total_files_archived", 0)
+        except Exception:
+            pass
+
+        # 5. VCP Breakout Engine
+        try:
+            from app.services.vcp_scheduler import VCPScheduler
+            from app.services.autonomous_scheduler import AutonomousEngineScheduler
+            vcp_running = VCPScheduler.is_running() or AutonomousEngineScheduler.is_engine_enabled("vcp_engine")
+            if cls._services["vcp_breakout_engine"]["status"] not in ("STOPPED", "PAUSED"):
+                cls._services["vcp_breakout_engine"]["status"] = "RUNNING" if vcp_running else "IDLE"
+            elif vcp_running:
+                cls._services["vcp_breakout_engine"]["status"] = "RUNNING"
+        except Exception:
+            pass
+
+        # 6. Master Autonomous Scheduler
+        try:
+            from app.services.autonomous_scheduler import AutonomousEngineScheduler
+            master_running = AutonomousEngineScheduler.is_running()
+            if cls._services["master_scheduler"]["status"] not in ("STOPPED", "PAUSED"):
+                cls._services["master_scheduler"]["status"] = "RUNNING" if master_running else "IDLE"
+            elif master_running:
+                cls._services["master_scheduler"]["status"] = "RUNNING"
         except Exception:
             pass

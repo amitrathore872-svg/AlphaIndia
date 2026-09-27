@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Play,
   Pause,
+  Square,
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
@@ -43,6 +44,10 @@ import {
   fetchControlSystemLogs,
   triggerService,
   toggleService,
+  startService,
+  stopService,
+  startAllServices,
+  stopAllServices,
   triggerAllServices,
   type ControlSystemStatusResponse,
   type ControlSystemServiceItem,
@@ -73,7 +78,7 @@ export default function ControlAndLogsPage() {
 
   // Engine deck view mode & filter
   const [engineViewMode, setEngineViewMode] = useState<"MATRIX" | "CARDS">("MATRIX");
-  const [serviceStatusFilter, setServiceStatusFilter] = useState<"ALL" | "ACTIVE" | "PAUSED" | "ERROR">("ALL");
+  const [serviceStatusFilter, setServiceStatusFilter] = useState<"ALL" | "ACTIVE" | "PAUSED" | "STOPPED" | "ERROR">("ALL");
 
   // Log terminal filters & controls
   const [activeServiceFilter, setActiveServiceFilter] = useState("ALL");
@@ -85,8 +90,13 @@ export default function ControlAndLogsPage() {
 
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
   const [triggeringAll, setTriggeringAll] = useState(false);
+  const [startingAll, setStartingAll] = useState(false);
+  const [stoppingAll, setStoppingAll] = useState(false);
   const [tick, setTick] = useState(0);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -105,8 +115,10 @@ export default function ControlAndLogsPage() {
       ]);
       setStatusData(statusRes);
       setLogs(logsRes);
-    } catch (e) {
+      setFetchError(null);
+    } catch (e: any) {
       console.error("Failed to load control system data:", e);
+      setFetchError(e?.message || "Failed to communicate with Alpha India Backend (127.0.0.1:8000)");
     } finally {
       setLoading(false);
       if (!isSilent) setRefreshing(false);
@@ -145,6 +157,30 @@ export default function ControlAndLogsPage() {
     }
   };
 
+  const handleStartService = async (serviceId: string) => {
+    setStartingId(serviceId);
+    try {
+      await startService(serviceId);
+      await loadData(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  const handleStopService = async (serviceId: string) => {
+    setStoppingId(serviceId);
+    try {
+      await stopService(serviceId);
+      await loadData(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStoppingId(null);
+    }
+  };
+
   const handleToggleService = async (serviceId: string) => {
     setTogglingId(serviceId);
     try {
@@ -154,6 +190,30 @@ export default function ControlAndLogsPage() {
       console.error(e);
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleStartAll = async () => {
+    setStartingAll(true);
+    try {
+      await startAllServices();
+      await loadData(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStartingAll(false);
+    }
+  };
+
+  const handleStopAll = async () => {
+    setStoppingAll(true);
+    try {
+      await stopAllServices();
+      await loadData(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStoppingAll(false);
     }
   };
 
@@ -176,6 +236,9 @@ export default function ControlAndLogsPage() {
     }
     if (serviceStatusFilter === "PAUSED") {
       return statusData.services.filter((s) => s.status === "PAUSED");
+    }
+    if (serviceStatusFilter === "STOPPED") {
+      return statusData.services.filter((s) => s.status === "STOPPED");
     }
     if (serviceStatusFilter === "ERROR") {
       return statusData.services.filter((s) => s.status === "ERROR");
@@ -248,6 +311,40 @@ export default function ControlAndLogsPage() {
           {/* Action Bar */}
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={handleStartAll}
+              disabled={startingAll}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-600 text-emerald-600 hover:text-white dark:text-emerald-400 border border-emerald-500/30 transition-all disabled:opacity-50 shadow-xs"
+              title="Start / Resume all background engines"
+            >
+              {startingAll ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+              <span>{startingAll ? "Starting All..." : "Start All Engines"}</span>
+            </button>
+
+            <button
+              onClick={handleStopAll}
+              disabled={stoppingAll}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-400 border border-rose-500/30 transition-all disabled:opacity-50 shadow-xs"
+              title="Safety Stop: Halt all background engines"
+            >
+              {stoppingAll ? <Loader2 size={13} className="animate-spin" /> : <Square size={13} />}
+              <span>{stoppingAll ? "Stopping All..." : "Stop All Engines"}</span>
+            </button>
+
+            <button
+              onClick={handleTriggerAll}
+              disabled={triggeringAll}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-xs dark:shadow-md dark:shadow-cyan-900/30 transition-all disabled:opacity-50"
+              title="Immediately trigger ingestion cycle on all engines"
+            >
+              {triggeringAll ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Zap size={13} />
+              )}
+              <span>{triggeringAll ? "Syncing All..." : "Fetch All Engines"}</span>
+            </button>
+
+            <button
               onClick={() => setAutoRefresh(!autoRefresh)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 autoRefresh
@@ -256,7 +353,7 @@ export default function ControlAndLogsPage() {
               }`}
             >
               <Activity size={13} className={autoRefresh ? "animate-pulse" : ""} />
-              <span>{autoRefresh ? "Auto-refresh: 4s" : "Auto-refresh: OFF"}</span>
+              <span>{autoRefresh ? "Auto: 4s" : "Auto: OFF"}</span>
             </button>
 
             <button
@@ -268,19 +365,6 @@ export default function ControlAndLogsPage() {
               <span>Refresh</span>
             </button>
 
-            <button
-              onClick={handleTriggerAll}
-              disabled={triggeringAll}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-xs dark:shadow-md dark:shadow-cyan-900/30 transition-all disabled:opacity-50"
-            >
-              {triggeringAll ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Zap size={13} />
-              )}
-              <span>{triggeringAll ? "Syncing All..." : "Fetch All Engines"}</span>
-            </button>
-
             <Link
               href="/monitoring"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -290,6 +374,29 @@ export default function ControlAndLogsPage() {
             </Link>
           </div>
         </div>
+
+        {/* Backend Connectivity Error Alert */}
+        {fetchError && (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-600 dark:text-rose-400 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-rose-500/20 text-rose-500 shrink-0">
+                <AlertTriangle size={18} className="animate-pulse" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider">Backend Telemetry Unreachable</p>
+                <p className="text-xs text-rose-500/90 mt-0.5">
+                  {fetchError}. Ensure FastAPI backend is active on <code className="font-mono bg-rose-500/20 px-1 py-0.5 rounded text-[11px]">http://127.0.0.1:8000</code>.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => loadData()}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-colors shrink-0 shadow-xs"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
 
         {/* Top KPIs Row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -369,7 +476,7 @@ export default function ControlAndLogsPage() {
 
               {/* Status Filter Pills */}
               <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px]">
-                {(["ALL", "ACTIVE", "PAUSED", "ERROR"] as const).map((st) => (
+                {(["ALL", "ACTIVE", "PAUSED", "STOPPED", "ERROR"] as const).map((st) => (
                   <button
                     key={st}
                     onClick={() => setServiceStatusFilter(st)}
@@ -431,15 +538,42 @@ export default function ControlAndLogsPage() {
                       <th className="py-3 px-4 font-semibold text-center">Interval</th>
                       <th className="py-3 px-4 font-semibold text-right">Ingested Today</th>
                       <th className="py-3 px-4 font-semibold text-right">Total Cycles</th>
-                      <th className="py-3 px-4 font-semibold text-right">Controls</th>
+                      <th className="py-3 px-4 font-semibold text-right">Engine Controls</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                    {filteredServices.map((svc) => {
-                      const isTriggering = triggeringId === svc.id;
-                      const isToggling = togglingId === svc.id;
+                    {loading && !statusData ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Loader2 size={24} className="animate-spin text-cyan-500" />
+                            <span className="text-xs font-medium">Connecting to Background Engine Telemetry...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredServices.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Sliders size={24} className="text-slate-500 opacity-50" />
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              {fetchError ? "Backend offline. No engine status available." : "No background engines found matching current filter."}
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              {fetchError ? "Start backend uvicorn service on port 8000." : "Switch status filter pill to 'All' above."}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredServices.map((svc) => {
+                        const isTriggering = triggeringId === svc.id;
+                      const isStarting = startingId === svc.id;
+                      const isStopping = stoppingId === svc.id;
                       const isPaused = svc.status === "PAUSED";
+                      const isStopped = svc.status === "STOPPED";
                       const isError = svc.status === "ERROR";
+                      const isHalted = isStopped || isPaused;
 
                       return (
                         <tr key={svc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
@@ -464,7 +598,9 @@ export default function ControlAndLogsPage() {
                           <td className="py-3 px-4 text-center">
                             <span
                               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${
-                                isPaused
+                                isStopped
+                                  ? "bg-slate-500/10 border-slate-500/30 text-slate-600 dark:text-slate-400"
+                                  : isPaused
                                   ? "bg-amber-500/10 border-amber-500/30 text-amber-500 dark:text-amber-400"
                                   : isError
                                   ? "bg-red-500/10 border-red-500/30 text-red-500 dark:text-red-400"
@@ -473,7 +609,13 @@ export default function ControlAndLogsPage() {
                             >
                               <span
                                 className={`h-1.5 w-1.5 rounded-full ${
-                                  isPaused ? "bg-amber-500" : isError ? "bg-red-500" : "bg-emerald-500 dark:bg-emerald-400 animate-pulse"
+                                  isStopped
+                                    ? "bg-slate-400"
+                                    : isPaused
+                                    ? "bg-amber-500"
+                                    : isError
+                                    ? "bg-red-500"
+                                    : "bg-emerald-500 dark:bg-emerald-400 animate-pulse"
                                 }`}
                               />
                               {svc.status}
@@ -502,40 +644,56 @@ export default function ControlAndLogsPage() {
 
                           {/* Action Controls */}
                           <td className="py-3 px-4 text-right">
-                            <div className="inline-flex items-center gap-2">
-                              <button
-                                onClick={() => handleToggleService(svc.id)}
-                                disabled={isToggling}
-                                className="flex items-center gap-1 text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
-                                title={isPaused ? "Resume Worker" : "Pause Worker"}
-                              >
-                                {isToggling ? (
-                                  <Loader2 size={12} className="animate-spin" />
-                                ) : isPaused ? (
-                                  <Play size={12} className="text-emerald-500" />
-                                ) : (
-                                  <Pause size={12} className="text-amber-500" />
-                                )}
-                                <span>{isPaused ? "Resume" : "Pause"}</span>
-                              </button>
+                            <div className="inline-flex items-center gap-1.5">
+                              {/* Explicit Stop / Start Engine Control */}
+                              {isHalted ? (
+                                <button
+                                  onClick={() => handleStartService(svc.id)}
+                                  disabled={isStarting}
+                                  className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-white px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-600 border border-emerald-500/30 transition-all disabled:opacity-50"
+                                  title={`Start ${svc.name}`}
+                                >
+                                  {isStarting ? (
+                                    <Loader2 size={12} className="animate-spin" />
+                                  ) : (
+                                    <Play size={12} />
+                                  )}
+                                  <span>{isStarting ? "Starting..." : "Start Engine"}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleStopService(svc.id)}
+                                  disabled={isStopping}
+                                  className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 dark:text-rose-400 hover:text-white px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-600 border border-rose-500/30 transition-all disabled:opacity-50"
+                                  title={`Stop ${svc.name}`}
+                                >
+                                  {isStopping ? (
+                                    <Loader2 size={12} className="animate-spin" />
+                                  ) : (
+                                    <Square size={12} />
+                                  )}
+                                  <span>{isStopping ? "Stopping..." : "Stop Engine"}</span>
+                                </button>
+                              )}
 
                               <button
                                 onClick={() => handleTriggerService(svc.id)}
-                                disabled={isTriggering || isPaused}
-                                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-cyan-600 hover:text-white text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-cyan-500/20 transition-all disabled:opacity-50"
+                                disabled={isTriggering || isHalted}
+                                className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-cyan-600 hover:text-white text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-cyan-500/20 transition-all disabled:opacity-50"
+                                title="Trigger cycle immediately"
                               >
                                 {isTriggering ? (
                                   <Loader2 size={12} className="animate-spin text-cyan-500" />
                                 ) : (
                                   <Zap size={12} />
                                 )}
-                                <span>{isTriggering ? "Fetching..." : "Fetch"}</span>
+                                <span>{isTriggering ? "..." : "Fetch"}</span>
                               </button>
                             </div>
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>
@@ -543,11 +701,30 @@ export default function ControlAndLogsPage() {
           ) : (
             /* Engine Deck View: Cards Grid */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredServices.map((svc) => {
+              {loading && !statusData ? (
+                <div className="col-span-full py-12 text-center text-slate-400 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-2">
+                  <Loader2 size={24} className="animate-spin text-cyan-500" />
+                  <span className="text-xs font-medium">Connecting to Background Engine Telemetry...</span>
+                </div>
+              ) : filteredServices.length === 0 ? (
+                <div className="col-span-full py-12 text-center text-slate-400 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-2">
+                  <Sliders size={24} className="text-slate-500 opacity-50" />
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    {fetchError ? "Backend offline. No engine status available." : "No background engines found matching current filter."}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {fetchError ? "Start backend uvicorn service on port 8000." : "Switch status filter pill to 'All' above."}
+                  </span>
+                </div>
+              ) : (
+                filteredServices.map((svc) => {
                 const isTriggering = triggeringId === svc.id;
-                const isToggling = togglingId === svc.id;
+                const isStarting = startingId === svc.id;
+                const isStopping = stoppingId === svc.id;
                 const isPaused = svc.status === "PAUSED";
+                const isStopped = svc.status === "STOPPED";
                 const isError = svc.status === "ERROR";
+                const isHalted = isStopped || isPaused;
 
                 return (
                   <div
@@ -555,8 +732,10 @@ export default function ControlAndLogsPage() {
                     className={`bg-white dark:bg-slate-900/80 border rounded-2xl p-4 transition-all duration-200 flex flex-col justify-between shadow-xs ${
                       isError
                         ? "border-red-500/40 bg-red-50/50 dark:bg-red-950/10"
+                        : isStopped
+                        ? "border-slate-300 dark:border-slate-800 opacity-80"
                         : isPaused
-                        ? "border-slate-200 dark:border-slate-800 opacity-75"
+                        ? "border-amber-500/30 bg-amber-50/20 dark:bg-amber-950/10"
                         : "border-slate-200 dark:border-slate-800/90 hover:border-slate-300 dark:hover:border-slate-700"
                     }`}
                   >
@@ -574,7 +753,9 @@ export default function ControlAndLogsPage() {
 
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${
-                            isPaused
+                            isStopped
+                              ? "bg-slate-500/10 border-slate-500/30 text-slate-600 dark:text-slate-400"
+                              : isPaused
                               ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
                               : isError
                               ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
@@ -583,7 +764,13 @@ export default function ControlAndLogsPage() {
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              isPaused ? "bg-amber-500" : isError ? "bg-red-500" : "bg-emerald-500 dark:bg-emerald-400 animate-pulse"
+                              isStopped
+                                ? "bg-slate-400"
+                                : isPaused
+                                ? "bg-amber-500"
+                                : isError
+                                ? "bg-red-500"
+                                : "bg-emerald-500 dark:bg-emerald-400 animate-pulse"
                             }`}
                           />
                           {svc.status}
@@ -626,24 +813,37 @@ export default function ControlAndLogsPage() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => handleToggleService(svc.id)}
-                        disabled={isToggling}
-                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors disabled:opacity-50"
-                      >
-                        {isToggling ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : isPaused ? (
-                          <Play size={12} className="text-emerald-500" />
-                        ) : (
-                          <Pause size={12} className="text-amber-500" />
-                        )}
-                        <span>{isPaused ? "Resume Engine" : "Pause Engine"}</span>
-                      </button>
+                      {isHalted ? (
+                        <button
+                          onClick={() => handleStartService(svc.id)}
+                          disabled={isStarting}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-400 hover:text-white border border-emerald-500/30 transition-all disabled:opacity-50"
+                        >
+                          {isStarting ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Play size={12} />
+                          )}
+                          <span>{isStarting ? "Starting Engine..." : "Start Engine"}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleStopService(svc.id)}
+                          disabled={isStopping}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-600 text-rose-700 dark:text-rose-400 hover:text-white border border-rose-500/30 transition-all disabled:opacity-50"
+                        >
+                          {isStopping ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Square size={12} />
+                          )}
+                          <span>{isStopping ? "Stopping Engine..." : "Stop Engine"}</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => handleTriggerService(svc.id)}
-                        disabled={isTriggering || isPaused}
+                        disabled={isTriggering || isHalted}
                         className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-xl bg-cyan-50 dark:bg-cyan-600/20 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/30 hover:bg-cyan-600 hover:text-white transition-all disabled:opacity-50"
                       >
                         {isTriggering ? (
@@ -656,7 +856,7 @@ export default function ControlAndLogsPage() {
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           )}
         </div>
@@ -728,13 +928,12 @@ export default function ControlAndLogsPage() {
                 onChange={(e) => setActiveServiceFilter(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500"
               >
-                <option value="ALL">All Services ({statusData?.services.length || 6})</option>
-                <option value="exchange_live_wire">Exchange Live Wire</option>
-                <option value="results_discovery">Results Discovery</option>
-                <option value="athena_omega_watcher">Athena Omega Watcher</option>
-                <option value="screener_financial_importer">Screener Financial Importer</option>
-                <option value="early_stage_discovery">Early Stage Discovery</option>
-                <option value="raw_file_archiver">Raw File Archiver</option>
+                <option value="ALL">All Services ({statusData?.services.length || 0})</option>
+                {statusData?.services.map((svc) => (
+                  <option key={svc.id} value={svc.id}>
+                    {svc.name}
+                  </option>
+                ))}
               </select>
             </div>
 

@@ -26,10 +26,12 @@ import {
   X,
   TrendingUp,
   BookOpen,
+  ArrowRight,
+  SlidersHorizontal,
 } from "lucide-react";
+import Link from "next/link";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import PeadDriftMatrix from "@/components/layout/earnings/PeadDriftMatrix";
 import KnowledgeCenter from "@/components/knowledge/KnowledgeCenter";
 import {
   fetchFlashDecisions,
@@ -593,13 +595,9 @@ export default function AthenaOmegaPage() {
 
                       {/* PEAD Quantitative Drift Runway & Leverage Ribbon */}
                       {card.pead && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearchQuery(card.symbol);
-                            setActiveTab("pead");
-                          }}
-                          title={`Click to view ${card.symbol} in PEAD Quantitative Matrix`}
+                        <Link
+                          href={`/quarterly-results?search=${encodeURIComponent(card.symbol)}`}
+                          title={`Click to view ${card.symbol} in PEAD Quantitative Matrix Terminal`}
                           className="mt-3.5 w-full p-2.5 rounded-lg bg-slate-950/90 border border-slate-800/80 hover:border-cyan-500/50 flex items-center justify-between transition-all group/pead text-left cursor-pointer"
                         >
                           <div className="flex items-center gap-2.5">
@@ -632,7 +630,7 @@ export default function AthenaOmegaPage() {
                           <span className="text-[10px] font-mono text-cyan-400 group-hover/pead:text-cyan-300 flex items-center gap-1 shrink-0 font-bold">
                             Matrix &rarr;
                           </span>
-                        </button>
+                        </Link>
                       )}
 
                       {/* Decision Drivers Meter */}
@@ -754,16 +752,47 @@ export default function AthenaOmegaPage() {
         )}
 
         {/* =========================================================================
-            TAB 2: PEAD QUANTITATIVE DRIFT MATRIX
+            TAB 2: PEAD QUANTITATIVE DRIFT MATRIX GATEWAY
         ========================================================================= */}
         {activeTab === "pead" && (
           <div className="space-y-4">
-            <PeadDriftMatrix
-              initialSearch={searchQuery}
-              onAuditAthena={(sym) => {
-                handleInspect(sym);
-              }}
-            />
+            <div className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/90 via-[#070D18] to-slate-950 p-6 sm:p-10 text-center relative overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10 max-w-2xl mx-auto space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-bold uppercase tracking-wider">
+                  <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  Consolidated Terminal Gateway
+                </div>
+
+                <h2 className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight">
+                  Quantitative PEAD Drift Matrix & Earnings Radar
+                </h2>
+
+                <p className="text-sm text-slate-300 leading-relaxed font-sans">
+                  Real-time corporate quarterly earnings announcements, business shock score calculations, Post-Earnings Announcement Drift runway, and Screener.in dynamic column customization are consolidated into the dedicated terminal.
+                </p>
+
+                <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
+                  <Link
+                    href={`/quarterly-results${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
+                  >
+                    <span>Launch Dedicated Earnings Radar</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+
+                  <Link
+                    href="/growth-screener"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold font-mono text-xs uppercase tracking-wider transition-all cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Open 2000+ Universe Screener</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

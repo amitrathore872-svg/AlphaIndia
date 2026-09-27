@@ -43,6 +43,12 @@ import {
   triggerPrebreakoutScan,
   fetchPrebreakoutFilterOptions,
 } from "@/lib/prebreakoutRadarApi";
+import BreakoutExecutionCockpit from "@/components/breakout-execution/BreakoutExecutionCockpit";
+import {
+  watchBreakoutCandidate,
+  autoEnrollTopBreakoutCandidates,
+  fetchBreakoutCandidates,
+} from "@/lib/breakoutExecutionApi";
 
 const PATTERN_TABS = [
   { id: "ALL", label: "All Pre-Breakout Coils" },
@@ -88,6 +94,10 @@ export default function PreBreakoutRadarPage() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+
+  // Tab Mode: "execution" (Breakout Execution Cockpit) or "screener" (Pre-Breakout Coils Screener)
+  const [activeTab, setActiveTab] = useState<"execution" | "screener">("execution");
+  const [watchedSymbolSet, setWatchedSymbolSet] = useState<Set<string>>(new Set());
 
   // Position Sizing Calculator State in Modal
   const [accountRiskRupees, setAccountRiskRupees] = useState<number>(10000);
@@ -136,6 +146,61 @@ export default function PreBreakoutRadarPage() {
       await loadData();
     } catch (err) {
       console.error("Failed to trigger pre-breakout scan:", err);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const loadWatchedSymbols = useCallback(async () => {
+    try {
+      const res = await fetchBreakoutCandidates("ALL");
+      if (res && res.items) {
+        setWatchedSymbolSet(new Set(res.items.map((i) => i.symbol)));
+      }
+    } catch (err) {
+      console.error("Failed to load watched symbols:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWatchedSymbols();
+  }, [loadWatchedSymbols]);
+
+  const handleWatchForBreakout = async (opp: PreBreakoutOpportunity) => {
+    try {
+      await watchBreakoutCandidate({
+        symbol: opp.symbol,
+        company_name: opp.company_name,
+        sector: opp.sector,
+        pattern_tag: opp.pattern_tag,
+        conviction_score: opp.conviction_score,
+        setup_tier: opp.setup_tier,
+        cmp: opp.cmp,
+        day_change_pct: opp.day_change_pct,
+        trigger_price: opp.blueprint.cheat_entry,
+        stop_loss: opp.blueprint.stop_loss,
+        target_1: opp.blueprint.target_1,
+        target_2: opp.blueprint.target_2,
+      });
+      setWatchedSymbolSet((prev) => new Set([...prev, opp.symbol]));
+      setToastMessage(`🎯 ${opp.symbol} added to Breakout Execution Engine!`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error("Failed to watch candidate:", err);
+    }
+  };
+
+  const handleAutoEnrollFromScreener = async () => {
+    setScanning(true);
+    try {
+      const res = await autoEnrollTopBreakoutCandidates(10, 70);
+      if (res && res.enrolled_count !== undefined) {
+        setToastMessage(`⚡ Enrolled ${res.enrolled_count} A+ Coils into Breakout Execution Engine!`);
+        await loadWatchedSymbols();
+        setActiveTab("execution");
+      }
+    } catch (err) {
+      console.error("Auto-enroll error:", err);
     } finally {
       setScanning(false);
     }
@@ -308,6 +373,15 @@ export default function PreBreakoutRadarPage() {
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-2">
               <button
+                onClick={handleAutoEnrollFromScreener}
+                disabled={scanning}
+                className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-950/60 px-4 py-2 text-xs font-mono font-bold text-cyan-300 hover:bg-cyan-900/80 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>Auto-Watch Top 10</span>
+              </button>
+
+              <button
                 onClick={handleTriggerScan}
                 disabled={scanning}
                 className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/60 px-4 py-2 text-xs font-mono font-bold text-emerald-300 hover:bg-emerald-900/80 transition-all cursor-pointer disabled:opacity-50"
@@ -317,9 +391,55 @@ export default function PreBreakoutRadarPage() {
               </button>
             </div>
           </div>
+
+          {/* MODE SWITCHER TABS: Breakout Execution Engine vs Pre-Breakout Coils Screener */}
+          <div className="flex flex-wrap items-center gap-2.5 mt-4 pt-4 border-t border-slate-800/80">
+            <button
+              onClick={() => setActiveTab("execution")}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-mono font-bold transition-all cursor-pointer ${
+                activeTab === "execution"
+                  ? "bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/10 text-emerald-300 border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+              }`}
+            >
+              <Zap className="h-4 w-4 text-emerald-400" />
+              <span>BREAKOUT EXECUTION ENGINE</span>
+              <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-300">
+                LIVE COCKPIT
+              </span>
+              {watchedSymbolSet.size > 0 && (
+                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                  {watchedSymbolSet.size} Watching
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab("screener")}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-mono font-bold transition-all cursor-pointer ${
+                activeTab === "screener"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+              }`}
+            >
+              <Search className="h-4 w-4 text-cyan-400" />
+              <span>PRE-BREAKOUT COILS SCREENER</span>
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                {displayedOpportunities.length} Setups
+              </span>
+            </button>
+          </div>
         </div>
 
-        {/* METRICS & TELEMETRY RIBBON */}
+        {activeTab === "execution" ? (
+          <BreakoutExecutionCockpit
+            onSwitchToScreener={() => setActiveTab("screener")}
+            toastMessage={toastMessage}
+            setToastMessage={setToastMessage}
+          />
+        ) : (
+          <>
+            {/* METRICS & TELEMETRY RIBBON */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-slate-800/80 bg-slate-950/80 p-3.5 flex flex-col justify-between">
             <span className="text-[10px] uppercase font-mono font-bold text-slate-400">Scanned Universe</span>
@@ -726,6 +846,27 @@ export default function PreBreakoutRadarPage() {
                               <Star className={`h-3.5 w-3.5 ${isInWatchlist ? "fill-amber-400 text-amber-400" : ""}`} />
                             </button>
 
+                            {/* Breakout Execution Engine Watch */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleWatchForBreakout(opp);
+                              }}
+                              title={
+                                watchedSymbolSet.has(opp.symbol)
+                                  ? `Watching in Breakout Execution Engine`
+                                  : `Watch ${opp.symbol} for Breakout Execution`
+                              }
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                watchedSymbolSet.has(opp.symbol)
+                                  ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                                  : "bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-cyan-400 border-slate-800"
+                              }`}
+                            >
+                              <Zap className="h-3.5 w-3.5" />
+                            </button>
+
                             <a
                               href={opp.tradingview_url}
                               target="_blank"
@@ -893,6 +1034,28 @@ export default function PreBreakoutRadarPage() {
                         <span>{isInWatchlist ? "Watchlisted" : "Watchlist"}</span>
                       </button>
 
+                      {/* Watch Breakout in Execution Engine */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleWatchForBreakout(opp);
+                        }}
+                        className={`flex-1 py-1 px-2 rounded-lg border text-xs font-mono text-center flex items-center justify-center gap-1 cursor-pointer transition-colors ${
+                          watchedSymbolSet.has(opp.symbol)
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                            : "bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border-cyan-800/40"
+                        }`}
+                        title={
+                          watchedSymbolSet.has(opp.symbol)
+                            ? "Already in Breakout Execution Engine"
+                            : "Add to Breakout Execution Engine"
+                        }
+                      >
+                        <Zap className="h-3 w-3" />
+                        <span>{watchedSymbolSet.has(opp.symbol) ? "Watching" : "Watch"}</span>
+                      </button>
+
                       <a
                         href={opp.tradingview_url}
                         target="_blank"
@@ -946,8 +1109,10 @@ export default function PreBreakoutRadarPage() {
             </div>
           </div>
         )}
+      </>
+    )}
 
-        {/* DETAILED DRILL-DOWN & POSITION SIZING MODAL */}
+    {/* DETAILED DRILL-DOWN & POSITION SIZING MODAL */}
         {selectedOpportunity && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="relative w-full max-w-2xl rounded-2xl border border-slate-700 bg-[#07111F] p-5 md:p-6 shadow-2xl space-y-4">

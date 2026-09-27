@@ -8,7 +8,7 @@ difference diagnosis, and actions taken under the ±2% tolerance rule.
 from datetime import datetime
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class FinancialReconciliationLog(Base):
@@ -32,4 +32,4 @@ class FinancialReconciliationLog(Base):
     # EXACT_MATCH_NO_UPDATE, WITHIN_TOLERANCE_NO_UPDATE, UPDATED_FROM_NSE, FILLED_FROM_NSE, PARSE_ERROR_SENT_TO_AUDIT
 
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utc_now, index=True)

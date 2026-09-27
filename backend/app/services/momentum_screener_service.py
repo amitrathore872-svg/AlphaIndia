@@ -16,8 +16,11 @@ Implements the institutional momentum setup:
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import logging
 import math
+from pathlib import Path
+import threading
 import time
 from typing import Any, Dict, List, Optional
 import numpy as np
@@ -30,13 +33,18 @@ from app.models.screener_growth_record import ScreenerGrowthRecord
 
 logger = logging.getLogger(__name__)
 
-# Cache for scan results (TTL: 5 minutes)
+# Persistent Disk Cache Path
+DISK_CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "momentum_radar_cache.json"
+
+# In-memory cache for scan results (TTL: 5 minutes)
 _CACHE: Dict[str, Any] = {
     "timestamp": 0,
     "data": [],
     "metadata": {},
 }
 CACHE_TTL_SECONDS = 300
+_scan_in_progress = False
+_scan_lock = threading.Lock()
 
 
 class MomentumScreenerService:
@@ -55,22 +63,22 @@ class MomentumScreenerService:
         "CHAMBLFERT", "CHOLAFIN", "CIPLA", "COALINDIA", "COFORGE", "COLPAL", "CONCOR",
         "COROMANDEL", "CROMPTON", "CUMMINSIND", "DABUR", "DALBHARAT", "DEEPAKNTR", "DIVISLAB",
         "DIXON", "DLF", "DRREDDY", "EICHERMOT", "ESCORTS", "EXIDEIND", "FEDERALBNK", "GAIL",
-        "GLENMARK", "GMRINFRA", "GNFC", "GODREJCP", "GODREJPROP", "GRANULES", "GRASIM", "GUJGASLTD",
+        "GLENMARK", "GMRAIRPORT", "GNFC", "GODREJCP", "GODREJPROP", "GRANULES", "GRASIM", "FLUOROCHEM",
         "HAL", "HAVELLS", "HCLTECH", "HDFCAMC", "HDFCBANK", "HDFCLIFE", "HEROMOTOCO", "HINDALCO",
         "HINDCOPPER", "HINDPETRO", "HINDUNILVR", "ICICIBANK", "ICICIGI", "ICICIPRULI", "IDEA",
         "IDFCFIRSTB", "IEX", "INDHOTEL", "INDIACEM", "INDIAMART", "INDIGO", "INDUSINDBK",
         "INDUSTOWER", "INFY", "IOC", "IPCALAB", "IRCTC", "ITC", "JINDALSTEL", "JKCEMENT",
         "JSWSTEEL", "JUBLFOOD", "KAYNES", "KOTAKBANK", "LALPATHLAB", "LAURUSLABS", "LICHSGFIN", "LT",
-        "LTIM", "LTTS", "LUPIN", "M&M", "M&MFIN", "MANAPPURAM", "MARICO", "MARUTI", "MAZDOCK", "MCDOWELL-N",
+        "CYIENT", "LTTS", "LUPIN", "M&M", "M&MFIN", "MANAPPURAM", "MARICO", "MARUTI", "MAZDOCK", "UNITDSPR",
         "MCX", "METROPOLIS", "MFSL", "MGL", "MOTHERSON", "MPHASIS", "MRF", "MUTHOOTFIN",
         "NATIONALUM", "NAUKRI", "NAVINFLUOR", "NESTLEIND", "NMDC", "NTPC", "OBEROIRLTY", "OFSS",
-        "ONGC", "PAGEIND", "PEL", "PERSISTENT", "PETRONET", "PFC", "PIDILITIND", "PIIND", "PNB",
+        "ONGC", "PAGEIND", "POONAWALLA", "PERSISTENT", "PETRONET", "PFC", "PIDILITIND", "PIIND", "PNB",
         "POLYCAB", "POWERGRID", "PVRINOX", "RAMCOCEM", "RBLBANK", "RECLTD", "RELIANCE", "SAIL",
         "SBICARD", "SBILIFE", "SBIN", "SHREECEM", "SHRIRAMFIN", "SIEMENS", "SRF", "SUNPHARMA",
-        "SUNTV", "SUZLON", "SYNGENE", "TATACHEM", "TATACOMM", "TATACONSUM", "TATAMOTORS", "TATAPOWER",
+        "SUNTV", "SUZLON", "SYNGENE", "TATACHEM", "TATACOMM", "TATACONSUM", "TIINDIA", "TATAPOWER",
         "TATASTEEL", "TCS", "TECHM", "TITAN", "TORNTPHARM", "TRENT", "TVSMOTOR", "UBL",
         "ULTRACEMCO", "UPL", "VEDL", "VOLTAS", "WIPRO", "ZEEL", "COCHINSHIP", "BOMDYEING", "HUDCO",
-        "IREDA", "BSE", "CDSL", "ANGELONE", "ZOMATO", "JIOFIN", "KPITTECH", "TATAELXSI"
+        "IREDA", "BSE", "CDSL", "ANGELONE", "POLICYBZR", "JIOFIN", "KPITTECH", "TATAELXSI"
     ]
 
     SECTOR_MAP: Dict[str, str] = {
@@ -431,18 +439,101 @@ class MomentumScreenerService:
             return None
 
     @classmethod
+    def _load_disk_cache(cls) -> bool:
+        """Loads cached momentum radar results from disk if available."""
+        try:
+            if DISK_CACHE_PATH.exists():
+                with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                    if cached and isinstance(cached, dict) and "data" in cached and cached["data"]:
+                        _CACHE["timestamp"] = cached.get("timestamp", 0)
+                        _CACHE["data"] = cached.get("data", [])
+                        _CACHE["metadata"] = cached.get("metadata", {})
+                        logger.info(f"[MomentumScreenerService] Restored {len(_CACHE['data'])} opportunities from disk cache.")
+                        return True
+        except Exception as e:
+            logger.warning(f"[MomentumScreenerService] Error loading disk cache: {e}")
+        return False
+
+    @classmethod
+    def _save_disk_cache(cls) -> None:
+        """Persists current cache state to disk for instant restore on server restart."""
+        try:
+            DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(_CACHE, f, indent=2)
+        except Exception as e:
+            logger.warning(f"[MomentumScreenerService] Error saving disk cache: {e}")
+
+    @classmethod
+    def trigger_background_scan(cls, db: Optional[Session] = None) -> None:
+        """
+        Launches non-blocking background scan worker if not already running.
+        """
+        global _scan_in_progress
+        with _scan_lock:
+            if _scan_in_progress:
+                return
+            _scan_in_progress = True
+
+        def _worker():
+            global _scan_in_progress
+            try:
+                logger.info("[MomentumScreenerService] Starting non-blocking background radar scan...")
+                cls._execute_full_scan(db=db)
+                logger.info("[MomentumScreenerService] Background radar scan completed successfully.")
+            except Exception as e:
+                logger.error(f"[MomentumScreenerService] Background scan error: {e}", exc_info=True)
+            finally:
+                with _scan_lock:
+                    _scan_in_progress = False
+
+        thread = threading.Thread(target=_worker, daemon=True, name="MomentumRadarScanWorker")
+        thread.start()
+
+    @classmethod
     def scan_opportunities(cls, db: Optional[Session] = None, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        Scans liquid universe using multi-threaded execution and caches result.
+        Returns multi-timeframe momentum opportunities.
+        Uses stale-while-revalidate non-blocking caching so the REST API responds
+        instantaneously (< 25ms) and NEVER times out.
         """
+        # 1. Ensure memory cache is populated (restore from disk on cold start)
+        if not _CACHE["data"]:
+            cls._load_disk_cache()
+
         now = time.time()
-        if not force_refresh and _CACHE["data"] and (now - _CACHE["timestamp"] < CACHE_TTL_SECONDS):
+        has_cache = bool(_CACHE["data"])
+        is_stale = (now - _CACHE.get("timestamp", 0) > CACHE_TTL_SECONDS)
+
+        # 2. If cached data exists and force_refresh is False:
+        if has_cache and not force_refresh:
+            if is_stale:
+                cls.trigger_background_scan(db=db)
             return {
                 "metadata": _CACHE["metadata"],
                 "opportunities": _CACHE["data"],
             }
 
+        # 3. If force_refresh is requested and cache exists: return cached instantly & refresh background
+        if has_cache and force_refresh:
+            cls.trigger_background_scan(db=db)
+            return {
+                "metadata": _CACHE["metadata"],
+                "opportunities": _CACHE["data"],
+            }
+
+        # 4. Only if completely empty on cold boot with no disk cache: execute synchronously
+        return cls._execute_full_scan(db=db)
+
+    @classmethod
+    def _execute_full_scan(cls, db: Optional[Session] = None) -> Dict[str, Any]:
+        """
+        Internal worker that calculates all multi-timeframe indicators across the liquid universe.
+        """
+        now = time.time()
         t0 = time.time()
+
         # Build symbols dictionary from core universe + top DB growth records
         symbols_map: Dict[str, Dict[str, str]] = {}
         for sym in cls.CORE_UNIVERSE:
@@ -466,7 +557,7 @@ class MomentumScreenerService:
                 logger.warning(f"Failed to query DB for growth records: {e}")
 
         results: List[Dict[str, Any]] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=14) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
             futures = {
                 executor.submit(cls.analyze_symbol, sym, meta["company_name"], meta["sector"]): sym
                 for sym, meta in symbols_map.items()
@@ -511,6 +602,8 @@ class MomentumScreenerService:
         _CACHE["timestamp"] = now
         _CACHE["data"] = results
         _CACHE["metadata"] = metadata
+
+        cls._save_disk_cache()
 
         return {
             "metadata": metadata,

@@ -3,7 +3,7 @@ Alpha India Quarterly Financial Warehouse
 Sprint 30.2 Production Model
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -59,6 +59,6 @@ class QuarterlyResult(Base):
     roce = Column(Float)
 
     source = Column(String(30), default="YAHOO_FINANCE")
-    imported_at = Column(DateTime, default=datetime.utcnow)
+    imported_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company")

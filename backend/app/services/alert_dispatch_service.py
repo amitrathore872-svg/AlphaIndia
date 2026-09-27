@@ -4,10 +4,13 @@ Sprint 34 — Institutional Alerts & Multi-Channel Broadcasting
 """
 
 import logging
+import threading
+import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 import requests
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.notification import SystemNotification, AlertChannelConfig, AlertDispatchLog
@@ -20,6 +23,31 @@ class AlertDispatchService:
     Central service for internal notifications and external alert dispatching
     (Telegram Bot API & WhatsApp).
     """
+
+    _recent_dispatches: Dict[str, float] = {}
+    _dispatch_lock = threading.Lock()
+
+    @staticmethod
+    def get_dedup_cutoff(hours: int = 18) -> datetime:
+        """
+        Returns the cutoff datetime (UTC) for deduplicating opportunity alerts.
+        Compares:
+        1) Rolling window (e.g. 18 hours ago)
+        2) Midnight of current UTC calendar day
+        3) Midnight of current IST (Indian Standard Time) trading session converted to UTC
+        Takes the earliest timestamp among them so that night scans across UTC/IST
+        midnight boundaries never falsely re-alert the same symbols.
+        """
+        now_utc = datetime.utcnow()
+        rolling_cutoff = now_utc - timedelta(hours=hours)
+        today_utc_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # IST is UTC + 5:30. Midnight IST in UTC is 18:30 UTC of previous UTC day
+        ist_offset = timedelta(hours=5, minutes=30)
+        now_ist = now_utc + ist_offset
+        today_ist_midnight = (now_ist.replace(hour=0, minute=0, second=0, microsecond=0)) - ist_offset
+        
+        return min(rolling_cutoff, today_utc_start, today_ist_midnight)
 
     # ==========================================================
     # 1. Telegram Dispatch & Verification
@@ -361,6 +389,45 @@ class AlertDispatchService:
         )
 
     @staticmethod
+    def format_breakout_triggered_alert(
+        symbol: str,
+        company_name: str,
+        sector: str,
+        conviction_score: int,
+        setup_tier: str,
+        pattern_tag: str,
+        cmp: float,
+        trigger_price: float,
+        buy_zone_max: float,
+        stop_loss: float,
+        target_1: float,
+        target_2: float,
+        risk_reward: float,
+        volume_pace_ratio: float,
+        action_url: str = "http://localhost:3000/pre-breakout-radar",
+    ) -> str:
+        risk_pct = round(((trigger_price - stop_loss) / max(0.01, trigger_price)) * 100.0, 2)
+        return (
+            f"🚨 *ALPHA INDIA | BREAKOUT EXECUTION TRIGGERED!*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
+            f"⚡ *STATUS:* `BUY ZONE ACTIVE — TAKE ENTRY NOW`\n"
+            f"🎯 *Conviction:* {conviction_score} PTS ({setup_tier})\n"
+            f"📐 *Base Pattern:* {pattern_tag}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Current CMP:* ₹{cmp:,.2f}\n"
+            f"🛒 *Buy Zone:* ₹{trigger_price:,.2f} – ₹{buy_zone_max:,.2f} (+1.5% max)\n"
+            f"🛡️ *Stop Loss:* ₹{stop_loss:,.2f} (Risk: -{risk_pct}%)\n"
+            f"🚀 *Target 1:* ₹{target_1:,.2f} (+9.0%)\n"
+            f"🚀 *Target 2:* ₹{target_2:,.2f} (+18.0%)\n"
+            f"⚖️ *Risk/Reward:* {risk_reward:.1f}:1\n"
+            f"📊 *Volume Pace:* {volume_pace_ratio:.2f}x 20-DMA\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ *Execution Rule:* Never chase past ₹{buy_zone_max:,.2f}. Book 50% at Target 1 and trail stop on 10 EMA.\n"
+            f"📡 *Open Live Cockpit:* {action_url}"
+        )
+
+    @staticmethod
     def format_momentum_radar_alert(
         symbol: str,
         company_name: str,
@@ -388,6 +455,186 @@ class AlertDispatchService:
             f"🛡️ *Stop Loss:* ₹{stop_loss:,.2f}\n"
             f"🚀 *Targets:* *T1:* ₹{target_1:,.1f} (+8%) | *T2:* ₹{target_2:,.1f} (+16%)\n"
             f"⚖️ *Risk/Reward:* {risk_reward:.1f}x\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 *Live Radar:* {action_url}"
+        )
+
+    @staticmethod
+    def format_order_win_alert(
+        symbol: str,
+        company_name: str,
+        deal_value_cr: Optional[float],
+        significance_score: float,
+        significance_tier: str,
+        client_counterparty: Optional[str] = None,
+        rev_pct_ttm: Optional[float] = None,
+        execution_months: Optional[int] = None,
+        quarterly_rev_cr: Optional[float] = None,
+        earnings_impact_cr: Optional[float] = None,
+        cmp: Optional[float] = None,
+        target_price: Optional[float] = None,
+        upside_pct: Optional[float] = None,
+        stop_loss: Optional[float] = None,
+        upside_prob_pct: Optional[float] = None,
+        headline: Optional[str] = None,
+        thesis: Optional[str] = None,
+        source_url: Optional[str] = None,
+        action_url: str = "http://localhost:3000/announcements?catalyst_type=ORDER_WIN",
+    ) -> str:
+        tier_clean = (significance_tier or "HIGH_IMPACT").replace("_", " ").upper()
+        deal_str = f"₹{deal_value_cr:,.1f} Cr" if deal_value_cr else "Undisclosed Size"
+        if rev_pct_ttm:
+            deal_str += f" (+{rev_pct_ttm:.1f}% TTM Sales)"
+
+        client_line = f"\n🏛️ *Client/Agency:* {client_counterparty}" if client_counterparty else ""
+
+        runway_parts = []
+        if execution_months:
+            runway_parts.append(f"{execution_months} Months")
+        if quarterly_rev_cr:
+            runway_parts.append(f"~₹{quarterly_rev_cr:,.1f} Cr/Quarter")
+        runway_str = f"\n⏱️ *Runway:* {' • '.join(runway_parts)}" if runway_parts else ""
+
+        pat_line = f"\n📈 *Annualized PAT Impact:* +₹{earnings_impact_cr:,.1f} Cr" if earnings_impact_cr else ""
+
+        price_parts = []
+        if cmp:
+            price_parts.append(f"*CMP:* ₹{cmp:,.1f}")
+        if target_price:
+            up_str = f" (+{upside_pct:.1f}%)" if upside_pct else ""
+            price_parts.append(f"*Target:* ₹{target_price:,.1f}{up_str}")
+        if stop_loss:
+            price_parts.append(f"*SL:* ₹{stop_loss:,.1f}")
+        price_line = f"\n🎯 {' | '.join(price_parts)}" if price_parts else ""
+
+        prob_line = f"\n🎲 *Win Probability:* {upside_prob_pct:.1f}%" if upside_prob_pct else ""
+
+        thesis_line = ""
+        if thesis:
+            clean_th = thesis.replace("*", "").replace("`", "").strip()
+            thesis_line = f"\n💡 *Quant Thesis:*\n{clean_th}"
+        elif headline:
+            clean_hl = headline.replace("*", "").replace("`", "").strip()
+            thesis_line = f"\n📋 *Filing:* {clean_hl[:120]}"
+
+        link_line = f"\n🔗 [Exchange Filing]({source_url})" if source_url else ""
+
+        return (
+            f"🏆 *ALPHA INDIA | ORDER WIN RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
+            f"⭐ *Significance:* {significance_score:.1f}/100 — {tier_clean}\n"
+            f"💰 *Order Value:* {deal_str}"
+            f"{client_line}"
+            f"{runway_str}"
+            f"{pat_line}"
+            f"{price_line}"
+            f"{prob_line}"
+            f"{thesis_line}"
+            f"{link_line}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 *Live Radar:* {action_url}"
+        )
+
+    @staticmethod
+    def format_techno_funda_alert(
+        symbol: str,
+        company_name: str,
+        setup_score: float,
+        cmp: float,
+        pivot_price: float,
+        distance_to_pivot_pct: float,
+        sector: str = "Diversified",
+        health_score: float = 70.0,
+        signal: str = "PRE_BREAKOUT",
+        pattern: str = "VCP Base",
+        action_url: str = "http://localhost:3000/techno-funda",
+    ) -> str:
+        return (
+            f"🎯 *ALPHA INDIA | TECHNO-FUNDA RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
+            f"⭐ *Setup Score:* {setup_score:.1f}/100 | *Signal:* `{signal}`\n"
+            f"📐 *Pattern Archetype:* {pattern}\n"
+            f"💵 *CMP:* ₹{cmp:,.2f} | *Model Pivot:* ₹{pivot_price:,.2f}\n"
+            f"📍 *Distance to Pivot:* {distance_to_pivot_pct:+.2f}%\n"
+            f"🛡️ *Health Score:* {health_score:.1f}/100\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 *Live Radar:* {action_url}"
+        )
+
+    @staticmethod
+    def format_delivery_breakout_alert(
+        symbol: str,
+        company_name: str,
+        delivery_per: float,
+        delivery_spike_x: float,
+        cmp: float,
+        setup_type: str = "50D_BREAKOUT",
+        conviction_score: float = 85.0,
+        sector: str = "Diversified",
+        tier: str = "ACTIVE_SWING",
+        deliv_flow_20d: float = 1.5,
+        target_1: Optional[float] = None,
+        target_2: Optional[float] = None,
+        breakeven_trigger: Optional[float] = None,
+        stop_loss: Optional[float] = None,
+        risk_pct: float = 3.5,
+        risk_reward: str = "1:3.1",
+        win_rate_expectation: str = "60% - 63%",
+        trail_rule: Optional[str] = None,
+        action_url: str = "http://localhost:3000/delivery-radar",
+        target_price: Optional[float] = None,
+    ) -> str:
+        t1_val = target_1 or target_price or (cmp * 1.055)
+        t2_val = target_2 or (cmp * 1.11)
+        sl_val = stop_loss or (cmp * 0.965)
+        be_val = breakeven_trigger or (cmp * 1.02)
+        tier_tag = "🎯 APEX SNIPER (70%+ WR)" if tier == "APEX_SNIPER" else ("⚡ ACTIVE SWING (62% WR)" if tier == "ACTIVE_SWING" else "📡 BASE WATCHLIST")
+        rule_str = f"\n⚠️ *Protocol:* {trail_rule}" if trail_rule else ""
+
+        return (
+            f"⚡ *ALPHA INDIA | DELIVERY BREAKOUT RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
+            f"🎯 *Conviction Tier:* `{tier_tag}` ({conviction_score:.0f} PTS)\n"
+            f"🏆 *Model Win Rate:* {win_rate_expectation} | *R:R:* {risk_reward}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 *Delivery Absorption:* {delivery_per:.1f}% Float Absorption\n"
+            f"📈 *Surge Multiplier:* {delivery_spike_x:.2f}x 10-DMA\n"
+            f"🌊 *20D Net Flow (D-A/D):* {deliv_flow_20d:.2f}x Net Accumulation\n"
+            f"📐 *Setup Structure:* {setup_type.replace('_', ' ')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *CMP (Suggested Entry):* ₹{cmp:,.2f}\n"
+            f"🛡️ *Initial Stop Loss:* ₹{sl_val:,.2f} (-{risk_pct:.1f}%)\n"
+            f"🔒 *Breakeven Lock Trigger:* ₹{be_val:,.2f} (+2.0%) [Locks Stop to +0.4% BE]\n"
+            f"🚀 *Target 1:* ₹{t1_val:,.2f} (+5.0%) [Book 50% Profit]\n"
+            f"🚀 *Target 2:* ₹{t2_val:,.2f} (+10.0%) [Apex Runner]{rule_str}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 *Live Radar:* {action_url}"
+        )
+
+    @staticmethod
+    def format_institutional_mf_alert(
+        symbol: str,
+        company_name: str,
+        smart_money_score: float,
+        schemes_count: int,
+        net_shares_change_pct: float,
+        sector: str = "Diversified",
+        latest_month: str = "Latest Month",
+        action_url: str = "http://localhost:3000/institutional-radar/fresh-entries",
+    ) -> str:
+        return (
+            f"🏛️ *ALPHA INDIA | INSTITUTIONAL MF RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
+            f"⭐ *Smart Money Score:* {smart_money_score:.1f}/100\n"
+            f"💼 *Fresh AMC Position Initiations:* {schemes_count} Schemes\n"
+            f"📊 *Net Holding Change:* {net_shares_change_pct:+.1f}%\n"
+            f"⏱️ *Filing Cycle:* {latest_month}\n"
+            f"💡 *Institutional Edge:*\n"
+            f"Multiple top mutual fund asset managers aggressively accumulating equity float.\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"📡 *Live Radar:* {action_url}"
         )
@@ -461,26 +708,44 @@ class AlertDispatchService:
         """
         Triggers an institutional in-app notification and automated Telegram/WhatsApp broadcast
         for a newly discovered Mark Minervini VCP opportunity.
-        Includes deduplication so the same stock isn't alerted multiple times on the same date.
+        Includes multi-layer deduplication so the same stock isn't alerted multiple times.
         """
-        from datetime import date
         sym = pick.get("symbol", "").strip().upper()
         if not sym:
             return None
 
-        today_start = datetime.combine(date.today(), datetime.min.time())
-        # Check if already alerted today for VCP_BREAKOUT
+        # 1. Thread-safe in-memory rate-limit check (18-hour cooldown)
+        now_ts = time.time()
+        cache_key = f"VCP:{sym}"
+        with cls._dispatch_lock:
+            # Clean expired keys older than 18 hours (64,800s)
+            cls._recent_dispatches = {k: v for k, v in cls._recent_dispatches.items() if now_ts - v < 64800}
+            last_ts = cls._recent_dispatches.get(cache_key)
+            if last_ts and (now_ts - last_ts < 64800):
+                logger.info(f"VCP alert for {sym} throttled in-memory ({int(now_ts - last_ts)}s ago); skipping duplicate.")
+                return None
+
+        cutoff_time = cls.get_dedup_cutoff(hours=18)
+
+        # 2. In-app notification deduplication check (timezone-proof session window)
         existing = (
             db.query(SystemNotification)
             .filter(
                 SystemNotification.category == "VCP_BREAKOUT",
-                SystemNotification.created_at >= today_start,
-                SystemNotification.title.like(f"%{sym}%"),
+                SystemNotification.created_at >= cutoff_time,
+                or_(
+                    SystemNotification.title.like(f"%: {sym} %"),
+                    SystemNotification.title.like(f"%: {sym}(%"),
+                    SystemNotification.title.like(f"% {sym} %"),
+                    SystemNotification.title.like(f"%{sym}%"),
+                ),
             )
             .first()
         )
         if existing:
-            logger.info(f"VCP alert for {sym} already dispatched today; skipping duplicate.")
+            with cls._dispatch_lock:
+                cls._recent_dispatches[cache_key] = now_ts
+            logger.info(f"VCP alert for {sym} already dispatched (id={existing.id} at {existing.created_at}); skipping duplicate.")
             return existing
 
         total_score = float(pick.get("final_ai_score", pick.get("total_score", 90.0)))
@@ -543,6 +808,10 @@ class AlertDispatchService:
             metadata=metadata,
         )
 
+        # Mark in-memory rate-limit
+        with cls._dispatch_lock:
+            cls._recent_dispatches[cache_key] = now_ts
+
         # Automated Broadcast to Telegram / WhatsApp if auto-rules permit
         if auto_broadcast:
             try:
@@ -574,21 +843,35 @@ class AlertDispatchService:
                     elite_only = bool(auto_rules.get("vcp_elite_only", False))
 
                     if vcp_enabled and total_score >= min_score and (not elite_only or is_elite):
-                        tg_res = cls.dispatch_telegram(
-                            bot_token=tg_cfg.bot_token,
-                            chat_id=tg_cfg.chat_id,
-                            text=memo,
+                        # Strict check in AlertDispatchLog to prevent duplicate Telegram broadcasts
+                        already_dispatched_tg = (
+                            db.query(AlertDispatchLog)
+                            .filter(
+                                AlertDispatchLog.channel == "TELEGRAM",
+                                AlertDispatchLog.symbol == sym,
+                                AlertDispatchLog.status == "SUCCESS",
+                                AlertDispatchLog.dispatched_at >= cutoff_time,
+                            )
+                            .first()
                         )
-                        cls.log_dispatch(
-                            db=db,
-                            channel="TELEGRAM",
-                            recipient=tg_cfg.chat_id,
-                            symbol=sym,
-                            payload_preview=memo,
-                            status="SUCCESS" if tg_res.get("success") else "FAILED",
-                            error_message=tg_res.get("error"),
-                        )
-                        logger.info(f"Broadcast VCP alert for {sym} to Telegram: {tg_res.get('success')}")
+                        if already_dispatched_tg:
+                            logger.info(f"Telegram alert for {sym} already logged SUCCESS at {already_dispatched_tg.dispatched_at}; skipping duplicate external broadcast.")
+                        else:
+                            tg_res = cls.dispatch_telegram(
+                                bot_token=tg_cfg.bot_token,
+                                chat_id=tg_cfg.chat_id,
+                                text=memo,
+                            )
+                            cls.log_dispatch(
+                                db=db,
+                                channel="TELEGRAM",
+                                recipient=tg_cfg.chat_id,
+                                symbol=sym,
+                                payload_preview=memo,
+                                status="SUCCESS" if tg_res.get("success") else "FAILED",
+                                error_message=tg_res.get("error"),
+                            )
+                            logger.info(f"Broadcast VCP alert for {sym} to Telegram: {tg_res.get('success')}")
 
                 # Check WhatsApp Cloud API
                 wa_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "WHATSAPP").first()
@@ -599,24 +882,135 @@ class AlertDispatchService:
                     elite_only = bool(auto_rules.get("vcp_elite_only", False))
 
                     if vcp_enabled and total_score >= min_score and (not elite_only or is_elite):
-                        wa_res = cls.dispatch_whatsapp_cloud(
-                            api_key=wa_cfg.api_key,
-                            phone_number_id=wa_cfg.phone_number_id,
-                            recipient=wa_cfg.target_recipient,
-                            text=memo,
+                        already_dispatched_wa = (
+                            db.query(AlertDispatchLog)
+                            .filter(
+                                AlertDispatchLog.channel == "WHATSAPP",
+                                AlertDispatchLog.symbol == sym,
+                                AlertDispatchLog.status == "SUCCESS",
+                                AlertDispatchLog.dispatched_at >= cutoff_time,
+                            )
+                            .first()
                         )
-                        cls.log_dispatch(
-                            db=db,
-                            channel="WHATSAPP",
-                            recipient=wa_cfg.target_recipient,
-                            symbol=sym,
-                            payload_preview=memo,
-                            status="SUCCESS" if wa_res.get("success") else "FAILED",
-                            error_message=wa_res.get("error"),
-                        )
-                        logger.info(f"Broadcast VCP alert for {sym} to WhatsApp Cloud: {wa_res.get('success')}")
+                        if already_dispatched_wa:
+                            logger.info(f"WhatsApp alert for {sym} already logged SUCCESS at {already_dispatched_wa.dispatched_at}; skipping duplicate.")
+                        else:
+                            wa_res = cls.dispatch_whatsapp_cloud(
+                                api_key=wa_cfg.api_key,
+                                phone_number_id=wa_cfg.phone_number_id,
+                                recipient=wa_cfg.target_recipient,
+                                text=memo,
+                            )
+                            cls.log_dispatch(
+                                db=db,
+                                channel="WHATSAPP",
+                                recipient=wa_cfg.target_recipient,
+                                symbol=sym,
+                                payload_preview=memo,
+                                status="SUCCESS" if wa_res.get("success") else "FAILED",
+                                error_message=wa_res.get("error"),
+                            )
+                            logger.info(f"Broadcast VCP alert for {sym} to WhatsApp Cloud: {wa_res.get('success')}")
 
             except Exception as e:
                 logger.error(f"Error executing automated broadcast for VCP pick {sym}: {e}", exc_info=True)
 
         return notif
+
+    @classmethod
+    def dispatch_breakout_execution_alert(
+        cls,
+        db: Session,
+        candidate: Any,
+    ) -> Dict[str, Any]:
+        """
+        Formats and broadcasts a breakout trigger event across configured channels (Telegram & WhatsApp).
+        """
+        sym = getattr(candidate, "symbol", "").strip().upper()
+        if not sym:
+            return {"success": False, "error": "No symbol provided."}
+
+        company_name = getattr(candidate, "company_name", sym) or sym
+        sector = getattr(candidate, "sector", "Diversified") or "Diversified"
+        conviction_score = int(getattr(candidate, "conviction_score", 75) or 75)
+        setup_tier = getattr(candidate, "setup_tier", "A+ SUPER COIL") or "A+ SUPER COIL"
+        pattern_tag = getattr(candidate, "pattern_tag", "SUPER_COIL") or "SUPER_COIL"
+        cmp_val = float(getattr(candidate, "current_cmp", 0.0) or 0.0)
+        trigger = float(getattr(candidate, "trigger_price", 0.0) or 0.0)
+        buy_max = float(getattr(candidate, "buy_zone_max", round(trigger * 1.015, 2)) or round(trigger * 1.015, 2))
+        stop = float(getattr(candidate, "stop_loss", round(trigger * 0.968, 2)) or round(trigger * 0.968, 2))
+        t1 = float(getattr(candidate, "target_1", round(trigger * 1.09, 2)) or round(trigger * 1.09, 2))
+        t2 = float(getattr(candidate, "target_2", round(trigger * 1.18, 2)) or round(trigger * 1.18, 2))
+        rr = float(getattr(candidate, "risk_reward", 3.0) or 3.0)
+        vol_pace = float(getattr(candidate, "volume_pace_ratio", 1.0) or 1.0)
+
+        memo = cls.format_breakout_triggered_alert(
+            symbol=sym,
+            company_name=company_name,
+            sector=sector,
+            conviction_score=conviction_score,
+            setup_tier=setup_tier,
+            pattern_tag=pattern_tag,
+            cmp=cmp_val,
+            trigger_price=trigger,
+            buy_zone_max=buy_max,
+            stop_loss=stop,
+            target_1=t1,
+            target_2=t2,
+            risk_reward=rr,
+            volume_pace_ratio=vol_pace,
+            action_url="http://localhost:3000/pre-breakout-radar",
+        )
+
+        results = {"symbol": sym, "telegram": None, "whatsapp": None}
+
+        # 1. Telegram Dispatch
+        try:
+            tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
+            if tg_cfg and tg_cfg.is_enabled and tg_cfg.bot_token and tg_cfg.chat_id:
+                tg_res = cls.dispatch_telegram(
+                    bot_token=tg_cfg.bot_token,
+                    chat_id=tg_cfg.chat_id,
+                    text=memo,
+                )
+                cls.log_dispatch(
+                    db=db,
+                    channel="TELEGRAM",
+                    recipient=tg_cfg.chat_id,
+                    symbol=sym,
+                    payload_preview=memo,
+                    status="SUCCESS" if tg_res.get("success") else "FAILED",
+                    error_message=tg_res.get("error"),
+                )
+                results["telegram"] = tg_res
+                logger.info(f"Broadcast Breakout Trigger for {sym} to Telegram: {tg_res.get('success')}")
+            else:
+                logger.debug("Telegram channel not enabled or missing credentials.")
+        except Exception as e:
+            logger.error(f"Error dispatching breakout telegram alert for {sym}: {e}", exc_info=True)
+            results["telegram"] = {"success": False, "error": str(e)}
+
+        # 2. WhatsApp Dispatch (if configured)
+        try:
+            wa_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "WHATSAPP").first()
+            if wa_cfg and wa_cfg.is_enabled and wa_cfg.api_key and wa_cfg.phone_number_id and wa_cfg.target_recipient:
+                wa_res = cls.dispatch_whatsapp_cloud(
+                    api_key=wa_cfg.api_key,
+                    phone_number_id=wa_cfg.phone_number_id,
+                    recipient=wa_cfg.target_recipient,
+                    text=memo,
+                )
+                cls.log_dispatch(
+                    db=db,
+                    channel="WHATSAPP",
+                    recipient=wa_cfg.target_recipient,
+                    symbol=sym,
+                    payload_preview=memo,
+                    status="SUCCESS" if wa_res.get("success") else "FAILED",
+                    error_message=wa_res.get("error"),
+                )
+                results["whatsapp"] = wa_res
+        except Exception as e:
+            logger.debug(f"WhatsApp dispatch skipped or error: {e}")
+
+        return results

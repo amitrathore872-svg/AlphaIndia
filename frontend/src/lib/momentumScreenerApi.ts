@@ -123,16 +123,20 @@ export async function fetchMomentumOpportunities(
   if (params.limit !== undefined) query.set("limit", String(params.limit));
 
   return fetchJson<MomentumOpportunitiesResponse>(
-    `/api/v1/momentum-screener?${query.toString()}`
+    `/api/v1/momentum-screener?${query.toString()}`,
+    { timeoutMs: 35000 }
   );
 }
 
 export async function triggerMomentumScan(): Promise<any> {
   return fetchJson(`/api/v1/momentum-screener/scan`, {
     method: "POST",
+    timeoutMs: 35000,
   });
 }
 
 export async function fetchMomentumFilterOptions(): Promise<FilterOptionsResponse> {
-  return fetchJson<FilterOptionsResponse>(`/api/v1/momentum-screener/filters`);
+  return fetchJson<FilterOptionsResponse>(`/api/v1/momentum-screener/filters`, {
+    timeoutMs: 35000,
+  });
 }

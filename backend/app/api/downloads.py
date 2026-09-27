@@ -8,8 +8,9 @@ Version: v0.9.8-alpha
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.models.filing_registry import FilingRegistry
 from app.services.pdf_download_service import PDFDownloadService
 
@@ -20,17 +21,6 @@ router = APIRouter(
 
 
 # ==========================================================
-# Database Dependency
-# ==========================================================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# ==========================================================
 # Download Summary
 # ==========================================================
 @router.get("/summary")
@@ -38,33 +28,24 @@ def download_summary(db: Session = Depends(get_db)):
     """
     Returns Bronze Layer download statistics for Mission Control.
     """
+    stats = db.query(
+        func.count(FilingRegistry.id).label("total"),
+        func.count().filter(FilingRegistry.download_status == "PENDING").label("pending"),
+        func.count().filter(FilingRegistry.download_status == "DOWNLOADED").label("downloaded"),
+        func.count().filter(FilingRegistry.download_status == "ARCHIVE_MISSING").label("archive_missing"),
+        func.count().filter(FilingRegistry.download_status == "ARCHIVE_UNAVAILABLE").label("archive_unavailable"),
+        func.count().filter(FilingRegistry.download_status == "INVALID_FILE").label("invalid_file"),
+        func.count().filter(FilingRegistry.download_status == "FAILED").label("failed"),
+    ).one()
 
     return {
-        "total_filings": db.query(FilingRegistry).count(),
-
-        "pending": db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "PENDING")
-        .count(),
-
-        "downloaded": db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "DOWNLOADED")
-        .count(),
-
-        "archive_missing": db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "ARCHIVE_MISSING")
-        .count(),
-
-        "archive_unavailable": db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "ARCHIVE_UNAVAILABLE")
-        .count(),
-
-        "invalid_file": db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "INVALID_FILE")
-        .count(),
-
-        "failed": db.query(FilingRegistry)
-        .filter(FilingRegistry.download_status == "FAILED")
-        .count(),
+        "total_filings": stats.total or 0,
+        "pending": stats.pending or 0,
+        "downloaded": stats.downloaded or 0,
+        "archive_missing": stats.archive_missing or 0,
+        "archive_unavailable": stats.archive_unavailable or 0,
+        "invalid_file": stats.invalid_file or 0,
+        "failed": stats.failed or 0,
     }
 
 

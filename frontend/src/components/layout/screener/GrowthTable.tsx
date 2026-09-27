@@ -18,8 +18,13 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Star,
+  TrendingUp,
 } from "lucide-react";
 import type { GrowthCompany } from "@/lib/api";
+import {
+  ALL_AVAILABLE_COLUMNS,
+  type ColumnDefinition,
+} from "@/components/layout/earnings/quarterlyColumnsConfig";
 
 export type TableDensity = "default" | "compact";
 
@@ -44,6 +49,7 @@ interface GrowthTableProps {
 
   density?: TableDensity;
   onOpenWatchlist?: (company: GrowthCompany) => void;
+  selectedColumnIds?: string[];
 }
 
 // =======================================================
@@ -222,6 +228,95 @@ function formatLastUpdated(dateStr?: string | null): string {
   }
 }
 
+function renderGrowthColumnCell(
+  col: ColumnDefinition,
+  company: GrowthCompany,
+  isCompact: boolean
+) {
+  let val: any = (company as any)[col.id];
+
+  if (val === undefined || val === null) {
+    if (col.id === "current_price") val = company.cmp;
+    else if (col.id === "stock_pe") val = company.pe_ratio;
+    else if (col.id === "price_to_book") val = company.pb_ratio;
+    else if (col.id === "quarterly_sales_yoy") val = company.sales_growth_yoy ?? company.revenue_growth;
+    else if (col.id === "quarterly_pat_yoy") val = company.profit_growth_yoy ?? company.pat_growth;
+    else if (col.id === "revenue_growth_qoq") val = company.sales_growth_qoq;
+    else if (col.id === "pat_growth_qoq") val = company.profit_growth_qoq;
+    else if (col.id === "opm_latest") val = company.opm;
+    else if (col.id === "sales_growth_3yr") val = company.sales_cagr_3y;
+    else if (col.id === "profit_growth_3yr") val = company.profit_cagr_3y;
+  }
+
+  if (col.id === "piotroski_score") {
+    const s = company.piotroski_score;
+    if (s === null || s === undefined) return <span className="text-slate-400 dark:text-slate-600 font-mono text-xs">—</span>;
+    return (
+      <span
+        className={`inline-block px-1.5 py-0.5 rounded font-mono font-bold ${isCompact ? "text-[10px]" : "text-xs"} ${
+          s >= 7
+            ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30"
+            : s >= 5
+            ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30"
+            : "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30"
+        }`}
+      >
+        {s}/9
+      </span>
+    );
+  }
+
+  if (col.id === "pead_score") {
+    const s = company.pead_score;
+    if (s === null || s === undefined) return <span className="text-slate-400 dark:text-slate-600 font-mono text-xs">—</span>;
+    return (
+      <span
+        className={`inline-block px-1.5 py-0.5 rounded font-mono font-bold ${isCompact ? "text-[10px]" : "text-xs"} ${
+          s >= 80
+            ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40"
+            : s >= 65
+            ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
+            : "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40"
+        }`}
+      >
+        {s.toFixed(0)}
+      </span>
+    );
+  }
+
+  if (col.id === "health_score") {
+    return renderHealthPill(company.health_score, isCompact);
+  }
+
+  if (val === null || val === undefined || (typeof val === "number" && isNaN(val))) {
+    return <span className="text-slate-400 dark:text-slate-600 font-mono text-xs">—</span>;
+  }
+
+  switch (col.format) {
+    case "currency_cr":
+      return formatCrores(typeof val === "number" ? val : parseFloat(val));
+    case "currency_rs":
+      return formatPrice(typeof val === "number" ? val : parseFloat(val));
+    case "growth_percent":
+      return formatGrowth(typeof val === "number" ? val : parseFloat(val));
+    case "percent":
+      return formatPercentMargin(typeof val === "number" ? val : parseFloat(val));
+    case "ratio":
+    case "multiple":
+      return formatRatio(typeof val === "number" ? val : parseFloat(val));
+    case "integer":
+      return (
+        <span className="font-mono text-slate-800 dark:text-slate-200">
+          {Math.round(typeof val === "number" ? val : parseFloat(val))}
+        </span>
+      );
+    case "date":
+      return <span className="font-mono text-xs text-slate-600 dark:text-slate-300">{String(val).slice(0, 10)}</span>;
+    default:
+      return <span className="font-mono text-slate-700 dark:text-slate-300">{String(val)}</span>;
+  }
+}
+
 // =======================================================
 // Main Growth Table Component
 // =======================================================
@@ -243,8 +338,20 @@ export default function GrowthTable({
   onLast,
   density = "default",
   onOpenWatchlist,
+  selectedColumnIds,
 }: GrowthTableProps) {
   const isCompact = density === "compact";
+
+  const activeColumnDefs = React.useMemo(() => {
+    if (!selectedColumnIds || selectedColumnIds.length === 0) return null;
+    const map = new Map<string, ColumnDefinition>();
+    ALL_AVAILABLE_COLUMNS.forEach((c) => map.set(c.id, c));
+    return selectedColumnIds
+      .map((id) => map.get(id))
+      .filter((c): c is ColumnDefinition => c !== undefined);
+  }, [selectedColumnIds]);
+
+  const totalCols = activeColumnDefs ? 3 + activeColumnDefs.length + 1 : 16;
 
   const thPy = isCompact ? "py-1.5" : "py-3";
   const thSubPy = isCompact ? "py-1" : "py-1.5";
@@ -257,10 +364,66 @@ export default function GrowthTable({
       {/* Table Scrollable Container */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-xs">
-          {/* Grouped Header */}
+          {/* Table Header */}
           <thead className="sticky top-0 z-20 bg-slate-100 text-slate-600 dark:bg-[#060B14] dark:text-slate-400 select-none shadow-xs dark:shadow-md">
-            {/* Top Header Row */}
-            <tr className={`border-b border-slate-200 dark:border-slate-800 ${isCompact ? "text-[10px]" : "text-[11px]"} uppercase tracking-wider font-semibold`}>
+            {activeColumnDefs ? (
+              <tr className={`border-b border-slate-200 dark:border-slate-800 ${isCompact ? "text-[10px]" : "text-[11px]"} uppercase tracking-wider font-semibold`}>
+                <th
+                  className={`sticky left-0 z-30 bg-slate-100 dark:bg-[#060B14] px-2.5 sm:px-3 ${thPy} text-center w-11 sm:w-12 text-slate-400 dark:text-slate-500 border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_6px_rgba(0,0,0,0.5)]`}
+                >
+                  #
+                </th>
+
+                <th
+                  className={`sticky left-11 sm:left-12 z-30 bg-slate-100 dark:bg-[#060B14] px-3 sm:px-4 ${thPy} text-left min-w-[160px] sm:min-w-[200px] border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.06)] dark:shadow-[4px_0_8px_rgba(0,0,0,0.5)]`}
+                >
+                  <SortHeader
+                    label="Company"
+                    column="company"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={onSort}
+                    align="left"
+                  />
+                </th>
+
+                <th className={`${cellPx} ${thPy} text-center min-w-[85px] sm:min-w-[100px] border-r border-slate-200/80 dark:border-slate-800/60`}>
+                  <SortHeader
+                    label="Conviction"
+                    column="conviction"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={onSort}
+                    align="center"
+                  />
+                </th>
+
+                {activeColumnDefs.map((col) => (
+                  <th
+                    key={col.id}
+                    className={`${cellPx} ${thPy} border-r border-slate-200/80 dark:border-slate-800/60 ${
+                      col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
+                    } ${col.minWidth || "min-w-[85px]"}`}
+                  >
+                    <SortHeader
+                      label={col.shortLabel}
+                      column={col.sortKey}
+                      sortBy={sortBy}
+                      sortOrder={sortOrder}
+                      onSort={onSort}
+                      align={col.align}
+                    />
+                  </th>
+                ))}
+
+                <th className={`${cellPx} ${thPy} text-center min-w-[70px]`}>
+                  Actions
+                </th>
+              </tr>
+            ) : (
+              <>
+                {/* Top Header Row */}
+                <tr className={`border-b border-slate-200 dark:border-slate-800 ${isCompact ? "text-[10px]" : "text-[11px]"} uppercase tracking-wider font-semibold`}>
               <th
                 rowSpan={2}
                 className={`sticky left-0 z-30 bg-slate-100 dark:bg-[#060B14] px-2.5 sm:px-3 ${thPy} text-center w-11 sm:w-12 text-slate-400 dark:text-slate-500 border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_6px_rgba(0,0,0,0.5)]`}
@@ -468,13 +631,15 @@ export default function GrowthTable({
                 />
               </th>
             </tr>
+              </>
+            )}
           </thead>
 
           {/* Table Body */}
           <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800/50">
             {loading ? (
               <tr>
-                <td colSpan={16} className="py-20 text-center text-slate-500 dark:text-slate-400">
+                <td colSpan={totalCols} className="py-20 text-center text-slate-500 dark:text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <div className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
                     <p className="text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-400">
@@ -485,7 +650,7 @@ export default function GrowthTable({
               </tr>
             ) : companies.length === 0 ? (
               <tr>
-                <td colSpan={16} className="py-20 text-center text-slate-500">
+                <td colSpan={totalCols} className="py-20 text-center text-slate-500">
                   <p className="text-sm">No companies matched your screener criteria.</p>
                   <p className="text-xs text-slate-400 dark:text-slate-600 mt-1">
                     Try adjusting your sector, market cap, or valuation ratio filters.
@@ -570,87 +735,119 @@ export default function GrowthTable({
                       </button>
                     </td>
 
-                    {/* CMP (₹) */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatPrice(company.cmp)}
-                    </td>
+                    {/* Dynamic Columns or Standard Columns */}
+                    {activeColumnDefs ? (
+                      <>
+                        {activeColumnDefs.map((col) => (
+                          <td
+                            key={col.id}
+                            className={`${cellPx} ${cellPy} border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont} ${
+                              col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
+                            }`}
+                          >
+                            {renderGrowthColumnCell(col, company, isCompact)}
+                          </td>
+                        ))}
+                        <td className={`${cellPx} ${cellPy} text-center`}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <a
+                              href={`https://in.tradingview.com/chart/?symbol=${company.exchange || "NSE"}:${company.symbol}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 dark:bg-cyan-950/60 dark:hover:bg-cyan-900/60 text-cyan-700 hover:text-cyan-800 dark:text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold font-mono transition-all cursor-pointer shadow-2xs"
+                              title={`Open ${company.symbol} Chart on TradingView`}
+                            >
+                              <TrendingUp className="w-3 h-3 text-cyan-500" />
+                              <span>TV</span>
+                            </a>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        {/* CMP (₹) */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatPrice(company.cmp)}
+                        </td>
 
-                    {/* MCap (₹ Cr) */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatCrores(company.market_cap)}
-                    </td>
+                        {/* MCap (₹ Cr) */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatCrores(company.market_cap)}
+                        </td>
 
-                    {/* P/E */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatRatio(company.pe_ratio)}
-                    </td>
+                        {/* P/E */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatRatio(company.pe_ratio)}
+                        </td>
 
-                    {/* Ind P/E */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono text-slate-500 dark:text-slate-400 ${cellFont}`}>
-                      {formatRatio(company.industry_pe)}
-                    </td>
+                        {/* Ind P/E */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono text-slate-500 dark:text-slate-400 ${cellFont}`}>
+                          {formatRatio(company.industry_pe)}
+                        </td>
 
-                    {/* P/B */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatRatio(company.pb_ratio)}
-                    </td>
+                        {/* P/B */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatRatio(company.pb_ratio)}
+                        </td>
 
-                    {/* ROCE (%) */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatPercentMargin(company.roce)}
-                    </td>
+                        {/* ROCE (%) */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatPercentMargin(company.roce)}
+                        </td>
 
-                    {/* ROE (%) */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatPercentMargin(company.roe)}
-                    </td>
+                        {/* ROE (%) */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatPercentMargin(company.roe)}
+                        </td>
 
-                    {/* OPM (%) */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatPercentMargin(company.opm)}
-                    </td>
+                        {/* OPM (%) */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatPercentMargin(company.opm)}
+                        </td>
 
-                    {/* Sales Growth YoY */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-cyan-50/30 dark:bg-cyan-950/5 font-mono ${cellFont}`}>
-                      {formatGrowth(company.sales_growth_yoy ?? (typeof company.revenue_growth === "number" ? company.revenue_growth : null))}
-                    </td>
+                        {/* Sales Growth YoY */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-cyan-50/30 dark:bg-cyan-950/5 font-mono ${cellFont}`}>
+                          {formatGrowth(company.sales_growth_yoy ?? (typeof company.revenue_growth === "number" ? company.revenue_growth : null))}
+                        </td>
 
-                    {/* Sales Growth QoQ */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-cyan-50/30 dark:bg-cyan-950/5 font-mono ${cellFont}`}>
-                      {formatGrowth(company.sales_growth_qoq)}
-                    </td>
+                        {/* Sales Growth QoQ */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-cyan-50/30 dark:bg-cyan-950/5 font-mono ${cellFont}`}>
+                          {formatGrowth(company.sales_growth_qoq)}
+                        </td>
 
-                    {/* Profit Growth YoY */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-emerald-50/30 dark:bg-emerald-950/5 font-mono ${cellFont}`}>
-                      {formatGrowth(company.profit_growth_yoy ?? (typeof company.pat_growth === "number" ? company.pat_growth : null))}
-                    </td>
+                        {/* Profit Growth YoY */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-emerald-50/30 dark:bg-emerald-950/5 font-mono ${cellFont}`}>
+                          {formatGrowth(company.profit_growth_yoy ?? (typeof company.pat_growth === "number" ? company.pat_growth : null))}
+                        </td>
 
-                    {/* Profit Growth QoQ */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-emerald-50/30 dark:bg-emerald-950/5 font-mono ${cellFont}`}>
-                      {formatGrowth(company.profit_growth_qoq)}
-                    </td>
+                        {/* Profit Growth QoQ */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 bg-emerald-50/30 dark:bg-emerald-950/5 font-mono ${cellFont}`}>
+                          {formatGrowth(company.profit_growth_qoq)}
+                        </td>
 
-                    {/* Sales 3Y CAGR */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatGrowth(company.sales_cagr_3y)}
-                    </td>
+                        {/* Sales 3Y CAGR */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatGrowth(company.sales_cagr_3y)}
+                        </td>
 
-                    {/* Profit 3Y CAGR */}
-                    <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
-                      {formatGrowth(company.profit_cagr_3y)}
-                    </td>
+                        {/* Profit 3Y CAGR */}
+                        <td className={`${cellPx} ${cellPy} text-right border-r border-slate-200/60 dark:border-slate-800/40 font-mono ${cellFont}`}>
+                          {formatGrowth(company.profit_cagr_3y)}
+                        </td>
 
-                    {/* Health Score */}
-                    <td className={`${cellPx} ${cellPy} text-center border-r border-slate-200/60 dark:border-slate-800/40`}>
-                      {renderHealthPill(company.health_score, isCompact)}
-                    </td>
+                        {/* Health Score */}
+                        <td className={`${cellPx} ${cellPy} text-center border-r border-slate-200/60 dark:border-slate-800/40`}>
+                          {renderHealthPill(company.health_score, isCompact)}
+                        </td>
 
-                    {/* Last Updated */}
-                    <td className={`${cellPx} ${cellPy} text-center font-mono text-slate-500 dark:text-slate-400 ${cellFont}`}>
-                      <span className={`inline-flex items-center gap-1 rounded bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300 ${isCompact ? "px-1.5 py-0 text-[10px]" : "px-2 py-0.5 text-[11px]"}`}>
-                        {formatLastUpdated(company.last_updated)}
-                      </span>
-                    </td>
+                        {/* Last Updated */}
+                        <td className={`${cellPx} ${cellPy} text-center font-mono text-slate-500 dark:text-slate-400 ${cellFont}`}>
+                          <span className={`inline-flex items-center gap-1 rounded bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300 ${isCompact ? "px-1.5 py-0 text-[10px]" : "px-2 py-0.5 text-[11px]"}`}>
+                            {formatLastUpdated(company.last_updated)}
+                          </span>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })

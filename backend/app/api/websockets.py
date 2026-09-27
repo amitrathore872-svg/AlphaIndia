@@ -70,3 +70,29 @@ async def websocket_telemetry(websocket: WebSocket):
     except Exception as exc:
         logger.debug(f"[WebSocket] telemetry client exception: {exc}")
         ws_manager.disconnect("telemetry", websocket)
+
+
+@router.websocket("/ws/cpr-alerts")
+@router.websocket("/ws/alerts")
+async def websocket_cpr_alerts(websocket: WebSocket):
+    """
+    Real-time WebSocket endpoint streaming CPR breakout, retest, and expansion alerts.
+    """
+    await ws_manager.connect("cpr_alerts", websocket)
+    try:
+        await websocket.send_json({
+            "type": "CONNECTION_ESTABLISHED",
+            "channel": "cpr_alerts",
+            "message": "Connected to Alpha India CPR Compression Real-Time Alert Radar",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        ws_manager.disconnect("cpr_alerts", websocket)
+    except Exception as exc:
+        logger.debug(f"[WebSocket] cpr_alerts client exception: {exc}")
+        ws_manager.disconnect("cpr_alerts", websocket)

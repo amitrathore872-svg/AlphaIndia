@@ -17,6 +17,7 @@ import {
   TableProperties,
   Sparkles,
   Zap,
+  Layers,
   BookOpen,
   X,
   PanelLeftClose,
@@ -31,6 +32,8 @@ import {
   Compass,
   Crosshair,
   Briefcase,
+  Trophy,
+  Activity,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -49,6 +52,7 @@ const navigation = [
       { name: "Growth Screener PRO", href: "/growth-screener", icon: TrendingUp },
       { name: "MF Fresh Entries Radar", href: "/institutional-radar/fresh-entries", icon: Sparkles },
       { name: "Corporate Catalysts", href: "/announcements", icon: Radio },
+      { name: "Order Win Radar", href: "/order-wins", icon: Trophy },
     ],
   },
   {
@@ -61,7 +65,9 @@ const navigation = [
       { name: "Delivery Breakout", href: "/delivery-radar", icon: Radar },
       { name: "VCP Breakout Engine", href: "/vcp-discovery", icon: Sparkles },
       { name: "↳ VCP Track Record", href: "/vcp-signals", icon: Award },
+      { name: "Live Intraday Radar", href: "/live-intraday", icon: Activity },
       { name: "Tomorrow 5% Move", href: "/intraday-radar", icon: Flame },
+      { name: "Narrow CPR Compression", href: "/cpr-scanner", icon: Layers },
     ],
   },
   {

@@ -75,9 +75,41 @@ def trigger_service_now(
 @router.post("/toggle/{service_id}")
 def toggle_service_status(service_id: str) -> Dict[str, Any]:
     """
-    Pauses or resumes a background ingestion service.
+    Toggles an engine: stops it if active, or starts it if stopped.
     """
     return ControlSystemService.toggle_service(service_id)
+
+
+@router.post("/start/{service_id}")
+def start_service_engine(service_id: str) -> Dict[str, Any]:
+    """
+    Explicitly starts a specific background engine or scheduler thread.
+    """
+    return ControlSystemService.start_service(service_id)
+
+
+@router.post("/stop/{service_id}")
+def stop_service_engine(service_id: str) -> Dict[str, Any]:
+    """
+    Explicitly stops a specific background engine or scheduler thread.
+    """
+    return ControlSystemService.stop_service(service_id)
+
+
+@router.post("/start-all")
+def start_all_engines() -> Dict[str, Any]:
+    """
+    Master Start: Ignites all background ingestion engines and autonomous schedulers.
+    """
+    return ControlSystemService.start_all_services()
+
+
+@router.post("/stop-all")
+def stop_all_engines() -> Dict[str, Any]:
+    """
+    Safety Halt: Halts all background ingestion engines and autonomous schedulers.
+    """
+    return ControlSystemService.stop_all_services()
 
 
 @router.post("/trigger-all")

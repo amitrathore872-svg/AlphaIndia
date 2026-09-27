@@ -15,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class FinancialMetric(Base):
@@ -44,6 +44,6 @@ class FinancialMetric(Base):
 
     ai_score = Column(Float, default=0)
 
-    scanned_at = Column(DateTime, default=datetime.utcnow)
+    scanned_at = Column(DateTime, default=utc_now)
 
     company = relationship("Company")

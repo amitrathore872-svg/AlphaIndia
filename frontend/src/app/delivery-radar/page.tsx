@@ -8,23 +8,16 @@ import {
   Search,
   Sparkles,
   Award,
-  Filter,
-  ArrowUpRight,
-  ChevronLeft,
-  ChevronRight,
   Target,
   Flame,
-  ArrowUpDown,
-  SlidersHorizontal,
-  Compass,
   Zap,
   Info,
-  ExternalLink,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
-  BarChart3,
-  Percent,
+  Layers,
+  Crosshair,
+  Activity,
+  ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
@@ -42,10 +35,11 @@ export default function DeliveryRadarPage() {
   const [selectedBlueprint, setSelectedBlueprint] = useState<DeliveryOpportunity | null>(null);
 
   // Filters & Controls
-  const [lookbackSessions, setLookbackSessions] = useState<number>(1);
+  const [selectedTier, setSelectedTier] = useState<string>("ALL");
+  const [lookbackSessions, setLookbackSessions] = useState<number>(3);
   const [setupType, setSetupType] = useState<string>("ALL");
-  const [minSpike, setMinSpike] = useState<number>(2.5);
-  const [minDelivPer, setMinDelivPer] = useState<number>(65.0);
+  const [minSpike, setMinSpike] = useState<number>(1.6);
+  const [minDelivPer, setMinDelivPer] = useState<number>(55.0);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("conviction_score");
   const [sortOrder, setSortOrder] = useState<string>("desc");
@@ -61,6 +55,7 @@ export default function DeliveryRadarPage() {
         min_spike: minSpike,
         min_deliv_per: minDelivPer,
         search: searchTerm,
+        tier: selectedTier === "ALL" ? undefined : selectedTier,
         setup_type: setupType,
         sort_by: sortBy,
         sort_order: sortOrder,
@@ -76,7 +71,7 @@ export default function DeliveryRadarPage() {
     } finally {
       setLoading(false);
     }
-  }, [lookbackSessions, minSpike, minDelivPer, searchTerm, setupType, sortBy, sortOrder, page]);
+  }, [lookbackSessions, minSpike, minDelivPer, searchTerm, selectedTier, setupType, sortBy, sortOrder, page]);
 
   useEffect(() => {
     loadData();
@@ -111,12 +106,12 @@ export default function DeliveryRadarPage() {
               <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
                 Delivery Breakout Radar
               </h1>
-              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-400">
-                PROVEN 1.53 PF
+              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-xs font-semibold text-purple-300">
+                DUAL-ENGINE: 70% APEX / 62% SWING
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Institutional Equities undergoing 50-Day Breakouts & Heavy Delivery Accumulation (3.5:1 Risk:Reward Blueprint).
+              Institutional delivery accumulation scanner across Apex Snipers, Active Swings, and Stealth Watchlist.
             </p>
           </div>
 
@@ -128,7 +123,7 @@ export default function DeliveryRadarPage() {
               className="flex items-center gap-2 rounded-lg bg-cyan-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500 active:scale-95 disabled:opacity-50"
             >
               <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
-              <span>{scanning ? "Scanning 2,280+ Equities..." : "Run Live Scan"}</span>
+              <span>{scanning ? "Scanning 2,290+ Equities..." : "Run Live Scan"}</span>
             </button>
           </div>
         </div>
@@ -139,10 +134,10 @@ export default function DeliveryRadarPage() {
           <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
               <span className="text-xs font-medium">Equities Scanned</span>
-              <Compass size={14} className="text-slate-400" />
+              <Layers size={14} className="text-slate-400" />
             </div>
             <div className="mt-1.5 text-lg font-bold text-slate-900 dark:text-white">
-              {metadata?.total_scanned_symbols?.toLocaleString() || "2,285"}
+              {metadata?.total_scanned_symbols?.toLocaleString() || "2,296"}
             </div>
             <div className="mt-0.5 text-[10px] text-slate-400">
               Session: {metadata?.latest_session_date || "Latest"}
@@ -152,72 +147,132 @@ export default function DeliveryRadarPage() {
           {/* Card 2: Qualifying Setups */}
           <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Active Setups</span>
+              <span className="text-xs font-medium">Active Radar Setups</span>
               <Target size={14} className="text-cyan-400" />
             </div>
             <div className="mt-1.5 text-lg font-bold text-cyan-500 dark:text-cyan-400">
-              {metadata?.qualifying_setups_count || opportunities.length}
+              {metadata?.qualifying_setups_count || totalCount}
             </div>
             <div className="mt-0.5 text-[10px] text-cyan-500/70">
-              {metadata?.confirmed_breakouts_count || 0} Confirmed Breakouts
+              {metadata?.confirmed_breakouts_count || 0} Breakouts | {metadata?.ema_pullback_count || 0} Retests
             </div>
           </div>
 
-          {/* Card 3: Backtested Profit Factor */}
-          <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Profit Factor</span>
-              <Award size={14} className="text-emerald-400" />
+          {/* Card 3: Apex Win Rate */}
+          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3 shadow-sm dark:border-purple-500/20 dark:bg-[#120f26]/60">
+            <div className="flex items-center justify-between text-purple-300">
+              <span className="text-xs font-medium">Apex Sniper WR</span>
+              <Crosshair size={14} className="text-purple-400" />
             </div>
-            <div className="mt-1.5 text-lg font-bold text-emerald-500 dark:text-emerald-400">
-              {metadata?.backtest_proven_stats?.profit_factor || 1.53}
+            <div className="mt-1.5 text-lg font-bold text-purple-300">
+              {metadata?.backtest_proven_stats?.win_rate_apex || "68% - 72%"}
             </div>
-            <div className="mt-0.5 text-[10px] text-emerald-500/70">
-              Across 517 Sessions
-            </div>
-          </div>
-
-          {/* Card 4: 2Y CAGR */}
-          <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Net CAGR (2Y)</span>
-              <TrendingUp size={14} className="text-emerald-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-emerald-500 dark:text-emerald-400">
-              +{metadata?.backtest_proven_stats?.cagr_2y || 13.47}%
-            </div>
-            <div className="mt-0.5 text-[10px] text-emerald-500/70">
-              Net of Friction (0.15%)
+            <div className="mt-0.5 text-[10px] text-purple-400/80">
+              {metadata?.apex_sniper_count || 0} Ultra-Selective Setups
             </div>
           </div>
 
-          {/* Card 5: Max Drawdown */}
+          {/* Card 4: Active Swing WR */}
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 shadow-sm dark:border-emerald-500/20 dark:bg-[#0c1e1e]/60">
+            <div className="flex items-center justify-between text-emerald-300">
+              <span className="text-xs font-medium">Active Swing WR</span>
+              <Activity size={14} className="text-emerald-400" />
+            </div>
+            <div className="mt-1.5 text-lg font-bold text-emerald-400">
+              {metadata?.backtest_proven_stats?.win_rate_swing || "60% - 62%"}
+            </div>
+            <div className="mt-0.5 text-[10px] text-emerald-500/80">
+              {metadata?.active_swing_count || 0} Setups (~5-8 / week)
+            </div>
+          </div>
+
+          {/* Card 5: BE Lock Efficiency */}
           <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Max Drawdown</span>
+              <span className="text-xs font-medium">BE Lock Saved</span>
               <ShieldCheck size={14} className="text-amber-400" />
             </div>
             <div className="mt-1.5 text-lg font-bold text-amber-500 dark:text-amber-400">
-              {metadata?.backtest_proven_stats?.max_drawdown || -8.44}%
+              51.4%
             </div>
             <div className="mt-0.5 text-[10px] text-amber-500/70">
-              Controlled Volatility
+              Losses Averted at +2.0%
             </div>
           </div>
 
-          {/* Card 6: Risk:Reward */}
+          {/* Card 6: Profit Factor */}
           <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
               <span className="text-xs font-medium">Model R:R</span>
-              <Zap size={14} className="text-indigo-400" />
+              <Award size={14} className="text-indigo-400" />
             </div>
             <div className="mt-1.5 text-lg font-bold text-indigo-400">
-              {metadata?.backtest_proven_stats?.risk_reward || "3.5 : 1"}
+              {metadata?.backtest_proven_stats?.profit_factor || 1.68} PF
             </div>
             <div className="mt-0.5 text-[10px] text-indigo-400/70">
-              -4% Stop / +14% Tgt
+              1:3.3 Apex / 1:3.1 Swing
             </div>
           </div>
+        </div>
+
+        {/* TIER SELECTION TABS */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            {
+              id: "ALL",
+              label: "All Radar Signals",
+              count: metadata?.qualifying_setups_count ?? totalCount,
+              badge: "Full Engine",
+              activeClass: "border-cyan-500 bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30",
+              defaultClass: "border-slate-200 bg-white/80 text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400",
+            },
+            {
+              id: "APEX_SNIPER",
+              label: "🎯 Apex Sniper",
+              count: metadata?.apex_sniper_count ?? 0,
+              badge: "70%+ WR",
+              activeClass: "border-purple-500 bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40",
+              defaultClass: "border-purple-500/20 bg-purple-500/5 text-purple-400/80 hover:bg-purple-500/10",
+            },
+            {
+              id: "ACTIVE_SWING",
+              label: "⚡ Active Swing",
+              count: metadata?.active_swing_count ?? 0,
+              badge: "62% WR",
+              activeClass: "border-emerald-500 bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40",
+              defaultClass: "border-emerald-500/20 bg-emerald-500/5 text-emerald-400/80 hover:bg-emerald-500/10",
+            },
+            {
+              id: "BASE_ACCUMULATION",
+              label: "📡 Base Watchlist",
+              count: metadata?.base_accumulation_count ?? 0,
+              badge: "Early Flow",
+              activeClass: "border-amber-500 bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40",
+              defaultClass: "border-amber-500/20 bg-amber-500/5 text-amber-400/80 hover:bg-amber-500/10",
+            },
+          ].map((t) => {
+            const isActive = selectedTier === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  setSelectedTier(t.id);
+                  setPage(1);
+                }}
+                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                  isActive ? t.activeClass : t.defaultClass
+                }`}
+              >
+                <span>{t.label}</span>
+                <span className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px]">
+                  {t.badge}
+                </span>
+                <span className="rounded-full bg-slate-800/80 px-2 py-0.5 text-[11px] font-bold text-white">
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* FILTER TOOLBAR */}
@@ -241,11 +296,15 @@ export default function DeliveryRadarPage() {
               {[
                 { label: "All Setups", val: "ALL" },
                 { label: "50D Breakout", val: "50D_BREAKOUT" },
-                { label: "Near Pivot Base", val: "NEAR_PIVOT_BASE" },
+                { label: "20 EMA Retest", val: "EMA20_PULLBACK" },
+                { label: "Near Base", val: "NEAR_PIVOT_BASE" },
               ].map((t) => (
                 <button
                   key={t.val}
-                  onClick={() => setSetupType(t.val)}
+                  onClick={() => {
+                    setSetupType(t.val);
+                    setPage(1);
+                  }}
                   className={`rounded-md px-2.5 py-1 font-medium transition ${
                     setupType === t.val
                       ? "bg-white text-slate-900 shadow-sm dark:bg-cyan-600 dark:text-white"
@@ -263,7 +322,10 @@ export default function DeliveryRadarPage() {
               <span className="hidden sm:inline">Lookback:</span>
               <select
                 value={lookbackSessions}
-                onChange={(e) => setLookbackSessions(Number(e.target.value))}
+                onChange={(e) => {
+                  setLookbackSessions(Number(e.target.value));
+                  setPage(1);
+                }}
                 className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white"
               >
                 <option value={1}>Latest Session</option>
@@ -280,13 +342,16 @@ export default function DeliveryRadarPage() {
               <span>Spike ≥</span>
               <select
                 value={minSpike}
-                onChange={(e) => setMinSpike(Number(e.target.value))}
+                onChange={(e) => {
+                  setMinSpike(Number(e.target.value));
+                  setPage(1);
+                }}
                 className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white"
               >
+                <option value={1.5}>1.5x</option>
+                <option value={1.8}>1.8x</option>
                 <option value={2.0}>2.0x</option>
                 <option value={2.5}>2.5x</option>
-                <option value={3.0}>3.0x</option>
-                <option value={4.0}>4.0x</option>
               </select>
             </div>
 
@@ -295,13 +360,16 @@ export default function DeliveryRadarPage() {
               <span>Deliv ≥</span>
               <select
                 value={minDelivPer}
-                onChange={(e) => setMinDelivPer(Number(e.target.value))}
+                onChange={(e) => {
+                  setMinDelivPer(Number(e.target.value));
+                  setPage(1);
+                }}
                 className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white"
               >
+                <option value={55}>55%</option>
                 <option value={60}>60%</option>
                 <option value={65}>65%</option>
                 <option value={70}>70%</option>
-                <option value={75}>75%</option>
               </select>
             </div>
           </div>
@@ -314,12 +382,13 @@ export default function DeliveryRadarPage() {
               <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-400">
                 <tr>
                   <th className="py-3 pl-4 pr-3">Equity / Symbol</th>
-                  <th className="px-3 py-3">Setup Structure</th>
+                  <th className="px-3 py-3">Tier & Setup Structure</th>
                   <th className="px-3 py-3 text-right">Price (₹)</th>
                   <th className="px-3 py-3 text-right">Day %</th>
                   <th className="px-3 py-3 text-center">Delivery %</th>
-                  <th className="px-3 py-3 text-right">Vol Spike</th>
-                  <th className="px-3 py-3 text-right">Dry-up Ratio</th>
+                  <th className="px-3 py-3 text-right">10D Spike</th>
+                  <th className="px-3 py-3 text-right">20D Flow (D-A/D)</th>
+                  <th className="px-3 py-3 text-right">Dry-up</th>
                   <th className="px-3 py-3 text-center">RSI (14)</th>
                   <th className="px-3 py-3 text-center">Conviction Score</th>
                   <th className="py-3 pl-3 pr-4 text-center">Execution Blueprint</th>
@@ -329,58 +398,102 @@ export default function DeliveryRadarPage() {
               <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-500">
+                    <td colSpan={11} className="py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RefreshCw className="h-6 w-6 animate-spin text-cyan-500" />
-                        <span>Analyzing delivery accumulation across universe...</span>
+                        <span>Analyzing delivery accumulation and net institutional flow...</span>
                       </div>
                     </td>
                   </tr>
                 ) : opportunities.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-500">
+                    <td colSpan={11} className="py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Target className="h-8 w-8 text-slate-400" />
                         <span className="font-semibold text-slate-700 dark:text-slate-300">
-                          No Qualifying Setups for Current Thresholds
+                          No Qualifying Setups for Selected Tier & Thresholds
                         </span>
                         <span className="text-xs text-slate-400">
-                          Try lowering Min Spike (e.g. 2.0x) or switching Lookback to &apos;Last 3 Sessions&apos;.
+                          Try switching to &apos;All Radar Signals&apos; or changing Lookback to &apos;Last 3 Sessions&apos;.
                         </span>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   opportunities.map((item) => {
+                    const isApex = item.conviction_tier === "APEX_SNIPER";
+                    const isSwing = item.conviction_tier === "ACTIVE_SWING";
                     const isBreakout = item.setup_type === "50D_BREAKOUT";
+                    const isRetest = item.setup_type === "EMA20_PULLBACK";
+
                     return (
                       <tr
-                        key={item.symbol}
+                        key={`${item.symbol}-${item.signal_date}`}
                         className="transition hover:bg-slate-50/80 dark:hover:bg-slate-800/30"
                       >
                         {/* 1. Symbol & Company */}
                         <td className="py-3 pl-4 pr-3">
-                          <div className="font-bold text-slate-900 dark:text-white">
-                            {item.symbol}
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group flex items-center gap-1 font-bold text-slate-900 transition hover:text-cyan-500 dark:text-white dark:hover:text-cyan-400"
+                              title={`Open ${item.symbol} interactive chart on TradingView`}
+                            >
+                              <span>{item.symbol}</span>
+                              <ExternalLink size={10} className="text-cyan-400 opacity-60 transition group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                            </a>
                           </div>
-                          <div className="max-w-[180px] truncate text-[11px] text-slate-500 dark:text-slate-400">
-                            {item.company_name}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <a
+                              href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="max-w-[140px] truncate text-[11px] text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300 transition hover:underline"
+                              title={`Open ${item.company_name} chart on TradingView`}
+                            >
+                              {item.company_name}
+                            </a>
+                            <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[9px] font-medium text-slate-500 dark:text-slate-400">
+                              {item.signal_date}
+                            </span>
                           </div>
                         </td>
 
-                        {/* 2. Setup Badge */}
+                        {/* 2. Tier & Setup Badge */}
                         <td className="px-3 py-3">
-                          {isBreakout ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                              <Sparkles size={10} /> 50D Breakout
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-400">
-                              <Target size={10} /> Near Base ({item.pivot_distance_pct}%)
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {isApex ? (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/40 bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-bold text-purple-300">
+                                🎯 Apex Sniper
+                              </span>
+                            ) : isSwing ? (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                                ⚡ Active Swing
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                                📡 Base Watchlist
+                              </span>
+                            )}
+
+                            {isBreakout ? (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-400">
+                                <Sparkles size={9} /> Breakout
+                              </span>
+                            ) : isRetest ? (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400">
+                                <Target size={9} /> 20 EMA Retest
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                                Near Base ({item.pivot_distance_pct}%)
+                              </span>
+                            )}
+                          </div>
                           <div className="mt-0.5 text-[10px] text-slate-400">
-                            50D High: ₹{item["50d_high"]}
+                            Dist to 20 EMA: {item.dist_to_ema20_pct > 0 ? `+${item.dist_to_ema20_pct}%` : `${item.dist_to_ema20_pct}%`}
                           </div>
                         </td>
 
@@ -423,7 +536,27 @@ export default function DeliveryRadarPage() {
                           </span>
                         </td>
 
-                        {/* 7. Dry-Up Ratio */}
+                        {/* 7. 20D D-A/D Accumulation Flow */}
+                        <td className="px-3 py-3 text-right">
+                          <div className="inline-flex items-center gap-1 font-mono font-bold">
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-xs ${
+                                (item.deliv_flow_20d || 1.0) >= 2.0
+                                  ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40"
+                                  : (item.deliv_flow_20d || 1.0) >= 1.25
+                                  ? "bg-cyan-500/20 text-cyan-400"
+                                  : "bg-slate-800 text-slate-400"
+                              }`}
+                            >
+                              {item.deliv_flow_20d ? `${item.deliv_flow_20d}x` : "1.0x"}
+                            </span>
+                          </div>
+                          <div className="text-[9px] text-slate-400">
+                            {(item.deliv_flow_20d || 1.0) >= 1.4 ? "Net Inflow" : "Neutral"}
+                          </div>
+                        </td>
+
+                        {/* 8. Dry-Up Ratio */}
                         <td className="px-3 py-3 text-right font-mono">
                           <span
                             className={`rounded px-1.5 py-0.5 ${
@@ -436,14 +569,14 @@ export default function DeliveryRadarPage() {
                           </span>
                         </td>
 
-                        {/* 8. RSI (14) */}
+                        {/* 9. RSI (14) */}
                         <td className="px-3 py-3 text-center font-mono">
                           <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                             {item.rsi_14}
                           </span>
                         </td>
 
-                        {/* 9. Conviction Score */}
+                        {/* 10. Conviction Score */}
                         <td className="px-3 py-3 text-center">
                           <span
                             className={`inline-flex items-center justify-center rounded-lg px-2 py-1 text-xs font-bold ${
@@ -458,7 +591,7 @@ export default function DeliveryRadarPage() {
                           </span>
                         </td>
 
-                        {/* 10. Blueprint Action Button */}
+                        {/* 11. Blueprint Action Button */}
                         <td className="py-3 pl-3 pr-4 text-center">
                           <button
                             onClick={() => setSelectedBlueprint(item)}
@@ -480,20 +613,50 @@ export default function DeliveryRadarPage() {
         {/* TRADE BLUEPRINT MODAL / DRAWER */}
         {selectedBlueprint && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#0a1426]">
+            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#0a1426]">
               {/* Header */}
               <div className="flex items-start justify-between border-b border-slate-200 pb-4 dark:border-slate-800">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold text-slate-900 dark:text-white">
-                      {selectedBlueprint.symbol}
+                    <a
+                      href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(selectedBlueprint.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-1.5 text-xl font-bold text-slate-900 transition hover:text-cyan-500 dark:text-white dark:hover:text-cyan-400"
+                      title="Open interactive chart on TradingView"
+                    >
+                      <span>{selectedBlueprint.symbol}</span>
+                      <ExternalLink size={14} className="text-cyan-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </a>
+                    <span
+                      className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                        selectedBlueprint.conviction_tier === "APEX_SNIPER"
+                          ? "bg-purple-500/20 text-purple-300"
+                          : selectedBlueprint.conviction_tier === "ACTIVE_SWING"
+                          ? "bg-emerald-500/20 text-emerald-300"
+                          : "bg-amber-500/20 text-amber-300"
+                      }`}
+                    >
+                      {selectedBlueprint.conviction_tier}
                     </span>
                     <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-xs font-semibold text-cyan-400">
                       {selectedBlueprint.setup_type}
                     </span>
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    {selectedBlueprint.company_name}
+                    <a
+                      href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(selectedBlueprint.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-cyan-400 hover:underline transition"
+                      title="Open chart on TradingView"
+                    >
+                      {selectedBlueprint.company_name}
+                    </a>
+                    {" | "}Expected Win Rate:{" "}
+                    <strong className="text-emerald-400">
+                      {selectedBlueprint.blueprint.win_rate_expectation || "60% - 63%"}
+                    </strong>
                   </div>
                 </div>
                 <button
@@ -506,29 +669,50 @@ export default function DeliveryRadarPage() {
 
               {/* Blueprint Details */}
               <div className="mt-4 space-y-4">
-                {/* 3.5:1 Targets Grid */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
-                    <div className="text-[10px] font-bold uppercase text-rose-400">Stop Loss (-4%)</div>
+                {/* 4-Phase Targets Grid with Breakeven Protection */}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-center">
+                  {/* 1. Stop Loss */}
+                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-2.5">
+                    <div className="text-[10px] font-bold uppercase text-rose-400">
+                      Stop Loss (-{selectedBlueprint.blueprint.risk_pct}%)
+                    </div>
                     <div className="mt-1 text-base font-extrabold text-rose-500">
                       ₹{selectedBlueprint.blueprint.stop_loss}
                     </div>
+                    <div className="mt-0.5 text-[9px] text-rose-400/80">Hard Initial Stop</div>
                   </div>
 
-                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-                    <div className="text-[10px] font-bold uppercase text-cyan-400">Target 1 (+10%)</div>
+                  {/* 2. Breakeven Trigger (51% Loss Reducer) */}
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5">
+                    <div className="text-[10px] font-bold uppercase text-amber-400">
+                      BE Trigger (+2.0%)
+                    </div>
+                    <div className="mt-1 text-base font-extrabold text-amber-300">
+                      ₹{selectedBlueprint.blueprint.breakeven_trigger}
+                    </div>
+                    <div className="mt-0.5 text-[9px] text-amber-400/80">Locks Stop to +0.4%</div>
+                  </div>
+
+                  {/* 3. Target 1 */}
+                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5">
+                    <div className="text-[10px] font-bold uppercase text-cyan-400">
+                      Target 1 (+5.0%)
+                    </div>
                     <div className="mt-1 text-base font-extrabold text-cyan-400">
                       ₹{selectedBlueprint.blueprint.target_1}
                     </div>
-                    <div className="mt-0.5 text-[9px] text-cyan-400/80">Book 50%</div>
+                    <div className="mt-0.5 text-[9px] text-cyan-400/80">Book 50% Profit</div>
                   </div>
 
-                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-                    <div className="text-[10px] font-bold uppercase text-emerald-400">Target 2 (+14%)</div>
+                  {/* 4. Target 2 */}
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+                    <div className="text-[10px] font-bold uppercase text-emerald-400">
+                      Target 2 (+10.0%)
+                    </div>
                     <div className="mt-1 text-base font-extrabold text-emerald-400">
                       ₹{selectedBlueprint.blueprint.target_2}
                     </div>
-                    <div className="mt-0.5 text-[9px] text-emerald-400/80">Full Runner</div>
+                    <div className="mt-0.5 text-[9px] text-emerald-400/80">Apex Runner</div>
                   </div>
                 </div>
 
@@ -559,6 +743,18 @@ export default function DeliveryRadarPage() {
                         {selectedBlueprint.blueprint.holding_horizon}
                       </span>
                     </div>
+                    <div>
+                      <span className="text-slate-400">20D D-A/D Flow:</span>{" "}
+                      <span className="font-mono font-bold text-cyan-400">
+                        {selectedBlueprint.deliv_flow_20d ? `${selectedBlueprint.deliv_flow_20d}x Net Inflow` : "1.0x"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Distance to 20 EMA:</span>{" "}
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {selectedBlueprint.dist_to_ema20_pct > 0 ? `+${selectedBlueprint.dist_to_ema20_pct}%` : `${selectedBlueprint.dist_to_ema20_pct}%`}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -566,7 +762,7 @@ export default function DeliveryRadarPage() {
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300/90">
                   <div className="flex items-center gap-1.5 font-bold text-amber-400">
                     <Info size={14} />
-                    <span>Breakeven Locking Rule</span>
+                    <span>Breakeven Locking & Scaling Protocol</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed">
                     {selectedBlueprint.blueprint.trail_rule}

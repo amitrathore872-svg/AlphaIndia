@@ -17,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from app.db.database import Base
+from app.db.database import Base, utc_now
 
 
 class Portfolio(Base):
@@ -34,8 +34,8 @@ class Portfolio(Base):
     # Multi-tenant user ownership
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     user = relationship("User", backref="portfolios")
@@ -64,11 +64,11 @@ class PortfolioHolding(Base):
     # Transaction details
     quantity = Column(Float, nullable=False, default=1.0)
     avg_buy_price = Column(Float, nullable=False)
-    buy_date = Column(DateTime, default=datetime.utcnow)
+    buy_date = Column(DateTime, default=utc_now)
     notes = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     portfolio = relationship("Portfolio", back_populates="holdings")
@@ -132,4 +132,4 @@ class PortfolioStockAnalysisCache(Base):
     company_dna_moat = Column(Text, nullable=True)
     growth_catalysts = Column(Text, nullable=True)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

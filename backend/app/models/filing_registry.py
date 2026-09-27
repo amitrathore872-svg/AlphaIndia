@@ -4,7 +4,7 @@ Sprint 28.2 Production Version
 Tracks every historical filing discovered from NSE/BSE.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -12,6 +12,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
 )
@@ -22,6 +23,11 @@ from app.db.database import Base
 
 class FilingRegistry(Base):
     __tablename__ = "filing_registry"
+    __table_args__ = (
+        Index("idx_fr_sym_period_type", "symbol", "period", "filing_type"),
+        Index("idx_fr_download_status", "download_status"),
+        Index("idx_fr_parse_status", "parse_status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -55,10 +61,10 @@ class FilingRegistry(Base):
     # -------------------------------------------------------
     # Audit
     # -------------------------------------------------------
-    discovered_at = Column(DateTime, default=datetime.utcnow)
+    discovered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     downloaded_at = Column(DateTime, nullable=True)
     parsed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # -------------------------------------------------------
     # Relationship

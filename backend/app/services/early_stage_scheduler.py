@@ -14,6 +14,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta
+from app.db.database import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +64,17 @@ class EarlyStageScheduler:
 
     _thread: threading.Thread | None = None
     _stop_event = threading.Event()
-    _lock = threading.Lock()
+    _lock = threading.RLock()
+
+    @classmethod
+    def is_running(cls) -> bool:
+        with cls._lock:
+            return cls._thread is not None and cls._thread.is_alive() and not cls._stop_event.is_set()
 
     @classmethod
     def start(cls):
         with cls._lock:
-            if cls._thread is not None and cls._thread.is_alive():
+            if cls.is_running():
                 logger.info("[EarlyStageScheduler] Already running.")
                 return
 
@@ -157,7 +163,7 @@ class EarlyStageScheduler:
 
     @classmethod
     def _scheduler_loop(cls):
-        now = datetime.utcnow()
+        now = utc_now()
         next_news    = now + timedelta(seconds=20)
         next_social  = now + timedelta(seconds=40)
         next_youtube = now + timedelta(seconds=60)
@@ -165,21 +171,21 @@ class EarlyStageScheduler:
         _summary_ran_today:  set = set()
 
         while not cls._stop_event.is_set():
-            now     = datetime.utcnow()
+            now     = utc_now()
             today   = now.date()
             enabled = _is_feature_enabled()
 
             if enabled and now >= next_news:
                 threading.Thread(target=cls._run_news, daemon=True).start()
-                next_news = datetime.utcnow() + timedelta(seconds=NEWS_INTERVAL_SECONDS)
+                next_news = utc_now() + timedelta(seconds=NEWS_INTERVAL_SECONDS)
 
             if enabled and now >= next_social:
                 threading.Thread(target=cls._run_social, daemon=True).start()
-                next_social = datetime.utcnow() + timedelta(seconds=SOCIAL_INTERVAL_SECONDS)
+                next_social = utc_now() + timedelta(seconds=SOCIAL_INTERVAL_SECONDS)
 
             if enabled and now >= next_youtube:
                 threading.Thread(target=cls._run_youtube, daemon=True).start()
-                next_youtube = datetime.utcnow() + timedelta(seconds=YOUTUBE_INTERVAL_SECONDS)
+                next_youtube = utc_now() + timedelta(seconds=YOUTUBE_INTERVAL_SECONDS)
 
             # Nightly archive — runs once per day at ARCHIVE_UTC_HOUR
             if (
