@@ -166,11 +166,45 @@ app.include_router(live_intraday_router, prefix="/api/v1")
 app.include_router(cpr_scanner_router)
 app.include_router(cpr_scanner_router, prefix="/api/v1")
 
+# ---------------- Dual Mount Under /api (Same-Origin Reverse Proxy Compatibility) ----------------
+# Allows any client calling /api/<path> or direct /<path> to resolve cleanly
+API_DOMAIN_ROUTERS = [
+    growth_router,
+    market_intelligence_router,
+    companies_router,
+    quarterly_results_router,
+    notifications_router,
+    alerts_router,
+    screener_growth_router,
+    screener_monitoring_router,
+    control_system_router,
+    mission_control_router,
+    early_stage_router,
+    monitoring_early_stage_router,
+    athena_omega_router,
+    vcp_router,
+    portfolio_router,
+    swing_overlay_router,
+    auth_router,
+    filings_router,
+    downloads_router,
+    discovery_router,
+    financials_router,
+    screener_formula_router,
+    system_router,
+    dashboard_router,
+    import_dashboard_router,
+    metrics_router,
+]
+for r in API_DOMAIN_ROUTERS:
+    app.include_router(r, prefix="/api")
+
 
 # ==========================================================
 # Root Endpoint
 # ==========================================================
 @app.get("/")
+@app.get("/api")
 def root():
     return {
         "project": "Alpha India",
@@ -193,6 +227,7 @@ def root():
 # Health & Exchange Telemetry Endpoint
 # ==========================================================
 @app.get("/health")
+@app.get("/api/health")
 def health():
     db = None
     db_status = "Connected"

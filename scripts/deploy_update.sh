@@ -29,12 +29,23 @@ docker compose build backend worker frontend
 echo "[3/5] Restarting updated containers..."
 docker compose up -d --remove-orphans backend worker frontend nginx
 
-# 5. Ensure database schema integrity
-echo "[4/5] Verifying database schema..."
+# 5. Ensure database schema integrity and verify master data
+echo "[4/5] Verifying database schema and initial master data..."
 docker compose exec -T backend python -c "
-from app.db.database import Base, engine
+from app.db.database import Base, engine, SessionLocal
+from app.models.company import Company
 Base.metadata.create_all(bind=engine)
 print('Database tables verified.')
+db = SessionLocal()
+try:
+    count = db.query(Company).count()
+    print(f'Active companies in database: {count}')
+    if count == 0:
+        print('Seeding NSE company master list...')
+        from scripts.import_nse_companies import import_nse_companies
+        import_nse_companies()
+finally:
+    db.close()
 " || true
 
 # 6. Prune untagged/dangling images to conserve EC2 disk space

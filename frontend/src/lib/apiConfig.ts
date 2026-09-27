@@ -5,8 +5,10 @@
 const rawBase: string =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-// Ensure localhost is normalized to 127.0.0.1 to prevent IPv6 [::1] connection refused issues on Windows
-export const API_BASE: string = rawBase.replace("//localhost:", "//127.0.0.1:");
+// Ensure localhost is normalized to 127.0.0.1 and trailing slash is stripped
+export const API_BASE: string = rawBase
+  .replace("//localhost:", "//127.0.0.1:")
+  .replace(/\/$/, "");
 
 export function getBackendUrl(): string {
   return API_BASE;
@@ -14,7 +16,15 @@ export function getBackendUrl(): string {
 
 export function getWebSocketUrl(path: string): string {
   const httpUrl = getBackendUrl();
-  const wsBase = httpUrl.replace(/^http/, "ws");
+  let wsBase: string;
+  if (httpUrl.startsWith("http")) {
+    wsBase = httpUrl.replace(/^http/, "ws").replace(/\/api$/, "");
+  } else if (typeof window !== "undefined") {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    wsBase = `${proto}//${window.location.host}`;
+  } else {
+    wsBase = "ws://127.0.0.1:8000";
+  }
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${wsBase}${cleanPath}`;
 }
@@ -27,9 +37,14 @@ export async function fetchJson<T>(
   options?: RequestInit & { timeoutMs?: number }
 ): Promise<T> {
   const normalizedUrl = url.replace("//localhost:", "//127.0.0.1:");
-  const fullUrl = normalizedUrl.startsWith("http")
-    ? normalizedUrl
-    : `${API_BASE}${normalizedUrl.startsWith("/") ? "" : "/"}${normalizedUrl}`;
+  let fullUrl: string;
+  if (normalizedUrl.startsWith("http")) {
+    fullUrl = normalizedUrl;
+  } else if (API_BASE && normalizedUrl.startsWith(API_BASE)) {
+    fullUrl = normalizedUrl;
+  } else {
+    fullUrl = `${API_BASE}${normalizedUrl.startsWith("/") ? "" : "/"}${normalizedUrl}`;
+  }
 
   const timeoutMs = options?.timeoutMs ?? 25000;
   const controller = new AbortController();
