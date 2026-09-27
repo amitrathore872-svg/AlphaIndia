@@ -154,8 +154,10 @@ export default function StreamOverviewGrid({
   streams: propStreams,
   className = "",
 }: StreamOverviewGridProps) {
-  const [liveStreams, setLiveStreams] = useState<StreamCard[]>(propStreams || []);
-  const [loading, setLoading] = useState<boolean>(!propStreams || propStreams.length === 0);
+  const [liveStreams, setLiveStreams] = useState<StreamCard[]>(
+    propStreams && propStreams.length > 0 ? propStreams : DEFAULT_ALPHA_INDIA_STREAMS
+  );
+  const [loading, setLoading] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [displayDate, setDisplayDate] = useState<string>(
@@ -170,7 +172,7 @@ export default function StreamOverviewGrid({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data?.streams && Array.isArray(data.streams)) {
+        if (data?.streams && Array.isArray(data.streams) && data.streams.length > 0) {
           setLiveStreams(data.streams);
           if (data.dateStr) setDisplayDate(data.dateStr);
           setLastUpdated(
@@ -181,9 +183,12 @@ export default function StreamOverviewGrid({
             })
           );
         }
+      } else {
+        setLiveStreams((prev) => (prev && prev.length > 0 ? prev : DEFAULT_ALPHA_INDIA_STREAMS));
       }
     } catch (err) {
-      console.error("[StreamOverviewGrid] Failed to fetch live scanner streams:", err);
+      console.warn("[StreamOverviewGrid] Backend offline or unreachable at", API_BASE, err);
+      setLiveStreams((prev) => (prev && prev.length > 0 ? prev : DEFAULT_ALPHA_INDIA_STREAMS));
     } finally {
       setLoading(false);
       setIsSyncing(false);
