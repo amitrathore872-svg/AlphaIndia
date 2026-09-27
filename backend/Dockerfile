@@ -28,8 +28,9 @@ RUN pip install --upgrade pip setuptools wheel && \
 # Copy the entire backend application
 COPY . .
 
-# Ensure data storage directories exist
-RUN mkdir -p /app/data /app/data/bronze/nse/pdfs
+# Ensure data storage directories exist and backup seed data so volume mounts don't shadow CSVs
+RUN mkdir -p /app/data /app/data_seed /app/data/bronze/nse/pdfs && \
+    cp -r /app/data/* /app/data_seed/ 2>/dev/null || true
 
 EXPOSE 8000
 

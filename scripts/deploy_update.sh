@@ -29,21 +29,31 @@ docker compose build backend worker frontend
 echo "[3/5] Restarting updated containers..."
 docker compose up -d --remove-orphans backend worker frontend nginx
 
-# 5. Ensure database schema integrity and verify master data
-echo "[4/5] Verifying database schema and initial master data..."
+# 5. Ensure database schema integrity, normalize status, and verify master company list
+echo "[4/5] Verifying database schema, normalization, and master company list..."
 docker compose exec -T backend python -c "
 from app.db.database import Base, engine, SessionLocal
 from app.models.company import Company
 Base.metadata.create_all(bind=engine)
 print('Database tables verified.')
+
+# Run database optimization (normalizes 'ACTIVE' -> 'Active', deduplicates indexes)
+try:
+    from scripts.optimize_production_database import optimize_database
+    optimize_database()
+except Exception as e:
+    print(f'Optimization note: {e}')
+
 db = SessionLocal()
 try:
-    count = db.query(Company).count()
-    print(f'Active companies in database: {count}')
-    if count == 0:
-        print('Seeding NSE company master list...')
+    active_count = db.query(Company).filter(Company.listing_status == 'Active').count()
+    print(f'Active companies in database: {active_count}')
+    if active_count < 100:
+        print('Seeding full NSE company master list (2,100+ equities)...')
         from scripts.import_nse_companies import import_nse_companies
         import_nse_companies()
+        refreshed = db.query(Company).filter(Company.listing_status == 'Active').count()
+        print(f'Seeding completed. Total active companies: {refreshed}')
 finally:
     db.close()
 " || true

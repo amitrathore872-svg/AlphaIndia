@@ -27,6 +27,8 @@ from app.db.database import SessionLocal
 from app.models.company import Company
 
 CSV_PATH = BACKEND_DIR / "data" / "nse_companies_master.csv"
+if not CSV_PATH.exists():
+    CSV_PATH = BACKEND_DIR / "data_seed" / "nse_companies_master.csv"
 
 
 # -------------------------------------------------------
