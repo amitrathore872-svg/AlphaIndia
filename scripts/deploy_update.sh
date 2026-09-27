@@ -58,7 +58,11 @@ finally:
     db.close()
 " || true
 
-# 6. Prune untagged/dangling images to conserve EC2 disk space
+# 6. Reload Nginx to ensure new reverse-proxy routes (/api/, /health) take effect
+echo "Reloading Nginx reverse proxy..."
+docker compose restart nginx
+
+# 7. Prune untagged/dangling images to conserve EC2 disk space
 echo "[5/5] Pruning dangling Docker images..."
 docker image prune -f
 
@@ -66,3 +70,7 @@ echo "=========================================================="
 echo "         DEPLOYMENT TO EC2 COMPLETED SUCCESSFULLY!        "
 echo "=========================================================="
 docker compose ps
+echo ""
+echo "--- Backend Container Logs (Last 30 Lines) ---"
+docker compose logs --tail=30 backend
+
