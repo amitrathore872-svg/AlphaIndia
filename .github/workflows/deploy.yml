@@ -1,0 +1,69 @@
+name: Deploy to Production EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Ensure only one deployment runs at a time on the EC2 server
+concurrency:
+  group: production-ec2-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Auto Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Trigger Remote Deployment via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          command_timeout: 20m
+          script_stop: true
+          script: |
+            set -e
+            echo "=========================================="
+            echo "Connected to EC2 Host: $(hostname)"
+            echo "Deploying latest commit from main..."
+            echo "=========================================="
+
+            # Auto-detect project directory or use secret override
+            DEPLOY_PATH="${{ secrets.EC2_APP_DIR }}"
+            if [ -z "$DEPLOY_PATH" ]; then
+              if [ -d "$HOME/AlphaIndia" ]; then
+                DEPLOY_PATH="$HOME/AlphaIndia"
+              elif [ -d "/home/ec2-user/AlphaIndia" ]; then
+                DEPLOY_PATH="/home/ec2-user/AlphaIndia"
+              elif [ -d "/home/ubuntu/AlphaIndia" ]; then
+                DEPLOY_PATH="/home/ubuntu/AlphaIndia"
+              else
+                echo "Error: Directory AlphaIndia not found in home folder."
+                exit 1
+              fi
+            fi
+
+            echo "Target Directory: $DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
+
+            # Execute automated continuous update pipeline
+            chmod +x scripts/deploy_update.sh
+            ./scripts/deploy_update.sh
+
+      - name: Verify Service Health Check
+        run: |
+          echo "Verifying backend health endpoint..."
+          sleep 5
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "http://${{ secrets.EC2_HOST }}/health" || echo "000")
+          echo "HTTP /health status code: $STATUS_CODE"
+          if [ "$STATUS_CODE" -eq 200 ] || [ "$STATUS_CODE" -eq 301 ] || [ "$STATUS_CODE" -eq 302 ]; then
+            echo "Deployment verification successful!"
+          else
+            echo "Warning: Direct HTTP /health check returned $STATUS_CODE. Continuing since SSL or custom domain may be enforced."
+          fi

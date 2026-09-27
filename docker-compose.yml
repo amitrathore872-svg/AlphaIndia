@@ -1,0 +1,151 @@
+services:
+  # ==========================================================
+  # 1. PostgreSQL Database
+  # ==========================================================
+  db:
+    image: postgres:16-alpine
+    container_name: alpha_india_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-alpha_india}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-alpha_india}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  # ==========================================================
+  # 2. FastAPI Core Backend API
+  # ==========================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: alpha_india_backend
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-alpha_india}
+      APP_ENV: production
+      CORS_ORIGINS: "https://ipodesk.shop,https://www.ipodesk.shop,https://api.ipodesk.shop,http://ipodesk.shop,http://localhost:3000"
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      # Dedicated worker container handles schedulers, so disable in web process
+      ENABLE_BACKGROUND_WORKERS: "false"
+      NSE_USE_CURL_CFFI: "true"
+      DB_POOL_SIZE: 8
+      DB_MAX_OVERFLOW: 5
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_DEFAULT_CHAT_ID: ${TELEGRAM_DEFAULT_CHAT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backend_data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+
+  # ==========================================================
+  # 3. Autonomous Ingestion & Scanner Worker Daemon
+  # ==========================================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: alpha_india_worker
+    restart: unless-stopped
+    command: python worker.py --services all
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-alpha_india}
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY}
+      WORKER_POLL_INTERVAL_SECONDS: 60
+      NSE_USE_CURL_CFFI: "true"
+      DB_POOL_SIZE: 5
+      DB_MAX_OVERFLOW: 3
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_DEFAULT_CHAT_ID: ${TELEGRAM_DEFAULT_CHAT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backend_data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+
+  # ==========================================================
+  # 4. Next.js 16 Production Frontend
+  # ==========================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ipodesk.shop}
+    container_name: alpha_india_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+
+  # ==========================================================
+  # 5. Nginx Reverse Proxy with SSL & WebSockets
+  # ==========================================================
+  nginx:
+    image: nginx:alpine
+    container_name: alpha_india_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8000:8000"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - frontend
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+
+  # ==========================================================
+  # 6. Certbot for Automatic SSL Certificate Renewal
+  # ==========================================================
+  certbot:
+    image: certbot/certbot
+    container_name: alpha_india_certbot
+    restart: unless-stopped
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+
+volumes:
+  postgres_data:
+    name: alpha_india_pgdata
+  backend_data:
+    name: alpha_india_backend_data
+  certbot_conf:
+    name: alpha_india_certbot_conf
+  certbot_www:
+    name: alpha_india_certbot_www
