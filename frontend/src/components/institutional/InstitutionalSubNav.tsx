@@ -28,7 +28,7 @@ export default function InstitutionalSubNav({ freshCount }: SubNavProps) {
       exact: false,
     },
     {
-      name: "Fresh Portfolio Entries",
+      name: "Mutual Funds New Entries",
       href: "/institutional-radar/fresh-entries",
       icon: Sparkles,
       badge: freshCount ? `${freshCount} NEW` : "NEW INITIATIONS",

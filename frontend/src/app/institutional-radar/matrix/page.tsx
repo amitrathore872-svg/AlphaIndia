@@ -140,7 +140,7 @@ export default function AmcSchemeMatrixPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="flex-1 space-y-4">
         {/* TOP INSTITUTIONAL NAVIGATION SUB-NAV */}
         <InstitutionalSubNav />
 

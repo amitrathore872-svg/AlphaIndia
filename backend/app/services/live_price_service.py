@@ -16,6 +16,7 @@ from app.models.company_market_metrics import CompanyMarketMetrics
 from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.yahoo_client import YahooClient
+from app.clients.dhan_client import DhanClient
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,14 @@ class LivePriceService:
     """
     Unified real-time quote resolution service across Alpha India engines:
     Portfolio, Watchlists, Techno-Funda, and Breakout Radar.
+    Prioritizes DhanHQ for 0-latency live quotes with graceful Yahoo Finance fallback.
     """
 
     @classmethod
     def resolve_single_quote(cls, symbol: str, exchange: str = "NSE") -> Dict[str, Any]:
         """
         Fast resolution of CMP and day change metrics for a single equity ticker.
-        Resiliently falls back between .NS and .BO suffixes.
+        Prioritizes DhanHQ zero-latency feed, falling back to Yahoo Finance.
         """
         clean_sym = symbol.strip().upper()
         res: Dict[str, Any] = {
@@ -45,6 +47,29 @@ class LivePriceService:
             "source": "UNKNOWN",
         }
 
+        # 1. Tier 1: Try DhanHQ 0-delay real-time live feed if configured
+        try:
+            dhan = DhanClient.get_instance()
+            if dhan.is_configured():
+                dhan_quotes = dhan.get_live_quotes([clean_sym])
+                if clean_sym in dhan_quotes and dhan_quotes[clean_sym].get("cmp"):
+                    q = dhan_quotes[clean_sym]
+                    cmp_val = q["cmp"]
+                    prev_close = q.get("close")
+                    day_change = round(cmp_val - prev_close, 2) if prev_close else None
+                    day_change_pct = round((day_change / prev_close) * 100.0, 2) if (day_change is not None and prev_close and prev_close > 0) else None
+                    res.update({
+                        "cmp": cmp_val,
+                        "prev_close": prev_close,
+                        "day_change": day_change,
+                        "day_change_pct": day_change_pct,
+                        "source": "DHAN_REALTIME",
+                    })
+                    return res
+        except Exception as e:
+            logger.debug(f"[LivePriceService] Dhan live quote failed for {clean_sym}: {e}")
+
+        # 2. Tier 2: Yahoo Finance Fallback (~15 min delayed)
         try:
             ticker = YahooClient.resolve_ticker(clean_sym, exchange=exchange)
             fi = getattr(ticker, "fast_info", None)
@@ -200,7 +225,32 @@ class LivePriceService:
                     "source": "DB_CACHE",
                 }
 
-        # Fetch in parallel via thread pool
+        # Tier 1: Try DhanHQ batch live quotes (0-delay real-time)
+        if symbols_to_fetch:
+            try:
+                dhan = DhanClient.get_instance()
+                if dhan.is_configured():
+                    dhan_quotes = dhan.get_live_quotes(symbols_to_fetch)
+                    for sym, dq in dhan_quotes.items():
+                        if dq.get("cmp"):
+                            cmp_val = dq["cmp"]
+                            prev_close = dq.get("close")
+                            day_change = round(cmp_val - prev_close, 2) if prev_close else None
+                            day_change_pct = round((day_change / prev_close) * 100.0, 2) if (day_change is not None and prev_close and prev_close > 0) else None
+                            results[sym] = {
+                                "symbol": sym,
+                                "cmp": cmp_val,
+                                "prev_close": prev_close,
+                                "day_change": day_change,
+                                "day_change_pct": day_change_pct,
+                                "source": "DHAN_REALTIME",
+                            }
+                    # Keep only unresolved symbols for Yahoo Finance fallback
+                    symbols_to_fetch = [s for s in symbols_to_fetch if s not in results or not results[s].get("cmp")]
+            except Exception as d_err:
+                logger.debug(f"[LivePriceService] Dhan batch live quote error: {d_err}")
+
+        # Tier 2: Fetch unresolved via parallel Yahoo Finance fallback
         if symbols_to_fetch:
             worker_count = min(len(symbols_to_fetch), max_workers)
             with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:

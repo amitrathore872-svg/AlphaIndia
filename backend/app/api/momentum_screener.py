@@ -20,7 +20,7 @@ router = APIRouter(prefix="/momentum-screener", tags=["Multi-Timeframe Momentum 
 
 @router.get("", response_model=Dict[str, Any])
 def get_momentum_opportunities(
-    min_matches: int = Query(default=6, ge=1, le=10, description="Minimum conditions matched"),
+    min_matches: int = Query(default=9, ge=1, le=10, description="Minimum conditions matched"),
     require_strict: bool = Query(default=False, description="Require all core 9 filters to pass"),
     search: Optional[str] = Query(default=None, description="Filter by stock symbol or company name"),
     sector: Optional[str] = Query(default=None, description="Filter by sector"),

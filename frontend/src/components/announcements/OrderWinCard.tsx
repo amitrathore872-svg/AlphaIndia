@@ -150,7 +150,7 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
           {/* Order Win AI Flag */}
           <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
             <Zap size={11} className="text-amber-400 fill-amber-400" />
-            Order Win Radar
+            New Order Win Screener
           </span>
 
           {/* Counterparty Badge if detected */}

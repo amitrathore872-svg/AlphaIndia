@@ -117,7 +117,7 @@ export default function InstitutionalRadarPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="flex-1 space-y-4">
         {/* TOP INSTITUTIONAL NAVIGATION SUB-NAV */}
         <InstitutionalSubNav />
 
@@ -166,93 +166,6 @@ export default function InstitutionalRadarPage() {
               <RefreshCw size={14} className={loading ? "animate-spin text-cyan-400" : ""} />
               Refresh
             </button>
-          </div>
-        </div>
-
-        {/* MACRO TELEMETRY CARDS */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-slate-800 bg-[#080E1A]/90 p-5 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">
-                Institutional Smart Money Avg
-              </span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                <Target size={15} />
-              </span>
-            </div>
-            <div className="mt-3 flex items-baseline gap-3">
-              <span className="text-3xl font-black text-white">
-                {telemetry?.smart_money_avg ?? "72.4"}
-              </span>
-              <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-400">
-                STRONG INTAKE
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Benchmark institutional accumulation index
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-[#080E1A]/90 p-5 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">
-                Net Mutual Fund Inflows
-              </span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <TrendingUp size={15} />
-              </span>
-            </div>
-            <div className="mt-3 flex items-baseline gap-3">
-              <span className="text-3xl font-black text-emerald-400">
-                +₹{telemetry?.total_inflows_cr.toLocaleString("en-IN") ?? "4,820"} Cr
-              </span>
-              <span className="text-xs font-semibold text-emerald-400">MoM Net</span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Monthly AMFI Filings Reporting
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-[#080E1A]/90 p-5 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">
-                Active Alpha Schemes Flow
-              </span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                <Award size={15} />
-              </span>
-            </div>
-            <div className="mt-3 flex items-baseline gap-3">
-              <span className="text-3xl font-black text-cyan-300">
-                ₹{telemetry?.active_schemes_inflow_cr.toLocaleString("en-IN") ?? "3,952"} Cr
-              </span>
-              <span className="text-xs font-medium text-slate-400">Pure Alpha</span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Excluding Passive Beta / Index ETFs
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-[#080E1A]/90 p-5 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">
-                Stealth Base Accumulation Alerts
-              </span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <Flame size={15} />
-              </span>
-            </div>
-            <div className="mt-3 flex items-baseline gap-3">
-              <span className="text-3xl font-black text-amber-400">
-                {telemetry?.stealth_alerts_count ?? 8}
-              </span>
-              <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300">
-                ACTIONABLE
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              High Delivery + Float Consolidation
-            </p>
           </div>
         </div>
 

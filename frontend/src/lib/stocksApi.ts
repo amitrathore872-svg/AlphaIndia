@@ -168,7 +168,11 @@ export interface StockSearchResult {
   symbol: string;
   company_name: string;
   sector: string;
+  industry?: string;
+  exchange?: string;
+  market_cap?: string | number | null;
   current_price: number;
+  is_trending?: boolean;
 }
 
 export async function fetchStockTechnicalOverview(symbol: string): Promise<StockTechnicalOverview> {
@@ -181,11 +185,17 @@ export async function fetchStockTechnicalOverview(symbol: string): Promise<Stock
   return res.json();
 }
 
-export async function searchStocks(query: string): Promise<StockSearchResult[]> {
-  if (!query || query.trim().length === 0) return [];
-  const res = await fetch(`${API_BASE}/api/stocks/search?q=${encodeURIComponent(query)}&limit=8`, {
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
-  return res.json();
+export async function searchStocks(query: string = "", limit: number = 10): Promise<StockSearchResult[]> {
+  try {
+    const cleanQuery = query.trim();
+    const res = await fetch(`${API_BASE}/api/stocks/search?q=${encodeURIComponent(cleanQuery)}&limit=${limit}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.error("Error searching stocks:", err);
+    return [];
+  }
 }
+

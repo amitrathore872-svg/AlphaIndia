@@ -118,7 +118,7 @@ const HIERARCHY_DATA: ModuleData[] = [
       },
       {
         id: "fresh-entries",
-        name: "MF Fresh Entries Radar",
+        name: "MF Fresh Entries Screener",
         route: "/institutional-radar/fresh-entries",
         icon: Sparkles,
         description: "Equities newly introduced into mutual fund portfolios",
@@ -207,7 +207,7 @@ const HIERARCHY_DATA: ModuleData[] = [
       },
       {
         id: "vcp-discovery",
-        name: "VCP Breakout Engine",
+        name: "VCP Volume Breakout",
         route: "/vcp-discovery",
         icon: Sparkles,
         description: "Mark Minervini Volatility Contraction Pattern discovery",

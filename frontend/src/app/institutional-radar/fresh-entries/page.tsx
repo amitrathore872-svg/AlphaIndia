@@ -16,6 +16,8 @@ import {
   Percent,
   Layers,
   Award,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import InstitutionalSubNav from "@/components/institutional/InstitutionalSubNav";
@@ -44,6 +46,32 @@ export default function FreshPortfolioEntriesPage() {
 
   // Modal
   const [modalSymbol, setModalSymbol] = useState<string | null>(null);
+
+  // Metric Cards Visibility
+  const [showMetrics, setShowMetrics] = useState<boolean>(true);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("alpha_india_fresh_entries_metrics_visible");
+      if (saved !== null) {
+        setShowMetrics(saved === "true");
+      }
+    } catch {
+      // Ignore localStorage error
+    }
+  }, []);
+
+  const handleToggleMetrics = () => {
+    setShowMetrics((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("alpha_india_fresh_entries_metrics_visible", String(next));
+      } catch {
+        // Ignore localStorage error
+      }
+      return next;
+    });
+  };
 
   const loadFreshEntries = useCallback(async () => {
     setLoading(true);
@@ -87,7 +115,7 @@ export default function FreshPortfolioEntriesPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="flex-1 space-y-4">
         {/* TOP SUB-NAV */}
         <InstitutionalSubNav freshCount={summary.total_fresh_entries} />
 
@@ -100,7 +128,7 @@ export default function FreshPortfolioEntriesPage() {
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-                  Fresh Portfolio Entries Radar
+                  Mutual Funds New Entries
                 </h1>
                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
                   {summary.total_fresh_entries} NEW INITIATIONS
@@ -117,6 +145,28 @@ export default function FreshPortfolioEntriesPage() {
 
           <div className="flex items-center gap-2.5">
             <button
+              onClick={handleToggleMetrics}
+              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all shadow-xs ${
+                showMetrics
+                  ? "border-slate-700 bg-slate-800/80 text-slate-300 hover:border-slate-600 hover:text-white"
+                  : "border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+              }`}
+              title={showMetrics ? "Hide Telemetry Metric Boxes" : "Show Telemetry Metric Boxes"}
+            >
+              {showMetrics ? (
+                <>
+                  <EyeOff size={14} className="text-slate-400" />
+                  <span>Hide Metrics</span>
+                </>
+              ) : (
+                <>
+                  <Eye size={14} className="text-emerald-400" />
+                  <span>Show Metrics</span>
+                </>
+              )}
+            </button>
+
+            <button
               onClick={loadFreshEntries}
               disabled={loading}
               className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-300 hover:border-slate-600 hover:text-white transition disabled:opacity-50"
@@ -128,7 +178,8 @@ export default function FreshPortfolioEntriesPage() {
         </div>
 
         {/* TELEMETRY METRIC CARDS */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {showMetrics && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 animate-in fade-in duration-200">
           <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4 backdrop-blur-md shadow-lg">
             <div className="flex items-center justify-between text-xs font-bold text-slate-400">
               <span>Total Fresh Initiations</span>
@@ -184,49 +235,7 @@ export default function FreshPortfolioEntriesPage() {
             <p className="text-[11px] text-slate-400 mt-1">Max net fresh institutional inflow sector</p>
           </div>
         </div>
-
-        {/* MARKET CAP CATEGORY FILTER RIBBON */}
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: "ALL", label: "All Caps", count: capCounts.ALL, color: "text-slate-200" },
-            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-400", desc: "> ₹20k Cr" },
-            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-400", desc: "₹5k - ₹20k Cr" },
-            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-400", desc: "₹1k - ₹5k Cr" },
-            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-400", desc: "< ₹1k Cr" },
-          ].map((cat) => {
-            const active = capCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setCapCategory(cat.id);
-                  setPage(1);
-                }}
-                className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all shadow-sm ${
-                  active
-                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/40"
-                    : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:bg-slate-800/60 hover:text-slate-200"
-                }`}
-              >
-                <span className={active ? "text-emerald-300 font-extrabold" : cat.color}>
-                  {cat.label}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
-                    active ? "bg-emerald-500 text-slate-950" : "bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  {cat.count}
-                </span>
-                {cat.desc && (
-                  <span className="hidden text-[10px] text-slate-400 font-normal lg:inline">
-                    ({cat.desc})
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        )}
 
         {/* SEARCH & SORT TOOLBAR */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-3">
@@ -256,10 +265,27 @@ export default function FreshPortfolioEntriesPage() {
               )}
             </div>
 
+            {/* Market Cap Filter Dropdown */}
+            <select
+              value={capCategory}
+              onChange={(e) => {
+                setCapCategory(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs font-semibold text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer hover:border-slate-700 transition"
+              aria-label="Filter by Market Cap"
+            >
+              <option value="ALL">Market Cap: All Caps ({capCounts.ALL})</option>
+              <option value="LARGE">Large Cap ({capCounts.LARGE}) • &gt; ₹20k Cr</option>
+              <option value="MID">Mid Cap ({capCounts.MID}) • ₹5k - ₹20k Cr</option>
+              <option value="SMALL">Small Cap ({capCounts.SMALL}) • ₹1k - ₹5k Cr</option>
+              <option value="MICRO">Micro Cap ({capCounts.MICRO}) • &lt; ₹1k Cr</option>
+            </select>
+
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs font-semibold text-slate-300 focus:border-emerald-500 focus:outline-none"
+              className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs font-semibold text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer hover:border-slate-700 transition"
             >
               <option value="market_value_cr">Sort: Capital Deployed (₹ Cr)</option>
               <option value="weight_pct">Sort: Scheme Weight %</option>

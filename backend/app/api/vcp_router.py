@@ -42,14 +42,23 @@ def get_vcp_discovery(
         existing_scores = (
             db.query(VCPAIScore)
             .filter(VCPAIScore.scan_date == scan_date)
-            .order_by(desc(VCPAIScore.total_score))
-            .limit(3)
+            .order_by(desc(VCPAIScore.total_score), desc(VCPAIScore.id))
             .all()
         )
 
         if existing_scores:
-            results = []
+            seen_symbols = set()
+            unique_scores = []
             for sc in existing_scores:
+                sym_clean = sc.symbol.strip().upper()
+                if sym_clean not in seen_symbols:
+                    seen_symbols.add(sym_clean)
+                    unique_scores.append(sc)
+                if len(unique_scores) >= 3:
+                    break
+
+            results = []
+            for sc in unique_scores:
                 pattern = db.query(VCPPattern).filter(VCPPattern.symbol == sc.symbol, VCPPattern.scan_date == scan_date).first()
                 vol = db.query(VolumeAnalysis).filter(VolumeAnalysis.symbol == sc.symbol, VolumeAnalysis.scan_date == scan_date).first()
                 brk = db.query(BreakoutSignal).filter(BreakoutSignal.symbol == sc.symbol, BreakoutSignal.breakout_date == scan_date).first()

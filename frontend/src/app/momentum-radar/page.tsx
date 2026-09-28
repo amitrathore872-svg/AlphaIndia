@@ -25,6 +25,8 @@ import {
   Maximize2,
   X,
   Info,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
@@ -66,7 +68,8 @@ export default function MomentumRadarPage() {
 
   // Filter Rules & Controls
   const [rules, setRules] = useState<RuleToggle[]>(INITIAL_RULES);
-  const [minMatches, setMinMatches] = useState<number>(6);
+  const [showRules, setShowRules] = useState<boolean>(false);
+  const [minMatches, setMinMatches] = useState<number>(9);
   const [requireStrict, setRequireStrict] = useState<boolean>(false);
   const [conviction79Only, setConviction79Only] = useState<boolean>(false);
   const [selectedSector, setSelectedSector] = useState<string>("ALL");
@@ -270,67 +273,121 @@ export default function MomentumRadarPage() {
           </div>
         </div>
 
-        {/* INTERACTIVE RULE ENGINE CONSOLE (MATCHING THE SCREENSHOT) */}
-        <div className="rounded-2xl border border-slate-800 bg-[#07111F]/80 p-4 md:p-5 shadow-lg space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-            <div className="flex items-center gap-2">
-              <Sliders className="h-4 w-4 text-cyan-400" />
-              <h2 className="text-xs md:text-sm font-bold font-mono uppercase tracking-wider text-slate-200">
-                Rule Engine Filter Conditions (Cash Segment)
-              </h2>
+        {/* INTERACTIVE RULE ENGINE CONSOLE (COLLAPSIBLE) */}
+        <div className="rounded-2xl border border-slate-800 bg-[#07111F]/80 p-4 md:p-5 shadow-lg space-y-3 transition-all">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div
+              onClick={() => setShowRules((prev) => !prev)}
+              className="flex items-center gap-2.5 cursor-pointer select-none group"
+            >
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 group-hover:bg-cyan-500/20 transition-all">
+                <Sliders className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs md:text-sm font-bold font-mono uppercase tracking-wider text-slate-200 group-hover:text-cyan-300 transition-colors">
+                    Rule Engine Filter Conditions (Cash Segment)
+                  </h2>
+                  <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-mono font-bold text-cyan-300">
+                    {rules.filter((r) => r.active).length}/10 Active
+                  </span>
+                </div>
+                {!showRules && (
+                  <p className="text-[11px] font-mono text-slate-500 hidden sm:block">
+                    Click to expand &amp; customize Volume expansion, BB breakouts, Triple RSI &amp; WMA cross rules
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
-              <span>Click toggle to customize live screening logic</span>
+
+            <div className="flex items-center gap-2.5">
+              {showRules && (
+                <button
+                  onClick={() => setRules(INITIAL_RULES)}
+                  className="text-cyan-400 hover:text-cyan-300 underline cursor-pointer text-xs font-mono mr-1"
+                >
+                  Reset Defaults
+                </button>
+              )}
+
               <button
-                onClick={() => setRules(INITIAL_RULES)}
-                className="text-cyan-400 hover:text-cyan-300 underline cursor-pointer text-[10px]"
+                onClick={() => setShowRules((prev) => !prev)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer ${
+                  showRules
+                    ? "bg-cyan-950/60 border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/80"
+                    : "bg-slate-900/90 border-slate-700/80 text-slate-300 hover:text-white hover:border-cyan-500/40"
+                }`}
               >
-                Reset Defaults
+                {showRules ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 text-cyan-400" />
+                    <span>Hide Rules</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 text-cyan-400" />
+                    <span>Expand Rules ({rules.filter((r) => r.active).length}/10 Active)</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-            {rules.map((rule) => {
-              return (
-                <div
-                  key={rule.id}
-                  onClick={() => handleToggleRule(rule.id)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                    rule.active
-                      ? "bg-slate-900/90 border-cyan-500/40 text-slate-200 hover:border-cyan-400/60"
-                      : "bg-slate-950/40 border-slate-800/60 text-slate-500 hover:border-slate-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                        rule.timeframe === "Daily"
-                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
-                          : rule.timeframe === "Weekly"
-                          ? "bg-purple-500/10 text-purple-400 border border-purple-500/30"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+          {showRules && (
+            <>
+              <div className="border-t border-slate-800/80 pt-3">
+                <p className="text-[11px] font-mono text-slate-400">
+                  Click any condition toggle below to customize live screening logic:
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                {rules.map((rule) => {
+                  return (
+                    <div
+                      key={rule.id}
+                      onClick={() => handleToggleRule(rule.id)}
+                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                        rule.active
+                          ? "bg-slate-900/90 border-cyan-500/40 text-slate-200 hover:border-cyan-400/60"
+                          : "bg-slate-950/40 border-slate-800/60 text-slate-500 hover:border-slate-700"
                       }`}
                     >
-                      {rule.timeframe}
-                    </span>
-                    <span className={`text-xs font-mono truncate ${rule.active ? "text-slate-200" : "text-slate-500 line-through"}`}>
-                      {rule.label}
-                    </span>
-                  </div>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            rule.timeframe === "Daily"
+                              ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                              : rule.timeframe === "Weekly"
+                              ? "bg-purple-500/10 text-purple-400 border border-purple-500/30"
+                              : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                          }`}
+                        >
+                          {rule.timeframe}
+                        </span>
+                        <span
+                          className={`text-xs font-mono truncate ${
+                            rule.active ? "text-slate-200" : "text-slate-500 line-through"
+                          }`}
+                        >
+                          {rule.label}
+                        </span>
+                      </div>
 
-                  {/* Toggle Pill */}
-                  <div
-                    className={`w-8 h-4 rounded-full p-0.5 transition-colors flex items-center ${
-                      rule.active ? "bg-emerald-500 justify-end" : "bg-slate-800 justify-start"
-                    }`}
-                  >
-                    <div className="w-3 h-3 rounded-full bg-white shadow-md" />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      {/* Toggle Pill */}
+                      <div
+                        className={`w-8 h-4 rounded-full p-0.5 transition-colors flex items-center ${
+                          rule.active ? "bg-emerald-500 justify-end" : "bg-slate-800 justify-start"
+                        }`}
+                      >
+                        <div className="w-3 h-3 rounded-full bg-white shadow-md" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* SEARCH, SECTOR & SORT TOOLBAR */}
@@ -440,7 +497,7 @@ export default function MomentumRadarPage() {
             <button
               onClick={() => {
                 setRequireStrict(false);
-                setMinMatches(6);
+                setMinMatches(9);
                 setSelectedSector("ALL");
                 setSearchTerm("");
               }}

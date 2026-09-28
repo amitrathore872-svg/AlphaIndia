@@ -86,7 +86,7 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
               href="/growth-screener"
               className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition shadow-2xs"
             >
-              Growth Screener PRO
+              Growth Screener
             </Link>
           </div>
         </div>

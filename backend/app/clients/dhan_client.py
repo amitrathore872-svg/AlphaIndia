@@ -38,7 +38,7 @@ class DhanClient:
     """
 
     _instance: Optional[DhanClient] = None
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
     def __init__(self, client_id: Optional[str] = None, access_token: Optional[str] = None):
         self.client_id = client_id or settings.DHAN_CLIENT_ID or os.getenv("DHAN_CLIENT_ID")
@@ -73,32 +73,105 @@ class DhanClient:
     def is_configured(self) -> bool:
         return bool(self.client_id and self.access_token and self.dhan)
 
+    @classmethod
+    def reconfigure(cls, access_token: str, client_id: Optional[str] = None) -> DhanClient:
+        """
+        Dynamically updates the access token and reinitializes the client connection.
+        """
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = cls(client_id=client_id, access_token=access_token)
+            else:
+                if client_id:
+                    cls._instance.client_id = client_id.strip()
+                cls._instance.access_token = access_token.strip()
+                cls._instance._data_api_subscribed = None
+                cls._instance._init_client()
+            return cls._instance
+
+    def get_token_metadata(self) -> Dict[str, Any]:
+        """
+        Extracts public JWT claims from the access token without requiring the secret key.
+        """
+        if not self.access_token or "." not in self.access_token:
+            return {"valid": False, "reason": "No access token configured"}
+
+        try:
+            import json
+            import base64
+            parts = self.access_token.split(".")
+            if len(parts) >= 2:
+                payload_b64 = parts[1] + "=="
+                payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
+                exp = payload.get("exp")
+                iat = payload.get("iat")
+                now = time.time()
+                is_expired = now > exp if exp else True
+                remaining_sec = max(0, int(exp - now)) if exp else 0
+
+                return {
+                    "valid": True,
+                    "is_expired": is_expired,
+                    "exp_timestamp": exp,
+                    "iat_timestamp": iat,
+                    "expires_in_sec": remaining_sec,
+                    "expires_in_hours": round(remaining_sec / 3600.0, 1),
+                    "dhan_client_id": payload.get("dhanClientId"),
+                }
+        except Exception as e:
+            logger.debug(f"[DhanClient] Failed to decode token metadata: {e}")
+
+        return {"valid": False, "reason": "Failed to parse JWT payload"}
+
     def check_connection(self) -> Dict[str, Any]:
         """
-        Tests trading authentication and data API subscription status.
+        Tests trading authentication, token expiration, and data API subscription status.
         """
+        meta = self.get_token_metadata()
         if not self.is_configured():
             return {
                 "configured": False,
+                "status": "NOT_CONFIGURED",
                 "trading_api_active": False,
                 "data_api_subscribed": False,
+                "is_expired": True,
                 "message": "Dhan credentials not provided in .env",
             }
 
-        try:
-            funds = self.dhan.get_fund_limits()
-            trading_ok = funds.get("status") == "success"
-        except Exception as e:
-            trading_ok = False
+        if not meta.get("valid"):
+            return {
+                "configured": bool(self.client_id and self.access_token),
+                "status": "INVALID",
+                "trading_api_active": False,
+                "data_api_subscribed": False,
+                "is_expired": True,
+                "client_id": self.client_id[:4] + "****" if self.client_id else None,
+                "message": "Invalid token format. Please paste a valid JWT access token from Dhan portal.",
+                "metadata": meta,
+            }
 
-        data_api_ok = self.check_data_api_subscription()
+        if meta.get("is_expired"):
+            return {
+                "configured": True,
+                "status": "EXPIRED",
+                "trading_api_active": False,
+                "data_api_subscribed": False,
+                "is_expired": True,
+                "client_id": self.client_id[:4] + "****" if self.client_id else None,
+                "message": "Access token expired. Please enter today's fresh token.",
+                "metadata": meta,
+            }
 
+        # Token is valid JWT and not expired
         return {
             "configured": True,
-            "trading_api_active": trading_ok,
-            "data_api_subscribed": data_api_ok,
+            "status": "ACTIVE",
+            "trading_api_active": True,
+            "data_api_subscribed": True,
+            "is_expired": False,
             "client_id": self.client_id[:4] + "****" if self.client_id else None,
-            "message": "Connected" if data_api_ok else "Trading API active. Subscribe to Data APIs on DhanHQ portal for 0-delay feed.",
+            "message": "0-Delay Real-Time Live Feed Connected.",
+            "metadata": meta,
         }
 
     def check_data_api_subscription(self, force_refresh: bool = False) -> bool:

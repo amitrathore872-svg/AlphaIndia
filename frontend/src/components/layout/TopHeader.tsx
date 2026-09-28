@@ -3,17 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Search,
   Bell,
   Activity,
-  ShieldCheck,
   Clock3,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import NotificationDrawer from "./notifications/NotificationDrawer";
+import GlobalCompanySearch from "./GlobalCompanySearch";
 import { notificationsApi } from "@/lib/notificationsApi";
 
 interface TopHeaderProps {
@@ -70,58 +67,26 @@ export default function TopHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-xl transition-colors duration-200 dark:border-slate-800 dark:bg-[#081225]/95">
       <div className="flex items-center justify-between px-3.5 py-2.5 sm:px-6 sm:py-3.5">
-        {/* LEFT: Mobile Menu Button & Desktop Sidebar Toggle */}
-        <div className="flex items-center gap-2">
-          {onOpenSidebar && (
+        {/* LEFT: Mobile Menu Button (Mobile Only) */}
+        {onOpenSidebar && (
+          <div className="flex items-center lg:hidden">
             <button
               onClick={onOpenSidebar}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 text-slate-700 transition hover:border-cyan-500/50 hover:bg-slate-200 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white lg:hidden"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 text-slate-700 transition hover:border-cyan-500/50 hover:bg-slate-200 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white"
               aria-label="Open Navigation Menu"
             >
               <Menu size={18} />
             </button>
-          )}
-
-          {onToggleSidebarCollapse && (
-            <button
-              onClick={onToggleSidebarCollapse}
-              className="hidden lg:flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-100/80 text-slate-600 transition hover:border-cyan-500/50 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700/80 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:border-cyan-500/40 dark:hover:bg-slate-800 dark:hover:text-white"
-              title={isSidebarCollapsed ? "Expand sidebar (Maximize)" : "Collapse sidebar (Minimize)"}
-              aria-label="Toggle Sidebar"
-            >
-              {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            </button>
-          )}
-        </div>
-
-        {/* CENTER SEARCH (Desktop) */}
-        <div className="hidden w-full max-w-xl lg:block mx-4">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-100/80 px-4 py-2 transition-colors dark:border-slate-700 dark:bg-slate-900/80">
-            <Search size={16} className="text-slate-400 dark:text-slate-500" />
-
-            <input
-              placeholder="Search company, symbol, sector..."
-              className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 outline-none dark:text-white dark:placeholder:text-slate-500"
-            />
           </div>
+        )}
+
+        {/* CENTER COMPANY SEARCH (Screener.in style -> /techno-funda/[symbol]) */}
+        <div className="flex-1 mx-2 sm:mx-4 flex items-center justify-center min-w-0">
+          <GlobalCompanySearch />
         </div>
 
         {/* RIGHT STATUS & PROFILE */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Universal Control Center & Action Logs Trigger */}
-          <button
-            onClick={onOpenControlCenter}
-            title="Open Universal Control System & Action Logs"
-            className="flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 sm:px-3 py-1.5 transition-all duration-200 hover:border-cyan-400 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-mono text-[11px] font-bold shadow-xs hover:shadow-cyan-950/40 cursor-pointer"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-            </span>
-            <span className="hidden sm:inline">CONTROL & LOGS</span>
-            <span className="sm:hidden">CONTROL</span>
-          </button>
-
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           <Link
             href="/monitoring"
             title="Live Market Engine — View Real-time Telemetry"
@@ -135,13 +100,6 @@ export default function TopHeader({
               ONLINE
             </span>
           </Link>
-
-          <div className="hidden items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 xl:flex">
-            <ShieldCheck size={14} className="text-cyan-600 dark:text-cyan-400" />
-            <span className="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400">
-              AUDIT READY
-            </span>
-          </div>
 
           <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 md:flex dark:border-slate-700 dark:bg-slate-900">
             <Clock3 size={14} className="text-amber-500 dark:text-amber-400" />

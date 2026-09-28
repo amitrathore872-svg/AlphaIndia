@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { SEBIDisclaimer } from "@/components/common/SEBIDisclaimer";
+import { PageVisibilityProvider } from "@/context/PageVisibilityContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -28,10 +29,12 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans bg-slate-50 text-slate-900 dark:bg-[#081225] dark:text-white antialiased min-h-screen flex flex-col`}>
         <QueryProvider>
           <ThemeProvider>
-            <div className="flex-1">
-              {children}
-            </div>
-            <SEBIDisclaimer />
+            <PageVisibilityProvider>
+              <div className="flex-1">
+                {children}
+              </div>
+              <SEBIDisclaimer />
+            </PageVisibilityProvider>
           </ThemeProvider>
         </QueryProvider>
       </body>

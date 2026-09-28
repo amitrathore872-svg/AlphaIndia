@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Layers,
   Search,
@@ -343,9 +344,16 @@ export default function CPRTransitionRadar({ onSelectStock }: CPRTransitionRadar
                         {item.market_cap_category}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-400 truncate max-w-[180px] font-sans">
+                    <Link
+                      href={`/techno-funda/${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[11px] text-slate-400 hover:text-cyan-300 hover:underline truncate max-w-[180px] font-sans inline-block transition-colors"
+                      title={`Open ${item.company_name} in Techno-Funda Radar`}
+                    >
                       {item.company_name}
-                    </div>
+                    </Link>
                   </td>
                   <td className="py-3 px-3 font-bold text-white">
                     ₹{item.cmp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   TrendingUp,
   ShieldCheck,
@@ -18,6 +19,8 @@ import {
   Send,
   Share2,
   Check,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { type VCPStockPick } from "@/lib/vcpApi";
 import { notificationsApi } from "@/lib/notificationsApi";
@@ -25,12 +28,18 @@ import { notificationsApi } from "@/lib/notificationsApi";
 interface VCPCardProps {
   stock: VCPStockPick;
   onOpenChart?: (stock: VCPStockPick) => void;
+  isCompactMode?: boolean;
 }
 
-export default function VCPCard({ stock, onOpenChart }: VCPCardProps) {
+export default function VCPCard({ stock, onOpenChart, isCompactMode = false }: VCPCardProps) {
   const isElite = stock.is_elite || stock.final_ai_score >= 95;
+  const [isExpanded, setIsExpanded] = useState<boolean>(!isCompactMode);
   const [alertDispatched, setAlertDispatched] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+
+  useEffect(() => {
+    setIsExpanded(!isCompactMode);
+  }, [isCompactMode]);
 
   const handleShareWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -54,6 +63,126 @@ export default function VCPCard({ stock, onOpenChart }: VCPCardProps) {
     }
   };
 
+  // Compact Single-Row View
+  if (!isExpanded) {
+    return (
+      <div
+        className={`relative rounded-xl border transition-all duration-200 overflow-hidden ${
+          isElite
+            ? "bg-white dark:bg-gradient-to-r dark:from-[#071322] dark:via-[#050B14] dark:to-[#03070D] border-cyan-500/40 shadow-xs dark:shadow-[0_0_20px_rgba(6,182,212,0.12)]"
+            : "bg-white dark:bg-[#050B14]/90 border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs"
+        }`}
+      >
+        {/* Left accent border */}
+        <div
+          className={`absolute left-0 top-0 bottom-0 w-1 ${
+            isElite
+              ? "bg-gradient-to-b from-cyan-400 via-emerald-400 to-amber-400"
+              : "bg-gradient-to-b from-emerald-500 to-cyan-500"
+          }`}
+        />
+
+        {/* Compact Single Row Content */}
+        <div className="pl-4 pr-3 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          {/* Company & Identity */}
+          <div className="flex items-center gap-2.5 min-w-[260px]">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link
+                  href={`/techno-funda/${encodeURIComponent(stock.symbol)}`}
+                  className="text-lg font-black tracking-tight text-slate-900 dark:text-white hover:text-cyan-500 dark:hover:text-cyan-400 font-mono transition-colors"
+                  title={`View ${stock.symbol} Techno-Funda Analysis`}
+                >
+                  {stock.symbol}
+                </Link>
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  {stock.sector}
+                </span>
+                {isElite ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5 text-cyan-500" />
+                    ELITE
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+                    HIGH CONVICTION
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs mt-0.5">
+                {stock.company_name} • ₹{(stock.market_cap / 1000).toFixed(1)}k Cr
+              </div>
+            </div>
+          </div>
+
+          {/* Trade Execution Metrics */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs font-mono">
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80">
+              <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400 block">CMP</span>
+              <span className="text-slate-900 dark:text-white font-bold">₹{stock.cmp.toFixed(2)}</span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-cyan-500/30">
+              <span className="text-[9px] uppercase font-bold text-cyan-700 dark:text-cyan-400 block">Pivot</span>
+              <span className="text-cyan-700 dark:text-cyan-300 font-bold">₹{stock.pivot_price.toFixed(2)}</span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-rose-500/30">
+              <span className="text-[9px] uppercase font-bold text-rose-600 dark:text-rose-400 block">Stop</span>
+              <span className="text-rose-600 dark:text-rose-400 font-bold">
+                ₹{stock.stop_loss.toFixed(2)}{" "}
+                <span className="text-[9px] font-normal text-rose-500">(-{stock.risk_pct.toFixed(1)}%)</span>
+              </span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-emerald-500/30">
+              <span className="text-[9px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block">Target 1</span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold">₹{stock.target_1.toFixed(2)}</span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-amber-500/30">
+              <span className="text-[9px] uppercase font-bold text-amber-700 dark:text-amber-400 block">R : R</span>
+              <span className="text-amber-700 dark:text-amber-300 font-bold">{stock.reward_risk}</span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 flex items-center gap-1.5">
+              <div className="text-right">
+                <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400 block">AI Score</span>
+                <span className={`font-black ${isElite ? "text-cyan-600 dark:text-cyan-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                  {stock.final_ai_score.toFixed(1)}
+                </span>
+              </div>
+              <Zap className={`w-3.5 h-3.5 ${isElite ? "text-cyan-500" : "text-emerald-500"}`} />
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            {onOpenChart && (
+              <button
+                onClick={() => onOpenChart(stock)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(6,182,212,0.25)] active:scale-95 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View VCP Swings & Chart</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setIsExpanded(true)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:border-cyan-500/50 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Show full card details"
+            >
+              <span>Show Details</span>
+              <ChevronDown className="w-3.5 h-3.5 text-cyan-500" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative rounded-2xl border transition-all duration-300 overflow-hidden ${
@@ -76,9 +205,13 @@ export default function VCPCard({ stock, onOpenChart }: VCPCardProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono">
+              <Link
+                href={`/techno-funda/${encodeURIComponent(stock.symbol)}`}
+                className="text-2xl font-black tracking-tight text-slate-900 dark:text-white hover:text-cyan-500 dark:hover:text-cyan-400 font-mono transition-colors"
+                title={`View ${stock.symbol} Techno-Funda Analysis`}
+              >
                 {stock.symbol}
-              </span>
+              </Link>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 {stock.sector}
               </span>
@@ -99,30 +232,41 @@ export default function VCPCard({ stock, onOpenChart }: VCPCardProps) {
             </div>
           </div>
 
-          {/* Institutional AI Composite Score Meter */}
-          <div className="flex items-center gap-3 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3 px-4 backdrop-blur-sm self-start sm:self-auto">
-            <div className="text-right">
-              <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500 dark:text-slate-400">
-                Final AI Score
+          {/* Institutional AI Composite Score Meter & Collapse Control */}
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <div className="flex items-center gap-3 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3 px-4 backdrop-blur-sm">
+              <div className="text-right">
+                <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500 dark:text-slate-400">
+                  Final AI Score
+                </div>
+                <div
+                  className={`text-2xl font-black font-mono ${
+                    isElite ? "text-cyan-600 dark:text-cyan-400" : "text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {stock.final_ai_score.toFixed(1)}
+                  <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">/100</span>
+                </div>
               </div>
               <div
-                className={`text-2xl font-black font-mono ${
-                  isElite ? "text-cyan-600 dark:text-cyan-400" : "text-emerald-600 dark:text-emerald-400"
+                className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm border ${
+                  isElite
+                    ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                    : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
                 }`}
               >
-                {stock.final_ai_score.toFixed(1)}
-                <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">/100</span>
+                <Zap className="w-5 h-5" />
               </div>
             </div>
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm border ${
-                isElite
-                  ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
-                  : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
-              }`}
+
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Collapse to compact view"
             >
-              <Zap className="w-5 h-5" />
-            </div>
+              <ChevronUp className="w-4 h-4 text-cyan-500" />
+              <span className="hidden sm:inline">Compact</span>
+            </button>
           </div>
         </div>
 

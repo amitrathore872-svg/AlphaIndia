@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import CPRDiscoveryCard from "@/components/cpr/CPRDiscoveryCard";
 import CPRBandVisualizer from "@/components/cpr/CPRBandVisualizer";
@@ -597,9 +598,16 @@ export default function CPRScannerPage() {
                                 </span>
                               )}
                             </span>
-                            <span className="text-[10px] text-slate-500 truncate max-w-[140px]">
+                            <Link
+                              href={`/techno-funda/${encodeURIComponent(stock.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] text-slate-400 hover:text-cyan-300 hover:underline truncate max-w-[140px] inline-block transition-colors"
+                              title={`Open ${stock.company_name} in Techno-Funda Radar`}
+                            >
                               {stock.company_name}
-                            </span>
+                            </Link>
                           </div>
                         </td>
 

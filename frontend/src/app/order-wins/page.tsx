@@ -7,7 +7,7 @@
 // Bloomberg dark aesthetic · cyan/emerald/amber/purple accents
 // =======================================================
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, Fragment } from "react";
 import Link from "next/link";
 import {
   Trophy,
@@ -472,7 +472,7 @@ export default function OrderWinsPage() {
                   </span>
                   <div>
                     <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl flex items-center gap-2">
-                      Order Win & Cumulative Backlog Radar
+                      New Order Win Screener
                       <span className="text-xs font-mono font-semibold uppercase tracking-wider text-cyan-400 border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 rounded-full">
                         Institutional Contract Terminal
                       </span>
@@ -507,85 +507,6 @@ export default function OrderWinsPage() {
                   <Zap size={13} className={analyzingAll ? "animate-pulse text-amber-300" : "text-amber-400"} />
                   <span>{analyzingAll ? "Calculating..." : "Re-Score Orders"}</span>
                 </button>
-              </div>
-            </div>
-
-            {/* ── TOP KPI TELEMETRY CARDS ──────────────────────────────── */}
-            <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Card 1: Total Backlog */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 backdrop-blur-sm">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Building2 size={14} className="text-cyan-400" />
-                    Total Cumulative Backlog
-                  </span>
-                  <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 border border-cyan-800/40 px-1.5 py-0.2 rounded">
-                    {cumulativeSummary?.total_companies_tracked || 312} Entities
-                  </span>
-                </div>
-                <div className="mt-1.5 text-xl font-black text-white font-mono">
-                  ₹{(cumulativeSummary?.total_tracked_backlog_cr || 172773).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-400">
-                  Across <strong className="text-slate-200">{cumulativeSummary?.total_orders_tracked || 522}</strong> verified commercial contracts
-                </div>
-              </div>
-
-              {/* Card 2: Transformational Order Books */}
-              <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-3.5 backdrop-blur-sm">
-                <div className="flex items-center justify-between text-purple-300 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Trophy size={14} className="text-purple-400" />
-                    Transformational Surge
-                  </span>
-                  <span className="text-[10px] font-mono text-purple-300 bg-purple-900/50 border border-purple-700/50 px-1.5 py-0.2 rounded">
-                    ≥1.5x TTM
-                  </span>
-                </div>
-                <div className="mt-1.5 text-xl font-black text-white font-mono">
-                  {cumulativeSummary?.transformational_companies_count || 21} <span className="text-xs font-normal text-purple-300">Companies</span>
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-400">
-                  {cumulativeSummary?.high_visibility_companies_count || 32} total entities with &gt;0.75x TTM revenue locked
-                </div>
-              </div>
-
-              {/* Card 3: Sovereign Client Backing */}
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3.5 backdrop-blur-sm">
-                <div className="flex items-center justify-between text-emerald-300 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Landmark size={14} className="text-emerald-400" />
-                    Sovereign / PSU Backing
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-300 bg-emerald-900/50 border border-emerald-700/50 px-1.5 py-0.2 rounded">
-                    Zero Default Risk
-                  </span>
-                </div>
-                <div className="mt-1.5 text-xl font-black text-emerald-300 font-mono">
-                  ₹{(cumulativeSummary?.sovereign_backed_backlog_cr || 38824).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-400">
-                  <strong className="text-emerald-400 font-bold">{cumulativeSummary?.sovereign_share_pct || 22.5}%</strong> of tracked commercial backlog
-                </div>
-              </div>
-
-              {/* Card 4: Surging Order Velocity */}
-              <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3.5 backdrop-blur-sm">
-                <div className="flex items-center justify-between text-amber-300 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Flame size={14} className="text-amber-400" />
-                    Surging Order Inflows
-                  </span>
-                  <span className="text-[10px] font-mono text-amber-300 bg-amber-900/50 border border-amber-700/50 px-1.5 py-0.2 rounded">
-                    Last 30 Days
-                  </span>
-                </div>
-                <div className="mt-1.5 text-xl font-black text-amber-300 font-mono">
-                  {cumulativeSummary?.surging_velocity_count || 138} <span className="text-xs font-normal text-slate-300">Active Issuers</span>
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-400">
-                  New contracts reported within the latest calendar month
-                </div>
               </div>
             </div>
 
@@ -780,7 +701,7 @@ export default function OrderWinsPage() {
                             : "—";
 
                           return (
-                            <tbody key={compKey} className="contents">
+                            <Fragment key={compKey}>
                               <tr
                                 className={`hover:bg-slate-900/60 transition-colors group cursor-pointer ${isExpanded ? "bg-slate-900/40" : ""}`}
                                 onClick={() => setExpandedCompanyKey(isExpanded ? null : compKey)}
@@ -1064,7 +985,7 @@ export default function OrderWinsPage() {
                                   </td>
                                 </tr>
                               )}
-                            </tbody>
+                            </Fragment>
                           );
                         })}
                       </tbody>

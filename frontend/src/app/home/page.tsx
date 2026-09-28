@@ -627,53 +627,6 @@ export default function HomePage() {
     <DashboardLayout>
       <div className="space-y-6 pb-24">
         {/* ================================================================= */}
-        {/* 1. TACTICAL MARKET STANCE & LIVE ENGINE TELEMETRY BAR             */}
-        {/* ================================================================= */}
-        <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-[#04161b] via-[#071322] to-[#120e24] p-4 text-white shadow-xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            {/* Market Stance & Strategy */}
-            <div className="flex items-start sm:items-center gap-3">
-              <span className="flex h-3 w-3 shrink-0 rounded-full bg-emerald-400 animate-ping mt-1 sm:mt-0" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                    MARKET REGIME: HIGH-ALPHA EXPANSION
-                  </span>
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.2 text-[10px] font-bold text-emerald-300 border border-emerald-500/40">
-                    LIVE EXCHANGE WIRES CONNECTED
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  <strong>Optimal Strategy:</strong> Aggressively buy high-ROCE EMS & Capital Goods breakouts on intraday pullbacks.
-                  {lastRefreshedAt && ` Telemetry synchronized at ${lastRefreshedAt} IST.`}
-                </p>
-              </div>
-            </div>
-
-            {/* Live Model Stats from Backend */}
-            <div className="flex flex-wrap items-center gap-3 text-xs border-t border-slate-800 lg:border-t-0 pt-3 lg:pt-0">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Monitored Universe</span>
-                <span className="text-sm font-black text-white">{macroStats.trackedEquities.toLocaleString("en-IN")} Equities</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">High Growth Stocks (≥80)</span>
-                <span className="text-sm font-black text-emerald-400">{macroStats.highGrowthStocks} Identified</span>
-              </div>
-              <button
-                onClick={loadMarketIntelligence}
-                disabled={isRefreshing}
-                className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/15 px-3 py-1.5 font-bold text-cyan-300 hover:bg-cyan-500/25 transition"
-                title="Refresh Live Market Data"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-                <span>{isRefreshing ? "Syncing..." : "Sync Live"}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================= */}
         {/* 2. CONVICTION ALPHA PICK OF THE DAY (100% Live Selected)          */}
         {/* ================================================================= */}
         {loading ? (
@@ -1264,7 +1217,7 @@ export default function HomePage() {
               </div>
               <div>
                 <h3 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-400 transition">
-                  Growth Screener PRO
+                  Growth Screener
                 </h3>
                 <p className="text-[10px] text-slate-400">Screen all {macroStats.trackedEquities.toLocaleString("en-IN")} stocks with custom filters</p>
               </div>

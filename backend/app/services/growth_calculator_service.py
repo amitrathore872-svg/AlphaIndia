@@ -109,6 +109,20 @@ class GrowthCalculatorService:
         }
 
     # ==========================================================
+    # Batch calculate growth metrics for multiple companies
+    # ==========================================================
+    @classmethod
+    def calculate_all_companies(cls, db: Session, batch_size: int = 20):
+        from app.services.growth_batch_engine import GrowthBatchEngine
+        res = GrowthBatchEngine.run_batch(db, limit=batch_size)
+        return {
+            "success": res.get("success", True),
+            "calculated_count": res.get("processed", 0),
+            "failed_count": res.get("failed", 0),
+            "total": res.get("total", 0),
+        }
+
+    # ==========================================================
     # Generic Growth Calculator
     # ==========================================================
     @staticmethod

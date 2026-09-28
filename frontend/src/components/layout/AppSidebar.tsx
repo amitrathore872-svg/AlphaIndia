@@ -4,37 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  TrendingUp,
-  FileText,
-  Star,
-  Radar,
-  Radio,
-  History,
-  Building2,
-  Settings,
-  Telescope,
-  ShieldCheck,
-  TableProperties,
-  Sparkles,
-  Zap,
-  Layers,
-  BookOpen,
   X,
-  PanelLeftClose,
-  PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
-  Sliders,
-  BellRing,
-  Target,
-  Flame,
-  Award,
-  Compass,
-  Crosshair,
-  Briefcase,
-  Trophy,
-  Activity,
 } from "lucide-react";
+import { NAVIGATION_CONFIG } from "@/config/navigationConfig";
+import { usePageVisibility } from "@/context/PageVisibilityContext";
 
 interface AppSidebarProps {
   isOpen?: boolean;
@@ -43,114 +18,6 @@ interface AppSidebarProps {
   onToggleCollapse?: () => void;
 }
 
-const navigation = [
-  {
-    title: "RADARS & ENGINES",
-    items: [
-      { name: "Executive Terminal", href: "/home", icon: LayoutDashboard },
-      { name: "Athena Omega AI", href: "/athena-omega", icon: Zap },
-      { name: "Growth Screener PRO", href: "/growth-screener", icon: TrendingUp },
-      { name: "MF Fresh Entries Radar", href: "/institutional-radar/fresh-entries", icon: Sparkles },
-      { name: "Corporate Catalysts", href: "/announcements", icon: Radio },
-      { name: "Order Win Radar", href: "/order-wins", icon: Trophy },
-    ],
-  },
-  {
-    title: "FAST OPPORTUNITY SCREENER",
-    items: [
-      { name: "Techno-Funda Radar", href: "/techno-funda", icon: Target },
-      { name: "Super Momentum Radar", href: "/momentum-radar", icon: Zap },
-      { name: "Pre-Breakout Radar", href: "/pre-breakout-radar", icon: Crosshair },
-      { name: "Trend Genesis (Ignition)", href: "/trend-genesis", icon: Flame },
-      { name: "Delivery Breakout", href: "/delivery-radar", icon: Radar },
-      { name: "VCP Breakout Engine", href: "/vcp-discovery", icon: Sparkles },
-      { name: "↳ VCP Track Record", href: "/vcp-signals", icon: Award },
-      { name: "Live Intraday Radar", href: "/live-intraday", icon: Activity },
-      { name: "Tomorrow 5% Move", href: "/intraday-radar", icon: Flame },
-      { name: "Narrow CPR Compression", href: "/cpr-scanner", icon: Layers },
-    ],
-  },
-  {
-    title: "INSTITUTIONAL RESEARCH",
-    items: [
-      { name: "Mutual Fund Radar", href: "/institutional-radar", icon: ShieldCheck },
-      { name: "AMC Scheme Matrix", href: "/institutional-radar/matrix", icon: TableProperties },
-    ],
-  },
-  {
-    title: "PIPELINE & TRIAGE",
-    items: [
-      { name: "Discovery Incubator", href: "/early-stage", icon: Telescope },
-      { name: "Quarterly Results", href: "/quarterly-results", icon: FileText },
-    ],
-  },
-  {
-    title: "PORTFOLIO",
-    items: [
-      {
-        name: "Portfolio Intelligence",
-        href: "/portfolio",
-        icon: Briefcase,
-      },
-      {
-        name: "Alpha Swing Overlay",
-        href: "/portfolio/swing-overlay",
-        icon: Zap,
-      },
-      {
-        name: "Watchlist Builder",
-        href: "/watchlist",
-        icon: Star,
-      },
-    ],
-  },
-  {
-    title: "MONITORING",
-    items: [
-      {
-        name: "Mission Control Overview",
-        href: "/monitoring",
-        icon: Radar,
-      },
-      {
-        name: "Control & Action Logs",
-        href: "/monitoring/control",
-        icon: Sliders,
-      },
-      {
-        name: "Activity Timeline",
-        href: "/activity",
-        icon: History,
-      },
-    ],
-  },
-  {
-    title: "ADMINISTRATION",
-    items: [
-      {
-        name: "Company Master",
-        href: "/company-master",
-        icon: Building2,
-      },
-      {
-        name: "System Settings",
-        href: "/settings",
-        icon: Settings,
-      },
-      {
-        name: "Knowledge Center",
-        href: "/knowledge-center",
-        icon: BookOpen,
-      },
-      {
-        name: "Alert Center",
-        href: "/alerts",
-        icon: BellRing,
-      },
-    ],
-  },
-];
-
 export default function AppSidebar({
   isOpen = false,
   onClose,
@@ -158,6 +25,13 @@ export default function AppSidebar({
   onToggleCollapse,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { isPageHidden } = usePageVisibility();
+
+  // Dynamically filter out hidden pages and exclude empty sections
+  const visibleNavigation = NAVIGATION_CONFIG.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !isPageHidden(item.href)),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <>
@@ -212,18 +86,6 @@ export default function AppSidebar({
             </Link>
 
             <div className="flex items-center gap-1.5">
-              {/* Desktop Toggle Button in Header */}
-              {onToggleCollapse && (
-                <button
-                  onClick={onToggleCollapse}
-                  className="hidden lg:flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-600 transition hover:border-cyan-500/50 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700/80 dark:bg-slate-800/80 dark:text-slate-400 dark:hover:border-cyan-500/40 dark:hover:bg-slate-700 dark:hover:text-white"
-                  title={isCollapsed ? "Expand sidebar (Maximize)" : "Collapse sidebar (Minimize)"}
-                  aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                  {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-                </button>
-              )}
-
               {/* Close Button on Mobile */}
               {onClose && (
                 <button
@@ -247,7 +109,7 @@ export default function AppSidebar({
             isCollapsed ? "px-2 py-4" : "px-4 py-4 sm:py-5"
           }`}
         >
-          {navigation.map((group) => (
+          {visibleNavigation.map((group) => (
             <div key={group.title} className="mb-4 sm:mb-5">
               {!isCollapsed ? (
                 <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis">

@@ -850,9 +850,14 @@ class VCPEngineService:
             db.commit()
 
         rejections_to_insert: List[VCPScanRejection] = []
+        seen_candidates: set = set()
 
         for record in candidates:
             sym = record.symbol.strip().upper()
+            if sym in seen_candidates:
+                continue
+            seen_candidates.add(sym)
+
             cmp = record.current_price or 0.0
 
             # 1. Fetch historical OHLCV data
@@ -1024,11 +1029,18 @@ class VCPEngineService:
             db.bulk_save_objects(rejections_to_insert)
             db.commit()
 
-        # Sort by total_score descending
+        # Sort by total_score descending and deduplicate by symbol
         qualified_results.sort(key=lambda x: x["final_ai_score"], reverse=True)
+        unique_results = []
+        seen_res = set()
+        for res in qualified_results:
+            s_res = res["symbol"].strip().upper()
+            if s_res not in seen_res:
+                seen_res.add(s_res)
+                unique_results.append(res)
 
         # STRICT TARGET OUTPUT: 0 to 3 STOCKS ONLY
-        final_top_picks = qualified_results[:3]
+        final_top_picks = unique_results[:3]
 
         # Persist qualified candidates into PostgreSQL tables
         if persist:

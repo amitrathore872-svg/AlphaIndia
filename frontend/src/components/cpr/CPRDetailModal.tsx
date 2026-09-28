@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   X,
   Target,
@@ -52,13 +53,28 @@ export default function CPRDetailModal({ symbol, onClose }: CPRDetailModalProps)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-800 bg-[#070D18] p-6 shadow-2xl text-slate-100 custom-scrollbar">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-xl border border-slate-700/80 bg-slate-800/80 p-2 text-slate-400 hover:border-slate-600 hover:text-white transition"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        {/* Header Actions */}
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          {detail && (
+            <Link
+              href={`/techno-funda/${encodeURIComponent(detail.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 transition"
+              title={`Open ${detail.symbol} in Techno-Funda Radar`}
+            >
+              <Target className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Techno-Funda</span>
+              <ExternalLink className="h-3 w-3 text-cyan-400/80" />
+            </Link>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-slate-700/80 bg-slate-800/80 p-2 text-slate-400 hover:border-slate-600 hover:text-white transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
         {loading ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3">
@@ -88,8 +104,19 @@ export default function CPRDetailModal({ symbol, onClose }: CPRDetailModalProps)
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-slate-400 mt-0.5">
-                  {detail.company_name} • <span className="text-cyan-400">{detail.sector}</span>
+                <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <Link
+                    href={`/techno-funda/${encodeURIComponent(detail.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-cyan-300 hover:underline inline-flex items-center gap-1 transition-colors text-slate-200 font-medium"
+                    title={`Open ${detail.company_name} in Techno-Funda Radar`}
+                  >
+                    <span>{detail.company_name}</span>
+                    <ExternalLink className="h-3 w-3 text-cyan-400" />
+                  </Link>
+                  <span>•</span>
+                  <span className="text-cyan-400">{detail.sector}</span>
                 </p>
               </div>
 

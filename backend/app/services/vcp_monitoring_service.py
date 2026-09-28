@@ -158,7 +158,13 @@ class VCPMonitoringService:
             if row[0]
         )
 
+        seen_cand_syms = set()
         for rec in records:
+            sym_clean = rec.symbol.strip().upper()
+            if sym_clean in seen_cand_syms:
+                continue
+            seen_cand_syms.add(sym_clean)
+
             priority = 0.0
             cmp = rec.current_price or 0.0
             high_52 = rec.high_52_week or 0.0
@@ -402,11 +408,27 @@ class VCPMonitoringService:
                     if result:
                         opportunities.append(result)
                         with cls._lock:
-                            cls._opportunities_found = len(opportunities)
-                            cls._latest_picks = sorted(opportunities, key=lambda x: x["final_ai_score"], reverse=True)[:3]
+                            # Deduplicate by symbol for live latest_picks
+                            seen_live = set()
+                            live_picks = []
+                            for opp in sorted(opportunities, key=lambda x: x["final_ai_score"], reverse=True):
+                                s_live = opp["symbol"].strip().upper()
+                                if s_live not in seen_live:
+                                    seen_live.add(s_live)
+                                    live_picks.append(opp)
+                            cls._opportunities_found = len(live_picks)
+                            cls._latest_picks = live_picks[:3]
 
-            opportunities.sort(key=lambda x: x["final_ai_score"], reverse=True)
-            top_picks = opportunities[:3]
+            # Deduplicate opportunities by symbol
+            seen_opps = set()
+            unique_opps = []
+            for opp in sorted(opportunities, key=lambda x: x["final_ai_score"], reverse=True):
+                s_opp = opp["symbol"].strip().upper()
+                if s_opp not in seen_opps:
+                    seen_opps.add(s_opp)
+                    unique_opps.append(opp)
+
+            top_picks = unique_opps[:3]
 
             with cls._lock:
                 cls._scan_duration_seconds = round((datetime.now() - cls._scan_start_time).total_seconds(), 1) if cls._scan_start_time else 0.0

@@ -43,6 +43,10 @@ import {
   AlertTriangle,
   Search,
   X,
+  Eye,
+  EyeOff,
+  LayoutList,
+  LayoutGrid,
 } from "lucide-react";
 
 type TabMode = "DISCOVERY" | "WATCHLIST" | "BACKTEST";
@@ -86,6 +90,48 @@ export default function VCPDiscoveryPage() {
   // Modals
   const [selectedStockForChart, setSelectedStockForChart] = useState<VCPStockPick | null>(null);
   const [showFunnelModal, setShowFunnelModal] = useState(false);
+
+  // Scanner Engine Ribbon Visibility
+  const [showTelemetry, setShowTelemetry] = useState<boolean>(true);
+
+  // Results View Mode (Compact vs Detailed)
+  const [viewMode, setViewMode] = useState<"compact" | "detailed">("compact");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("alpha_india_vcp_telemetry_visible");
+      if (saved !== null) {
+        setShowTelemetry(saved === "true");
+      }
+      const savedMode = localStorage.getItem("alpha_india_vcp_view_mode");
+      if (savedMode === "compact" || savedMode === "detailed") {
+        setViewMode(savedMode);
+      }
+    } catch {
+      // Ignore localStorage error
+    }
+  }, []);
+
+  const handleSetViewMode = (mode: "compact" | "detailed") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("alpha_india_vcp_view_mode", mode);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const toggleTelemetry = () => {
+    setShowTelemetry((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("alpha_india_vcp_telemetry_visible", String(next));
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  };
 
   // Initial Load
   useEffect(() => {
@@ -238,8 +284,18 @@ export default function VCPDiscoveryPage() {
     return true;
   };
 
-  const activePicks = (discoveryData?.items || []).filter(filterStock);
-  const activeWatchlist = watchlistItems.filter(filterStock);
+  const dedupeBySymbol = (items: VCPStockPick[]) => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const sym = (item.symbol || "").trim().toUpperCase();
+      if (!sym || seen.has(sym)) return false;
+      seen.add(sym);
+      return true;
+    });
+  };
+
+  const activePicks = dedupeBySymbol((discoveryData?.items || []).filter(filterStock));
+  const activeWatchlist = dedupeBySymbol(watchlistItems.filter(filterStock));
 
   const allAvailableSectors = Array.from(
     new Set([
@@ -250,120 +306,91 @@ export default function VCPDiscoveryPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-3.5">
         {/* Institutional Bloomberg Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800/80 pb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800/80 pb-3 sm:pb-4">
           <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
-                <Target className="w-5 h-5" />
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
+                <Target className="w-4 h-4" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white font-mono">
-                VCP + VOLUME BREAKOUT ENGINE
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono">
+                VCP Volume Breakout
               </h1>
-              <span className="px-3 py-1 rounded-full text-xs font-bold font-mono tracking-wider bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
                 INSTITUTIONAL RADAR • 8 GATES
               </span>
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-3xl">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
               Mark Minervini Volatility Contraction Pattern (VCP) & institutional volume breakout
               scanner. Scans entire NSE universe with strict 3-rule verification.
             </p>
           </div>
 
           {/* Controls & Schedulers status */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 px-3 py-2 rounded-xl text-xs font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-slate-500 dark:text-slate-400">EOD 3:40 PM IST:</span>
-              <span className="text-slate-800 dark:text-white font-semibold">Active</span>
-              <span className="text-slate-300 dark:text-slate-600">|</span>
-              <span className="text-slate-500 dark:text-slate-400">5M Intraday:</span>
-              <span className="text-cyan-700 dark:text-cyan-400 font-semibold">Armed</span>
-            </div>
-
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/vcp-signals"
-              className="px-3.5 py-2 rounded-xl text-xs font-bold font-mono tracking-wide bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-300 border border-slate-300 dark:border-slate-700 hover:border-emerald-500/40 transition-all flex items-center gap-1.5"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-300 border border-slate-300 dark:border-slate-700 hover:border-emerald-500/40 transition-all flex items-center gap-1.5"
             >
               <Award className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               Signal Track Record
             </Link>
 
             <button
-              onClick={() => setShowFunnelModal(true)}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Filter className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-              Rejection Funnel
-            </button>
-
-            <button
               onClick={() => handleTriggerScan("TODAY_BREAKOUT")}
               disabled={scanning}
-              className="px-4 py-2 rounded-xl text-xs font-bold tracking-wide bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-mono flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] disabled:opacity-50 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-mono flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`} />
-              {scanning ? "Executing 8 Gates..." : "Scan Universe"}
+              {scanning ? "Executing..." : "Scan Universe"}
             </button>
-          </div>
-        </div>
 
-        {/* 3 Core Rules Verification Header Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 font-mono text-xs font-black shrink-0">
-              R1
-            </div>
-            <div>
-              <div className="text-xs font-black text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
-                <span>3–5 Contractions</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Successively smaller pullbacks (C1 &gt; C2 &gt; C3) with higher swing lows.
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-600 dark:text-violet-400 font-mono text-xs font-black shrink-0">
-              R2
-            </div>
-            <div>
-              <div className="text-xs font-black text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
-                <span>Volume Contracts</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Lower volume in each pullback wave (V1 &gt; V2 &gt; V3) proving supply dry-up.
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 font-mono text-xs font-black shrink-0">
-              R3
-            </div>
-            <div>
-              <div className="text-xs font-black text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
-                <span>Breakout Volume</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Biggest volume in 20 sessions on pivot attack (closing in upper 25% of candle).
-              </div>
-            </div>
+            {/* Toggle Engine Telemetry Button */}
+            <button
+              onClick={toggleTelemetry}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+              title={showTelemetry ? "Hide Scanner Engine" : "Show Scanner Engine"}
+            >
+              {showTelemetry ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Hide Engine</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Show Engine</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
         {/* Live Opportunity Monitoring & Progress Telemetry Ribbon */}
-        <VCPProgressRibbon
-          telemetry={telemetry}
-          onScanNow={handleScanNow}
-          onToggleContinuous={handleToggleContinuous}
-          isActionLoading={isActionLoading}
-        />
+        {showTelemetry ? (
+          <VCPProgressRibbon
+            telemetry={telemetry}
+            onScanNow={handleScanNow}
+            onToggleContinuous={handleToggleContinuous}
+            onHide={toggleTelemetry}
+            isActionLoading={isActionLoading}
+          />
+        ) : (
+          <div className="flex items-center justify-between px-3 py-1.5 rounded-lg border border-dashed border-cyan-500/25 bg-cyan-500/5 text-xs font-mono text-cyan-400">
+            <div className="flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-slate-400">Scanner Engine Telemetry Hidden</span>
+            </div>
+            <button
+              onClick={toggleTelemetry}
+              className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 underline underline-offset-2 flex items-center gap-1 cursor-pointer"
+            >
+              <Eye className="w-3 h-3" />
+              Show Scanner Engine
+            </button>
+          </div>
+        )}
 
         {/* Interactive Opportunities Filter Bar */}
         <div className="bg-white dark:bg-[#040A14] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 space-y-3 shadow-xs">
@@ -513,9 +540,38 @@ export default function VCPDiscoveryPage() {
             </button>
           </div>
 
-          {/* Quick Filter: Elite Only */}
-          {tab === "DISCOVERY" && (
-            <div className="flex items-center gap-3">
+          {/* Controls: View Mode & Elite Only */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* View Mode Switcher: Compact vs Detailed */}
+            <div className="flex items-center gap-1 bg-white dark:bg-[#040A14] p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono shadow-xs">
+              <button
+                onClick={() => handleSetViewMode("compact")}
+                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === "compact"
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+                title="Single-row compact view with quick swing chart button and details toggle"
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+                <span>Compact View</span>
+              </button>
+              <button
+                onClick={() => handleSetViewMode("detailed")}
+                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === "detailed"
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+                title="Full detailed multi-gate breakdown view"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Detailed View</span>
+              </button>
+            </div>
+
+            {/* Quick Filter: Elite Only */}
+            {tab === "DISCOVERY" && (
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -525,8 +581,8 @@ export default function VCPDiscoveryPage() {
                 />
                 <span>Elite Setups Only (95+ Score)</span>
               </label>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Tab 1: Discovery Top 3 Output */}
@@ -564,7 +620,7 @@ export default function VCPDiscoveryPage() {
                 </button>
               </div>
             ) : activePicks.length > 0 ? (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                   <span>
@@ -574,11 +630,12 @@ export default function VCPDiscoveryPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6">
+                <div className={`grid grid-cols-1 ${viewMode === "compact" ? "gap-2.5" : "gap-6"}`}>
                   {activePicks.map((stock, idx) => (
                     <VCPCard
                       key={`${stock.symbol}-${idx}`}
                       stock={stock}
+                      isCompactMode={viewMode === "compact"}
                       onOpenChart={(s) => setSelectedStockForChart(s)}
                     />
                   ))}
@@ -693,11 +750,12 @@ export default function VCPDiscoveryPage() {
             </div>
 
             {activeWatchlist.length > 0 ? (
-              <div className="grid grid-cols-1 gap-6">
+              <div className={`grid grid-cols-1 ${viewMode === "compact" ? "gap-2.5" : "gap-6"}`}>
                 {activeWatchlist.map((stock, idx) => (
                   <VCPCard
-                    key={`${stock.symbol}-${idx}`}
+                    key={`watch-${stock.symbol}-${idx}`}
                     stock={stock}
+                    isCompactMode={viewMode === "compact"}
                     onOpenChart={(s) => setSelectedStockForChart(s)}
                   />
                 ))}
