@@ -208,6 +208,7 @@ def test_telegram_connection(
 ):
     """
     Validates the Telegram bot token and dispatches an institutional test alert message.
+    """
     tg_resolved = AlertDispatchService.get_telegram_config(db)
     token_to_use = bot_token or (tg_resolved["bot_token"] if tg_resolved else None)
     chat_to_use = chat_id or (tg_resolved["chat_id"] if tg_resolved else None)
