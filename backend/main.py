@@ -128,6 +128,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------- Auto-Deduplicate Double /api/api Prefix Middleware ----------------
+@app.middleware("http")
+async def deduplicate_api_prefix_middleware(request: Request, call_next):
+    if request.scope.get("path", "").startswith("/api/api/"):
+        request.scope["path"] = request.scope["path"][4:]
+    return await call_next(request)
+
 # ---------------- Observability Telemetry Middleware ----------------
 @app.middleware("http")
 async def telemetry_middleware(request: Request, call_next):
