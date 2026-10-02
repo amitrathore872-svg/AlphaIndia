@@ -254,6 +254,16 @@ export const notificationsApi = {
     });
   },
 
+  async triggerIpoScanAlerts(forceBroadcast: boolean = true, minScore: number = 85): Promise<{
+    status: string;
+    count: number;
+    alerts: Array<{ engine: string; symbol: string; title: string; notif_id: number }>;
+  }> {
+    return fetchJson(`${API_BASE}/alerts/trigger-ipo-scan-alerts?force_broadcast=${forceBroadcast}&min_score=${minScore}`, {
+      method: "POST",
+    });
+  },
+
   async triggerStockVCPAlert(symbol: string, autoBroadcast: boolean = true): Promise<{
     status: string;
     symbol: string;
@@ -299,6 +309,8 @@ export interface OpportunityThresholds {
   momentum_min_matches: number;
   momentum_conviction_79_enabled: boolean;
   momentum_min_conviction: number;
+  momentum_universe_enabled?: boolean;
+  momentum_min_mcap_cr?: number;
   tomorrow_radar_enabled?: boolean;
   tomorrow_min_conviction?: number;
   order_win_enabled?: boolean;
@@ -323,6 +335,9 @@ export interface OpportunityThresholds {
   growth_min_pat_pct?: number;
   growth_min_sales_pct?: number;
   breakout_execution_enabled?: boolean;
+  ipo_radar_enabled?: boolean;
+  ipo_min_conviction?: number;
+  ipo_blue_sky_only?: boolean;
   // Legacy Tab 2 aliases for backward compatibility
   pead_enabled?: boolean;
   pead_min_conviction?: number;

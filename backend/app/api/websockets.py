@@ -44,6 +44,20 @@ async def websocket_live_wire(websocket: WebSocket):
         ws_manager.disconnect("live_wire", websocket)
 
 
+def get_telemetry_payload() -> Optional[Dict[str, Any]]:
+    try:
+        from app.db.database import SessionLocal
+        from app.api.mission_control import mission_control_telemetry
+        db = SessionLocal()
+        try:
+            return mission_control_telemetry(db)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"[WebSocket] Telemetry payload build error: {e}")
+        return None
+
+
 @router.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
     """
@@ -51,24 +65,47 @@ async def websocket_telemetry(websocket: WebSocket):
     and system heartbeats.
     """
     await ws_manager.connect("telemetry", websocket)
+    push_task = None
     try:
-        # Send initial handshake welcome
+        # Send initial snapshot immediately upon connection
+        init_data = get_telemetry_payload()
         await websocket.send_json({
-            "type": "CONNECTION_ESTABLISHED",
+            "type": "TELEMETRY_SNAPSHOT",
             "channel": "telemetry",
-            "message": "Connected to Alpha India Mission Control Telemetry Stream",
+            "data": init_data,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
-        # Keep connection open
+        # Background broadcast loop to push fresh telemetry every 4 seconds
+        async def push_loop():
+            while True:
+                await asyncio.sleep(4)
+                data = get_telemetry_payload()
+                if data:
+                    try:
+                        await websocket.send_json({
+                            "type": "TELEMETRY_UPDATE",
+                            "channel": "telemetry",
+                            "data": data,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        })
+                    except Exception:
+                        break
+
+        push_task = asyncio.create_task(push_loop())
+
+        # Keep connection open and handle incoming ping/pong
         while True:
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        ws_manager.disconnect("telemetry", websocket)
+        pass
     except Exception as exc:
         logger.debug(f"[WebSocket] telemetry client exception: {exc}")
+    finally:
+        if push_task and not push_task.done():
+            push_task.cancel()
         ws_manager.disconnect("telemetry", websocket)
 
 

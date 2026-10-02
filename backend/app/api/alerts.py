@@ -59,6 +59,15 @@ def get_channel_configs(db: Session = Depends(get_db)):
     configs = db.query(AlertChannelConfig).all()
     config_map = {cfg.channel: cfg.to_dict(mask_secrets=True) for cfg in configs}
 
+    # Ensure Telegram credentials fallback to env vars if DB is empty
+    tg_resolved = AlertDispatchService.get_telegram_config(db)
+    if tg_resolved and "TELEGRAM" in config_map:
+        if not config_map["TELEGRAM"].get("bot_token") and tg_resolved.get("bot_token"):
+            tok = tg_resolved["bot_token"]
+            config_map["TELEGRAM"]["bot_token"] = f"{tok[:6]}...{tok[-4:]}" if len(tok) > 10 else tok
+        if not config_map["TELEGRAM"].get("chat_id") and tg_resolved.get("chat_id"):
+            config_map["TELEGRAM"]["chat_id"] = tg_resolved["chat_id"]
+
     # Ensure defaults exist in response
     if "TELEGRAM" not in config_map:
         config_map["TELEGRAM"] = {
@@ -82,6 +91,8 @@ def get_channel_configs(db: Session = Depends(get_db)):
                 "momentum_min_matches": 9,
                 "momentum_conviction_79_enabled": True,
                 "momentum_min_conviction": 79,
+                "momentum_universe_enabled": True,
+                "momentum_min_mcap_cr": 1000.0,
                 "tomorrow_radar_enabled": True,
                 "tomorrow_min_conviction": 90,
                 "order_win_enabled": True,
@@ -197,10 +208,9 @@ def test_telegram_connection(
 ):
     """
     Validates the Telegram bot token and dispatches an institutional test alert message.
-    """
-    cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
-    token_to_use = bot_token or (cfg.bot_token if cfg else None)
-    chat_to_use = chat_id or (cfg.chat_id if cfg else None)
+    tg_resolved = AlertDispatchService.get_telegram_config(db)
+    token_to_use = bot_token or (tg_resolved["bot_token"] if tg_resolved else None)
+    chat_to_use = chat_id or (tg_resolved["chat_id"] if tg_resolved else None)
 
     if not token_to_use:
         raise HTTPException(status_code=400, detail="No Telegram bot token provided or configured.")
@@ -438,6 +448,27 @@ def generate_brief_and_links(req: GenerateBriefRequest):
             net_shares_change_pct=float(d.get("net_shares_change_pct", 18.5)),
             sector=d.get("sector", "Diversified"),
         )
+    elif req.alert_type in ["IPO", "IPO_RADAR"]:
+        d = req.data
+        memo = AlertDispatchService.format_ipo_radar_alert(
+            symbol=req.symbol,
+            company_name=req.company_name or req.symbol,
+            setup_type=d.get("setup_type", "LDH_BREAKOUT"),
+            setup_label=d.get("setup_label", "Blue-Sky Breakout"),
+            setup_status=d.get("setup_status", "READY"),
+            conviction_score=float(d.get("conviction_score", 90.0)),
+            cmp=float(d.get("cmp", d.get("current_price", 0.0))),
+            pivot_price=float(d.get("pivot_price", 0.0)),
+            stop_loss=float(d.get("stop_loss", 0.0)),
+            target_1=float(d.get("target_1", 0.0)),
+            target_2=float(d.get("target_2", 0.0)),
+            risk_pct=float(d.get("risk_pct", 5.0)),
+            day1_high=float(d.get("day1_high", 0.0)),
+            days_since_listing=int(d.get("days_since_listing", 15)),
+            rvol=float(d.get("rvol", 1.5)),
+            anchor_days_left=d.get("anchor_30d_days_left"),
+            rationale=d.get("rationale"),
+        )
     else:
         memo = f"⚡ *ALPHA INDIA ALERT | {req.symbol}*\n\n{req.data.get('message', '')}"
 
@@ -662,6 +693,31 @@ def trigger_order_win_scan_alerts(
     }
 
 
+@router.post("/trigger-ipo-scan-alerts", summary="Trigger Alerts for Top Mainboard IPO Setups")
+def trigger_ipo_scan_alerts(
+    force_broadcast: bool = Query(True, description="Broadcast to enabled external channels"),
+    min_score: float = Query(85.0, description="Minimum conviction score (0-100)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Scans Mainboard IPO Radar and broadcasts top active setups (Blue-Sky, Base Cheat, Anchor Spring)
+    to Telegram, WhatsApp, and in-app System Notifications.
+    """
+    rules = OpportunityAlertService.get_opportunity_thresholds(db)
+    rules["ipo_radar_enabled"] = True
+    rules["ipo_min_conviction"] = min_score
+    if not force_broadcast:
+        rules["auto_broadcast_telegram"] = False
+        rules["auto_broadcast_whatsapp"] = False
+
+    dispatched = OpportunityAlertService.scan_ipo_radar_alerts(db=db, rules=rules, force_top_recent=True)
+    return {
+        "status": "ok",
+        "count": len(dispatched),
+        "alerts": dispatched,
+    }
+
+
 # ==========================================================
 # 6. High-Conviction Opportunity Radar Alerts Engine
 # ==========================================================
@@ -678,6 +734,8 @@ class OpportunityRuleUpdateRequest(BaseModel):
     momentum_min_matches: Optional[int] = None
     momentum_conviction_79_enabled: Optional[bool] = None
     momentum_min_conviction: Optional[int] = None
+    momentum_universe_enabled: Optional[bool] = None
+    momentum_min_mcap_cr: Optional[float] = None
     tomorrow_radar_enabled: Optional[bool] = None
     tomorrow_min_conviction: Optional[int] = None
     athena_pead_enabled: Optional[bool] = None
@@ -702,6 +760,9 @@ class OpportunityRuleUpdateRequest(BaseModel):
     growth_min_pat_pct: Optional[float] = None
     growth_min_sales_pct: Optional[float] = None
     breakout_execution_enabled: Optional[bool] = None
+    ipo_radar_enabled: Optional[bool] = None
+    ipo_min_conviction: Optional[float] = None
+    ipo_blue_sky_only: Optional[bool] = None
     # Tab 2 backwards-compatibility aliases
     pead_enabled: Optional[bool] = None
     pead_min_conviction: Optional[int] = None

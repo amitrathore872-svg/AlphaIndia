@@ -1184,7 +1184,7 @@ export default function AnnouncementsRadarPage() {
         )}
 
         {/* ── Unified High-Density Filter Toolbar ──────────────────── */}
-        <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-slate-800 bg-[#0A1628] p-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0A1628] p-2.5 shadow-xs">
           {/* Search */}
           <TerminalSearch
             value={search}
@@ -1280,12 +1280,12 @@ export default function AnnouncementsRadarPage() {
               setImpactFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+            className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-300 focus:border-cyan-500 focus:outline-hidden cursor-pointer shadow-xs"
           >
-            <option value="">All Impact Tiers</option>
-            <option value="CRITICAL">🔥 Critical (&gt;= 8.5)</option>
-            <option value="HIGH">⚡ High (&gt;= 7.5)</option>
-            <option value="MEDIUM">ℹ️ Medium</option>
+            <option value="" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Impact Tiers</option>
+            <option value="CRITICAL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">🔥 Critical (&gt;= 8.5)</option>
+            <option value="HIGH" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">⚡ High (&gt;= 7.5)</option>
+            <option value="MEDIUM" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">ℹ️ Medium</option>
           </select>
 
           {/* Feed Stream Dropdown */}
@@ -1296,12 +1296,12 @@ export default function AnnouncementsRadarPage() {
               setFeedSource(e.target.value as "ALL" | "POLL_WIRE" | "CATALYST");
               setPage(1);
             }}
-            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+            className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-300 focus:border-cyan-500 focus:outline-hidden cursor-pointer shadow-xs"
           >
 
-            <option value="ALL">🌐 All Sources ({stats?.by_feed_source?.ALL ?? stats?.total ?? 0})</option>
-            <option value="POLL_WIRE">📡 Live Poll Wire ({stats?.by_feed_source?.POLL_WIRE ?? 86})</option>
-            <option value="CATALYST">⚡ Catalyst AI ({stats?.by_feed_source?.CATALYST ?? 61})</option>
+            <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">🌐 All Sources ({stats?.by_feed_source?.ALL ?? stats?.total ?? 0})</option>
+            <option value="POLL_WIRE" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">📡 Live Poll Wire ({stats?.by_feed_source?.POLL_WIRE ?? 86})</option>
+            <option value="CATALYST" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">⚡ Catalyst AI ({stats?.by_feed_source?.CATALYST ?? 61})</option>
           </select>
 
           {/* Listed Only Toggle */}
@@ -1314,11 +1314,11 @@ export default function AnnouncementsRadarPage() {
             }}
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
               listedOnly
-                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-sm"
-                : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
+                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 shadow-xs"
+                : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 shadow-xs"
             }`}
           >
-            <span className={`h-2 w-2 rounded-full ${listedOnly ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
+            <span className={`h-2 w-2 rounded-full ${listedOnly ? "bg-emerald-500 dark:bg-emerald-400 animate-pulse" : "bg-slate-400 dark:bg-slate-600"}`} />
             Listed Only
           </button>
 
@@ -1331,7 +1331,7 @@ export default function AnnouncementsRadarPage() {
                 setSortBy(e.target.value);
                 setPage(1);
               }}
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+              className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-300 focus:border-cyan-500 focus:outline-hidden cursor-pointer shadow-xs"
             >
               <option value="announcement_date">📅 Announcement Date</option>
               <option value="recommendation_date">🎯 Recommendation Date</option>

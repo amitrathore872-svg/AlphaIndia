@@ -66,7 +66,7 @@ def get_techno_funda_summary(
 @router.get("/chart/{symbol}", summary="Get Lightweight Candlestick OHLCV Data & Moving Averages")
 def get_techno_funda_chart(
     symbol: str,
-    period: str = Query("6mo", description="1mo, 3mo, 6mo, 1y, 2y"),
+    period: str = Query("6mo", description="1mo, 3mo, 6mo, 1y, 2y, 5y, max"),
 ) -> Dict[str, Any]:
     return TechnoFundaService.get_chart_candles(symbol=symbol, period=period)
 

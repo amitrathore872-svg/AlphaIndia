@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   TrendingUp,
+  GitBranch,
   FileText,
   Star,
   Radar,
@@ -24,6 +25,7 @@ import {
   Briefcase,
   Trophy,
   Activity,
+  Rocket,
   LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +49,23 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
   {
     title: "RADARS & ENGINES",
     items: [
+      {
+        id: "velocity-burst-elite",
+        name: "Velocity Burst Elite",
+        href: "/velocity-burst-elite",
+        icon: Flame,
+        badge: "FLAGSHIP",
+        section: "RADARS & ENGINES",
+        description: "Institutional 18-stage breakout engine: contraction intelligence, base patterns, smart money, and automated trade management.",
+      },
+      {
+        id: "fx-swing-screener",
+        name: "FX Swing Screener",
+        href: "/portfolio/fx-swing-screener",
+        icon: Target,
+        section: "RADARS & ENGINES",
+        description: "12 FX Swing Confluence Screener & empirical Nifty 500 backtest radar.",
+      },
       {
         id: "home",
         name: "Executive Terminal",
@@ -88,6 +107,15 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         description: "Mutual fund fresh buys, portfolio expansions, and block accumulation.",
       },
       {
+        id: "mutual-funds-radar",
+        name: "MF Alpha Radar",
+        href: "/mutual-funds",
+        icon: Radar,
+        badge: "PRO",
+        section: "RADARS & ENGINES",
+        description: "Top 100 pure equity mutual fund scanner, pre-2:00 PM cutoff dip buying radar, and dual-tier NAV charts.",
+      },
+      {
         id: "announcements",
         name: "Corporate Catalysts",
         href: "/announcements",
@@ -109,6 +137,15 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
     title: "FAST OPPORTUNITY SCREENER",
     items: [
       {
+        id: "apex-confluence",
+        name: "Apex Confluence Radar",
+        href: "/apex-confluence",
+        icon: Award,
+        badge: "APEX",
+        section: "FAST OPPORTUNITY SCREENER",
+        description: "Institutional cross-engine confluence scanner: surfaces multi-signal alignment across VCP, Cup & Handle, Chart Patterns, Momentum & Delivery.",
+      },
+      {
         id: "techno-funda",
         name: "Techno-Funda Radar",
         href: "/techno-funda",
@@ -123,6 +160,42 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         icon: Zap,
         section: "FAST OPPORTUNITY SCREENER",
         description: "Stage-2 breakout leaders trading near 52-week highs with volume expansion.",
+      },
+      {
+        id: "cup-handle",
+        name: "Cup & Handle AI Engine",
+        href: "/cup-handle",
+        icon: GitBranch,
+        badge: "AI",
+        section: "FAST OPPORTUNITY SCREENER",
+        description: "8-stage AI gating: U-shape geometry, handle tightness, volume signature, RS rank, and fundamental overlay. Only high-conviction breakouts surfaced.",
+      },
+      {
+        id: "chart-patterns",
+        name: "Multi-Pattern Radar",
+        href: "/chart-patterns",
+        icon: Layers,
+        badge: "NEW",
+        section: "FAST OPPORTUNITY SCREENER",
+        description: "Institutional 5-pattern scanner: Flat Base, Double Bottom, Ascending Triangle, Bull Flag & High Tight Flag across 4000+ stocks.",
+      },
+      {
+        id: "candlestick-radar",
+        name: "Candlestick Radar",
+        href: "/candlestick-radar",
+        icon: Flame,
+        badge: "20 PATTERNS",
+        section: "FAST OPPORTUNITY SCREENER",
+        description: "Single, Double & Triple Candlestick Screener (Morning Star, Soldiers, Engulfing, Hammer) with volume confirmation.",
+      },
+      {
+        id: "ipo-radar",
+        name: "Mainboard IPO Radar",
+        href: "/ipo-radar",
+        icon: Rocket,
+        badge: "HOT",
+        section: "FAST OPPORTUNITY SCREENER",
+        description: "Institutional Blue-Sky Breakouts, IPO Base Cheats, SEBI 30D/90D Anchor Lock-in Exhaustion & Turnarounds.",
       },
       {
         id: "pre-breakout-radar",
@@ -234,6 +307,15 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         icon: Briefcase,
         section: "PORTFOLIO",
         description: "Portfolio risk decomposition, sector exposure, and capital weighting.",
+      },
+      {
+        id: "fx-swing-screener",
+        name: "FX Swing Screener",
+        href: "/portfolio/fx-swing-screener",
+        icon: Sliders,
+        badge: "HOT",
+        section: "PORTFOLIO",
+        description: "Institutional 12 FX indicator confluence screener generating tactical Buy / Sell swing signals on portfolio equities.",
       },
       {
         id: "swing-overlay",

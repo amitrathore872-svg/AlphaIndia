@@ -23,12 +23,14 @@ import {
   RefreshCw,
   List,
   LayoutGrid,
+  Flame,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { NAVIGATION_CONFIG, ALL_PAGES, isRouteProtected, NavItemConfig } from "@/config/navigationConfig";
 import { usePageVisibility } from "@/context/PageVisibilityContext";
 import { API_BASE } from "@/lib/apiConfig";
 import DhanFeedWidget from "@/components/common/DhanFeedWidget";
+import CompanyVelocityTab from "@/components/company/CompanyVelocityTab";
 
 interface CompanyItem {
   id: number;
@@ -58,7 +60,7 @@ export default function CompanyMasterPage() {
     isLoaded,
   } = usePageVisibility();
 
-  const [activeTab, setActiveTab] = useState<"pages" | "companies">("pages");
+  const [activeTab, setActiveTab] = useState<"pages" | "companies" | "velocity">("pages");
 
   // Page Master Filters
   const [pageSearch, setPageSearch] = useState("");
@@ -311,6 +313,21 @@ export default function CompanyMasterPage() {
             >
               <Database size={16} />
               Listed Equities Master (2,100+ Equities)
+            </button>
+
+            <button
+              onClick={() => setActiveTab("velocity")}
+              className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs sm:text-sm font-semibold transition ${
+                activeTab === "velocity"
+                  ? "border-amber-500 text-amber-600 dark:text-amber-400 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              }`}
+            >
+              <Flame size={16} className="text-amber-400" />
+              Velocity Burst Elite (VBE Intelligence)
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                Stage 16
+              </span>
             </button>
           </div>
         </div>
@@ -948,6 +965,11 @@ export default function CompanyMasterPage() {
             </div>
           </div>
         )}
+
+        {/* ========================================================= */}
+        {/* TAB 3: VELOCITY BURST ELITE (STAGE 16 DOSSIER)            */}
+        {/* ========================================================= */}
+        {activeTab === "velocity" && <CompanyVelocityTab />}
       </div>
     </DashboardLayout>
   );

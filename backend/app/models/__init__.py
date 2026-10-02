@@ -13,6 +13,7 @@ from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.models.screener_import_run import ScreenerImportRun
 from app.models.screener_import_event import ScreenerImportEvent
 from app.models.watchlist import Watchlist, WatchlistItem
+from app.models.watchlist_alert import WatchlistAlert, UserPersonalTelegramConfig
 from app.models.early_stage_candidate import EarlyStageCandidate
 from app.models.early_stage_temp_cache import EarlyStageTempCache
 from app.models.early_stage_daily import EarlyStageDaily
@@ -34,6 +35,12 @@ from app.models.mf_models import (
     MFSectorFlow,
     MFAccumulationSignal,
 )
+from app.models.mf_radar_models import (
+    MFRadarScheme,
+    MFRadarNavHistory,
+    MFRadarDipAlert,
+    MFRadarPortfolioHolding,
+)
 
 from app.models.notification import (
     SystemNotification,
@@ -52,6 +59,7 @@ from app.models.portfolio import (
     PortfolioHolding,
     PortfolioStockAnalysisCache,
 )
+from app.models.portfolio_signal_alert import PortfolioSignalAlert
 from app.models.swing_overlay import (
     SwingPosition,
     SwingQuantSignal,
@@ -61,6 +69,27 @@ from app.models.swing_overlay import (
 from app.models.user import User, UserSession
 from app.models.breakout_execution import BreakoutExecutionCandidate
 from app.models.cpr_models import CPRScannerDaily
+from app.models.momentum_radar_watchlist import MomentumRadarWatchlist
+from app.models.velocity_models import (
+    VelocityMarketRegime,
+    VelocitySleepingGiant,
+    VelocityCompression,
+    VelocityBasePattern,
+    VelocityInstitution,
+    VelocityRSRank,
+    VelocitySectorStrength,
+    VelocitySmartMoney,
+    VelocityLiquidity,
+    VelocityNewsRisk,
+    VelocityLiveSignal,
+    VelocityEntryQuality,
+    VelocityTradeManager,
+    VelocityBTST,
+    VelocitySignalHistory,
+    VelocityAlert,
+    VelocityBacktest,
+    VelocityLearning,
+)
 
 __all__ = [
     "User",
@@ -99,6 +128,10 @@ __all__ = [
     "MFStockMonthlyAggregate",
     "MFSectorFlow",
     "MFAccumulationSignal",
+    "MFRadarScheme",
+    "MFRadarNavHistory",
+    "MFRadarDipAlert",
+    "MFRadarPortfolioHolding",
     "SystemNotification",
     "AlertChannelConfig",
     "AlertDispatchLog",
@@ -116,4 +149,8 @@ __all__ = [
     "SwingStockProfile",
     "BreakoutExecutionCandidate",
     "CPRScannerDaily",
+    "WatchlistAlert",
+    "UserPersonalTelegramConfig",
+    "PortfolioSignalAlert",
+    "MomentumRadarWatchlist",
 ]

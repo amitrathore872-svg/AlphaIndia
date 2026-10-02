@@ -39,6 +39,12 @@ def send_tomorrow_picks_telegram():
             print("[!] No picks available to dispatch.")
             return
 
+        # 2.5 Check duplicate dispatch
+        top_symbols = ", ".join([p["symbol"] for p in picks])
+        if AlertDispatchService.is_duplicate_dispatch(db, channel="TELEGRAM", symbol=top_symbols, recipient=chat_id, cooldown_hours=4.0):
+            print(f"[!] Duplicate dispatch suppressed: {top_symbols} was already dispatched to {chat_id} within cooldown window.")
+            return
+
         nifty = res.get("nifty_benchmark", {})
         nifty_cmp = nifty.get("cmp", "N/A")
         nifty_regime = nifty.get("regime", "NEUTRAL")
@@ -67,6 +73,7 @@ def send_tomorrow_picks_telegram():
             sl = p.get("stop_loss", 0)
             exp_move = p.get("expected_move_pct", 5.0)
             rr = p.get("risk_reward", 1.6)
+            stock_urls = AlertDispatchService.get_stock_urls(sym)
 
             patterns = []
             if p.get("is_nr7"):
@@ -86,6 +93,7 @@ def send_tomorrow_picks_telegram():
                 f"• *Target 1:* ₹{t1} (+{exp_move}%) | *Stop Loss:* ₹{sl}",
                 f"• *Risk:Reward:* `1:{rr}`",
                 f"• *Setup:* {pattern_str}",
+                f"• {stock_urls['stock_360_md']} | {stock_urls['screener_md']}",
                 ""
             ])
 

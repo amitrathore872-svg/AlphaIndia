@@ -20,6 +20,7 @@ import {
   StockInstitutionalDetail,
   fetchStockInstitutionalDetail,
 } from "@/lib/institutionalApi";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
 interface StockInstitutionalModalProps {
   symbol: string | null;
@@ -101,6 +102,13 @@ export default function StockInstitutionalModal({
                   {data.action_zone.confidence}% Conviction
                 </span>
               </div>
+            )}
+            {data && (
+              <AddToWatchlistButton
+                symbol={symbol}
+                companyName={data.company.name || symbol}
+                variant="button"
+              />
             )}
             <button
               onClick={onClose}

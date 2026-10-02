@@ -28,10 +28,17 @@ class TechnoFundaService:
     """
 
     @classmethod
-    def calculate_technical_profile(cls, record: ScreenerGrowthRecord, yf_fast_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def calculate_technical_profile(
+        cls,
+        record: ScreenerGrowthRecord,
+        yf_fast_info: Optional[Dict[str, Any]] = None,
+        identified_pattern: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Calculates Stage 2 status, pivot resistance, distance to pivot,
         VCP base characteristics, RSI, setup score, and buy/sell signals.
+        Enriches metrics with institutional pattern signals (Cup & Handle, Ascending Triangle, etc.)
+        when detected.
         """
         cmp = record.current_price or 0.0
         dma_50 = record.dma_50 or (cmp * 0.96 if cmp else 0.0)
@@ -146,6 +153,57 @@ class TechnoFundaService:
         target_1 = round(scenario_trigger * 1.10, 2)
         target_2 = round(scenario_trigger * 1.20, 2)
 
+        # ── INSTITUTIONAL PATTERN OVERRIDE & BOOST ───────────────────────
+        if identified_pattern:
+            pat_lbl = identified_pattern.get("pattern_label")
+            pat_tag = identified_pattern.get("pattern_type")
+            pat_pivot = identified_pattern.get("pivot_buy_point")
+            pat_stop = identified_pattern.get("stop_loss")
+            pat_t1 = identified_pattern.get("target_1")
+            pat_t2 = identified_pattern.get("target_2")
+            pat_score = int(identified_pattern.get("score") or 70)
+            pat_tier = str(identified_pattern.get("conviction_tier") or "ACTIVE")
+
+            if pat_lbl:
+                pattern = pat_lbl
+            if pat_tag:
+                pattern_tag = pat_tag
+
+            if pat_pivot and float(pat_pivot) > 0:
+                pivot = round(float(pat_pivot), 2)
+                distance_to_pivot_pct = round(((pivot - cmp) / pivot) * 100, 2) if pivot > 0 else distance_to_pivot_pct
+
+            scenario_trigger = round(pivot * 1.005, 2)
+            scenario_distance = round(scenario_trigger - cmp, 2)
+
+            if pat_stop and float(pat_stop) > 0:
+                downside_ref = round(float(pat_stop), 2)
+                downside_pct = round(((cmp - downside_ref) / cmp) * 100, 2) if cmp > 0 else downside_pct
+
+            if pat_t1 and float(pat_t1) > 0:
+                target_1 = round(float(pat_t1), 2)
+            else:
+                target_1 = round(scenario_trigger * 1.10, 2)
+
+            if pat_t2 and float(pat_t2) > 0:
+                target_2 = round(float(pat_t2), 2)
+            else:
+                target_2 = round(scenario_trigger * 1.20, 2)
+
+            # Boost setup score based on institutional pattern conviction
+            pattern_boosted = int(round(pat_score * 0.92 + (8 if is_stage_2 else 0)))
+            setup_score = max(setup_score, min(99, pattern_boosted))
+
+            # Upgrade signal tier
+            if pat_score >= 80 and is_stage_2 and distance_to_pivot_pct <= 6.5:
+                signal = f"INSTITUTIONAL {pat_lbl.upper()} BREAKOUT"
+                signal_tier = "STRONG_BUY"
+                signal_color = "emerald"
+            elif pat_score >= 70 and distance_to_pivot_pct <= 6.5:
+                signal = f"{pat_lbl.upper()} COILING"
+                signal_tier = "PRE_BREAKOUT"
+                signal_color = "cyan"
+
         risk_amount = max(1.0, cmp - downside_ref)
         reward_amount = max(1.0, target_1 - cmp)
         risk_reward = round(reward_amount / risk_amount, 1)
@@ -173,6 +231,7 @@ class TechnoFundaService:
             "target_1": target_1,
             "target_2": target_2,
             "risk_reward": risk_reward,
+            "identified_pattern": identified_pattern,
         }
 
     @classmethod
@@ -219,18 +278,33 @@ class TechnoFundaService:
         # we compute profiling and sort in memory efficiently for up to 1000 candidates
         total_pool = query.limit(1000).all()
 
+        # Load unified pattern detections (Cup & Handle + Multi-Pattern engines)
+        try:
+            from app.services.pattern_engine.unified_pattern_service import UnifiedPatternService
+            patterns_map = UnifiedPatternService.get_all_patterns_map()
+        except Exception as e:
+            logger.debug(f"[TechnoFunda] Failed to load pattern map for screener: {e}")
+            patterns_map = {}
+
         results: List[Dict[str, Any]] = []
         for r in total_pool:
-            tech = cls.calculate_technical_profile(r)
+            sym_key = (r.symbol or "").strip().upper()
+            sym_patterns = patterns_map.get(sym_key, [])
+            primary_pattern = sym_patterns[0] if sym_patterns else None
+
+            tech = cls.calculate_technical_profile(r, identified_pattern=primary_pattern)
 
             # Apply signal filter
             if signal_filter and signal_filter.upper() != "ALL":
                 if tech["signal_tier"] != signal_filter.upper():
                     continue
 
-            # Apply pattern filter
+            # Apply pattern filter (supports VCP, NEAR_PIVOT, PULLBACK, CUP_WITH_HANDLE, ASCENDING_TRIANGLE, FLAT_BASE, DOUBLE_BOTTOM, etc.)
             if pattern_filter and pattern_filter.upper() != "ALL":
-                if tech["pattern_tag"] != pattern_filter.upper():
+                tgt = pattern_filter.upper()
+                matches_tag = (tech.get("pattern_tag") == tgt)
+                matches_identified = any(p.get("pattern_type") == tgt for p in sym_patterns)
+                if not (matches_tag or matches_identified):
                     continue
 
             # Apply max pivot distance filter
@@ -254,6 +328,10 @@ class TechnoFundaService:
                 "stock_pe": r.stock_pe,
                 "return_3m": r.return_3m,
                 "return_6m": r.return_6m,
+                "identified_pattern": primary_pattern,
+                "identified_pattern_type": primary_pattern.get("pattern_type") if primary_pattern else None,
+                "identified_pattern_label": primary_pattern.get("pattern_label") if primary_pattern else None,
+                "identified_pattern_score": primary_pattern.get("score") if primary_pattern else None,
                 **tech,
             }
             results.append(item)
@@ -324,19 +402,13 @@ class TechnoFundaService:
         yf_info: Dict[str, Any] = {}
         try:
             from app.services.live_price_service import LivePriceService
-            from app.services.yahoo_client import YahooClient
-            live_quote = LivePriceService.get_live_price(clean_sym, force_refresh=True, db=db)
-            if live_quote.get("cmp"):
+            live_quote = LivePriceService.get_live_price(clean_sym, force_refresh=False, db=db)
+            if live_quote and live_quote.get("cmp"):
                 yf_info["last_price"] = live_quote["cmp"]
-            if live_quote.get("year_high"):
+            if live_quote and live_quote.get("year_high"):
                 yf_info["year_high"] = live_quote["year_high"]
-            if live_quote.get("year_low"):
+            if live_quote and live_quote.get("year_low"):
                 yf_info["year_low"] = live_quote["year_low"]
-
-            ticker_obj = YahooClient.resolve_ticker(clean_sym)
-            fi = getattr(ticker_obj, "fast_info", None)
-            if fi and hasattr(fi, "fifty_day_average") and fi.fifty_day_average:
-                yf_info["dma_50"] = round(float(fi.fifty_day_average), 2)
         except Exception as e:
             logger.debug(f"Live quote fetch error in techno-funda for {clean_sym}: {e}")
 
@@ -346,13 +418,35 @@ class TechnoFundaService:
         if yf_info.get("dma_50"):
             record.dma_50 = yf_info["dma_50"]
 
-        tech = cls.calculate_technical_profile(record, yf_info)
+        # ── INSTITUTIONAL PATTERN DISCOVERY & INTEGRATION ─────────────────
+        patterns: List[Dict[str, Any]] = []
+        primary_pattern: Optional[Dict[str, Any]] = None
+        try:
+            from app.services.pattern_engine.unified_pattern_service import UnifiedPatternService
+            patterns = UnifiedPatternService.get_patterns_for_symbol(clean_sym, run_if_missing=True)
+            if patterns:
+                primary_pattern = patterns[0]
+        except Exception as e:
+            logger.debug(f"[TechnoFunda] Pattern resolution for {clean_sym}: {e}")
+
+        tech = cls.calculate_technical_profile(record, yf_info, identified_pattern=primary_pattern)
         cmp = tech["current_price"]
         pivot = tech["pivot_reference"]
         dist = tech["distance_to_pivot_pct"]
 
         # Structured Bullish Factors
         bullish_factors: List[str] = []
+
+        if primary_pattern:
+            bullish_factors.append(
+                f"Pattern Engine: Confirmed {primary_pattern['pattern_label']} setup "
+                f"({primary_pattern['conviction_tier']} Tier, AI Conviction {primary_pattern['score']}/100, "
+                f"Base Width {primary_pattern['width_weeks']}W, Contraction Depth {primary_pattern['depth_pct']}%). "
+                f"Breakout Pivot at Rs.{primary_pattern['pivot_buy_point']}."
+            )
+            if primary_pattern.get("summary_notes"):
+                bullish_factors.append(primary_pattern["summary_notes"])
+
         if dist <= 4.0:
             bullish_factors.append(f"Price is within {dist}% of the key pivot resistance zone (₹{pivot}).")
         else:
@@ -401,7 +495,14 @@ class TechnoFundaService:
         risk_factors.append("Broad market regime volatility may trigger sudden pivot rejections.")
 
         # Status Summary
-        if tech["setup_score"] >= 75:
+        if primary_pattern:
+            setup_status = f"{primary_pattern['pattern_label']} · {primary_pattern['conviction_tier']} Setup"
+            status_desc = (
+                f"Institutional {primary_pattern['pattern_label']} identified by algorithmic pattern radar. "
+                f"Consolidation base of {primary_pattern['depth_pct']}% depth over {primary_pattern['width_weeks']} weeks "
+                f"with clear breakout pivot at Rs.{tech['pivot_reference']} and trigger at Rs.{tech['scenario_trigger']}."
+            )
+        elif tech["setup_score"] >= 75:
             setup_status = "High Conviction Techno-Funda Setup"
             status_desc = "Setup displays prominent institutional characteristics: tight base contraction, sound fundamentals, and near-pivot positioning."
         elif tech["setup_score"] >= 60:
@@ -424,6 +525,8 @@ class TechnoFundaService:
             "status_desc": status_desc,
             "bullish_factors": bullish_factors,
             "risk_factors": risk_factors,
+            "identified_pattern": primary_pattern,
+            "identified_patterns": patterns,
             "technical": tech,
             "fundamentals": {
                 "health_score": record.health_score,
@@ -530,11 +633,390 @@ class TechnoFundaService:
                         "value": round(float(row["SMA_200"]), 2),
                     })
 
+            pattern_overlays = cls._build_pattern_overlays(clean_sym, candles)
+
             return {
                 "candles": candles,
                 "dma_50": dma_50_series,
                 "dma_200": dma_200_series,
+                "pattern_overlays": pattern_overlays,
             }
         except Exception as e:
             logger.error(f"Failed to fetch candles for {clean_sym}: {e}")
-            return {"candles": [], "dma_50": [], "dma_200": []}
+            return {"candles": [], "dma_50": [], "dma_200": [], "pattern_overlays": []}
+
+    @classmethod
+    def _build_pattern_overlays(cls, clean_sym: str, candles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Builds institutional pattern visualization geometry:
+        horizontal resistance/support lines, rising support trendlines,
+        pivot points, stop loss, profit targets, and inflection point markers.
+        """
+        overlays: List[Dict[str, Any]] = []
+        if not candles:
+            return overlays
+
+        latest_time = candles[-1]["time"]
+        latest_close = candles[-1]["close"]
+
+        # 1. Multi-Pattern Engine (Flat Base, Ascending Triangle, Double Bottom, Bull Flag, HTF)
+        try:
+            from app.services.pattern_engine.pattern_orchestrator import _CACHE as PATTERN_CACHE, analyze_all_patterns
+            cached_patterns = [p for p in PATTERN_CACHE.get("data", []) if p.get("symbol") == clean_sym]
+            if not cached_patterns:
+                cached_patterns = analyze_all_patterns(clean_sym)
+
+            for p in cached_patterns:
+                pt = p.get("pattern_type")
+                m = p.get("pattern_metrics", {})
+                pivot = float(p.get("pivot_buy_point") or 0.0)
+                stop_loss = float(p.get("stop_loss") or 0.0)
+                target_1 = float(p.get("target_1") or 0.0)
+                target_2 = float(p.get("target_2") or 0.0)
+                score = int(p.get("ai_conviction_score") or 0)
+                tier = str(p.get("conviction_tier") or "ACTIVE")
+                label = str(p.get("pattern_label") or pt)
+
+                h_lines = []
+                t_lines = []
+                markers = []
+
+                if pt == "ASCENDING_TRIANGLE":
+                    res_lvl = float(m.get("resistance_level") or pivot)
+                    h_lines.append({
+                        "id": "resistance",
+                        "price": res_lvl,
+                        "color": "#06b6d4",
+                        "lineWidth": 2,
+                        "lineStyle": 0,  # Solid
+                        "title": f"RESISTANCE (Rs.{res_lvl:.1f})",
+                    })
+                    if pivot and abs(pivot - res_lvl) > 0.5:
+                        h_lines.append({
+                            "id": "pivot",
+                            "price": pivot,
+                            "color": "#10b981",
+                            "lineWidth": 2,
+                            "lineStyle": 0,
+                            "title": f"PIVOT BUY POINT (Rs.{pivot:.1f})",
+                        })
+                    if stop_loss:
+                        h_lines.append({
+                            "id": "stop_loss",
+                            "price": stop_loss,
+                            "color": "#ef4444",
+                            "lineWidth": 1,
+                            "lineStyle": 2,  # Dashed
+                            "title": f"STOP LOSS (Rs.{stop_loss:.1f})",
+                        })
+                    if target_1:
+                        h_lines.append({
+                            "id": "target_1",
+                            "price": target_1,
+                            "color": "#10b981",
+                            "lineWidth": 1,
+                            "lineStyle": 1,  # Dotted
+                            "title": f"TARGET 1 (Rs.{target_1:.1f})",
+                        })
+                    if target_2:
+                        h_lines.append({
+                            "id": "target_2",
+                            "price": target_2,
+                            "color": "#059669",
+                            "lineWidth": 1,
+                            "lineStyle": 1,
+                            "title": f"TARGET 2 (Rs.{target_2:.1f})",
+                        })
+
+                    # Construct Rising Support Trendline:
+                    window_bars = min(len(candles), max(20, int(p.get("pattern_width_weeks", 6) * 5)))
+                    window_candles = candles[-window_bars:]
+                    if len(window_candles) >= 10:
+                        min_c = min(window_candles, key=lambda c: c["low"])
+                        start_time = min_c["time"]
+                        start_low = min_c["low"]
+                        slope = float(m.get("support_slope", 0.002))
+                        bars_elapsed = len(window_candles) - window_candles.index(min_c)
+                        proj_support = round(start_low * (1.0 + slope * bars_elapsed), 2)
+                        t_lines.append({
+                            "id": "rising_support",
+                            "title": "RISING SUPPORT",
+                            "color": "#10b981",
+                            "lineWidth": 2,
+                            "lineStyle": 2,  # Dashed
+                            "points": [
+                                {"time": start_time, "value": start_low},
+                                {"time": latest_time, "value": min(proj_support, latest_close * 1.02)},
+                            ],
+                        })
+                        markers.append({
+                            "time": start_time,
+                            "position": "belowBar",
+                            "color": "#10b981",
+                            "shape": "arrowUp",
+                            "text": f"SUPPORT BASE Rs.{start_low:.1f}",
+                        })
+
+                    markers.append({
+                        "time": latest_time,
+                        "position": "aboveBar",
+                        "color": "#06b6d4",
+                        "shape": "circle",
+                        "text": f"PIVOT Rs.{pivot:.1f}",
+                    })
+
+                elif pt == "FLAT_BASE":
+                    b_high = float(m.get("base_high") or pivot)
+                    b_low = float(m.get("base_low") or stop_loss)
+                    h_lines.append({
+                        "id": "base_high",
+                        "price": b_high,
+                        "color": "#06b6d4",
+                        "lineWidth": 2,
+                        "lineStyle": 0,
+                        "title": f"BASE TOP (Rs.{b_high:.1f})",
+                    })
+                    h_lines.append({
+                        "id": "base_low",
+                        "price": b_low,
+                        "color": "#3b82f6",
+                        "lineWidth": 2,
+                        "lineStyle": 0,
+                        "title": f"BASE SUPPORT (Rs.{b_low:.1f})",
+                    })
+                    if pivot and abs(pivot - b_high) > 0.5:
+                        h_lines.append({
+                            "id": "pivot",
+                            "price": pivot,
+                            "color": "#10b981",
+                            "lineWidth": 2,
+                            "lineStyle": 0,
+                            "title": f"PIVOT BUY (Rs.{pivot:.1f})",
+                        })
+                    if stop_loss:
+                        h_lines.append({
+                            "id": "stop_loss",
+                            "price": stop_loss,
+                            "color": "#ef4444",
+                            "lineWidth": 1,
+                            "lineStyle": 2,
+                            "title": f"STOP (Rs.{stop_loss:.1f})",
+                        })
+                    if target_1:
+                        h_lines.append({
+                            "id": "target_1",
+                            "price": target_1,
+                            "color": "#10b981",
+                            "lineWidth": 1,
+                            "lineStyle": 1,
+                            "title": f"TARGET 1 (Rs.{target_1:.1f})",
+                        })
+
+                    markers.append({
+                        "time": latest_time,
+                        "position": "aboveBar",
+                        "color": "#06b6d4",
+                        "shape": "arrowDown",
+                        "text": f"BASE PIVOT Rs.{pivot:.1f}",
+                    })
+
+                elif pt == "DOUBLE_BOTTOM":
+                    mid_p = float(m.get("mid_pivot") or pivot)
+                    l_low = float(m.get("left_low") or stop_loss)
+                    r_low = float(m.get("right_low") or stop_loss)
+                    h_lines.append({
+                        "id": "mid_pivot",
+                        "price": mid_p,
+                        "color": "#f59e0b",
+                        "lineWidth": 2,
+                        "lineStyle": 0,
+                        "title": f"W PIVOT (Rs.{mid_p:.1f})",
+                    })
+                    h_lines.append({
+                        "id": "w_lows",
+                        "price": min(l_low, r_low),
+                        "color": "#10b981",
+                        "lineWidth": 1,
+                        "lineStyle": 2,
+                        "title": f"W-BOTTOM (Rs.{min(l_low, r_low):.1f})",
+                    })
+                    if stop_loss:
+                        h_lines.append({
+                            "id": "stop_loss",
+                            "price": stop_loss,
+                            "color": "#ef4444",
+                            "lineWidth": 1,
+                            "lineStyle": 2,
+                            "title": f"STOP (Rs.{stop_loss:.1f})",
+                        })
+                    if target_1:
+                        h_lines.append({
+                            "id": "target_1",
+                            "price": target_1,
+                            "color": "#10b981",
+                            "lineWidth": 1,
+                            "lineStyle": 1,
+                            "title": f"TARGET 1 (Rs.{target_1:.1f})",
+                        })
+                    markers.append({
+                        "time": latest_time,
+                        "position": "aboveBar",
+                        "color": "#f59e0b",
+                        "shape": "circle",
+                        "text": f"W BREAKOUT Rs.{pivot:.1f}",
+                    })
+
+                elif pt in ("BULL_FLAG", "HIGH_TIGHT_FLAG"):
+                    f_top = float(m.get("flag_top") or pivot)
+                    f_bot = float(m.get("flag_bottom") or stop_loss)
+                    h_lines.append({
+                        "id": "flag_top",
+                        "price": f_top,
+                        "color": "#f59e0b",
+                        "lineWidth": 2,
+                        "lineStyle": 0,
+                        "title": f"FLAG RESISTANCE (Rs.{f_top:.1f})",
+                    })
+                    h_lines.append({
+                        "id": "flag_bot",
+                        "price": f_bot,
+                        "color": "#8b5cf6",
+                        "lineWidth": 2,
+                        "lineStyle": 2,
+                        "title": f"FLAG SUPPORT (Rs.{f_bot:.1f})",
+                    })
+                    if stop_loss:
+                        h_lines.append({
+                            "id": "stop_loss",
+                            "price": stop_loss,
+                            "color": "#ef4444",
+                            "lineWidth": 1,
+                            "lineStyle": 2,
+                            "title": f"STOP (Rs.{stop_loss:.1f})",
+                        })
+                    if target_1:
+                        h_lines.append({
+                            "id": "target_1",
+                            "price": target_1,
+                            "color": "#10b981",
+                            "lineWidth": 1,
+                            "lineStyle": 1,
+                            "title": f"TARGET 1 (Rs.{target_1:.1f})",
+                        })
+                    markers.append({
+                        "time": latest_time,
+                        "position": "aboveBar",
+                        "color": "#f59e0b",
+                        "shape": "arrowDown",
+                        "text": f"FLAG TRIGGER Rs.{pivot:.1f}",
+                    })
+
+                overlays.append({
+                    "pattern_type": pt,
+                    "pattern_label": label,
+                    "score": score,
+                    "conviction_tier": tier,
+                    "pivot_buy_point": pivot,
+                    "stop_loss": stop_loss,
+                    "target_1": target_1,
+                    "target_2": target_2,
+                    "horizontal_lines": h_lines,
+                    "trend_lines": t_lines,
+                    "markers": markers,
+                })
+        except Exception as e:
+            logger.debug(f"[TechnoFunda] Error extracting pattern engine overlays for {clean_sym}: {e}")
+
+        # 2. Cup & Handle Engine
+        try:
+            from app.services.cup_handle.cup_handle_orchestrator import _CACHE as CUP_CACHE
+            cup_items = [p for p in CUP_CACHE.get("data", []) if p.get("symbol") == clean_sym]
+            for p in cup_items:
+                cup = p.get("cup") or {}
+                handle = p.get("handle") or {}
+                pivot = float(p.get("pivot_buy_point") or 0.0)
+                rim = float(cup.get("right_rim") or cup.get("prior_high") or pivot)
+                cup_low = float(cup.get("cup_low") or 0.0)
+                h_high = float(handle.get("handle_high") or pivot)
+                h_low = float(handle.get("handle_low") or 0.0)
+                stop_loss = float(p.get("stop_loss_tight") or 0.0)
+                target_1 = float(p.get("target_1") or 0.0)
+                target_2 = float(p.get("target_2") or 0.0)
+                score = int(p.get("ai_conviction_score") or 0)
+                tier = str(p.get("conviction_tier") or "ACTIVE")
+
+                h_lines = []
+                markers = []
+
+                if rim:
+                    h_lines.append({
+                        "id": "cup_rim",
+                        "price": rim,
+                        "color": "#06b6d4",
+                        "lineWidth": 2,
+                        "lineStyle": 0,
+                        "title": f"CUP RIM (Rs.{rim:.1f})",
+                    })
+                if pivot:
+                    h_lines.append({
+                        "id": "handle_pivot",
+                        "price": pivot,
+                        "color": "#10b981",
+                        "lineWidth": 2,
+                        "lineStyle": 0,
+                        "title": f"HANDLE PIVOT (Rs.{pivot:.1f})",
+                    })
+                if cup_low:
+                    h_lines.append({
+                        "id": "cup_low",
+                        "price": cup_low,
+                        "color": "#8b5cf6",
+                        "lineWidth": 1,
+                        "lineStyle": 2,
+                        "title": f"CUP BASE (Rs.{cup_low:.1f})",
+                    })
+                if stop_loss:
+                    h_lines.append({
+                        "id": "stop_loss",
+                        "price": stop_loss,
+                        "color": "#ef4444",
+                        "lineWidth": 1,
+                        "lineStyle": 2,
+                        "title": f"STOP (Rs.{stop_loss:.1f})",
+                    })
+                if target_1:
+                    h_lines.append({
+                        "id": "target_1",
+                        "price": target_1,
+                        "color": "#10b981",
+                        "lineWidth": 1,
+                        "lineStyle": 1,
+                        "title": f"TARGET 1 (Rs.{target_1:.1f})",
+                    })
+
+                markers.append({
+                    "time": latest_time,
+                    "position": "aboveBar",
+                    "color": "#10b981",
+                    "shape": "arrowDown",
+                    "text": f"BUY POINT Rs.{pivot:.1f}",
+                })
+
+                overlays.append({
+                    "pattern_type": "CUP_HANDLE",
+                    "pattern_label": "Cup & Handle",
+                    "score": score,
+                    "conviction_tier": tier,
+                    "pivot_buy_point": pivot,
+                    "stop_loss": stop_loss,
+                    "target_1": target_1,
+                    "target_2": target_2,
+                    "horizontal_lines": h_lines,
+                    "trend_lines": [],
+                    "markers": markers,
+                })
+        except Exception as e:
+            logger.debug(f"[TechnoFunda] Error extracting cup_handle overlays for {clean_sym}: {e}")
+
+        from app.services.pattern_engine.pattern_core import sanitize_json
+        return [sanitize_json(o) for o in overlays]

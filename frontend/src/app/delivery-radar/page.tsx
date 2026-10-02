@@ -20,6 +20,10 @@ import {
   ExternalLink,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
+import PageHeader from "@/components/common/PageHeader";
+import KpiCard from "@/components/common/KpiCard";
+import EmptyState from "@/components/common/EmptyState";
 import {
   DeliveryOpportunity,
   DeliveryRadarMetadata,
@@ -97,122 +101,68 @@ export default function DeliveryRadarPage() {
     <DashboardLayout>
       <div className="space-y-4">
         {/* TOP BANNER & TITLE */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-200/80 bg-white/70 p-4 shadow-sm backdrop-blur-md dark:border-slate-800 dark:bg-[#0b1528]/80">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20">
-                <Flame size={18} />
-              </div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Delivery Breakout Radar
-              </h1>
-              <span className="rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-xs font-semibold text-purple-300">
-                DUAL-ENGINE: 70% APEX / 62% SWING
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Institutional delivery accumulation scanner across Apex Snipers, Active Swings, and Stealth Watchlist.
-            </p>
-          </div>
-
-          {/* Action: Run Live Scan */}
-          <div className="flex items-center gap-2">
+        <PageHeader
+          eyebrow="INSTITUTIONAL RADAR"
+          icon={<Flame className="w-5 h-5" />}
+          iconColor="emerald"
+          title="Delivery Breakout Radar"
+          badge={{ label: "INSTITUTIONAL APEX: 78% WIN RATE • MCAP ≥ ₹1,000 CR", color: "purple" }}
+          subtitle="Institutional float absorption engine with ticket size expansion, pre-breakout contraction, and dynamic buy/sell corridors (Price ≥ ₹40, MCap ≥ ₹1,000 Cr)."
+          actions={
             <button
               onClick={handleTriggerScan}
               disabled={scanning}
               className="flex items-center gap-2 rounded-lg bg-cyan-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500 active:scale-95 disabled:opacity-50"
             >
               <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
-              <span>{scanning ? "Scanning 2,290+ Equities..." : "Run Live Scan"}</span>
+              <span>{scanning ? "Scanning 1,400+ Quality Equities..." : "Run Live Scan"}</span>
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* TELEMETRY RIBBON */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {/* Card 1: Total Scanned */}
-          <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Equities Scanned</span>
-              <Layers size={14} className="text-slate-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-slate-900 dark:text-white">
-              {metadata?.total_scanned_symbols?.toLocaleString() || "2,296"}
-            </div>
-            <div className="mt-0.5 text-[10px] text-slate-400">
-              Session: {metadata?.latest_session_date || "Latest"}
-            </div>
-          </div>
-
-          {/* Card 2: Qualifying Setups */}
-          <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Active Radar Setups</span>
-              <Target size={14} className="text-cyan-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-cyan-500 dark:text-cyan-400">
-              {metadata?.qualifying_setups_count || totalCount}
-            </div>
-            <div className="mt-0.5 text-[10px] text-cyan-500/70">
-              {metadata?.confirmed_breakouts_count || 0} Breakouts | {metadata?.ema_pullback_count || 0} Retests
-            </div>
-          </div>
-
-          {/* Card 3: Apex Win Rate */}
-          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3 shadow-sm dark:border-purple-500/20 dark:bg-[#120f26]/60">
-            <div className="flex items-center justify-between text-purple-300">
-              <span className="text-xs font-medium">Apex Sniper WR</span>
-              <Crosshair size={14} className="text-purple-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-purple-300">
-              {metadata?.backtest_proven_stats?.win_rate_apex || "68% - 72%"}
-            </div>
-            <div className="mt-0.5 text-[10px] text-purple-400/80">
-              {metadata?.apex_sniper_count || 0} Ultra-Selective Setups
-            </div>
-          </div>
-
-          {/* Card 4: Active Swing WR */}
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 shadow-sm dark:border-emerald-500/20 dark:bg-[#0c1e1e]/60">
-            <div className="flex items-center justify-between text-emerald-300">
-              <span className="text-xs font-medium">Active Swing WR</span>
-              <Activity size={14} className="text-emerald-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-emerald-400">
-              {metadata?.backtest_proven_stats?.win_rate_swing || "60% - 62%"}
-            </div>
-            <div className="mt-0.5 text-[10px] text-emerald-500/80">
-              {metadata?.active_swing_count || 0} Setups (~5-8 / week)
-            </div>
-          </div>
-
-          {/* Card 5: BE Lock Efficiency */}
-          <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">BE Lock Saved</span>
-              <ShieldCheck size={14} className="text-amber-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-amber-500 dark:text-amber-400">
-              51.4%
-            </div>
-            <div className="mt-0.5 text-[10px] text-amber-500/70">
-              Losses Averted at +2.0%
-            </div>
-          </div>
-
-          {/* Card 6: Profit Factor */}
-          <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3 shadow-sm dark:border-slate-800/80 dark:bg-[#0b1528]/60">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium">Model R:R</span>
-              <Award size={14} className="text-indigo-400" />
-            </div>
-            <div className="mt-1.5 text-lg font-bold text-indigo-400">
-              {metadata?.backtest_proven_stats?.profit_factor || 1.68} PF
-            </div>
-            <div className="mt-0.5 text-[10px] text-indigo-400/70">
-              1:3.3 Apex / 1:3.1 Swing
-            </div>
-          </div>
+          <KpiCard
+            label="Equities Filtered"
+            value={metadata?.total_scanned_symbols?.toLocaleString() || "1,473"}
+            sub="MCap ≥ ₹1k Cr | Price ≥ ₹40"
+            icon={<Layers className="w-4 h-4 text-slate-400" />}
+          />
+          <KpiCard
+            label="Active Radar Setups"
+            value={metadata?.qualifying_setups_count || totalCount}
+            sub={`${metadata?.confirmed_breakouts_count || 0} Breakouts | ${metadata?.near_pivot_count || 0} Coiling`}
+            color="cyan"
+            icon={<Target className="w-4 h-4 text-cyan-400" />}
+          />
+          <KpiCard
+            label="Apex Sniper WR"
+            value={metadata?.backtest_proven_stats?.win_rate_apex || "75% - 78%"}
+            sub="PF 2.40 (525 Sessions Proven)"
+            color="purple"
+            icon={<Crosshair className="w-4 h-4 text-purple-400" />}
+          />
+          <KpiCard
+            label="Active Swing WR"
+            value={metadata?.backtest_proven_stats?.win_rate_swing || "65% - 70%"}
+            sub={`${metadata?.active_swing_count || 0} Core Swing Opportunities`}
+            color="emerald"
+            icon={<Activity className="w-4 h-4 text-emerald-400" />}
+          />
+          <KpiCard
+            label="BE Shield Saved"
+            value="32.7%"
+            sub="Losses Averted at +1.8%"
+            color="amber"
+            icon={<ShieldCheck className="w-4 h-4 text-amber-400" />}
+          />
+          <KpiCard
+            label="Model R:R"
+            value={`${metadata?.backtest_proven_stats?.profit_factor || 2.40} PF`}
+            sub={metadata?.backtest_proven_stats?.risk_reward || "1:3.0 Apex / 1:3.2 Swing"}
+            color="indigo"
+            icon={<Award className="w-4 h-4 text-indigo-400" />}
+          />
         </div>
 
         {/* TIER SELECTION TABS */}
@@ -326,11 +276,11 @@ export default function DeliveryRadarPage() {
                   setLookbackSessions(Number(e.target.value));
                   setPage(1);
                 }}
-                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white"
+                className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white cursor-pointer shadow-xs focus:outline-hidden focus:border-cyan-500"
               >
-                <option value={1}>Latest Session</option>
-                <option value={3}>Last 3 Sessions</option>
-                <option value={5}>Last 5 Sessions</option>
+                <option value={1} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Latest Session</option>
+                <option value={3} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Last 3 Sessions</option>
+                <option value={5} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Last 5 Sessions</option>
               </select>
             </div>
           </div>
@@ -346,12 +296,12 @@ export default function DeliveryRadarPage() {
                   setMinSpike(Number(e.target.value));
                   setPage(1);
                 }}
-                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white"
+                className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white cursor-pointer shadow-xs focus:outline-hidden focus:border-cyan-500"
               >
-                <option value={1.5}>1.5x</option>
-                <option value={1.8}>1.8x</option>
-                <option value={2.0}>2.0x</option>
-                <option value={2.5}>2.5x</option>
+                <option value={1.5} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">1.5x</option>
+                <option value={1.8} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">1.8x</option>
+                <option value={2.0} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">2.0x</option>
+                <option value={2.5} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">2.5x</option>
               </select>
             </div>
 
@@ -364,12 +314,12 @@ export default function DeliveryRadarPage() {
                   setMinDelivPer(Number(e.target.value));
                   setPage(1);
                 }}
-                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white"
+                className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 dark:border-slate-700/80 dark:bg-slate-900 dark:text-white cursor-pointer shadow-xs focus:outline-hidden focus:border-cyan-500"
               >
-                <option value={55}>55%</option>
-                <option value={60}>60%</option>
-                <option value={65}>65%</option>
-                <option value={70}>70%</option>
+                <option value={55} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">55%</option>
+                <option value={60} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">60%</option>
+                <option value={65} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">65%</option>
+                <option value={70} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">70%</option>
               </select>
             </div>
           </div>
@@ -381,16 +331,16 @@ export default function DeliveryRadarPage() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-400">
                 <tr>
-                  <th className="py-3 pl-4 pr-3">Equity / Symbol</th>
-                  <th className="px-3 py-3">Tier & Setup Structure</th>
-                  <th className="px-3 py-3 text-right">Price (₹)</th>
+                  <th className="py-3 pl-4 pr-3">Equity & MCap</th>
+                  <th className="px-3 py-3">Tier & Setup</th>
+                  <th className="px-3 py-3 text-right">CMP & Buy Status</th>
                   <th className="px-3 py-3 text-right">Day %</th>
                   <th className="px-3 py-3 text-center">Delivery %</th>
                   <th className="px-3 py-3 text-right">10D Spike</th>
-                  <th className="px-3 py-3 text-right">20D Flow (D-A/D)</th>
-                  <th className="px-3 py-3 text-right">Dry-up</th>
-                  <th className="px-3 py-3 text-center">RSI (14)</th>
-                  <th className="px-3 py-3 text-center">Conviction Score</th>
+                  <th className="px-3 py-3 text-right">Order Ticket</th>
+                  <th className="px-3 py-3 text-right">20D Flow</th>
+                  <th className="px-3 py-3 text-right">Base Squeeze</th>
+                  <th className="px-3 py-3 text-center">Conviction</th>
                   <th className="py-3 pl-3 pr-4 text-center">Execution Blueprint</th>
                 </tr>
               </thead>
@@ -401,22 +351,29 @@ export default function DeliveryRadarPage() {
                     <td colSpan={11} className="py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RefreshCw className="h-6 w-6 animate-spin text-cyan-500" />
-                        <span>Analyzing delivery accumulation and net institutional flow...</span>
+                        <span>Scanning institutional delivery footprints & float absorption...</span>
                       </div>
                     </td>
                   </tr>
                 ) : opportunities.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-500">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Target className="h-8 w-8 text-slate-400" />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">
-                          No Qualifying Setups for Selected Tier & Thresholds
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          Try switching to &apos;All Radar Signals&apos; or changing Lookback to &apos;Last 3 Sessions&apos;.
-                        </span>
-                      </div>
+                    <td colSpan={11} className="p-8">
+                      <EmptyState
+                        icon={<Target className="h-7 w-7 text-cyan-400" />}
+                        title="No Qualifying Setups for Selected Tier & Thresholds"
+                        description="Try switching to 'All Radar Signals' or changing Lookback to 'Last 3 Sessions'."
+                        action={
+                          <button
+                            onClick={() => {
+                              setSelectedTier("ALL");
+                              setLookbackSessions(3);
+                            }}
+                            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20"
+                          >
+                            Reset Tier & Lookback
+                          </button>
+                        }
+                      />
                     </td>
                   </tr>
                 ) : (
@@ -425,6 +382,7 @@ export default function DeliveryRadarPage() {
                     const isSwing = item.conviction_tier === "ACTIVE_SWING";
                     const isBreakout = item.setup_type === "50D_BREAKOUT";
                     const isRetest = item.setup_type === "EMA20_PULLBACK";
+                    const buyStatus = item.blueprint?.buy_status || "ACCUMULATION_BASE";
 
                     return (
                       <tr
@@ -444,13 +402,18 @@ export default function DeliveryRadarPage() {
                               <span>{item.symbol}</span>
                               <ExternalLink size={10} className="text-cyan-400 opacity-60 transition group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                             </a>
+                            {item.market_cap_cr && (
+                              <span className="rounded bg-indigo-500/10 px-1 py-0.2 font-mono text-[9px] font-bold text-indigo-400">
+                                ₹{item.market_cap_cr.toLocaleString("en-IN")} Cr
+                              </span>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             <a
                               href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="max-w-[140px] truncate text-[11px] text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300 transition hover:underline"
+                              className="max-w-[130px] truncate text-[11px] text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300 transition hover:underline"
                               title={`Open ${item.company_name} chart on TradingView`}
                             >
                               {item.company_name}
@@ -466,7 +429,7 @@ export default function DeliveryRadarPage() {
                           <div className="flex flex-wrap items-center gap-1">
                             {isApex ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/40 bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-bold text-purple-300">
-                                🎯 Apex Sniper
+                                🎯 Apex (78% WR)
                               </span>
                             ) : isSwing ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
@@ -497,9 +460,30 @@ export default function DeliveryRadarPage() {
                           </div>
                         </td>
 
-                        {/* 3. Price */}
-                        <td className="px-3 py-3 text-right font-medium text-slate-900 dark:text-white">
-                          ₹{item.current_price.toLocaleString("en-IN")}
+                        {/* 3. Price & Buy Zone Status */}
+                        <td className="px-3 py-3 text-right">
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            ₹{item.current_price.toLocaleString("en-IN")}
+                          </div>
+                          <div className="mt-0.5">
+                            {buyStatus === "IN_BUY_ZONE" ? (
+                              <span className="inline-flex rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-extrabold text-emerald-400">
+                                🟢 In Buy Zone
+                              </span>
+                            ) : buyStatus === "EXTENDED_WAIT_DIP" ? (
+                              <span className="inline-flex rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-400" title="Extended above pivot. Wait for dip to buy corridor.">
+                                🟡 Extended: Wait Dip
+                              </span>
+                            ) : buyStatus === "RETEST_CONFIRMED" ? (
+                              <span className="inline-flex rounded bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-bold text-cyan-400">
+                                🔵 Retest Bounced
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded bg-slate-800 px-1.5 py-0.2 text-[9px] font-medium text-slate-400">
+                                Base Accumulation
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 4. Day Change % */}
@@ -536,14 +520,28 @@ export default function DeliveryRadarPage() {
                           </span>
                         </td>
 
-                        {/* 7. 20D D-A/D Accumulation Flow */}
+                        {/* 7. Institutional Ticket Size Spike */}
+                        <td className="px-3 py-3 text-right font-mono">
+                          <span
+                            className={`rounded px-1.5 py-0.5 font-bold ${
+                              (item.ticket_spike_x || 1.0) >= 1.25
+                                ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {item.ticket_spike_x ? `${item.ticket_spike_x}x` : "1.0x"}
+                          </span>
+                          <div className="text-[9px] text-slate-400">Ticket Size</div>
+                        </td>
+
+                        {/* 8. 20D D-A/D Accumulation Flow */}
                         <td className="px-3 py-3 text-right">
                           <div className="inline-flex items-center gap-1 font-mono font-bold">
                             <span
                               className={`rounded px-1.5 py-0.5 text-xs ${
                                 (item.deliv_flow_20d || 1.0) >= 2.0
                                   ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40"
-                                  : (item.deliv_flow_20d || 1.0) >= 1.25
+                                  : (item.deliv_flow_20d || 1.0) >= 1.35
                                   ? "bg-cyan-500/20 text-cyan-400"
                                   : "bg-slate-800 text-slate-400"
                               }`}
@@ -556,24 +554,18 @@ export default function DeliveryRadarPage() {
                           </div>
                         </td>
 
-                        {/* 8. Dry-Up Ratio */}
+                        {/* 9. Pre-Breakout Base Squeeze */}
                         <td className="px-3 py-3 text-right font-mono">
                           <span
                             className={`rounded px-1.5 py-0.5 ${
-                              item.vol_dryup_ratio <= 1.0
-                                ? "bg-emerald-500/10 font-bold text-emerald-400"
+                              (item.range_contraction_ratio || 1.0) <= 0.88
+                                ? "bg-emerald-500/15 font-bold text-emerald-400"
                                 : "text-slate-400"
                             }`}
                           >
-                            {item.vol_dryup_ratio}
+                            {item.range_contraction_ratio ? `${item.range_contraction_ratio}x` : "1.0x"}
                           </span>
-                        </td>
-
-                        {/* 9. RSI (14) */}
-                        <td className="px-3 py-3 text-center font-mono">
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                            {item.rsi_14}
-                          </span>
+                          <div className="text-[9px] text-slate-400">5D/20D Squeeze</div>
                         </td>
 
                         {/* 10. Conviction Score */}
@@ -591,15 +583,23 @@ export default function DeliveryRadarPage() {
                           </span>
                         </td>
 
-                        {/* 11. Blueprint Action Button */}
+                        {/* 11. Blueprint & Watchlist Actions */}
                         <td className="py-3 pl-3 pr-4 text-center">
-                          <button
-                            onClick={() => setSelectedBlueprint(item)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-400 transition hover:bg-cyan-500 hover:text-white"
-                          >
-                            <Zap size={12} />
-                            <span>Trade Plan</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <AddToWatchlistButton
+                              symbol={item.symbol}
+                              companyName={item.company_name}
+                              currentPrice={item.current_price}
+                              variant="star"
+                            />
+                            <button
+                              onClick={() => setSelectedBlueprint(item)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-400 transition hover:bg-cyan-500 hover:text-white"
+                            >
+                              <Zap size={12} />
+                              <span>Trade Plan</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -631,10 +631,10 @@ export default function DeliveryRadarPage() {
                     <span
                       className={`rounded px-2 py-0.5 text-xs font-semibold ${
                         selectedBlueprint.conviction_tier === "APEX_SNIPER"
-                          ? "bg-purple-500/20 text-purple-300"
+                          ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30"
                           : selectedBlueprint.conviction_tier === "ACTIVE_SWING"
-                          ? "bg-emerald-500/20 text-emerald-300"
-                          : "bg-amber-500/20 text-amber-300"
+                          ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30"
+                          : "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
                       }`}
                     >
                       {selectedBlueprint.conviction_tier}
@@ -643,35 +643,80 @@ export default function DeliveryRadarPage() {
                       {selectedBlueprint.setup_type}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    <a
-                      href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(selectedBlueprint.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-cyan-400 hover:underline transition"
-                      title="Open chart on TradingView"
-                    >
-                      {selectedBlueprint.company_name}
-                    </a>
-                    {" | "}Expected Win Rate:{" "}
-                    <strong className="text-emerald-400">
-                      {selectedBlueprint.blueprint.win_rate_expectation || "60% - 63%"}
-                    </strong>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedBlueprint.company_name}</span>
+                    {selectedBlueprint.market_cap_cr && (
+                      <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-indigo-400">
+                        MCap: ₹{selectedBlueprint.market_cap_cr.toLocaleString("en-IN")} Cr
+                      </span>
+                    )}
+                    <span>•</span>
+                    <span>Win Rate Expectation:{" "}
+                      <strong className="text-emerald-400">
+                        {selectedBlueprint.blueprint.win_rate_expectation || "75% - 78% (Apex)"}
+                      </strong>
+                    </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => setSelectedBlueprint(null)}
-                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2">
+                  <AddToWatchlistButton
+                    symbol={selectedBlueprint.symbol}
+                    companyName={selectedBlueprint.company_name}
+                    currentPrice={selectedBlueprint.current_price || selectedBlueprint.blueprint.entry_price}
+                    variant="button"
+                  />
+                  <button
+                    onClick={() => setSelectedBlueprint(null)}
+                    className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               {/* Blueprint Details */}
               <div className="mt-4 space-y-4">
-                {/* 4-Phase Targets Grid with Breakeven Protection */}
+                {/* ZONE 1: BUY CORRIDOR & CHASE CEILING */}
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold uppercase tracking-wider text-cyan-400">Zone 1: Accumulation Corridor</span>
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                      selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
+                        ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40"
+                        : selectedBlueprint.blueprint.buy_status === "EXTENDED_WAIT_DIP"
+                        ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40"
+                        : "bg-cyan-500/20 text-cyan-300"
+                    }`}>
+                      {selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
+                        ? "🟢 In Optimal Buy Zone"
+                        : selectedBlueprint.blueprint.buy_status === "EXTENDED_WAIT_DIP"
+                        ? "🟡 Extended: Limit Order on Dip"
+                        : selectedBlueprint.blueprint.buy_status === "RETEST_CONFIRMED"
+                        ? "🔵 Retest Support Held"
+                        : "⚪ Base Accumulation"}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-black/30 p-2">
+                      <div className="text-[10px] text-slate-400">Pivot Level</div>
+                      <div className="font-mono text-sm font-bold text-white">₹{selectedBlueprint.blueprint.pivot_price || selectedBlueprint.blueprint.entry_price}</div>
+                    </div>
+                    <div className="rounded-lg bg-black/30 p-2">
+                      <div className="text-[10px] text-slate-400">Ideal Buy Corridor</div>
+                      <div className="font-mono text-sm font-bold text-emerald-400">
+                        ₹{selectedBlueprint.blueprint.buy_corridor_min || selectedBlueprint.blueprint.entry_price} – ₹{selectedBlueprint.blueprint.buy_corridor_max || selectedBlueprint.blueprint.entry_price}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-black/30 p-2">
+                      <div className="text-[10px] text-slate-400">Do Not Chase Above</div>
+                      <div className="font-mono text-sm font-bold text-amber-400">₹{selectedBlueprint.blueprint.max_chase_price || selectedBlueprint.blueprint.entry_price}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ZONE 2 & 3: 4-PHASE TARGETS & DEFENSE GRID */}
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-center">
-                  {/* 1. Stop Loss */}
+                  {/* Stop Loss (Structural Candle Low) */}
                   <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-2.5">
                     <div className="text-[10px] font-bold uppercase text-rose-400">
                       Stop Loss (-{selectedBlueprint.blueprint.risk_pct}%)
@@ -679,24 +724,24 @@ export default function DeliveryRadarPage() {
                     <div className="mt-1 text-base font-extrabold text-rose-500">
                       ₹{selectedBlueprint.blueprint.stop_loss}
                     </div>
-                    <div className="mt-0.5 text-[9px] text-rose-400/80">Hard Initial Stop</div>
+                    <div className="mt-0.5 text-[9px] text-rose-400/80">Candle Low Defense</div>
                   </div>
 
-                  {/* 2. Breakeven Trigger (51% Loss Reducer) */}
+                  {/* Breakeven Trigger (+1.8%) */}
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5">
                     <div className="text-[10px] font-bold uppercase text-amber-400">
-                      BE Trigger (+2.0%)
+                      BE Shield (+1.8%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-amber-300">
                       ₹{selectedBlueprint.blueprint.breakeven_trigger}
                     </div>
-                    <div className="mt-0.5 text-[9px] text-amber-400/80">Locks Stop to +0.4%</div>
+                    <div className="mt-0.5 text-[9px] text-amber-400/80">Lock Stop to Entry+0.4%</div>
                   </div>
 
-                  {/* 3. Target 1 */}
+                  {/* Target 1 (+4.2%) */}
                   <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5">
                     <div className="text-[10px] font-bold uppercase text-cyan-400">
-                      Target 1 (+5.0%)
+                      Target 1 (+4.2%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-cyan-400">
                       ₹{selectedBlueprint.blueprint.target_1}
@@ -704,15 +749,15 @@ export default function DeliveryRadarPage() {
                     <div className="mt-0.5 text-[9px] text-cyan-400/80">Book 50% Profit</div>
                   </div>
 
-                  {/* 4. Target 2 */}
+                  {/* Target 2 (+8.5%) */}
                   <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5">
                     <div className="text-[10px] font-bold uppercase text-emerald-400">
-                      Target 2 (+10.0%)
+                      Target 2 (+8.5%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-emerald-400">
                       ₹{selectedBlueprint.blueprint.target_2}
                     </div>
-                    <div className="mt-0.5 text-[9px] text-emerald-400/80">Apex Runner</div>
+                    <div className="mt-0.5 text-[9px] text-emerald-400/80">10 EMA Trailing Runner</div>
                   </div>
                 </div>
 
@@ -720,9 +765,9 @@ export default function DeliveryRadarPage() {
                 <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-xs dark:border-slate-800 dark:bg-slate-900/60">
                   <div className="grid grid-cols-2 gap-y-2 text-slate-600 dark:text-slate-300">
                     <div>
-                      <span className="text-slate-400">Suggested Entry:</span>{" "}
+                      <span className="text-slate-400">Current CMP:</span>{" "}
                       <span className="font-semibold text-slate-900 dark:text-white">
-                        ₹{selectedBlueprint.blueprint.entry_price} (CMP)
+                        ₹{selectedBlueprint.blueprint.entry_price}
                       </span>
                     </div>
                     <div>
@@ -744,6 +789,18 @@ export default function DeliveryRadarPage() {
                       </span>
                     </div>
                     <div>
+                      <span className="text-slate-400">Order Ticket Expansion:</span>{" "}
+                      <span className="font-mono font-bold text-purple-400">
+                        {selectedBlueprint.ticket_spike_x ? `${selectedBlueprint.ticket_spike_x}x 20D Mean` : "1.0x"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Pre-Breakout Squeeze:</span>{" "}
+                      <span className="font-mono font-bold text-cyan-400">
+                        {selectedBlueprint.range_contraction_ratio ? `${selectedBlueprint.range_contraction_ratio}x 5D/20D` : "1.0x"}
+                      </span>
+                    </div>
+                    <div>
                       <span className="text-slate-400">20D D-A/D Flow:</span>{" "}
                       <span className="font-mono font-bold text-cyan-400">
                         {selectedBlueprint.deliv_flow_20d ? `${selectedBlueprint.deliv_flow_20d}x Net Inflow` : "1.0x"}
@@ -762,7 +819,7 @@ export default function DeliveryRadarPage() {
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300/90">
                   <div className="flex items-center gap-1.5 font-bold text-amber-400">
                     <Info size={14} />
-                    <span>Breakeven Locking & Scaling Protocol</span>
+                    <span>Breakeven Locking & 10 EMA Trailing Protocol</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed">
                     {selectedBlueprint.blueprint.trail_rule}

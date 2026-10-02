@@ -7,6 +7,11 @@ import { fetchJson } from "@/lib/apiConfig";
 
 export interface TradeBlueprint {
   entry_price: number;
+  pivot_price?: number;
+  buy_corridor_min?: number;
+  buy_corridor_max?: number;
+  max_chase_price?: number;
+  buy_status?: "IN_BUY_ZONE" | "EXTENDED_WAIT_DIP" | "RETEST_CONFIRMED" | "ACCUMULATION_BASE" | string;
   stop_loss: number;
   breakeven_trigger: number;
   target_1: number;
@@ -18,12 +23,14 @@ export interface TradeBlueprint {
   recommended_slot_allocation: string;
   holding_horizon: string;
   trail_rule: string;
+  market_cap_cr?: number;
 }
 
 export interface DeliveryOpportunity {
   symbol: string;
   company_name: string;
   sector: string;
+  market_cap_cr?: number;
   signal_date: string;
   current_price: number;
   day_change_pct: number;
@@ -31,8 +38,13 @@ export interface DeliveryOpportunity {
   delivery_per: number;
   delivery_spike_x: number;
   deliv_flow_20d: number;
+  ticket_spike_x?: number;
+  range_contraction_ratio?: number;
+  deliv_cluster_5d?: number;
+  roc_60d?: number;
   dist_to_ema20_pct: number;
   close_location: number;
+  upper_wick_pct?: number;
   vol_dryup_ratio: number;
   rsi_14: number;
   "50d_high": number;
@@ -55,12 +67,14 @@ export interface DeliveryRadarMetadata {
   ema_pullback_count?: number;
   near_pivot_count: number;
   scan_duration_seconds: number;
+  filters_applied?: Record<string, string>;
   backtest_proven_stats: {
     win_rate_apex?: string;
     win_rate_swing?: string;
     profit_factor: number;
-    cagr_2y: number;
-    max_drawdown: number;
+    avg_net_pnl?: string;
+    cagr_2y?: number;
+    max_drawdown?: number;
     be_lock_efficiency?: string;
     sharpe?: number;
     risk_reward: string;

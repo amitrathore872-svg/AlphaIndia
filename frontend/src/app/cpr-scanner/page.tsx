@@ -7,6 +7,7 @@ import CPRDiscoveryCard from "@/components/cpr/CPRDiscoveryCard";
 import CPRBandVisualizer from "@/components/cpr/CPRBandVisualizer";
 import CPRDetailModal from "@/components/cpr/CPRDetailModal";
 import CPRTransitionRadar from "@/components/cpr/CPRTransitionRadar";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import {
   fetchCPRScannerResults,
   fetchCPRSummary,
@@ -259,18 +260,18 @@ export default function CPRScannerPage() {
         )}
 
         {/* Navigation Mode Switcher */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-800/80 pb-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 dark:border-slate-800/80 pb-3">
           <button
             onClick={() => setActiveTab("transitions")}
             className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition font-mono border ${
               activeTab === "transitions"
-                ? "bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-transparent border-cyan-500/60 text-cyan-300 shadow-lg shadow-cyan-950/50"
-                : "bg-slate-900/60 border-slate-800/80 text-slate-400 hover:text-white"
+                ? "bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-transparent border-cyan-500/60 text-cyan-800 dark:text-cyan-300 shadow-lg shadow-cyan-950/20"
+                : "bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-2xs"
             }`}
           >
-            <Compass className="h-4 w-4 text-cyan-400" />
+            <Compass className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
             Broad &rarr; Narrow Transition Radar (Multi-Timeframe)
-            <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[9px] text-cyan-300 font-bold border border-cyan-500/30">
+            <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[9px] text-cyan-800 dark:text-cyan-300 font-bold border border-cyan-500/30">
               USER SETUP
             </span>
           </button>
@@ -279,11 +280,11 @@ export default function CPRScannerPage() {
             onClick={() => setActiveTab("compression")}
             className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition font-mono border ${
               activeTab === "compression"
-                ? "bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-transparent border-cyan-500/60 text-cyan-300 shadow-lg shadow-cyan-950/50"
-                : "bg-slate-900/60 border-slate-800/80 text-slate-400 hover:text-white"
+                ? "bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-transparent border-cyan-500/60 text-cyan-800 dark:text-cyan-300 shadow-lg shadow-cyan-950/20"
+                : "bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-2xs"
             }`}
           >
-            <Layers className="h-4 w-4 text-cyan-400" />
+            <Layers className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
             Full Universe Compression Scanner (NSE ~3,500)
           </button>
         </div>
@@ -297,7 +298,7 @@ export default function CPRScannerPage() {
         {activeTab === "compression" && (
           <>
             {/* Filters & Control Panel */}
-            <div className="rounded-2xl border border-slate-800 bg-[#070D18]/90 p-4 shadow-lg backdrop-blur-md space-y-4">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070D18]/90 p-4 shadow-sm dark:shadow-lg backdrop-blur-md space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             {/* Search Input */}
             <div className="relative flex-1 max-w-md">
@@ -310,7 +311,7 @@ export default function CPRScannerPage() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="w-full rounded-xl border border-slate-700/80 bg-slate-900/80 py-2 pl-9 pr-4 text-xs font-mono text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-xl border border-slate-300 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-900/80 py-2 pl-9 pr-4 text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 shadow-2xs"
               />
             </div>
 
@@ -323,8 +324,8 @@ export default function CPRScannerPage() {
                 }}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
                   tripleCprOnly
-                    ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-md shadow-amber-950/40"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-300 shadow-md shadow-amber-950/20"
+                    : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-2xs"
                 }`}
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -338,8 +339,8 @@ export default function CPRScannerPage() {
                 }}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
                   volumeDryupOnly
-                    ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-md shadow-cyan-950/40"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-800 dark:text-cyan-300 shadow-md shadow-cyan-950/20"
+                    : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-2xs"
                 }`}
               >
                 <Activity className="h-3.5 w-3.5" />
@@ -353,8 +354,8 @@ export default function CPRScannerPage() {
                 }}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
                   bullishTrendOnly
-                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-950/40"
-                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-800 dark:text-emerald-300 shadow-md shadow-emerald-950/20"
+                    : "bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-2xs"
                 }`}
               >
                 <TrendingUp className="h-3.5 w-3.5" />
@@ -364,17 +365,17 @@ export default function CPRScannerPage() {
           </div>
 
           {/* Granular Sliders and Selects */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 border-t border-slate-800/80 pt-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 border-t border-slate-200 dark:border-slate-800/80 pt-3">
             {/* Category Select */}
             <div>
-              <label className="text-[11px] uppercase font-bold text-slate-400 block mb-1">Compression Tier</label>
+              <label className="text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-1">Compression Tier</label>
               <select
                 value={selectedCategory}
                 onChange={(e) => {
                   setSelectedCategory(e.target.value);
                   setPage(1);
                 }}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-mono text-white focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-white focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
                 <option value="ALL">All Categories</option>
                 <option value="Ultra Compression">Ultra Compression (&lt;0.10%)</option>
@@ -386,14 +387,14 @@ export default function CPRScannerPage() {
 
             {/* Min Market Cap Select */}
             <div>
-              <label className="text-[11px] uppercase font-bold text-slate-400 block mb-1">Min Market Cap</label>
+              <label className="text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-1">Min Market Cap</label>
               <select
                 value={minMarketCapCr}
                 onChange={(e) => {
                   setMinMarketCapCr(Number(e.target.value));
                   setPage(1);
                 }}
-                className="w-full rounded-lg border border-emerald-500/40 bg-slate-900 px-3 py-1.5 text-xs font-mono text-emerald-300 font-bold focus:border-emerald-500 focus:outline-none"
+                className="w-full rounded-lg border border-emerald-500/40 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-emerald-700 dark:text-emerald-300 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
               >
                 <option value={1000}>≥ ₹1,000 Cr (Institutional)</option>
                 <option value={2500}>≥ ₹2,500 Cr</option>
@@ -404,14 +405,14 @@ export default function CPRScannerPage() {
 
             {/* Penny Stock Filter Select */}
             <div>
-              <label className="text-[11px] uppercase font-bold text-slate-400 block mb-1">Penny Filter</label>
+              <label className="text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-1">Penny Filter</label>
               <select
                 value={minPrice}
                 onChange={(e) => {
                   setMinPrice(Number(e.target.value));
                   setPage(1);
                 }}
-                className="w-full rounded-lg border border-cyan-500/40 bg-slate-900 px-3 py-1.5 text-xs font-mono text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-lg border border-cyan-500/40 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-cyan-700 dark:text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
                 <option value={30}>No Penny (≥ ₹30)</option>
                 <option value={50}>Price ≥ ₹50</option>
@@ -422,14 +423,14 @@ export default function CPRScannerPage() {
 
             {/* Market Cap Category */}
             <div>
-              <label className="text-[11px] uppercase font-bold text-slate-400 block mb-1">Market Cap Tier</label>
+              <label className="text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-1">Market Cap Tier</label>
               <select
                 value={selectedMarketCap}
                 onChange={(e) => {
                   setSelectedMarketCap(e.target.value);
                   setPage(1);
                 }}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-mono text-white focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-white focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
                 <option value="ALL">All Market Caps</option>
                 <option value="LARGE">Large Cap (&gt;₹20,000 Cr)</option>
@@ -441,8 +442,8 @@ export default function CPRScannerPage() {
             {/* CPR Width Slider */}
             <div>
               <div className="flex justify-between items-center mb-1 text-[11px]">
-                <span className="uppercase font-bold text-slate-400">Max CPR Width %</span>
-                <span className="font-mono font-bold text-cyan-400">{maxWidth.toFixed(2)}%</span>
+                <span className="uppercase font-bold text-slate-500 dark:text-slate-400">Max CPR Width %</span>
+                <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">{maxWidth.toFixed(2)}%</span>
               </div>
               <input
                 type="range"
@@ -454,15 +455,15 @@ export default function CPRScannerPage() {
                   setMaxWidth(parseFloat(e.target.value));
                   setPage(1);
                 }}
-                className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg"
               />
             </div>
 
             {/* Min Compression Score Slider */}
             <div>
               <div className="flex justify-between items-center mb-1 text-[11px]">
-                <span className="uppercase font-bold text-slate-400">Min Compression Score</span>
-                <span className="font-mono font-bold text-cyan-400">{minScore} pts</span>
+                <span className="uppercase font-bold text-slate-500 dark:text-slate-400">Min Compression Score</span>
+                <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">{minScore} pts</span>
               </div>
               <input
                 type="range"
@@ -474,22 +475,22 @@ export default function CPRScannerPage() {
                   setMinScore(parseInt(e.target.value));
                   setPage(1);
                 }}
-                className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg"
               />
             </div>
           </div>
         </div>
 
         {/* Data Table */}
-        <div className="rounded-2xl border border-slate-800 bg-[#070D18]/90 overflow-hidden shadow-xl backdrop-blur-md">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#070D18]/90 overflow-hidden shadow-xs dark:shadow-xl backdrop-blur-md">
           {/* Table Toolbar */}
-          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-3.5 bg-slate-900/40">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-5 py-3.5 bg-slate-50/80 dark:bg-slate-900/40">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-bold text-slate-300">
+              <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
                 Displaying {items.length} of {totalCount.toLocaleString()} stocks
               </span>
               {selectedCategory !== "ALL" && (
-                <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400 font-mono">
+                <span className="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] text-slate-600 dark:text-slate-400 font-mono">
                   {selectedCategory}
                 </span>
               )}
@@ -505,11 +506,11 @@ export default function CPRScannerPage() {
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-800 bg-[#050B14] text-[11px] font-mono uppercase text-slate-400 tracking-wider">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-[#050B14] text-[11px] font-mono uppercase text-slate-600 dark:text-slate-400 tracking-wider">
                 <tr>
                   <th
                     onClick={() => handleSort("cpr_rank")}
-                    className="cursor-pointer px-4 py-3 hover:text-white"
+                    className="cursor-pointer px-4 py-3 hover:text-slate-900 dark:hover:text-white"
                   >
                     <div className="flex items-center gap-1">
                       Rank <ArrowUpDown className="h-3 w-3" />
@@ -518,7 +519,7 @@ export default function CPRScannerPage() {
                   <th className="px-4 py-3">Symbol</th>
                   <th
                     onClick={() => handleSort("current_price")}
-                    className="cursor-pointer px-4 py-3 hover:text-white"
+                    className="cursor-pointer px-4 py-3 hover:text-slate-900 dark:hover:text-white"
                   >
                     <div className="flex items-center gap-1">
                       CMP <ArrowUpDown className="h-3 w-3" />
@@ -527,7 +528,7 @@ export default function CPRScannerPage() {
                   <th className="px-4 py-3">Sector</th>
                   <th
                     onClick={() => handleSort("cpr_width_pct")}
-                    className="cursor-pointer px-4 py-3 hover:text-white"
+                    className="cursor-pointer px-4 py-3 hover:text-slate-900 dark:hover:text-white"
                   >
                     <div className="flex items-center gap-1">
                       CPR Width % <ArrowUpDown className="h-3 w-3" />
@@ -535,7 +536,7 @@ export default function CPRScannerPage() {
                   </th>
                   <th
                     onClick={() => handleSort("compression_score")}
-                    className="cursor-pointer px-4 py-3 hover:text-white text-center"
+                    className="cursor-pointer px-4 py-3 hover:text-slate-900 dark:hover:text-white text-center"
                   >
                     <div className="flex items-center justify-center gap-1">
                       Comp Score <ArrowUpDown className="h-3 w-3" />
@@ -543,7 +544,7 @@ export default function CPRScannerPage() {
                   </th>
                   <th
                     onClick={() => handleSort("breakout_score")}
-                    className="cursor-pointer px-4 py-3 hover:text-white text-center"
+                    className="cursor-pointer px-4 py-3 hover:text-slate-900 dark:hover:text-white text-center"
                   >
                     <div className="flex items-center justify-center gap-1">
                       Breakout Score <ArrowUpDown className="h-3 w-3" />
@@ -555,13 +556,13 @@ export default function CPRScannerPage() {
                   <th className="px-4 py-3 text-center">CPR Band Visual</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono">
                 {loading ? (
                   <tr>
                     <td colSpan={11} className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-                        <span className="text-xs text-slate-400">Loading CPR universe...</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Loading CPR universe...</span>
                       </div>
                     </td>
                   </tr>
@@ -580,49 +581,58 @@ export default function CPRScannerPage() {
                       <tr
                         key={stock.id}
                         onClick={() => setSelectedSymbol(stock.symbol)}
-                        className="hover:bg-slate-800/40 cursor-pointer transition"
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition"
                       >
                         {/* 1. Rank */}
-                        <td className="px-4 py-3 text-slate-400 font-bold">
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-bold">
                           #{stock.cpr_rank}
                         </td>
 
                         {/* 2. Symbol */}
                         <td className="px-4 py-3">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-white hover:text-cyan-400 transition flex items-center gap-1.5">
-                              {stock.symbol}
-                              {stock.is_triple_cpr && (
-                                <span title="Triple CPR Compression">
-                                  <Sparkles className="h-3 w-3 text-amber-400" />
-                                </span>
-                              )}
-                            </span>
-                            <Link
-                              href={`/techno-funda/${encodeURIComponent(stock.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[10px] text-slate-400 hover:text-cyan-300 hover:underline truncate max-w-[140px] inline-block transition-colors"
-                              title={`Open ${stock.company_name} in Techno-Funda Radar`}
-                            >
-                              {stock.company_name}
-                            </Link>
+                          <div className="flex items-center gap-2">
+                            <AddToWatchlistButton
+                              symbol={stock.symbol}
+                              companyName={stock.company_name}
+                              currentPrice={stock.current_price}
+                              sector={stock.sector}
+                              defaultThesis={`CPR Compression: Width ${stock.cpr_width_pct.toFixed(2)}%, Comp Score ${stock.compression_score}/100, Breakout Score ${stock.breakout_score}/100. TC: ₹${stock.tc.toFixed(1)}, Pivot: ₹${stock.pivot.toFixed(1)}, BC: ₹${stock.bc.toFixed(1)}`}
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-bold text-slate-900 dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 transition flex items-center gap-1.5">
+                                {stock.symbol}
+                                {stock.is_triple_cpr && (
+                                  <span title="Triple CPR Compression">
+                                    <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-400" />
+                                  </span>
+                                )}
+                              </span>
+                              <Link
+                                href={`/techno-funda/${encodeURIComponent(stock.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-cyan-700 dark:hover:text-cyan-300 hover:underline truncate max-w-[140px] inline-block transition-colors"
+                                title={`Open ${stock.company_name} in Techno-Funda Radar`}
+                              >
+                                {stock.company_name}
+                              </Link>
+                            </div>
                           </div>
                         </td>
 
                         {/* 3. CMP */}
-                        <td className="px-4 py-3 font-bold text-slate-200">
+                        <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200">
                           ₹{stock.current_price.toFixed(2)}
                         </td>
 
                         {/* 4. Sector */}
-                        <td className="px-4 py-3 text-slate-400 text-[11px] truncate max-w-[120px]">
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-[11px] truncate max-w-[120px]">
                           {stock.sector}
                         </td>
 
                         {/* 5. CPR Width % */}
-                        <td className="px-4 py-3 font-bold text-cyan-400">
+                        <td className="px-4 py-3 font-bold text-cyan-700 dark:text-cyan-400">
                           {stock.cpr_width_pct.toFixed(3)}%
                         </td>
 
@@ -631,10 +641,10 @@ export default function CPRScannerPage() {
                           <span
                             className={`inline-block px-2 py-0.5 rounded font-black text-xs ${
                               stock.compression_score >= 80
-                                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40"
                                 : stock.compression_score >= 60
-                                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
-                                : "bg-slate-800 text-slate-400"
+                                ? "bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 border border-indigo-500/40"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-transparent"
                             }`}
                           >
                             {stock.compression_score}
@@ -646,10 +656,10 @@ export default function CPRScannerPage() {
                           <span
                             className={`inline-block px-2 py-0.5 rounded font-black text-xs ${
                               stock.breakout_score >= 80
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40"
                                 : stock.breakout_score >= 60
-                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                : "bg-slate-800 text-slate-400"
+                                ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-transparent"
                             }`}
                           >
                             {stock.breakout_score}
@@ -661,10 +671,10 @@ export default function CPRScannerPage() {
                           <span
                             className={`rounded-md px-2 py-0.5 text-[10px] font-bold border ${
                               isUltra
-                                ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/40"
+                                ? "bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/40"
                                 : isVeryStrong
-                                ? "bg-indigo-500/15 text-indigo-300 border-indigo-500/40"
-                                : "bg-slate-800 text-slate-400 border-slate-700"
+                                ? "bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border-indigo-500/40"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                             }`}
                           >
                             {stock.category}
@@ -675,22 +685,22 @@ export default function CPRScannerPage() {
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1 flex-wrap">
                             {stock.is_nr7 && (
-                              <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold">
+                              <span className="rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold">
                                 NR7
                               </span>
                             )}
                             {stock.is_inside_bar && (
-                              <span className="rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-bold">
+                              <span className="rounded bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 border border-indigo-500/40 px-1.5 py-0.5 text-[9px] font-bold">
                                 Inside
                               </span>
                             )}
                             {stock.is_volume_dryup && (
-                              <span className="rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.5 text-[9px] font-bold">
+                              <span className="rounded bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 px-1.5 py-0.5 text-[9px] font-bold">
                                 VolDry
                               </span>
                             )}
                             {stock.is_supertrend_bullish && (
-                              <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold">
+                              <span className="rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold">
                                 ST+
                               </span>
                             )}
@@ -700,8 +710,8 @@ export default function CPRScannerPage() {
                         {/* 10. Trade Plan */}
                         <td className="px-4 py-3 text-[11px]">
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-emerald-400 font-bold">Buy: ₹{stock.entry_price.toFixed(2)}</span>
-                            <div className="flex gap-2 text-[10px] text-slate-400">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Buy: ₹{stock.entry_price.toFixed(2)}</span>
+                            <div className="flex gap-2 text-[10px] text-slate-500 dark:text-slate-400">
                               <span>SL: ₹{stock.stop_loss.toFixed(2)}</span>
                               <span>T1: ₹{stock.target1.toFixed(2)}</span>
                             </div>
@@ -728,22 +738,22 @@ export default function CPRScannerPage() {
           </div>
 
           {/* Pagination Footer */}
-          <div className="flex items-center justify-between border-t border-slate-800 bg-[#050B14] px-5 py-3.5">
-            <span className="text-xs text-slate-400 font-mono">
+          <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#050B14] px-5 py-3.5">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
               Total {totalCount.toLocaleString()} stocks evaluated
             </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 transition"
+                className="flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 transition shadow-2xs"
               >
                 <ChevronLeft className="h-4 w-4" /> Previous
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 transition"
+                className="flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 transition shadow-2xs"
               >
                 Next <ChevronRight className="h-4 w-4" />
               </button>

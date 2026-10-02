@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useTransition } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import {
   fetchTechnoFundaScreener,
   fetchTechnoFundaSummary,
@@ -211,6 +212,39 @@ export default function TechnoFundaPage() {
               </button>
 
               <button
+                onClick={() => handleQuickFilter("pattern", "CUP_WITH_HANDLE")}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  patternFilter === "CUP_WITH_HANDLE"
+                    ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                    : "bg-slate-800/80 text-amber-300 hover:bg-slate-800 border border-amber-500/30"
+                }`}
+              >
+                <span>Cup & Handle</span>
+              </button>
+
+              <button
+                onClick={() => handleQuickFilter("pattern", "ASCENDING_TRIANGLE")}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  patternFilter === "ASCENDING_TRIANGLE"
+                    ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "bg-slate-800/80 text-cyan-300 hover:bg-slate-800 border border-cyan-500/30"
+                }`}
+              >
+                <span>Ascending Triangle</span>
+              </button>
+
+              <button
+                onClick={() => handleQuickFilter("pattern", "FLAT_BASE")}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  patternFilter === "FLAT_BASE"
+                    ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/20"
+                    : "bg-slate-800/80 text-teal-300 hover:bg-slate-800 border border-teal-500/30"
+                }`}
+              >
+                <span>Flat Base</span>
+              </button>
+
+              <button
                 onClick={() => handleQuickFilter("pattern", "VCP")}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   patternFilter === "VCP"
@@ -310,6 +344,12 @@ export default function TechnoFundaPage() {
                       {/* SYMBOL */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          <AddToWatchlistButton
+                            symbol={item.symbol}
+                            companyName={item.company_name}
+                            currentPrice={item.current_price}
+                            variant="star"
+                          />
                           <Link href={`/techno-funda/${item.symbol}`} className="block">
                             <span className="font-bold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition hover:underline">
                               {item.symbol}
@@ -372,9 +412,23 @@ export default function TechnoFundaPage() {
 
                       {/* PATTERN */}
                       <td className="px-3 py-3 font-sans">
-                        <span className="rounded bg-slate-800/80 px-2 py-0.5 text-[11px] text-slate-300 border border-slate-700">
-                          {item.pattern}
-                        </span>
+                        {item.identified_pattern_label ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-1 rounded bg-cyan-500/10 px-2 py-0.5 text-[11px] font-bold text-cyan-300 border border-cyan-500/30">
+                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                              {item.identified_pattern_label}
+                            </span>
+                            {item.identified_pattern_score ? (
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                AI Conv: <strong className="text-emerald-400">{item.identified_pattern_score}%</strong>
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="rounded bg-slate-800/80 px-2 py-0.5 text-[11px] text-slate-300 border border-slate-700">
+                            {item.pattern}
+                          </span>
+                        )}
                       </td>
 
                       {/* SETUP SCORE */}

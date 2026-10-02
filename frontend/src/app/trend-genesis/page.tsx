@@ -30,6 +30,11 @@ import {
   Award,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import {
+  PageHeader,
+  ActionButton,
+} from "@/components/common";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
 // ============================================================================
 // Types
@@ -310,65 +315,41 @@ export default function TrendGenesisRadarMockup() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-[#050B14] text-slate-100 p-4 md:p-6 space-y-6">
+      <div className="space-y-5">
         {/* ==================================================================== */}
         {/* Top Header */}
         {/* ==================================================================== */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 via-cyan-500/10 to-transparent border border-emerald-500/30 text-emerald-400 shadow-lg shadow-emerald-500/10">
-                <Flame className="w-6 h-6 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                    Trend Genesis Radar
-                    <span className="text-xs px-2 py-0.5 rounded-md font-mono font-semibold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      Early Ignition Engine
-                    </span>
-                  </h1>
-                </div>
-                <p className="text-xs md:text-sm text-slate-400">
-                  Catching Stage-2 trends at the <span className="text-emerald-300 font-medium">ignition moment</span> off the 50-EMA base, long before the retail pivot breakout.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab("RADAR")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                activeTab === "RADAR"
-                  ? "bg-emerald-500 text-black font-semibold shadow-md shadow-emerald-500/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
-              }`}
-            >
-              Opportunity Grid
-            </button>
-            <button
-              onClick={() => setActiveTab("CASE_STUDY")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                activeTab === "CASE_STUDY"
-                  ? "bg-cyan-500 text-black font-semibold shadow-md shadow-cyan-500/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
-              }`}
-            >
-              Welspun Living Blueprint
-            </button>
-            <button
-              onClick={() => setActiveTab("BLUEPRINT")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                activeTab === "BLUEPRINT"
-                  ? "bg-amber-500 text-black font-semibold shadow-md shadow-amber-500/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
-              }`}
-            >
-              System Logic & Math
-            </button>
-          </div>
-        </div>
+        <PageHeader
+          icon={<Flame className="w-5 h-5" />}
+          iconColor="emerald"
+          title="Trend Genesis Radar"
+          badge={{ label: "EARLY IGNITION ENGINE", color: "emerald" }}
+          subtitle={
+            <>Catching Stage-2 trends at the <span className="text-emerald-300 font-medium">ignition moment</span> off the 50-EMA base, long before the retail pivot breakout.</>
+          }
+          actions={
+            <>
+              <ActionButton
+                onClick={() => setActiveTab("RADAR")}
+                variant={activeTab === "RADAR" ? "primary" : "secondary"}
+              >
+                Opportunity Grid
+              </ActionButton>
+              <ActionButton
+                onClick={() => setActiveTab("CASE_STUDY")}
+                variant={activeTab === "CASE_STUDY" ? "primary" : "secondary"}
+              >
+                Welspun Living Blueprint
+              </ActionButton>
+              <ActionButton
+                onClick={() => setActiveTab("BLUEPRINT")}
+                variant={activeTab === "BLUEPRINT" ? "primary" : "secondary"}
+              >
+                System Logic & Math
+              </ActionButton>
+            </>
+          }
+        />
 
         {/* ==================================================================== */}
         {/* KPI Telemetry Banner */}
@@ -498,6 +479,12 @@ export default function TrendGenesisRadarMockup() {
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2.5">
+                            <AddToWatchlistButton
+                              symbol={candidate.symbol}
+                              companyName={candidate.name}
+                              currentPrice={candidate.cmp}
+                              variant="star"
+                            />
                             <span className="text-base font-bold font-mono text-white group-hover:text-emerald-400 transition-colors">
                               {candidate.symbol}
                             </span>
@@ -699,6 +686,15 @@ export default function TrendGenesisRadarMockup() {
                       </span>
                       . If the stock breaks below the low of the volume spike, you exit immediately with negligible damage.
                     </p>
+                  </div>
+
+                  <div className="pt-1">
+                    <AddToWatchlistButton
+                      symbol={selectedCandidate.symbol}
+                      companyName={selectedCandidate.name}
+                      currentPrice={selectedCandidate.cmp}
+                      variant="button"
+                    />
                   </div>
                 </div>
               ) : (

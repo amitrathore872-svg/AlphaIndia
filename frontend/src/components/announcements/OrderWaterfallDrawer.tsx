@@ -54,60 +54,60 @@ export default function OrderWaterfallDrawer({
   return (
     <div className="flex flex-col gap-5 text-xs">
       {/* ── SECTION 1: Executive Sizing Summary ───────────────────── */}
-      <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
-        <div className="flex items-center justify-between border-b border-amber-500/20 pb-2.5 mb-3">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-400">
+      <div className="rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-950/20 p-4">
+        <div className="flex items-center justify-between border-b border-amber-200 dark:border-amber-500/20 pb-2.5 mb-3">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
             <Coins size={14} />
             <span>Order Value & Execution Sizing</span>
           </div>
-          <span className="font-mono text-xs font-black text-white">
+          <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
             ₹{dealValue.toLocaleString("en-IN")} Cr
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 font-mono">
-          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800">
-            <span className="text-[10px] text-slate-400 font-sans block">Revenue Contribution</span>
-            <span className="text-amber-300 font-bold text-sm mt-0.5 block">
+          <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">Revenue Contribution</span>
+            <span className="text-amber-600 dark:text-amber-300 font-bold text-sm mt-0.5 block">
               +{item.synergy_rev_pct_ttm ? item.synergy_rev_pct_ttm.toFixed(1) : 12}%
             </span>
-            <span className="text-[9px] text-slate-500 font-sans block">of TTM Sales</span>
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-sans block">of TTM Sales</span>
           </div>
 
-          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800">
-            <span className="text-[10px] text-slate-400 font-sans block">Execution Runway</span>
-            <span className="text-cyan-300 font-bold text-sm mt-0.5 block">
+          <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">Execution Runway</span>
+            <span className="text-cyan-700 dark:text-cyan-300 font-bold text-sm mt-0.5 block">
               {executionMonths} Months
             </span>
-            <span className="text-[9px] text-slate-500 font-sans block">{quarters} Quarters</span>
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-sans block">{quarters} Quarters</span>
           </div>
 
-          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800">
-            <span className="text-[10px] text-slate-400 font-sans block">Run-rate / Quarter</span>
-            <span className="text-emerald-300 font-bold text-sm mt-0.5 block">
+          <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">Run-rate / Quarter</span>
+            <span className="text-emerald-700 dark:text-emerald-300 font-bold text-sm mt-0.5 block">
               +₹{quarterlyRev.toLocaleString("en-IN")} Cr
             </span>
-            <span className="text-[9px] text-emerald-400/80 font-sans block">Quarterly Accretion</span>
+            <span className="text-[9px] text-emerald-600 dark:text-emerald-400/80 font-sans block">Quarterly Accretion</span>
           </div>
 
-          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800">
-            <span className="text-[10px] text-slate-400 font-sans block">EBITDA Margin</span>
-            <span className="text-purple-300 font-bold text-sm mt-0.5 block">
+          <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">EBITDA Margin</span>
+            <span className="text-purple-700 dark:text-purple-300 font-bold text-sm mt-0.5 block">
               {opm}%
             </span>
-            <span className="text-[9px] text-purple-400/80 font-sans block">Modeled Operating Margin</span>
+            <span className="text-[9px] text-purple-600 dark:text-purple-400/80 font-sans block">Modeled Operating Margin</span>
           </div>
         </div>
       </div>
 
       {/* ── SECTION 2: Quarterly Realization Waterfall ───────────── */}
-      <div className="rounded-xl border border-slate-800 bg-[#071322] p-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-cyan-400">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-[#071322] p-4">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5 mb-3">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
             <Calendar size={13} />
             <span>Quarterly Revenue Realization Waterfall ({quarters} Quarters)</span>
           </div>
-          <span className="text-[10px] font-mono text-slate-400">
+          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
             Linear Execution Cadence
           </span>
         </div>
@@ -115,7 +115,7 @@ export default function OrderWaterfallDrawer({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-mono">
             <thead>
-              <tr className="border-b border-slate-800 text-[10px] font-sans uppercase text-slate-400">
+              <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-sans uppercase text-slate-500 dark:text-slate-400">
                 <th className="py-2 px-2">Quarter</th>
                 <th className="py-2 px-2">Timeline</th>
                 <th className="py-2 px-2 text-right">Revenue (₹ Cr)</th>
@@ -124,15 +124,15 @@ export default function OrderWaterfallDrawer({
                 <th className="py-2 px-2 text-right">Cumulative</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
               {quarterlySchedule.map((q) => (
-                <tr key={q.quarter} className="hover:bg-slate-900/50 transition-colors">
-                  <td className="py-2 px-2 font-bold text-cyan-300">{q.quarter}</td>
-                  <td className="py-2 px-2 text-slate-400 font-sans text-[11px]">{q.timeline}</td>
-                  <td className="py-2 px-2 text-right text-emerald-300 font-semibold">+₹{q.revCr.toLocaleString("en-IN")}</td>
-                  <td className="py-2 px-2 text-right text-purple-300">+₹{q.ebitdaCr.toLocaleString("en-IN")}</td>
-                  <td className="py-2 px-2 text-right text-cyan-200">+₹{q.patCr.toLocaleString("en-IN")}</td>
-                  <td className="py-2 px-2 text-right text-slate-300">
+                <tr key={q.quarter} className="hover:bg-slate-100/80 dark:hover:bg-slate-900/50 transition-colors">
+                  <td className="py-2 px-2 font-bold text-cyan-700 dark:text-cyan-300">{q.quarter}</td>
+                  <td className="py-2 px-2 text-slate-600 dark:text-slate-400 font-sans text-[11px]">{q.timeline}</td>
+                  <td className="py-2 px-2 text-right text-emerald-700 dark:text-emerald-300 font-semibold">+₹{q.revCr.toLocaleString("en-IN")}</td>
+                  <td className="py-2 px-2 text-right text-purple-700 dark:text-purple-300">+₹{q.ebitdaCr.toLocaleString("en-IN")}</td>
+                  <td className="py-2 px-2 text-right text-cyan-700 dark:text-cyan-200">+₹{q.patCr.toLocaleString("en-IN")}</td>
+                  <td className="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
                     ₹{q.cumulativeRev.toLocaleString("en-IN")} <span className="text-[10px] text-slate-500 font-sans">({q.cumulativePct}%)</span>
                   </td>
                 </tr>
@@ -143,54 +143,54 @@ export default function OrderWaterfallDrawer({
       </div>
 
       {/* ── SECTION 3: Sensitivity Scenario Matrix ───────────────── */}
-      <div className="rounded-xl border border-slate-800 bg-[#071322] p-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-emerald-400">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-[#071322] p-4">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5 mb-3">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             <BarChart3 size={13} />
             <span>Margin Sensitivity & Target Price Realization</span>
           </div>
-          <span className="text-[10px] font-sans text-slate-400">3-Case Scenario</span>
+          <span className="text-[10px] font-sans text-slate-500 dark:text-slate-400">3-Case Scenario</span>
         </div>
 
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 font-mono">
           {/* Bear Case */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-            <div className="flex justify-between items-center text-[10px] font-sans text-slate-400 font-semibold uppercase mb-1">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 p-3 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-sans text-slate-500 dark:text-slate-400 font-semibold uppercase mb-1">
               <span>Bear Case (10% OPM)</span>
-              <span className="text-amber-400">Low</span>
+              <span className="text-amber-600 dark:text-amber-400">Low</span>
             </div>
-            <div className="text-base font-bold text-slate-200">
+            <div className="text-base font-bold text-slate-900 dark:text-slate-200">
               ₹{item.order_target_price_low ? item.order_target_price_low.toLocaleString("en-IN") : "—"}
             </div>
-            <div className="text-[10px] text-slate-400 font-sans mt-1">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-sans mt-1">
               Conservative multiple with raw material cost escalation.
             </div>
           </div>
 
           {/* Base Case */}
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-3">
-            <div className="flex justify-between items-center text-[10px] font-sans text-emerald-400 font-bold uppercase mb-1">
+          <div className="rounded-lg border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-sans text-emerald-600 dark:text-emerald-400 font-bold uppercase mb-1">
               <span>Base Case (14% OPM)</span>
-              <span className="text-emerald-300">Expected</span>
+              <span className="text-emerald-700 dark:text-emerald-300">Expected</span>
             </div>
-            <div className="text-base font-black text-emerald-300">
+            <div className="text-base font-black text-emerald-700 dark:text-emerald-300">
               ₹{item.target_price ? item.target_price.toLocaleString("en-IN") : "—"}
             </div>
-            <div className="text-[10px] text-emerald-400/90 font-sans mt-1">
+            <div className="text-[10px] text-emerald-600 dark:text-emerald-400/90 font-sans mt-1">
               +{item.upside_pct || 32}% upside ({item.order_upside_prob_pct || 82}% probability).
             </div>
           </div>
 
           {/* Bull Case */}
-          <div className="rounded-lg border border-cyan-500/30 bg-cyan-950/20 p-3">
-            <div className="flex justify-between items-center text-[10px] font-sans text-cyan-400 font-bold uppercase mb-1">
+          <div className="rounded-lg border border-cyan-300 dark:border-cyan-500/30 bg-cyan-50/60 dark:bg-cyan-950/20 p-3 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-sans text-cyan-600 dark:text-cyan-400 font-bold uppercase mb-1">
               <span>Bull Case (18% OPM)</span>
-              <span className="text-cyan-300">Rerating</span>
+              <span className="text-cyan-700 dark:text-cyan-300">Rerating</span>
             </div>
-            <div className="text-base font-bold text-cyan-300">
+            <div className="text-base font-bold text-cyan-700 dark:text-cyan-300">
               ₹{item.order_target_price_high ? item.order_target_price_high.toLocaleString("en-IN") : "—"}
             </div>
-            <div className="text-[10px] text-cyan-400/90 font-sans mt-1">
+            <div className="text-[10px] text-cyan-600 dark:text-cyan-400/90 font-sans mt-1">
               Operating leverage unblocks multiple expansion.
             </div>
           </div>
@@ -199,28 +199,28 @@ export default function OrderWaterfallDrawer({
 
       {/* ── SECTION 4: Historical Order Benchmark ──────────────────── */}
       {item.order_historical_comparison && (
-        <div className="rounded-xl border border-slate-800 bg-[#071322] p-4">
-          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-purple-400 mb-2">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-[#071322] p-4">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">
             <Compass size={13} />
             <span>Order Book Dynamics & Historical Context</span>
           </div>
-          <p className="text-xs text-slate-200 leading-relaxed font-sans">
+          <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-sans">
             {item.order_historical_comparison}
           </p>
 
           {histStats && histStats.prior_wins_count > 0 && (
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center font-mono text-[11px] pt-2 border-t border-slate-800">
-              <div className="bg-slate-950/60 rounded p-1.5">
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center font-mono text-[11px] pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded p-1.5 shadow-xs">
                 <span className="text-[9px] text-slate-500 font-sans block">12M Wins Tracked</span>
-                <span className="font-bold text-white">{histStats.prior_wins_count} Orders</span>
+                <span className="font-bold text-slate-900 dark:text-white">{histStats.prior_wins_count} Orders</span>
               </div>
-              <div className="bg-slate-950/60 rounded p-1.5">
+              <div className="bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded p-1.5 shadow-xs">
                 <span className="text-[9px] text-slate-500 font-sans block">Average Win Size</span>
-                <span className="font-bold text-amber-300">₹{histStats.avg_deal_cr} Cr</span>
+                <span className="font-bold text-amber-600 dark:text-amber-300">₹{histStats.avg_deal_cr} Cr</span>
               </div>
-              <div className="bg-slate-950/60 rounded p-1.5">
+              <div className="bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded p-1.5 shadow-xs">
                 <span className="text-[9px] text-slate-500 font-sans block">Total 12M Backlog Inflows</span>
-                <span className="font-bold text-emerald-300">₹{histStats.total_12m_cr} Cr</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-300">₹{histStats.total_12m_cr} Cr</span>
               </div>
             </div>
           )}
@@ -232,7 +232,7 @@ export default function OrderWaterfallDrawer({
         <div className="pt-2">
           <Link
             href={`/announcements/${item.id}`}
-            className="flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 py-2.5 px-4 font-bold text-slate-950 text-xs shadow-lg shadow-cyan-950/40 hover:from-cyan-400 hover:to-emerald-400 transition-all group"
+            className="flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 dark:from-cyan-500 dark:to-emerald-500 py-2.5 px-4 font-bold text-white dark:text-slate-950 text-xs shadow-lg shadow-cyan-950/20 hover:from-cyan-500 hover:to-emerald-500 transition-all group"
           >
             <span>Open Full Institutional Deep Dive Page</span>
             <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />

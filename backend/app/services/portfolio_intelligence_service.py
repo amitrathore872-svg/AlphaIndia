@@ -259,13 +259,120 @@ class PortfolioIntelligenceService:
         return True
 
     @classmethod
+    def import_holdings_file(
+        cls,
+        db: Session,
+        portfolio_id: int,
+        file_bytes: bytes,
+        filename: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Unified file importer for stock portfolios.
+        Supports Excel workbooks (.xlsx, .xls), CSV, and TSV from Zerodha, Groww, Angel One.
+        Auto-detects Mutual Fund statements and routes them to MFPortfolioService.
+        """
+        import openpyxl
+        is_excel = filename.lower().endswith((".xlsx", ".xls")) or file_bytes[:4] == b"PK\x03\x04"
+
+        # Check if this is a Mutual Funds statement
+        # Check text or sheets for mutual fund keywords
+        if is_excel:
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                all_text = " ".join(wb.sheetnames).lower()
+                for s in wb.sheetnames[:3]:
+                    rows = list(wb[s].iter_rows(values_only=True))
+                    for r in rows[:25]:
+                        all_text += " " + " ".join([str(c).lower() for c in r if c is not None])
+                
+                if "mutual fund" in all_text or "p&l statement for mutual funds" in all_text or any(k in all_text for k in ["inf2", "inf0", "inf8", "inf9", "inf1"]):
+                    from app.services.mf_radar.mf_portfolio_service import MFPortfolioService
+                    mf_res = MFPortfolioService.import_holdings_excel(db, file_bytes, replace_existing=False)
+                    tot = mf_res.get("added_count", 0) + mf_res.get("updated_count", 0)
+                    return {
+                        "success": True,
+                        "added_count": mf_res.get("added_count", 0),
+                        "updated_count": mf_res.get("updated_count", 0),
+                        "skipped_count": mf_res.get("skipped_count", 0),
+                        "errors": mf_res.get("errors", []),
+                        "is_mutual_fund": True,
+                        "message": f"Mutual Fund statement detected! Successfully synced {tot} holdings ({mf_res.get('added_count', 0)} added, {mf_res.get('updated_count', 0)} updated) in your Mutual Fund Radar Portfolio.",
+                    }
+
+                # Otherwise extract rows from Excel for equity import
+                first_sheet = wb.active or wb[wb.sheetnames[0]]
+                csv_lines = []
+                for row in first_sheet.iter_rows(values_only=True):
+                    if any(row):
+                        csv_lines.append(",".join([f'"{str(c)}"' if c is not None else '""' for c in row]))
+                csv_content = "\n".join(csv_lines)
+                return cls.import_holdings_csv(db, portfolio_id, csv_content)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "added_count": 0,
+                    "skipped_count": 0,
+                    "errors": [f"Could not parse Excel workbook: {str(e)}"],
+                }
+        else:
+            text = file_bytes.decode("utf-8", errors="ignore")
+            # Check if text is a Mutual Fund statement
+            text_lower = text.lower()
+            if "p&l statement for mutual funds" in text_lower or ("symbol" in text_lower and "isin" in text_lower and "inf" in text_lower):
+                from app.services.mf_radar.mf_portfolio_service import MFPortfolioService
+                mf_res = MFPortfolioService.import_holdings_csv(db, text, replace_existing=False)
+                tot = mf_res.get("added_count", 0) + mf_res.get("updated_count", 0)
+                return {
+                    "success": True,
+                    "added_count": mf_res.get("added_count", 0),
+                    "updated_count": mf_res.get("updated_count", 0),
+                    "skipped_count": mf_res.get("skipped_count", 0),
+                    "errors": mf_res.get("errors", []),
+                    "is_mutual_fund": True,
+                    "message": f"Mutual Fund statement detected! Successfully synced {tot} holdings ({mf_res.get('added_count', 0)} added, {mf_res.get('updated_count', 0)} updated) in your Mutual Fund Radar Portfolio.",
+                }
+            return cls.import_holdings_csv(db, portfolio_id, text)
+
+    @classmethod
     def import_holdings_csv(cls, db: Session, portfolio_id: int, csv_content: str) -> Dict[str, Any]:
         """
-        Parses CSV supporting standard, Zerodha Kite, Groww, and Angel One formats.
-        Supports columns like "Instrument", "Qty.", "Avg. cost", "LTP", "Invested", etc.
+        Parses CSV supporting standard, Zerodha Kite, Zerodha Equity P&L, Groww, and Angel One formats.
+        Supports columns like "Instrument", "Qty.", "Avg. cost", "Open Quantity", "Open Value", "LTP", "Invested", etc.
+        Skips broker preamble banners automatically.
         """
         import re
-        reader = csv.DictReader(io.StringIO(csv_content.strip()))
+        if not csv_content or not csv_content.strip():
+            return {"success": False, "added_count": 0, "skipped_count": 0, "errors": ["Content is empty"]}
+
+        # Auto-detect if this is a Mutual Funds statement pasted as CSV
+        text_lower = csv_content[:1500].lower()
+        if "p&l statement for mutual funds" in text_lower or ("symbol" in text_lower and "isin" in text_lower and "inf" in text_lower):
+            from app.services.mf_radar.mf_portfolio_service import MFPortfolioService
+            mf_res = MFPortfolioService.import_holdings_csv(db, csv_content, replace_existing=False)
+            return {
+                "success": True,
+                "added_count": mf_res.get("added_count", 0),
+                "updated_count": mf_res.get("updated_count", 0),
+                "skipped_count": mf_res.get("skipped_count", 0),
+                "errors": mf_res.get("errors", []),
+                "is_mutual_fund": True,
+                "message": f"Mutual Fund statement detected! Successfully imported {mf_res.get('added_count', 0)} holdings into your Mutual Fund Radar Portfolio.",
+            }
+
+        lines = [l for l in csv_content.strip().splitlines() if l.strip()]
+        header_idx = -1
+        for idx, line in enumerate(lines[:60]):
+            line_lower = line.lower()
+            if any(k in line_lower for k in ["instrument", "symbol", "stock", "tradingsymbol", "ticker", "scrip"]) and any(q in line_lower for q in ["qty", "quantity", "shares", "open quantity", "avg. cost", "buy price", "cost"]):
+                header_idx = idx
+                break
+
+        if header_idx == -1:
+            header_idx = 0
+
+        clean_csv = "\n".join(lines[header_idx:])
+        delimiter = "\t" if ("\t" in lines[header_idx] and "," not in lines[header_idx]) else ","
+        reader = csv.DictReader(io.StringIO(clean_csv), delimiter=delimiter)
         added_count = 0
         skipped_count = 0
         errors = []
@@ -280,20 +387,24 @@ class PortfolioIntelligenceService:
             symbol = None
             for key in ["instrument", "symbol", "stock", "tradingsymbol", "ticker", "scrip"]:
                 if key in cleaned and cleaned[key]:
-                    symbol = cleaned[key].upper().replace(".NS", "").replace(".BO", "").strip()
-                    break
+                    val = cleaned[key].upper().replace(".NS", "").replace(".BO", "").strip()
+                    if not any(val.lower().startswith(bad) for bad in ["total", "subtotal", "#ref"]):
+                        symbol = val
+                        break
 
-            if not symbol:
+            if not symbol or len(symbol) < 2:
                 skipped_count += 1
                 continue
 
-            # 2. Identify quantity column ("Qty.", "Qty", "Quantity", "Shares", etc.)
+            # 2. Identify quantity column (prioritize Open Quantity for Zerodha P&L)
             quantity = 0.0
-            for key in ["qty", "quantity", "shares", "availableqty", "netqty", "units"]:
+            for key in ["openquantity", "openqty", "qty", "quantity", "shares", "availableqty", "netqty", "units"]:
                 if key in cleaned and cleaned[key]:
                     try:
-                        quantity = float(cleaned[key].replace(",", ""))
-                        break
+                        q = float(cleaned[key].replace(",", ""))
+                        if q > 0:
+                            quantity = q
+                            break
                     except ValueError:
                         pass
 
@@ -302,10 +413,24 @@ class PortfolioIntelligenceService:
             for key in ["avgcost", "avgcostprice", "buyprice", "avgprice", "price", "avgbuyprice", "costprice"]:
                 if key in cleaned and cleaned[key]:
                     try:
-                        price = float(cleaned[key].replace(",", "").replace("₹", ""))
-                        break
+                        p = float(cleaned[key].replace(",", "").replace("₹", ""))
+                        if p > 0:
+                            price = p
+                            break
                     except ValueError:
                         pass
+
+            # Fallback for Zerodha P&L where Open Value & Open Quantity are present
+            if price <= 0 and quantity > 0:
+                for key in ["openvalue", "openval", "buyvalue", "invested", "costvalue", "totalcost"]:
+                    if key in cleaned and cleaned[key]:
+                        try:
+                            val = float(cleaned[key].replace(",", "").replace("₹", ""))
+                            if val > 0:
+                                price = round(val / quantity, 2)
+                                break
+                        except ValueError:
+                            pass
 
             if quantity <= 0 or price <= 0:
                 skipped_count += 1
@@ -313,11 +438,13 @@ class PortfolioIntelligenceService:
 
             # 4. Identify LTP / CMP if present in the broker export
             ltp = 0.0
-            for key in ["ltp", "cmp", "lastprice"]:
+            for key in ["previousclosingprice", "previousclosingp", "previousclosing", "ltp", "cmp", "lastprice", "closingprice"]:
                 if key in cleaned and cleaned[key]:
                     try:
-                        ltp = float(cleaned[key].replace(",", "").replace("₹", ""))
-                        break
+                        c = float(cleaned[key].replace(",", "").replace("₹", ""))
+                        if c > 0:
+                            ltp = c
+                            break
                     except ValueError:
                         pass
 
@@ -325,7 +452,6 @@ class PortfolioIntelligenceService:
             if ltp > 0:
                 comp = db.query(Company).filter(Company.symbol == symbol).first()
                 if not comp:
-                    # Create company record if missing so it links seamlessly
                     comp = Company(symbol=symbol, company=symbol, exchange="NSE")
                     db.add(comp)
                     db.commit()

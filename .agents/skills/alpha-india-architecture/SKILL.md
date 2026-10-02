@@ -158,6 +158,11 @@ AlphaIndia/
 - **Telemetry**: Heartbeat polled every 5 seconds by the Next.js frontend (`/mission-control/heartbeat`).
 - **Engine States**: Tracks status of Discovery Engine, Warehouse Import, Financial Audit, Growth Engine, and AI Scoring.
 
+### F. Velocity Burst Elite Engine (`velocity_orchestrator.py` & `velocity_scheduler.py`)
+- **Purpose**: Flagship 18-stage institutional breakout scanner and trade manager. Detects pre-breakout contraction (TTM Squeeze, Keltner, NR clusters, inside bars), validates volume and smart money footprints, tracks live breakouts, and manages automated trailing stops.
+- **Tables**: `velocity_market_regime`, `velocity_sleeping_giants`, `velocity_compression`, `velocity_base_patterns`, `velocity_institutions`, `velocity_rs_rank`, `velocity_sector_strength`, `velocity_smart_money`, `velocity_liquidity`, `velocity_news_risk`, `velocity_live_signals`, `velocity_entry_quality`, `velocity_trade_manager`, `velocity_btst`, `velocity_signal_history`, `velocity_alerts`, `velocity_backtests`, `velocity_learning`.
+- **API Namespace**: `/api/v4/velocity` (status, scan, sleeping-giants, patterns, live-signals, trade, btst, alerts, backtest).
+
 ---
 
 ## 5. Primary Database Schema Reference
@@ -194,6 +199,10 @@ AlphaIndia/
 - `POST /financials/queue/bootstrap`: Populate queue with all registered companies.
 - `POST /financials/import/{symbol}`: Trigger immediate import for a single equity.
 - `POST /financials/audit`: Run the integrity audit engine.
+
+### Velocity Burst Elite & Momentum Screening Funnel Endpoints
+- `GET /api/v4/velocity/funnel`: Stage-by-stage attrition waterfall showing candidate counts entering, passed, and filtered out at each gate (Gates 0 through 11).
+- `GET /api/v1/momentum-screener/funnel`: Multi-timeframe momentum condition attrition waterfall showing candidates filtered out on each of the 10 sequential conditions.
 
 ---
 

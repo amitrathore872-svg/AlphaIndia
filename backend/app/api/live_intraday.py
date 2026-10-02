@@ -78,10 +78,10 @@ def trigger_funnel_scan(db: Session = Depends(get_db)) -> Dict[str, Any]:
     Forces an immediate real-time scan of the Nifty 500 universe.
     """
     try:
-        data = IntradayFunnelService.execute_funnel_scan(db=db, force_refresh=True)
+        data = IntradayFunnelService.trigger_scan_async(db=db)
         return {
             "status": "success",
-            "message": "Intraday funnel scan completed successfully.",
+            "message": "Intraday funnel scan started in background.",
             "funnel_metrics": data.get("funnel_metrics"),
             "elite_picks_count": len(data.get("elite_picks", [])),
         }

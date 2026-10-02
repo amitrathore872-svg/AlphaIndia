@@ -26,7 +26,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans bg-slate-50 text-slate-900 dark:bg-[#081225] dark:text-white antialiased min-h-screen flex flex-col`}>
+      <body
+        suppressHydrationWarning
+        className={`${inter.variable} font-sans bg-slate-50 text-slate-900 dark:bg-[#081225] dark:text-white antialiased min-h-screen flex flex-col`}
+      >
         <QueryProvider>
           <ThemeProvider>
             <PageVisibilityProvider>

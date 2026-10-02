@@ -16,9 +16,11 @@ from app.models.company import Company
 from app.models.company_market_metrics import CompanyMarketMetrics
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.models.watchlist import Watchlist, WatchlistItem
+from app.models.watchlist_alert import WatchlistAlert, UserPersonalTelegramConfig
 from app.models.user import User
 from app.api.deps import get_optional_current_user
 from app.services.live_price_service import LivePriceService
+from app.services.watchlist_alert_service import WatchlistAlertService
 
 router = APIRouter(
     prefix="/watchlists",
@@ -561,3 +563,280 @@ def remove_stock_from_watchlist(
         "message": f"Removed {sym} from watchlist.",
         "removed_symbol": sym,
     }
+
+
+# =========================================================
+# Rule-Based Alerts & Personal Telegram Endpoints
+# =========================================================
+
+class CreateWatchlistAlertRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=30)
+    rule_type: str = Field(..., min_length=2, max_length=50)
+    threshold_value: Optional[float] = None
+    timeframe: Optional[str] = "1D"
+    notes: Optional[str] = None
+    notify_in_app: Optional[bool] = True
+    notify_telegram: Optional[bool] = True
+
+
+class UpdateAlertStatusRequest(BaseModel):
+    status: str = Field(..., min_length=4, max_length=20)
+
+
+class UpdatePersonalTelegramRequest(BaseModel):
+    chat_id: str = Field(..., min_length=1, max_length=100)
+    channel_name: Optional[str] = "Personal Watchlist Radar"
+    bot_token: Optional[str] = None
+    telegram_username: Optional[str] = None
+    is_enabled: Optional[bool] = True
+    notify_price_cross: Optional[bool] = True
+    notify_dma_reclaim: Optional[bool] = True
+    notify_vcp_breakout: Optional[bool] = True
+    notify_volume_surge: Optional[bool] = True
+    notify_target_stop: Optional[bool] = True
+    notify_portfolio_buy: Optional[bool] = True
+    notify_portfolio_sell: Optional[bool] = True
+    notify_portfolio_rebalance: Optional[bool] = True
+    notify_watchlist_buy: Optional[bool] = True
+    notify_watchlist_sell: Optional[bool] = True
+    min_conviction_score: Optional[int] = 75
+
+
+class TestTelegramPingRequest(BaseModel):
+    chat_id: Optional[str] = None
+    bot_token: Optional[str] = None
+
+
+@router.get("/personal-telegram/config")
+def get_personal_telegram_config(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetches the personalized Telegram configuration for the current user.
+    """
+    user_id = current_user.id if current_user else None
+    cfg = WatchlistAlertService.get_or_create_user_telegram_config(db, user_id=user_id)
+    return {
+        "success": True,
+        "config": cfg.to_dict(mask_secret=True),
+    }
+
+
+@router.post("/personal-telegram/config")
+def update_personal_telegram_config(
+    req: UpdatePersonalTelegramRequest,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Updates personalized Telegram channel settings (chat_id, bot_token, notification flags).
+    """
+    user_id = current_user.id if current_user else None
+    cfg = WatchlistAlertService.update_user_telegram_config(
+        db=db,
+        user_id=user_id,
+        chat_id=req.chat_id,
+        channel_name=req.channel_name,
+        bot_token=req.bot_token,
+        telegram_username=req.telegram_username,
+        is_enabled=req.is_enabled,
+        notify_price_cross=req.notify_price_cross,
+        notify_dma_reclaim=req.notify_dma_reclaim,
+        notify_vcp_breakout=req.notify_vcp_breakout,
+        notify_volume_surge=req.notify_volume_surge,
+        notify_target_stop=req.notify_target_stop,
+        notify_portfolio_buy=req.notify_portfolio_buy,
+        notify_portfolio_sell=req.notify_portfolio_sell,
+        notify_portfolio_rebalance=req.notify_portfolio_rebalance,
+        notify_watchlist_buy=req.notify_watchlist_buy,
+        notify_watchlist_sell=req.notify_watchlist_sell,
+        min_conviction_score=req.min_conviction_score,
+    )
+    return {
+        "success": True,
+        "message": "Personal Telegram alert configuration saved.",
+        "config": cfg.to_dict(mask_secret=True),
+    }
+
+
+@router.post("/personal-telegram/test-ping")
+def test_personal_telegram_ping(
+    req: Optional[TestTelegramPingRequest] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Sends an instant verification message to the user's personal Telegram chat / channel.
+    """
+    user_id = current_user.id if current_user else None
+    chat_id = req.chat_id if req else None
+    bot_token = req.bot_token if req else None
+    res = WatchlistAlertService.send_test_ping(
+        db=db,
+        user_id=user_id,
+        custom_chat_id=chat_id,
+        custom_bot_token=bot_token,
+    )
+    if not res.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Telegram test ping failed: {res.get('error', 'Unknown error')}",
+        )
+    return {
+        "success": True,
+        "message": "Test ping delivered successfully to personal Telegram channel.",
+        "details": res,
+    }
+
+
+@router.get("/alerts/by-symbol/{symbol}")
+def get_alerts_by_symbol(
+    symbol: str,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetches all configured rule alerts for a specific stock symbol.
+    """
+    user_id = current_user.id if current_user else None
+    alerts = WatchlistAlertService.get_alerts_for_symbol(db, symbol=symbol, user_id=user_id)
+    return {
+        "success": True,
+        "symbol": symbol.upper(),
+        "alerts": [a.to_dict() for a in alerts],
+    }
+
+
+@router.get("/{watchlist_id}/alerts")
+def get_alerts_for_watchlist(
+    watchlist_id: int,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetches all alerts configured within a given watchlist.
+    """
+    user_id = current_user.id if current_user else None
+    alerts = WatchlistAlertService.get_alerts_for_watchlist(
+        db, watchlist_id=watchlist_id, user_id=user_id
+    )
+    return {
+        "success": True,
+        "watchlist_id": watchlist_id,
+        "alerts": [a.to_dict() for a in alerts],
+    }
+
+
+@router.post("/{watchlist_id}/alerts")
+def create_watchlist_alert(
+    watchlist_id: int,
+    req: CreateWatchlistAlertRequest,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Creates a new rule-based alert for a stock in this watchlist.
+    """
+    # Verify watchlist exists
+    wl = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if not wl:
+        raise HTTPException(status_code=404, detail="Watchlist not found.")
+
+    user_id = current_user.id if current_user else None
+    alert = WatchlistAlertService.create_alert(
+        db=db,
+        watchlist_id=watchlist_id,
+        symbol=req.symbol,
+        rule_type=req.rule_type,
+        threshold_value=req.threshold_value,
+        user_id=user_id,
+        timeframe=req.timeframe or "1D",
+        notes=req.notes,
+        notify_in_app=req.notify_in_app if req.notify_in_app is not None else True,
+        notify_telegram=req.notify_telegram if req.notify_telegram is not None else True,
+    )
+
+    return {
+        "success": True,
+        "message": f"Alert created for {alert.symbol} ({alert.rule_type}).",
+        "alert": alert.to_dict(),
+    }
+
+
+@router.patch("/alerts/{alert_id}/status")
+def update_watchlist_alert_status(
+    alert_id: int,
+    req: UpdateAlertStatusRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Updates alert status (ACTIVE, SNOOZED, MUTED, etc.).
+    """
+    alert = WatchlistAlertService.update_alert_status(db, alert_id=alert_id, status=req.status.upper())
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found.")
+    return {
+        "success": True,
+        "message": f"Alert {alert_id} status updated to {alert.status}.",
+        "alert": alert.to_dict(),
+    }
+
+
+@router.delete("/alerts/{alert_id}")
+def delete_watchlist_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Deletes a watchlist alert.
+    """
+    ok = WatchlistAlertService.delete_alert(db, alert_id=alert_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Alert not found.")
+    return {
+        "success": True,
+        "message": f"Alert {alert_id} deleted.",
+    }
+
+
+class EvaluateAlertsRequest(BaseModel):
+    cmp: float
+    day_change_pct: Optional[float] = 0.0
+    volume: Optional[float] = None
+    avg_volume_20d: Optional[float] = None
+    dma_50: Optional[float] = None
+    dma_200: Optional[float] = None
+    vcp_score: Optional[int] = None
+    momentum_matches: Optional[int] = None
+
+
+@router.post("/alerts/evaluate/{symbol}")
+def evaluate_symbol_alerts(
+    symbol: str,
+    req: EvaluateAlertsRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Evaluates all active rules for the given symbol against real-time parameters.
+    Dispatches to personal Telegram if triggered.
+    """
+    results = WatchlistAlertService.evaluate_and_dispatch(
+        db=db,
+        symbol=symbol,
+        cmp=req.cmp,
+        day_change_pct=req.day_change_pct or 0.0,
+        volume=req.volume,
+        avg_volume_20d=req.avg_volume_20d,
+        dma_50=req.dma_50,
+        dma_200=req.dma_200,
+        vcp_score=req.vcp_score,
+        momentum_matches=req.momentum_matches,
+    )
+    return {
+        "success": True,
+        "symbol": symbol.upper(),
+        "triggered_count": len(results),
+        "triggered": results,
+    }
+

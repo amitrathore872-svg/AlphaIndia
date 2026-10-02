@@ -28,7 +28,11 @@ import {
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import PageHeader from "@/components/common/PageHeader";
+import KpiCard from "@/components/common/KpiCard";
+import EmptyState from "@/components/common/EmptyState";
 import TerminalSearch from "@/components/common/TerminalSearch";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import {
   fetchCandidates,
   fetchStats,
@@ -226,72 +230,76 @@ export default function EarlyStagePage() {
   // ─── Render ───────────────────────────────────────────
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 p-6">
+      <div className="space-y-5">
 
         {/* ── Header ─────────────────────────────────────── */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-900/30">
-                <Radar size={20} className="text-black" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight font-mono">Discovery Incubator & Triage</h1>
-                <p className="text-xs text-slate-400 mt-0.5">Pre-listing discovery radar & NLP news entity triage · Approve candidates to import into Master Universe</p>
-              </div>
+        <PageHeader
+          eyebrow="PRE-LISTING RADAR"
+          icon={<Radar className="w-5 h-5" />}
+          iconColor="amber"
+          title="Discovery Incubator & Triage"
+          badge={{ label: "NLP ENTITY TRIAGE", color: "amber" }}
+          subtitle="Pre-listing discovery radar & NLP news entity triage · Approve candidates to import into Master Universe"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Run pipeline */}
+              <button
+                id="btn-run-discovery"
+                onClick={handleRun}
+                disabled={running}
+                className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                {running ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+                {running ? "Running…" : "Run Discovery"}
+              </button>
+
+              {/* Refresh */}
+              <button
+                id="btn-refresh-discovery"
+                onClick={loadData}
+                disabled={loading}
+                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-400 disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+                Refresh
+              </button>
+
+              {/* Bulk import */}
+              <button
+                id="btn-bulk-import"
+                onClick={handleBulkImport}
+                disabled={selected.size === 0 || importing}
+                className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 transition-all hover:bg-emerald-500/20 disabled:opacity-40"
+              >
+                {importing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                {importing ? "Importing…" : `Import Selected (${selected.size})`}
+              </button>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Run pipeline */}
-            <button
-              id="btn-run-discovery"
-              onClick={handleRun}
-              disabled={running}
-              className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-50"
-            >
-              {running ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
-              {running ? "Running…" : "Run Discovery"}
-            </button>
-
-            {/* Refresh */}
-            <button
-              id="btn-refresh-discovery"
-              onClick={loadData}
-              disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-400 disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
-
-            {/* Bulk import */}
-            <button
-              id="btn-bulk-import"
-              onClick={handleBulkImport}
-              disabled={selected.size === 0 || importing}
-              className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 transition-all hover:bg-emerald-500/20 disabled:opacity-40"
-            >
-              {importing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-              {importing ? "Importing…" : `Import Selected (${selected.size})`}
-            </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* ── Stats Cards ────────────────────────────────── */}
         {stats && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: "Total Candidates",  value: stats.total_candidates,              color: "text-cyan-400"    },
-              { label: "Suggested",         value: stats.by_status["suggested"] ?? 0,   color: "text-amber-400"   },
-              { label: "Imported",          value: stats.by_status["imported"] ?? 0,    color: "text-emerald-400" },
-              { label: "Cache Queue",       value: stats.cache_rows_pending,             color: "text-slate-400"   },
-            ].map(card => (
-              <div key={card.label} className="rounded-2xl border border-slate-800 bg-[#0A1628] p-4">
-                <p className="text-[10px] uppercase tracking-widest text-slate-500">{card.label}</p>
-                <p className={`mt-1.5 text-2xl font-bold ${card.color}`}>{card.value.toLocaleString()}</p>
-              </div>
-            ))}
+            <KpiCard
+              label="Total Candidates"
+              value={stats.total_candidates.toLocaleString()}
+              color="cyan"
+            />
+            <KpiCard
+              label="Suggested"
+              value={(stats.by_status["suggested"] ?? 0).toLocaleString()}
+              color="amber"
+            />
+            <KpiCard
+              label="Imported"
+              value={(stats.by_status["imported"] ?? 0).toLocaleString()}
+              color="emerald"
+            />
+            <KpiCard
+              label="Cache Queue"
+              value={stats.cache_rows_pending.toLocaleString()}
+            />
           </div>
         )}
 
@@ -306,19 +314,19 @@ export default function EarlyStagePage() {
         )}
 
         {/* ── Triage Tabs & Filters Bar ─────────────────────────────── */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-[#0A1628] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0A1628] px-4 py-3 shadow-xs">
           {/* Triage Tabs */}
-          <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950/80 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
             <button
               onClick={() => { setStatusFilter("suggested"); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
                 statusFilter === "suggested"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               <span>Pending Triage</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-600 dark:text-amber-300">
                 {stats?.by_status["suggested"] ?? 0}
               </span>
             </button>
@@ -327,12 +335,12 @@ export default function EarlyStagePage() {
               onClick={() => { setStatusFilter("imported"); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
                 statusFilter === "imported"
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               <span>In Master Universe</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
                 {stats?.by_status["imported"] ?? 0}
               </span>
             </button>
@@ -341,12 +349,12 @@ export default function EarlyStagePage() {
               onClick={() => { setStatusFilter("ignored"); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
                 statusFilter === "ignored"
-                  ? "bg-slate-700/40 text-slate-300 border border-slate-600/40"
-                  : "text-slate-500 hover:text-slate-300"
+                  ? "bg-slate-200 dark:bg-slate-700/40 text-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-600/40"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
               }`}
             >
               <span>Dismissed</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                 {stats?.by_status["ignored"] ?? 0}
               </span>
             </button>
@@ -368,11 +376,11 @@ export default function EarlyStagePage() {
               onClick={() => { setListedOnly(v => !v); setPage(1); }}
               className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
                 listedOnly
-                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-950"
-                  : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200 hover:border-slate-600"
+                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 shadow-xs shadow-emerald-950"
+                  : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs"
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${listedOnly ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
+              <span className={`h-2 w-2 rounded-full ${listedOnly ? "bg-emerald-500 dark:bg-emerald-400 animate-pulse" : "bg-slate-400 dark:bg-slate-600"}`} />
               Listed Only
             </button>
 
@@ -381,18 +389,18 @@ export default function EarlyStagePage() {
               id="filter-sentiment"
               value={sentimentFilter}
               onChange={e => { setSentimentFilter(e.target.value); setPage(1); }}
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/50 focus:outline-none"
+              className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:outline-hidden cursor-pointer shadow-xs"
             >
-              <option value="">All Sentiments</option>
-              <option value="positive">Positive</option>
-              <option value="neutral">Neutral</option>
-              <option value="negative">Negative</option>
+              <option value="" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Sentiments</option>
+              <option value="positive" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Positive</option>
+              <option value="neutral" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Neutral</option>
+              <option value="negative" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Negative</option>
             </select>
           </div>
         </div>
 
         {/* ── Table ──────────────────────────────────────── */}
-        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-[#07111F]">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#07111F] shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -441,10 +449,22 @@ export default function EarlyStagePage() {
                 )}
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-16 text-center">
-                      <Radar size={32} className="mx-auto text-slate-700" />
-                      <p className="mt-3 text-sm text-slate-500">No candidates found.</p>
-                      <p className="mt-1 text-xs text-slate-600">Run the discovery pipeline to populate this table.</p>
+                    <td colSpan={9} className="p-8">
+                      <EmptyState
+                        icon={<Radar className="h-7 w-7 text-amber-400" />}
+                        title="No candidates found"
+                        description="Run the discovery pipeline to populate this table or adjust your search filter."
+                        action={
+                          <button
+                            onClick={handleRun}
+                            disabled={running}
+                            className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-400 hover:bg-amber-500/20"
+                          >
+                            <Zap size={13} />
+                            <span>Run Discovery</span>
+                          </button>
+                        }
+                      />
                     </td>
                   </tr>
                 )}
@@ -524,6 +544,13 @@ export default function EarlyStagePage() {
                       {/* Actions */}
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {c.is_listed && c.tentative_ticker && (
+                            <AddToWatchlistButton
+                              symbol={c.tentative_ticker}
+                              companyName={c.company_name}
+                              variant="star"
+                            />
+                          )}
                           {c.status === "suggested" && (
                             <>
                               <button

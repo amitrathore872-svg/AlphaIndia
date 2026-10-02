@@ -69,9 +69,13 @@ export default function GlobalCompanySearch() {
     }
 
     // Pre-fetch default trending equities
-    searchStocks("", 10).then((items) => {
-      setTrending(items);
-    });
+    searchStocks("", 10)
+      .then((items) => {
+        if (items && items.length > 0) {
+          setTrending(items);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Save selected company to recent searches

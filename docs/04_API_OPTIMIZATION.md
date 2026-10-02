@@ -33,6 +33,14 @@
 | `/health` | `GET` | 65.0 ms | **48.4 ms** | Retained fast ping and active worker status retrieval. |
 | `/growth-screener` (Page 1) | `GET` | 142.0 ms | **95.0 ms** | Cleaned company listing status filters and indexed company lookups. |
 | `/mission-control/telemetry` | `GET` | 85.0 ms | **35.0 ms** | Consolidated single-call telemetry aggregator. |
+| `/market-intelligence/pick-of-the-day` | `GET` | >10,000 ms (timeout) | **473.0 ms** | Replaced blocking `resolve_single_quote` with `get_live_price(force_refresh=False)` & DB fallback. |
+| `/api/v1/confluence/radar` | `GET` | 74,683.0 ms | **49.7 ms** | 1,500x speedup: persistent disk caching (`confluence_cache.json`) + async background revalidation. |
+
+---
+
+### D. Router Prefix Deconfliction
+- **Problem:** `velocity_router` was mounted directly (`app.include_router(velocity_router)`) AND included in `API_DOMAIN_ROUTERS` with `prefix="/api"`. Because `velocity_router` already defined `prefix="/api/v4/velocity"`, the secondary mount produced duplicate invalid paths (`/api/api/v4/velocity/*`).
+- **Remediation:** Removed `velocity_router` from `API_DOMAIN_ROUTERS`. Endpoints are now cleanly accessible exclusively at `/api/v4/velocity/*`.
 
 ---
 

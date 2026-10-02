@@ -346,11 +346,11 @@ export default function ScreenerGrowthPage() {
                   setSector(e.target.value);
                   setPage(1);
                 }}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:border-cyan-500 focus:outline-none"
+                className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:outline-hidden cursor-pointer shadow-xs"
               >
-                <option value="ALL">All Sectors</option>
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Sectors</option>
                 {sectorOptions.map((sec) => (
-                  <option key={sec} value={sec}>
+                  <option key={sec} value={sec} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                     {sec}
                   </option>
                 ))}
@@ -1020,12 +1020,12 @@ export default function ScreenerGrowthPage() {
                   setLimit(Number(e.target.value));
                   setPage(1);
                 }}
-                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-800 dark:text-slate-200"
+                className="rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 px-2 py-1 text-xs text-slate-800 dark:text-slate-200 cursor-pointer shadow-xs focus:outline-hidden focus:border-cyan-500"
               >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
+                <option value={10} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">10</option>
+                <option value={25} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">25</option>
+                <option value={50} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">50</option>
+                <option value={100} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">100</option>
               </select>
               <span className="ml-2">
                 Showing {companies.length > 0 ? (page - 1) * limit + 1 : 0} to{" "}
@@ -1127,10 +1127,10 @@ export default function ScreenerGrowthPage() {
                     <select
                       value={targetWatchlistId ?? watchlists[0]?.id}
                       onChange={(e) => setTargetWatchlistId(Number(e.target.value))}
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-900 dark:text-white outline-none focus:border-cyan-500"
+                      className="mt-1.5 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-800 dark:text-white outline-none focus:border-cyan-500 cursor-pointer shadow-xs"
                     >
                       {watchlists.map((wl) => (
-                        <option key={wl.id} value={wl.id}>
+                        <option key={wl.id} value={wl.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                           {wl.name} ({wl.items_count} stocks)
                         </option>
                       ))}

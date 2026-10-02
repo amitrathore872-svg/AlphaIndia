@@ -25,10 +25,30 @@ import {
   removeStockFromWatchlist,
 } from "@/lib/watchlistApi";
 
+export interface WatchlistModalTarget {
+  symbol: string;
+  company?: string;
+  company_name?: string;
+  sector?: string | null;
+  industry?: string | null;
+  exchange?: string | null;
+  cmp?: number | null;
+  current_price?: number | null;
+  roce?: number | null;
+  market_cap?: number | null;
+  health_score?: number | null;
+  conviction_score?: number | null;
+  watchlist_comment?: string | null;
+  target_price?: number | null;
+  in_watchlist?: boolean;
+  watchlist_id?: number | null;
+  watchlist_item_id?: number | null;
+}
+
 interface WatchlistModalProps {
   isOpen: boolean;
   onClose: () => void;
-  company: GrowthCompany | null;
+  company: GrowthCompany | WatchlistModalTarget | null;
   watchlists: WatchlistSummary[];
   onWatchlistUpdated: (
     symbol: string,
@@ -107,9 +127,10 @@ export default function WatchlistModal({
     if (company && isOpen) {
       setErrorMessage(null);
       setConvictionScore(company.conviction_score || 4);
+      const priceDisplay = company.cmp ?? company.current_price ?? "-";
       setComment(
         company.watchlist_comment ||
-          `High growth discovered via Screener. CMP ₹${company.cmp ?? "-"}, ROCE ${company.roce ?? "-"}%`
+          `Discovered via Alpha India Radar. CMP ₹${priceDisplay}${company.roce ? `, ROCE ${company.roce}%` : ""}`
       );
       setTargetPrice(company.target_price ? String(company.target_price) : "");
 
@@ -162,7 +183,7 @@ export default function WatchlistModal({
 
       await addStockToWatchlist(selectedWatchlistId, {
         symbol: company.symbol,
-        company_name: company.company,
+        company_name: ("company_name" in company && company.company_name) || company.company || company.symbol,
         confidence_score: convictionScore,
         comment: comment.trim(),
         target_price: targetPrice ? parseFloat(targetPrice) : undefined,
@@ -225,18 +246,26 @@ export default function WatchlistModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold tracking-tight">
-                  {company.company}
+                  {("company_name" in company && company.company_name) || company.company || company.symbol}
                 </h3>
                 <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                   {company.symbol}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                <span>CMP: ₹{company.cmp?.toLocaleString("en-IN") ?? "--"}</span>
-                <span>•</span>
-                <span>ROCE: {company.roce ? `${company.roce}%` : "--"}</span>
-                <span>•</span>
-                <span>MCap: ₹{company.market_cap ? `${Math.round(company.market_cap).toLocaleString("en-IN")} Cr` : "--"}</span>
+                <span>CMP: ₹{(company.cmp ?? ("current_price" in company ? company.current_price : null))?.toLocaleString("en-IN") ?? "--"}</span>
+                {company.roce && (
+                  <>
+                    <span>•</span>
+                    <span>ROCE: {company.roce}%</span>
+                  </>
+                )}
+                {company.market_cap && (
+                  <>
+                    <span>•</span>
+                    <span>MCap: ₹{Math.round(company.market_cap).toLocaleString("en-IN")} Cr</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -306,10 +335,10 @@ export default function WatchlistModal({
               <select
                 value={selectedWatchlistId}
                 onChange={(e) => setSelectedWatchlistId(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:border-cyan-500 dark:border-slate-800 dark:bg-[#060B14] dark:text-slate-200 cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:border-cyan-500 dark:border-slate-800 dark:bg-[#060B14] dark:text-slate-200 cursor-pointer shadow-xs"
               >
                 {watchlists.map((w) => (
-                  <option key={w.id} value={w.id}>
+                  <option key={w.id} value={w.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                     {w.name} ({w.items_count} stocks)
                   </option>
                 ))}

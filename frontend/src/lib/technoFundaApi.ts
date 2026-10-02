@@ -1,5 +1,22 @@
 import { API_BASE } from "@/lib/apiConfig";
 
+export interface IdentifiedPatternData {
+  pattern_type: string;
+  pattern_label: string;
+  score: number;
+  conviction_tier: string;
+  pivot_buy_point?: number;
+  stop_loss?: number;
+  target_1?: number;
+  target_2?: number;
+  depth_pct?: number;
+  width_weeks?: number;
+  risk_reward?: number;
+  status?: string;
+  summary_notes?: string;
+  metrics?: Record<string, any>;
+}
+
 export interface TechnoFundaItem {
   id: number;
   symbol: string;
@@ -38,6 +55,10 @@ export interface TechnoFundaItem {
   stock_pe?: number;
   return_3m?: number;
   return_6m?: number;
+  identified_pattern?: IdentifiedPatternData | null;
+  identified_pattern_type?: string | null;
+  identified_pattern_label?: string | null;
+  identified_pattern_score?: number | null;
 }
 
 export interface TechnoFundaScreenerResponse {
@@ -61,6 +82,8 @@ export interface TechnoFundaStockAnalysis {
   status_desc: string;
   bullish_factors: string[];
   risk_factors: string[];
+  identified_pattern?: IdentifiedPatternData | null;
+  identified_patterns?: IdentifiedPatternData[];
   technical: {
     current_price: number;
     dma_50?: number;
@@ -177,10 +200,51 @@ export interface LineDataPoint {
   value: number;
 }
 
+export interface PatternOverlayLine {
+  id: string;
+  price: number;
+  color: string;
+  lineWidth?: number;
+  lineStyle?: number;
+  title: string;
+}
+
+export interface PatternOverlayTrendline {
+  id: string;
+  title: string;
+  color: string;
+  lineWidth?: number;
+  lineStyle?: number;
+  points: Array<{ time: string; value: number }>;
+}
+
+export interface PatternOverlayMarker {
+  time: string;
+  position: "aboveBar" | "belowBar" | "inBar";
+  color: string;
+  shape: "circle" | "square" | "arrowUp" | "arrowDown";
+  text: string;
+}
+
+export interface PatternOverlay {
+  pattern_type: string;
+  pattern_label: string;
+  score: number;
+  conviction_tier: string;
+  pivot_buy_point: number;
+  stop_loss: number;
+  target_1: number;
+  target_2: number;
+  horizontal_lines: PatternOverlayLine[];
+  trend_lines: PatternOverlayTrendline[];
+  markers: PatternOverlayMarker[];
+}
+
 export interface TechnoFundaChartResponse {
   candles: CandleData[];
   dma_50: LineDataPoint[];
   dma_200: LineDataPoint[];
+  pattern_overlays?: PatternOverlay[];
 }
 
 export async function fetchTechnoFundaCandles(

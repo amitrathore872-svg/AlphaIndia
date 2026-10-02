@@ -19,9 +19,13 @@ import {
   ArrowUpDown,
   Check,
   X,
+  Activity,
+  LayoutGrid,
+  Bell,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import WatchlistTerminalView from "@/components/watchlist/WatchlistTerminalView";
 import {
   fetchWatchlists,
   fetchWatchlist,
@@ -44,6 +48,7 @@ export default function WatchlistPage() {
   const [watchlists, setWatchlists] = useState<WatchlistSummary[]>([]);
   const [activeWatchlistId, setActiveWatchlistId] = useState<number | null>(null);
   const [activeItems, setActiveItems] = useState<WatchlistItem[]>([]);
+  const [viewMode, setViewMode] = useState<"terminal" | "table">("terminal");
   const [activeSummary, setActiveSummary] = useState<{
     items_count: number;
     avg_confidence: number;
@@ -395,110 +400,209 @@ export default function WatchlistPage() {
   const activeWl = watchlists.find((w) => w.id === activeWatchlistId);
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6 pb-16">
-        {/* ========================================================= */}
-        {/* TOP HEADER & WATCHLIST SELECTOR TABS                      */}
-        {/* ========================================================= */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225]/90 p-6 backdrop-blur-xl shadow-xs dark:shadow-2xl">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            {/* Title & Description */}
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-lg shadow-amber-500/10">
-                  <Star className="fill-amber-500 dark:fill-amber-400 text-amber-500 dark:text-amber-400" size={20} />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                    Multi-Watchlist Radar
-                  </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Institutional portfolio tracker with 1-to-5 conviction scoring & thesis notes
-                  </p>
-                </div>
-              </div>
-            </div>
+    <DashboardLayout fullWidth={viewMode === "terminal"}>
+      {viewMode === "terminal" ? (
+        <div className="w-full h-full flex flex-col flex-1 min-h-0 gap-1.5">
+          {/* Top Compact Control Bar in Terminal Mode */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-[#070F1E] px-3 py-1.5 text-xs text-slate-300 shadow-md shrink-0">
+            {/* Watchlist Tabs as sleek pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <span className="font-bold text-white tracking-wider uppercase font-mono text-[10px] mr-1 text-cyan-400 flex items-center gap-1">
+                <Star size={12} className="fill-amber-400 text-amber-400" />
+                Watchlists:
+              </span>
+              {watchlists.map((wl) => (
+                <button
+                  key={wl.id}
+                  onClick={() => setActiveWatchlistId(wl.id)}
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                    wl.id === activeWatchlistId
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-xs font-bold"
+                      : "bg-slate-900/60 text-slate-400 hover:text-white border border-slate-800"
+                  }`}
+                >
+                  <span>{wl.name}</span>
+                  <span className="text-[10px] font-mono opacity-70">({wl.items_count})</span>
+                </button>
+              ))}
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2.5 text-xs font-bold text-cyan-700 dark:text-cyan-300 transition-all hover:border-cyan-400 hover:bg-cyan-500/20 hover:shadow-lg hover:shadow-cyan-500/10"
+                className="flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-400 hover:bg-cyan-500/20 transition"
+                title="Create new watchlist"
               >
-                <Plus size={16} />
-                <span>NEW WATCHLIST</span>
+                <Plus size={12} />
+                <span>New</span>
               </button>
 
               {activeWl && (
                 <>
                   <button
                     onClick={openEditModal}
-                    title="Edit watchlist details"
-                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 px-3 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 transition-all hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white shadow-xs"
+                    title="Rename active watchlist"
+                    className="p-1 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition"
                   >
-                    <Edit3 size={14} />
-                    <span>Rename</span>
+                    <Edit3 size={12} />
                   </button>
-
                   <button
                     onClick={handleDeleteWatchlist}
-                    title="Delete watchlist"
-                    className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 transition-all hover:bg-rose-500/20 hover:text-rose-700 dark:hover:text-rose-300 shadow-xs"
+                    title="Delete active watchlist"
+                    className="p-1 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition"
                   >
-                    <Trash2 size={14} />
-                    <span>Delete</span>
+                    <Trash2 size={12} />
                   </button>
                 </>
               )}
             </div>
+
+            {/* Switch to Classic Table Button */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-slate-400 hover:text-white transition text-xs font-semibold"
+              >
+                <LayoutGrid size={13} />
+                <span>Classic Table</span>
+              </button>
+            </div>
           </div>
 
-          {/* WATCHLIST TABS */}
-          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-slate-200 dark:border-slate-800/80 pt-5">
-            {loadingWatchlists ? (
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-                <span>Loading portfolios...</span>
-              </div>
-            ) : (
-              watchlists.map((wl) => {
-                const isActive = wl.id === activeWatchlistId;
-                return (
-                  <button
-                    key={wl.id}
-                    onClick={() => setActiveWatchlistId(wl.id)}
-                    className={`group flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${
-                      isActive
-                        ? "border border-cyan-500/60 bg-gradient-to-r from-cyan-500/20 to-blue-500/10 text-cyan-700 dark:text-cyan-300 shadow-md shadow-cyan-500/10"
-                        : "border border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
-                    }`}
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        isActive ? "bg-cyan-500 shadow-sm shadow-cyan-400" : "bg-slate-400 dark:bg-slate-600"
-                      }`}
-                    />
-                    <span>{wl.name}</span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-mono ${
-                        isActive
-                          ? "bg-cyan-500/30 text-cyan-800 dark:text-cyan-200"
-                          : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-400"
-                      }`}
-                    >
-                      {wl.items_count}
-                    </span>
-                  </button>
-                );
-              })
-            )}
+          {/* Full Screen Watchlist Terminal (Stretches completely to bottom & right!) */}
+          <div className="flex-1 min-h-0 h-full w-full">
+            <WatchlistTerminalView
+              watchlists={watchlists}
+              activeWatchlistId={activeWatchlistId}
+              activeItems={activeItems}
+              onSelectWatchlist={(id) => setActiveWatchlistId(id)}
+              onRefreshItems={() => activeWatchlistId && loadActiveWatchlist(activeWatchlistId)}
+              onSwitchToTableView={() => setViewMode("table")}
+            />
           </div>
         </div>
+      ) : (
+        <div className="space-y-6 pb-16">
+          {/* ========================================================= */}
+          {/* TOP HEADER & WATCHLIST SELECTOR TABS (Classic Table Mode) */}
+          {/* ========================================================= */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225]/90 p-6 backdrop-blur-xl shadow-xs dark:shadow-2xl">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              {/* Title & Description */}
+              <div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-lg shadow-amber-500/10">
+                    <Star className="fill-amber-500 dark:fill-amber-400 text-amber-500 dark:text-amber-400" size={20} />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+                      Multi-Watchlist Radar
+                    </h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Institutional portfolio tracker with 1-to-5 conviction scoring & thesis notes
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-        {/* ========================================================= */}
-        {/* SUMMARY KPI CARDS                                         */}
-        {/* ========================================================= */}
-        {activeSummary && (
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Terminal vs Table Switcher */}
+                <div className="flex items-center rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/90 p-0.5 text-xs font-semibold shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("terminal")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  >
+                    <Activity size={14} />
+                    <span>Chart Terminal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("table")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition bg-cyan-500 text-slate-950 font-bold shadow-xs"
+                  >
+                    <LayoutGrid size={14} />
+                    <span>Classic Table</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2.5 text-xs font-bold text-cyan-700 dark:text-cyan-300 transition-all hover:border-cyan-400 hover:bg-cyan-500/20 hover:shadow-lg hover:shadow-cyan-500/10"
+                >
+                  <Plus size={16} />
+                  <span>NEW WATCHLIST</span>
+                </button>
+
+                {activeWl && (
+                  <>
+                    <button
+                      onClick={openEditModal}
+                      title="Edit watchlist details"
+                      className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 px-3 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 transition-all hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white shadow-xs"
+                    >
+                      <Edit3 size={14} />
+                      <span>Rename</span>
+                    </button>
+
+                    <button
+                      onClick={handleDeleteWatchlist}
+                      title="Delete watchlist"
+                      className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 transition-all hover:bg-rose-500/20 hover:text-rose-700 dark:hover:text-rose-300 shadow-xs"
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* WATCHLIST TABS */}
+            <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-slate-200 dark:border-slate-800/80 pt-5">
+              {loadingWatchlists ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+                  <span>Loading portfolios...</span>
+                </div>
+              ) : (
+                watchlists.map((wl) => {
+                  const isActive = wl.id === activeWatchlistId;
+                  return (
+                    <button
+                      key={wl.id}
+                      onClick={() => setActiveWatchlistId(wl.id)}
+                      className={`group flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${
+                        isActive
+                          ? "border border-cyan-500/60 bg-gradient-to-r from-cyan-500/20 to-blue-500/10 text-cyan-700 dark:text-cyan-300 shadow-md shadow-cyan-500/10"
+                          : "border border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          isActive ? "bg-cyan-500 shadow-sm shadow-cyan-400" : "bg-slate-400 dark:bg-slate-600"
+                        }`}
+                      />
+                      <span>{wl.name}</span>
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-mono ${
+                          isActive
+                            ? "bg-cyan-500/30 text-cyan-800 dark:text-cyan-200"
+                            : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-400"
+                        }`}
+                      >
+                        {wl.items_count}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+            {/* ========================================================= */}
+            {/* SUMMARY KPI CARDS                                         */}
+            {/* ========================================================= */}
+            {activeSummary && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {/* Total Equities */}
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0B1528]/80 p-4 shadow-xs backdrop-blur-md">
@@ -711,12 +815,12 @@ export default function WatchlistPage() {
                       e.target.value as "confidence" | "roce" | "cmp" | "symbol"
                     )
                   }
-                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 outline-none shadow-xs"
+                  className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer shadow-xs focus:border-cyan-500"
                 >
-                  <option value="confidence">Sort: Conviction Rank</option>
-                  <option value="roce">Sort: ROCE %</option>
-                  <option value="cmp">Sort: Market Price</option>
-                  <option value="symbol">Sort: Ticker Symbol</option>
+                  <option value="confidence" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Sort: Conviction Rank</option>
+                  <option value="roce" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Sort: ROCE %</option>
+                  <option value="cmp" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Sort: Market Price</option>
+                  <option value="symbol" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Sort: Ticker Symbol</option>
                 </select>
 
                 <button
@@ -977,6 +1081,8 @@ export default function WatchlistPage() {
             </table>
           </div>
         </div>
+      </div>
+    )}
 
         {/* ========================================================= */}
         {/* MODAL: CREATE NEW WATCHLIST                               */}
@@ -1137,7 +1243,6 @@ export default function WatchlistPage() {
             </div>
           </div>
         )}
-      </div>
     </DashboardLayout>
   );
 }

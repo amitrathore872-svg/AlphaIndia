@@ -299,7 +299,7 @@ export default function ScreenerMonitoringPage() {
               {stats?.unimported_remaining ? stats.unimported_remaining.toLocaleString("en-IN") : "--"}
             </div>
             <div className="mt-0.5 text-[11px] text-cyan-500/80 truncate">
-              of {stats?.total_universe_eligible?.toLocaleString("en-IN") ?? 5002} eligible
+              of {stats?.total_universe_eligible ? stats.total_universe_eligible.toLocaleString("en-IN") : "--"} eligible
             </div>
           </div>
 
@@ -481,32 +481,32 @@ export default function ScreenerMonitoringPage() {
         )}
 
         {/* Section 6: Historical Import Runs Table */}
-        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-4 py-3">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 px-4 py-3">
             <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-cyan-400" />
-              <h3 className="text-sm font-bold text-white">Historical Import Jobs</h3>
+              <Layers className="h-4 w-4 text-cyan-500 dark:text-cyan-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Historical Import Jobs</h3>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Filter Status:</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">Filter Status:</span>
               <select
                 value={runStatusFilter}
                 onChange={(e) => setRunStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-200"
+                className="rounded-lg border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
               >
-                <option value="ALL">All Runs</option>
-                <option value="SUCCESS">Success</option>
-                <option value="PARTIAL">Partial</option>
-                <option value="FAILED">Failed</option>
-                <option value="RUNNING">Running</option>
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Runs</option>
+                <option value="SUCCESS" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Success</option>
+                <option value="PARTIAL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Partial</option>
+                <option value="FAILED" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Failed</option>
+                <option value="RUNNING" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Running</option>
               </select>
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-800 bg-slate-900/60 text-slate-400 uppercase tracking-wider font-semibold">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 uppercase tracking-wider font-semibold">
                 <tr>
                   <th className="px-4 py-3">Run ID</th>
                   <th className="px-3 py-3">Start Time</th>
@@ -520,7 +520,7 @@ export default function ScreenerMonitoringPage() {
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-800/80 font-mono">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-mono">
                 {runs.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
@@ -529,11 +529,11 @@ export default function ScreenerMonitoringPage() {
                   </tr>
                 ) : (
                   runs.map((r) => (
-                    <tr key={r.run_id} className="hover:bg-slate-900/60 transition">
-                      <td className="px-4 py-3 font-sans font-bold text-white">
+                    <tr key={r.run_id} className="hover:bg-slate-50 dark:hover:bg-slate-900/60 transition">
+                      <td className="px-4 py-3 font-sans font-bold text-slate-900 dark:text-white">
                         {r.run_id}
                       </td>
-                      <td className="px-3 py-3 text-slate-400 font-sans">
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-400 font-sans">
                         {r.start_time
                           ? new Date(r.start_time).toLocaleString("en-IN", {
                               month: "short",

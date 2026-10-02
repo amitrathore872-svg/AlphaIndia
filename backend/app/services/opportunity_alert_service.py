@@ -48,6 +48,10 @@ class OpportunityAlertService:
         "momentum_min_matches": 9,
         "momentum_conviction_79_enabled": True,
         "momentum_min_conviction": 79,
+        "momentum_universe_enabled": True,
+        "momentum_min_mcap_cr": 1000.0,
+        "momentum_min_price": 20.0,
+        "momentum_min_turnover_lakhs": 50.0,
         "tomorrow_radar_enabled": True,
         "tomorrow_min_conviction": 90,
         "athena_pead_enabled": True,
@@ -72,6 +76,9 @@ class OpportunityAlertService:
         "growth_min_pat_pct": 50.0,
         "growth_min_sales_pct": 25.0,
         "breakout_execution_enabled": True,
+        "ipo_radar_enabled": True,
+        "ipo_min_conviction": 85.0,
+        "ipo_blue_sky_only": False,
         "auto_broadcast_telegram": True,
         "auto_broadcast_whatsapp": True,
     }
@@ -341,30 +348,126 @@ class OpportunityAlertService:
                 logger.error(f"Error scanning pre-breakout radar for alerts: {e}", exc_info=True)
 
         # ==================================================================
-        # 3 & 4. /momentum-radar — Match Score >= 9 & Conviction Score >= 79
+        # 3. /momentum-radar — Multi-Timeframe Momentum Screener
+        #    (Evaluates F&O Basket + Full NSE/BSE Universe Scan + Live Watchlist Breakouts)
         # ==================================================================
         mom_match_enabled = rules.get("momentum_match_9_enabled", True)
         mom_conv_enabled = rules.get("momentum_conviction_79_enabled", True)
+        mom_universe_enabled = rules.get("momentum_universe_enabled", True)
 
-        if mom_match_enabled or mom_conv_enabled:
+        if mom_match_enabled or mom_conv_enabled or mom_universe_enabled:
             try:
-                mom_data = MomentumScreenerService.scan_opportunities(db=db, force_refresh=force_scan)
-                mom_opps = mom_data.get("opportunities", [])
                 min_match = int(rules.get("momentum_min_matches", 9))
                 min_conv = int(rules.get("momentum_min_conviction", 79))
+                min_mcap = float(rules.get("momentum_min_mcap_cr", 1000.0))
+                min_price = float(rules.get("momentum_min_price", 20.0))
+                min_turnover = float(rules.get("momentum_min_turnover_lakhs", 50.0))
 
-                for opp in mom_opps:
-                    sym = opp.get("symbol", "").strip().upper()
-                    if not sym:
-                        continue
+                # Aggregate candidates by symbol across all sources
+                candidates_by_sym: Dict[str, Dict[str, Any]] = {}
 
+                # A. Standard F&O candidates
+                try:
+                    mom_data = MomentumScreenerService.scan_opportunities(db=db, force_refresh=force_scan)
+                    for opp in mom_data.get("opportunities", []):
+                        s = opp.get("symbol", "").strip().upper()
+                        if s:
+                            opp_copy = dict(opp)
+                            opp_copy["scan_source"] = "FNO_BASKET"
+                            candidates_by_sym[s] = opp_copy
+                except Exception as fno_err:
+                    logger.warning(f"Error fetching F&O momentum opportunities: {fno_err}")
+
+                # B. Full Universe Scanner Findings (Disk Cache)
+                if mom_universe_enabled:
+                    try:
+                        from app.services.momentum_universe_scanner import MomentumUniverseScanner
+                        u_cache = MomentumUniverseScanner.load_universe_cache()
+                        if u_cache and u_cache.get("results"):
+                            for r in u_cache["results"]:
+                                s = r.get("symbol", "").strip().upper()
+                                if not s:
+                                    continue
+
+                                # Institutional gate verification
+                                cmp_val = float(r.get("cmp") or 0.0)
+                                if cmp_val < min_price:
+                                    continue
+                                mcap_val = r.get("market_cap_cr")
+                                if mcap_val is not None and mcap_val < min_mcap:
+                                    continue
+                                turnover_val = r.get("turnover_lakhs")
+                                if turnover_val is not None and turnover_val < min_turnover:
+                                    continue
+
+                                # If already exists from F&O, keep higher match_count or enrich metadata
+                                if s in candidates_by_sym:
+                                    existing = candidates_by_sym[s]
+                                    if r.get("match_count", 0) > existing.get("match_count", 0):
+                                        candidates_by_sym[s] = dict(r, scan_source="FULL_UNIVERSE")
+                                    else:
+                                        existing["market_cap_cr"] = r.get("market_cap_cr")
+                                        existing["turnover_lakhs"] = r.get("turnover_lakhs")
+                                else:
+                                    r_copy = dict(r)
+                                    r_copy["scan_source"] = "FULL_UNIVERSE"
+                                    candidates_by_sym[s] = r_copy
+                    except Exception as u_err:
+                        logger.warning(f"Error merging full universe momentum findings: {u_err}")
+
+                    # C. Live Breakout Watchlist Candidates
+                    try:
+                        from app.models.momentum_radar_watchlist import MomentumRadarWatchlist
+                        today_str = date.today().isoformat()
+                        live_candidates = (
+                            db.query(MomentumRadarWatchlist)
+                            .filter(
+                                MomentumRadarWatchlist.promoted_date == today_str,
+                                or_(
+                                    MomentumRadarWatchlist.breakout_triggered == True,
+                                    MomentumRadarWatchlist.intraday_match_count >= min_match,
+                                )
+                            )
+                            .all()
+                        )
+                        for b_row in live_candidates:
+                            s = b_row.symbol.strip().upper()
+                            b_dict = {
+                                "symbol": s,
+                                "company_name": b_row.company_name or s,
+                                "match_count": b_row.intraday_match_count or b_row.match_count,
+                                "conviction_score": b_row.conviction_score,
+                                "cmp": b_row.intraday_cmp or b_row.cmp_at_scan or 0.0,
+                                "trade_blueprint": {
+                                    "entry_trigger": b_row.entry_trigger,
+                                    "stop_loss": b_row.stop_loss,
+                                    "target_1": b_row.target_1,
+                                    "target_2": b_row.target_2,
+                                    "risk_reward": b_row.risk_reward or 2.5,
+                                },
+                                "indicators": {
+                                    "daily_rsi": b_row.daily_rsi_at_scan or 60.0,
+                                    "weekly_rsi": b_row.weekly_rsi_at_scan or 60.0,
+                                    "volume_surge_ratio": b_row.vol_surge_ratio_at_scan or 1.5,
+                                },
+                                "scan_source": "LIVE_BREAKOUT",
+                                "breakout_triggered": b_row.breakout_triggered,
+                            }
+                            candidates_by_sym[s] = b_dict
+                    except Exception as b_err:
+                        logger.warning(f"Error checking live momentum breakouts: {b_err}")
+
+                for sym, opp in candidates_by_sym.items():
                     match_count = int(opp.get("match_count", 0))
                     c_score = int(opp.get("conviction_score", 0))
+                    scan_source = opp.get("scan_source", "FNO_BASKET")
+                    is_live_breakout = (scan_source == "LIVE_BREAKOUT")
 
                     qualifies_match_9 = mom_match_enabled and (match_count >= min_match)
                     qualifies_conv_79 = mom_conv_enabled and (c_score >= min_conv)
+                    qualifies_live = is_live_breakout and (match_count >= min_match or opp.get("breakout_triggered"))
 
-                    if not (qualifies_match_9 or qualifies_conv_79):
+                    if not (qualifies_match_9 or qualifies_conv_79 or qualifies_live):
                         continue
 
                     # Deduplication check for momentum
@@ -390,6 +493,8 @@ class OpportunityAlertService:
                     cmp_price = float(opp.get("cmp", 0.0))
                     tb = opp.get("trade_blueprint", {})
                     ind = opp.get("indicators", {})
+                    market_cap_cr = opp.get("market_cap_cr")
+                    turnover_lakhs = opp.get("turnover_lakhs")
 
                     entry_trigger = float(tb.get("entry_trigger", cmp_price))
                     stop_loss = float(tb.get("stop_loss", cmp_price * 0.95))
@@ -401,16 +506,34 @@ class OpportunityAlertService:
                     vol_surge = float(ind.get("volume_surge_ratio", 1.5))
 
                     tag = "PERFECT 10/10" if match_count == 10 else f"{match_count}/10 MATCH"
-                    if qualifies_match_9 and qualifies_conv_79:
-                        headline_tag = f"MATCH {match_count}/10 & CONVICTION {c_score} PTS"
-                    elif qualifies_match_9:
-                        headline_tag = f"MATCH SCORE {match_count}/10"
+                    if is_live_breakout:
+                        headline_tag = f"LIVE BREAKOUT {match_count}/10"
+                        title = f"🔥 MOMENTUM BREAKOUT: {sym} ({headline_tag})"
+                    elif scan_source == "FULL_UNIVERSE":
+                        if qualifies_match_9 and qualifies_conv_79:
+                            headline_tag = f"UNIVERSE {match_count}/10 & {c_score} PTS"
+                        elif qualifies_match_9:
+                            headline_tag = f"UNIVERSE {match_count}/10"
+                        else:
+                            headline_tag = f"UNIVERSE {c_score} PTS"
+                        title = f"🌐 MOMENTUM RADAR: {sym} ({headline_tag})"
                     else:
-                        headline_tag = f"CONVICTION SCORE {c_score} PTS"
+                        if qualifies_match_9 and qualifies_conv_79:
+                            headline_tag = f"MATCH {match_count}/10 & CONVICTION {c_score} PTS"
+                        elif qualifies_match_9:
+                            headline_tag = f"MATCH SCORE {match_count}/10"
+                        else:
+                            headline_tag = f"CONVICTION SCORE {c_score} PTS"
+                        title = f"🚀 MOMENTUM RADAR: {sym} ({headline_tag})"
 
-                    title = f"🚀 MOMENTUM RADAR: {sym} ({headline_tag})"
+                    depth_str = ""
+                    if market_cap_cr is not None:
+                        depth_str += f" | Mcap ₹{int(market_cap_cr):,} Cr"
+                    if turnover_lakhs is not None:
+                        depth_str += f" | 20D TO ₹{int(turnover_lakhs):,}L"
+
                     message = (
-                        f"Multi-Timeframe Confluence: {match_count}/10 criteria met, Conviction: {c_score} pts. "
+                        f"Multi-Timeframe Confluence: {match_count}/10 criteria met, Conviction: {c_score} pts{depth_str}. "
                         f"CMP ₹{cmp_price:,.2f} | Trigger: ₹{entry_trigger:,.2f} | SL: ₹{stop_loss:,.2f}. "
                         f"Targets: ₹{target_1:,.2f} / ₹{target_2:,.2f}. Daily RSI: {d_rsi:.1f}, Weekly RSI: {w_rsi:.1f}, Vol Surge: {vol_surge:.1f}x."
                     )
@@ -423,6 +546,9 @@ class OpportunityAlertService:
                         "conviction_score": c_score,
                         "qualifies_match_9": qualifies_match_9,
                         "qualifies_conv_79": qualifies_conv_79,
+                        "scan_source": scan_source,
+                        "market_cap_cr": market_cap_cr,
+                        "turnover_lakhs": turnover_lakhs,
                         "cmp": cmp_price,
                         "entry_trigger": entry_trigger,
                         "stop_loss": stop_loss,
@@ -431,17 +557,17 @@ class OpportunityAlertService:
                         "daily_rsi": d_rsi,
                         "weekly_rsi": w_rsi,
                         "volume_surge_ratio": vol_surge,
-                        "action_url": "/momentum-radar",
+                        "action_url": "/momentum-radar?tab=universe" if scan_source == "FULL_UNIVERSE" else "/momentum-radar",
                     }
 
-                    severity = "critical" if match_count == 10 or c_score >= 88 else "warning"
+                    severity = "critical" if match_count == 10 or c_score >= 88 or is_live_breakout else "warning"
                     notif = AlertDispatchService.create_in_app_notification(
                         db=db,
                         title=title,
                         message=message,
                         category="MOMENTUM_RADAR",
                         severity=severity,
-                        action_url="/momentum-radar",
+                        action_url="/momentum-radar?tab=universe" if scan_source == "FULL_UNIVERSE" else "/momentum-radar",
                         metadata=metadata,
                     )
 
@@ -459,11 +585,14 @@ class OpportunityAlertService:
                         daily_rsi=d_rsi,
                         weekly_rsi=w_rsi,
                         vol_surge=vol_surge,
-                        action_url="http://localhost:3000/momentum-radar",
+                        action_url="http://localhost:3000/momentum-radar?tab=universe" if scan_source == "FULL_UNIVERSE" else "http://localhost:3000/momentum-radar",
+                        market_cap_cr=market_cap_cr,
+                        turnover_lakhs=turnover_lakhs,
+                        scan_source=scan_source,
                     )
                     cls._dispatch_external_channels(db, sym, memo, rules)
 
-                    dispatched_alerts.append({"engine": "momentum-radar", "symbol": sym, "title": title, "notif_id": notif.id})
+                    dispatched_alerts.append({"engine": "momentum-radar", "symbol": sym, "title": title, "notif_id": notif.id, "source": scan_source})
 
             except Exception as e:
                 logger.error(f"Error scanning momentum radar for alerts: {e}", exc_info=True)
@@ -548,6 +677,16 @@ class OpportunityAlertService:
         except Exception as gr_err:
             logger.error(f"Error evaluating growth screener alerts in master scan: {gr_err}", exc_info=True)
 
+        # ==================================================================
+        # 12. /ipo-radar — Mainboard IPO Breakouts & Base Cheats
+        # ==================================================================
+        try:
+            ipo_res = cls.scan_ipo_radar_alerts(db=db, rules=rules)
+            for item in ipo_res:
+                dispatched_alerts.append(item)
+        except Exception as ipo_err:
+            logger.error(f"Error evaluating IPO radar alerts in master scan: {ipo_err}", exc_info=True)
+
         return {
             "status": "SUCCESS",
             "timestamp": datetime.utcnow().isoformat(),
@@ -574,8 +713,8 @@ class OpportunityAlertService:
         # Telegram Dispatch
         if rules.get("auto_broadcast_telegram", True):
             try:
-                tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
-                if tg_cfg and tg_cfg.is_enabled and tg_cfg.bot_token and tg_cfg.chat_id:
+                tg_cfg_dict = AlertDispatchService.get_telegram_config(db)
+                if tg_cfg_dict and tg_cfg_dict.get("is_enabled", True):
                     already_sent_tg = (
                         db.query(AlertDispatchLog)
                         .filter(
@@ -590,14 +729,14 @@ class OpportunityAlertService:
                         logger.info(f"Skipping Telegram dispatch: {symbol} already dispatched at {already_sent_tg.dispatched_at}")
                     else:
                         res = AlertDispatchService.dispatch_telegram(
-                            bot_token=tg_cfg.bot_token,
-                            chat_id=tg_cfg.chat_id,
+                            bot_token=tg_cfg_dict["bot_token"],
+                            chat_id=tg_cfg_dict["chat_id"],
                             text=memo_text,
                         )
                         AlertDispatchService.log_dispatch(
                             db=db,
                             channel="TELEGRAM",
-                            recipient=tg_cfg.chat_id,
+                            recipient=tg_cfg_dict["chat_id"],
                             symbol=symbol,
                             payload_preview=memo_text,
                             status="SUCCESS" if res.get("success") else "FAILED",
@@ -1589,6 +1728,146 @@ class OpportunityAlertService:
         return dispatched
 
     @classmethod
+    def scan_ipo_radar_alerts(
+        cls,
+        db: Session,
+        rules: Optional[Dict[str, Any]] = None,
+        force_top_recent: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans Mainboard IPO Radar for active high-conviction institutional setups:
+        - Blue-Sky Listing Day High (LDH) Breakouts
+        - IPO Base & Cheat Pivots (VCP Contraction)
+        - SEBI 30-Day & 90-Day Anchor Lock-in Float Absorption
+        - Broken Phoenix Turnaround Reclaims
+        Deduplicates per symbol daily, creates in-app notification (IPO_RADAR), and broadcasts to Telegram / WhatsApp.
+        """
+        from app.services.ipo_radar_service import IPORadarService
+
+        if rules is None:
+            rules = cls.get_opportunity_thresholds(db)
+
+        if not rules.get("ipo_radar_enabled", True):
+            return []
+
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        dispatched = []
+
+        try:
+            min_conviction = float(rules.get("ipo_min_conviction", 85.0))
+            blue_sky_only = bool(rules.get("ipo_blue_sky_only", False))
+
+            data = IPORadarService.scan_all(force_refresh=force_top_recent)
+            candidates = data.get("candidates", [])
+
+            for cand in candidates:
+                sym = cand.get("symbol", "").strip().upper()
+                if not sym:
+                    continue
+
+                c_score = float(cand.get("conviction_score", 0.0))
+                setup_type = cand.get("setup_type", "")
+                setup_status = cand.get("setup_status", "")
+
+                # Filtering rules
+                if blue_sky_only and "LDH" not in setup_type:
+                    continue
+
+                if c_score < min_conviction and setup_status not in ["TRIGGERED", "DAY_1_ACTIVE"]:
+                    continue
+
+                # Deduplication check
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category == "IPO_RADAR",
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                company_name = cand.get("company", sym)
+                cmp_price = float(cand.get("cmp", 0.0))
+                pivot_price = float(cand.get("pivot_price", 0.0))
+                stop_loss = float(cand.get("stop_loss", 0.0))
+                target_1 = float(cand.get("target_1", 0.0))
+                target_2 = float(cand.get("target_2", 0.0))
+                risk_pct = float(cand.get("risk_pct", 0.0))
+                day1_high = float(cand.get("day1_high", 0.0))
+                days_since_listing = int(cand.get("days_since_listing", 0))
+                rvol = float(cand.get("rvol", 1.0))
+                setup_label = cand.get("setup_label", setup_type)
+                anchor_days_left = cand.get("anchor_30d_days_left")
+
+                severity = "critical" if setup_status == "TRIGGERED" or c_score >= 90.0 else "warning"
+                title = f"🚀 IPO RADAR: {sym} ({setup_label} • {c_score:.0f} PTS)"
+                message = (
+                    f"Mainboard IPO setup active ({setup_status}). "
+                    f"CMP: ₹{cmp_price:,.1f}, Pivot: ₹{pivot_price:,.1f}, SL: ₹{stop_loss:,.1f} (-{risk_pct:.1f}%). "
+                    f"2R Target: ₹{target_1:,.1f} (+15%). RelVol: {rvol:.2f}x."
+                )
+
+                metadata = {
+                    "rule_type": "IPO_RADAR",
+                    "symbol": sym,
+                    "company_name": company_name,
+                    "setup_type": setup_type,
+                    "setup_label": setup_label,
+                    "setup_status": setup_status,
+                    "conviction_score": c_score,
+                    "cmp": cmp_price,
+                    "pivot_price": pivot_price,
+                    "stop_loss": stop_loss,
+                    "target_1": target_1,
+                    "target_2": target_2,
+                    "risk_pct": risk_pct,
+                    "day1_high": day1_high,
+                    "days_since_listing": days_since_listing,
+                    "action_url": "/ipo-radar",
+                }
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="IPO_RADAR",
+                    severity=severity,
+                    action_url="/ipo-radar",
+                    metadata=metadata,
+                )
+
+                memo = AlertDispatchService.format_ipo_radar_alert(
+                    symbol=sym,
+                    company_name=company_name,
+                    setup_type=setup_type,
+                    setup_label=setup_label,
+                    setup_status=setup_status,
+                    conviction_score=c_score,
+                    cmp=cmp_price,
+                    pivot_price=pivot_price,
+                    stop_loss=stop_loss,
+                    target_1=target_1,
+                    target_2=target_2,
+                    risk_pct=risk_pct,
+                    day1_high=day1_high,
+                    days_since_listing=days_since_listing,
+                    rvol=rvol,
+                    anchor_days_left=anchor_days_left,
+                    rationale=cand.get("rationale"),
+                    action_url="http://localhost:3000/ipo-radar",
+                )
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "ipo-radar", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Mainboard IPO Radar for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
     def get_recent_opportunity_alerts(cls, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Returns recent opportunity notifications across all key radar categories.
@@ -1606,6 +1885,7 @@ class OpportunityAlertService:
             "INSTITUTIONAL_MF",
             "GROWTH_SCREENER",
             "BREAKOUT_EXECUTION",
+            "IPO_RADAR",
         ]
         items = (
             db.query(SystemNotification)

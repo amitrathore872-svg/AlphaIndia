@@ -164,3 +164,28 @@ def get_star_fund_managers_radar(db: Session = Depends(get_db)):
     Returns top alpha fund managers and their recent accumulation setups.
     """
     return MFAnalyticsService.get_star_fund_managers(db)
+
+
+@router.get("/filing-status")
+def get_mutual_fund_filing_status(db: Session = Depends(get_db)):
+    """
+    Evaluates mutual fund monthly portfolio filing calendar under SEBI Regulation 59A
+    and SEBI LODR Regulation 31. Returns whether new filings are available, exact posting
+    deadlines (10th of every month for AMFI), and autonomous scheduler telemetry.
+    """
+    from app.services.mf_engine_service import MFEngineService
+    return MFEngineService.get_filing_status(db)
+
+
+@router.post("/schedule-sync")
+def trigger_mutual_fund_sync(
+    force: bool = Query(False, description="Force re-ingestion if period already exists"),
+    db: Session = Depends(get_db),
+):
+    """
+    Triggers or schedules immediate ingestion of the next available monthly filings into the database,
+    computing MoM changes, fresh entries, smart money scores, sector flows, and AI conviction signals.
+    """
+    from app.services.mf_engine_service import MFEngineService
+    return MFEngineService.ingest_monthly_filings(db=db, force=force)
+

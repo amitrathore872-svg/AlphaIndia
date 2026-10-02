@@ -17,6 +17,7 @@ from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.yahoo_client import YahooClient
 from app.clients.dhan_client import DhanClient
+from app.clients.fivepaisa_client import FivePaisaClient
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,27 @@ class LivePriceService:
             "source": "UNKNOWN",
         }
 
-        # 1. Tier 1: Try DhanHQ 0-delay real-time live feed if configured
+        # 1. Tier 1: Try 5paisa 0-delay real-time live feed (₹0/mo free API)
+        try:
+            fp = FivePaisaClient.get_instance()
+            if fp.is_configured():
+                fp_quotes = fp.get_live_quotes([clean_sym])
+                if clean_sym in fp_quotes and fp_quotes[clean_sym].get("cmp"):
+                    q = fp_quotes[clean_sym]
+                    res.update({
+                        "cmp": q["cmp"],
+                        "prev_close": q.get("close"),
+                        "day_change": q.get("day_change"),
+                        "day_change_pct": q.get("day_change_pct"),
+                        "year_high": q.get("high"),
+                        "year_low": q.get("low"),
+                        "source": "FIVEPAISA_REALTIME",
+                    })
+                    return res
+        except Exception as e:
+            logger.debug(f"[LivePriceService] 5paisa live quote failed for {clean_sym}: {e}")
+
+        # 2. Tier 2: Try DhanHQ 0-delay real-time live feed if configured
         try:
             dhan = DhanClient.get_instance()
             if dhan.is_configured():
@@ -69,7 +90,7 @@ class LivePriceService:
         except Exception as e:
             logger.debug(f"[LivePriceService] Dhan live quote failed for {clean_sym}: {e}")
 
-        # 2. Tier 2: Yahoo Finance Fallback (~15 min delayed)
+        # 3. Tier 3: Yahoo Finance Fallback (~15 min delayed)
         try:
             ticker = YahooClient.resolve_ticker(clean_sym, exchange=exchange)
             fi = getattr(ticker, "fast_info", None)
@@ -225,7 +246,30 @@ class LivePriceService:
                     "source": "DB_CACHE",
                 }
 
-        # Tier 1: Try DhanHQ batch live quotes (0-delay real-time)
+        # Tier 1: Try 5paisa batch live quotes (0-delay real-time, ₹0 free API)
+        if symbols_to_fetch:
+            try:
+                fp = FivePaisaClient.get_instance()
+                if fp.is_configured():
+                    fp_quotes = fp.get_live_quotes(symbols_to_fetch)
+                    for sym, fq in fp_quotes.items():
+                        if fq.get("cmp"):
+                            results[sym] = {
+                                "symbol": sym,
+                                "cmp": fq["cmp"],
+                                "prev_close": fq.get("close"),
+                                "day_change": fq.get("day_change"),
+                                "day_change_pct": fq.get("day_change_pct"),
+                                "year_high": fq.get("high"),
+                                "year_low": fq.get("low"),
+                                "source": "FIVEPAISA_REALTIME",
+                            }
+                    # Keep only unresolved symbols
+                    symbols_to_fetch = [s for s in symbols_to_fetch if s not in results or not results[s].get("cmp")]
+            except Exception as fp_err:
+                logger.debug(f"[LivePriceService] 5paisa batch live quote error: {fp_err}")
+
+        # Tier 2: Try DhanHQ batch live quotes (0-delay real-time)
         if symbols_to_fetch:
             try:
                 dhan = DhanClient.get_instance()
@@ -250,7 +294,7 @@ class LivePriceService:
             except Exception as d_err:
                 logger.debug(f"[LivePriceService] Dhan batch live quote error: {d_err}")
 
-        # Tier 2: Fetch unresolved via parallel Yahoo Finance fallback
+        # Tier 3: Fetch unresolved via parallel Yahoo Finance fallback
         if symbols_to_fetch:
             worker_count = min(len(symbols_to_fetch), max_workers)
             with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:

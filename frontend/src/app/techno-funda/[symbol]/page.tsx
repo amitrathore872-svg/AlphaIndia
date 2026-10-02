@@ -8,6 +8,7 @@ import {
   fetchTechnoFundaStock,
   type TechnoFundaStockAnalysis,
 } from "@/lib/technoFundaApi";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import {
   ArrowLeft,
   Activity,
@@ -144,6 +145,14 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                     </div>
                   </div>
 
+                  <AddToWatchlistButton
+                    symbol={stock.symbol}
+                    companyName={stock.company_name}
+                    currentPrice={stock.technical.current_price}
+                    sector={stock.sector}
+                    variant="button"
+                  />
+
                   <div className="flex flex-col items-end gap-1">
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold border shadow-lg ${
@@ -165,27 +174,46 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
+
+              {/* IDENTIFIED INSTITUTIONAL PATTERN RIBBON */}
+              {stock.identified_pattern && (
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-800/80 pt-3">
+                  <div className="flex items-center gap-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 text-xs font-bold text-cyan-300">
+                    <Layers size={13} className="text-cyan-400" />
+                    <span>{stock.identified_pattern.pattern_label}</span>
+                  </div>
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+                    Conviction: {stock.identified_pattern.conviction_tier} ({stock.identified_pattern.score}/100)
+                  </div>
+                  {stock.identified_pattern.depth_pct ? (
+                    <div className="rounded-lg bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 text-xs text-slate-300">
+                      Contraction: <strong className="text-white">{stock.identified_pattern.depth_pct}%</strong>
+                    </div>
+                  ) : null}
+                  {stock.identified_pattern.width_weeks ? (
+                    <div className="rounded-lg bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 text-xs text-slate-300">
+                      Base Width: <strong className="text-white">{stock.identified_pattern.width_weeks}W</strong>
+                    </div>
+                  ) : null}
+                  {stock.identified_pattern.pivot_buy_point ? (
+                    <div className="rounded-lg bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 text-xs text-slate-300">
+                      Pivot Level: <strong className="text-cyan-300">₹{stock.identified_pattern.pivot_buy_point}</strong>
+                    </div>
+                  ) : null}
+                  {stock.identified_pattern.stop_loss ? (
+                    <div className="rounded-lg bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 text-xs text-slate-300">
+                      Stop Loss: <strong className="text-rose-400">₹{stock.identified_pattern.stop_loss}</strong>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
 
-            {/* MAIN WORKSPACE: LIVE CHART (7 COLS) & SCENARIO BLUEPRINT (5 COLS) */}
+            {/* FIRST STEP: SETUP READINESS & SCENARIO BLUEPRINT LEVELS */}
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-              {/* LIVE TRADINGVIEW CHART CONTAINER */}
-              <div className="lg:col-span-7 flex flex-col gap-4">
-                <TradingViewChart
-                  symbol={stock.symbol}
-                  exchange={stock.exchange || "NSE"}
-                  height={560}
-                  pivotReference={stock.technical.pivot_reference}
-                  scenarioTrigger={stock.technical.scenario_trigger}
-                  downsideReference={stock.technical.downside_reference}
-                  target1={stock.technical.target_1}
-                />
-              </div>
-
-              {/* SETUP READINESS & SCENARIO BLUEPRINT PANEL */}
-              <div className="lg:col-span-5 flex flex-col gap-4">
-                {/* SETUP READINESS CARD */}
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] p-5 shadow-xl">
+              {/* SETUP READINESS CARD */}
+              <div className="lg:col-span-5 flex flex-col justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] p-5 shadow-xl">
+                <div>
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2">
                       <Flame size={18} className="text-amber-400" />
@@ -209,18 +237,44 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                       {stock.status_desc}
                     </p>
 
-                    {/* Progress Score Bar */}
-                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-500 via-emerald-500 to-emerald-400 transition-all duration-500"
-                        style={{ width: `${stock.technical.setup_score}%` }}
-                      />
-                    </div>
+                    {/* Identified Pattern Callout if detected */}
+                    {stock.identified_pattern && (
+                      <div className="mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
+                        <div className="flex items-center justify-between text-xs font-bold text-cyan-300">
+                          <div className="flex items-center gap-1.5">
+                            <Target size={14} className="text-cyan-400" />
+                            <span>Institutional Pattern: {stock.identified_pattern.pattern_label}</span>
+                          </div>
+                          <span className="font-mono text-emerald-400">
+                            Conviction: {stock.identified_pattern.score}/100
+                          </span>
+                        </div>
+                        <div className="mt-1.5 text-[11px] leading-relaxed text-slate-300">
+                          {stock.identified_pattern.summary_notes || stock.status_desc}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* SCENARIO REFERENCE LEVELS (LIKE SWINGEDGE) */}
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] p-5 shadow-xl font-mono">
+                {/* Progress Score Bar */}
+                <div className="mt-4 pt-3 border-t border-slate-800/60">
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-1.5 font-sans">
+                    <span>Readiness Threshold</span>
+                    <span className="font-mono text-cyan-300 font-bold">{stock.technical.setup_score}%</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className="h-full bg-gradient-to-r from-cyan-500 via-emerald-500 to-emerald-400 transition-all duration-500"
+                      style={{ width: `${stock.technical.setup_score}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SCENARIO REFERENCE LEVELS (LIKE SWINGEDGE) */}
+              <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] p-5 shadow-xl font-mono">
+                <div>
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3 font-sans">
                     <div className="flex items-center gap-2">
                       <Target size={18} className="text-cyan-400" />
@@ -233,7 +287,7 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                  <div className="mt-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     {/* TRIGGER LEVEL */}
                     <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
                       <div className="text-[10px] font-sans text-cyan-400 font-semibold uppercase">
@@ -250,7 +304,7 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                     {/* PIVOT REFERENCE */}
                     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                       <div className="text-[10px] font-sans text-slate-400 font-semibold uppercase">
-                        Model Pivot Reference
+                        Pivot Reference
                       </div>
                       <div className="mt-1 text-lg font-bold text-white">
                         ₹{stock.technical.pivot_reference}
@@ -263,7 +317,7 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                     {/* DOWNSIDE STOP LOSS */}
                     <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
                       <div className="text-[10px] font-sans text-rose-400 font-semibold uppercase">
-                        Downside Ref / Stop
+                        Downside / Stop
                       </div>
                       <div className="mt-1 text-lg font-bold text-rose-400">
                         ₹{stock.technical.downside_reference}
@@ -286,14 +340,27 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* ASYMMETRIC R:R BANNER */}
-                  <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-2 text-xs">
-                    <span className="font-sans text-slate-300">Asymmetric Risk-to-Reward:</span>
-                    <strong className="text-amber-400 font-bold">1 : {stock.technical.risk_reward}</strong>
-                  </div>
+                {/* ASYMMETRIC R:R BANNER */}
+                <div className="mt-3.5 flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-2 text-xs">
+                  <span className="font-sans text-slate-300">Asymmetric Risk-to-Reward:</span>
+                  <strong className="text-amber-400 font-bold">1 : {stock.technical.risk_reward}</strong>
                 </div>
               </div>
+            </div>
+
+            {/* FULL LENGTH / FULL WIDTH LIVE TRADINGVIEW CHART */}
+            <div className="w-full flex flex-col gap-4">
+              <TradingViewChart
+                symbol={stock.symbol}
+                exchange={stock.exchange || "NSE"}
+                height={620}
+                pivotReference={stock.technical.pivot_reference}
+                scenarioTrigger={stock.technical.scenario_trigger}
+                downsideReference={stock.technical.downside_reference}
+                target1={stock.technical.target_1}
+              />
             </div>
 
             {/* STRUCTURED CHECKLIST: BULLISH FACTORS VS RISK FACTORS */}

@@ -19,6 +19,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import CPRBandVisualizer from "./CPRBandVisualizer";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import { fetchStockCPRDetail, type CPRStockDetail } from "@/lib/cprApi";
 
 interface CPRDetailModalProps {
@@ -56,17 +57,27 @@ export default function CPRDetailModal({ symbol, onClose }: CPRDetailModalProps)
         {/* Header Actions */}
         <div className="absolute right-4 top-4 flex items-center gap-2">
           {detail && (
-            <Link
-              href={`/techno-funda/${encodeURIComponent(detail.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 transition"
-              title={`Open ${detail.symbol} in Techno-Funda Radar`}
-            >
-              <Target className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Techno-Funda</span>
-              <ExternalLink className="h-3 w-3 text-cyan-400/80" />
-            </Link>
+            <>
+              <AddToWatchlistButton
+                symbol={detail.symbol}
+                companyName={detail.company_name}
+                currentPrice={detail.current_price}
+                sector={detail.sector}
+                defaultThesis={`CPR Compression: Width ${detail.cpr_daily?.width_pct?.toFixed(2) ?? "N/A"}%, Comp Score ${detail.scores?.compression_score ?? "N/A"}/100, Breakout Score ${detail.scores?.breakout_score ?? "N/A"}/100.`}
+                variant="button"
+              />
+              <Link
+                href={`/techno-funda/${encodeURIComponent(detail.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 transition"
+                title={`Open ${detail.symbol} in Techno-Funda Radar`}
+              >
+                <Target className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Techno-Funda</span>
+                <ExternalLink className="h-3 w-3 text-cyan-400/80" />
+              </Link>
+            </>
           )}
           <button
             onClick={onClose}

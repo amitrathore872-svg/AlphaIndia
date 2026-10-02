@@ -29,6 +29,7 @@ import {
   Compass,
 } from "lucide-react";
 import type { AnnouncementRadarItem, OrderSignificanceTier } from "@/lib/announcementsApi";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
 interface OrderWinCardProps {
   item: AnnouncementRadarItem;
@@ -38,31 +39,31 @@ interface OrderWinCardProps {
 
 const SIGNIFICANCE_THEMES: Record<string, { badge: string; text: string; bg: string; border: string; glow: string }> = {
   TRANSFORMATIONAL: {
-    badge: "bg-purple-500/20 text-purple-300 border-purple-500/40",
-    text: "text-purple-300",
-    bg: "from-purple-950/30 via-slate-900/60 to-[#07111F]",
-    border: "border-purple-500/40",
-    glow: "shadow-purple-950/30",
+    badge: "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/40",
+    text: "text-purple-700 dark:text-purple-300",
+    bg: "from-purple-500/10 via-white to-slate-50 dark:from-purple-950/30 dark:via-slate-900/60 dark:to-[#07111F]",
+    border: "border-purple-200 dark:border-purple-500/40",
+    glow: "shadow-purple-950/10 dark:shadow-purple-950/30",
   },
   HIGH_IMPACT: {
-    badge: "bg-amber-500/20 text-amber-300 border-amber-500/40",
-    text: "text-amber-300",
-    bg: "from-amber-950/25 via-slate-900/60 to-[#07111F]",
-    border: "border-amber-500/40",
-    glow: "shadow-amber-950/30",
+    badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40",
+    text: "text-amber-700 dark:text-amber-300",
+    bg: "from-amber-500/10 via-white to-slate-50 dark:from-amber-950/25 dark:via-slate-900/60 dark:to-[#07111F]",
+    border: "border-amber-200 dark:border-amber-500/40",
+    glow: "shadow-amber-950/10 dark:shadow-amber-950/30",
   },
   MODERATE: {
-    badge: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40",
-    text: "text-cyan-300",
-    bg: "from-cyan-950/25 via-slate-900/60 to-[#07111F]",
-    border: "border-cyan-500/40",
-    glow: "shadow-cyan-950/20",
+    badge: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/40",
+    text: "text-cyan-700 dark:text-cyan-300",
+    bg: "from-cyan-500/10 via-white to-slate-50 dark:from-cyan-950/25 dark:via-slate-900/60 dark:to-[#07111F]",
+    border: "border-cyan-200 dark:border-cyan-500/40",
+    glow: "shadow-cyan-950/10 dark:shadow-cyan-950/20",
   },
   ROUTINE: {
-    badge: "bg-slate-800 text-slate-400 border-slate-700",
-    text: "text-slate-400",
-    bg: "from-slate-900/40 via-slate-900/40 to-[#07111F]",
-    border: "border-slate-800",
+    badge: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400 border-slate-300 dark:border-slate-700",
+    text: "text-slate-600 dark:text-slate-400",
+    bg: "from-slate-50 via-white to-slate-100/50 dark:from-slate-900/40 dark:via-slate-900/40 dark:to-[#07111F]",
+    border: "border-slate-200 dark:border-slate-800",
     glow: "shadow-none",
   },
 };
@@ -118,14 +119,14 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1.5 text-base font-black tracking-tight text-white hover:text-cyan-300 hover:underline transition-colors"
+              className="inline-flex items-center gap-1.5 text-base font-black tracking-tight text-slate-900 dark:text-white hover:text-cyan-600 dark:hover:text-cyan-300 hover:underline transition-colors"
               title={`Open ${item.symbol} chart on TradingView`}
             >
               <span>{item.company_name}</span>
-              <ExternalLink size={12} className="opacity-60 hover:opacity-100 text-cyan-400 shrink-0" />
+              <ExternalLink size={12} className="opacity-60 hover:opacity-100 text-cyan-600 dark:text-cyan-400 shrink-0" />
             </a>
           ) : (
-            <span className="text-base font-black tracking-tight text-white group-hover:text-cyan-300 transition-colors">
+            <span className="text-base font-black tracking-tight text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-300 transition-colors">
               {item.company_name}
             </span>
           )}
@@ -135,29 +136,29 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="rounded bg-slate-800/90 border border-slate-700 px-2 py-0.5 text-xs font-mono font-bold text-cyan-400 hover:border-cyan-500/50 hover:bg-slate-800 transition-all"
+              className="rounded bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 px-2 py-0.5 text-xs font-mono font-bold text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/50 hover:bg-slate-200 dark:hover:bg-slate-800 transition-all shadow-xs"
               title={`TradingView Chart: ${item.symbol}`}
             >
               {item.symbol}
             </a>
           )}
           {item.is_listed && (
-            <span className="rounded bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-mono font-semibold text-emerald-400">
+            <span className="rounded bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-mono font-semibold text-emerald-700 dark:text-emerald-400">
               NSE/BSE
             </span>
           )}
 
           {/* Order Win AI Flag */}
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
-            <Zap size={11} className="text-amber-400 fill-amber-400" />
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+            <Zap size={11} className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400" />
             New Order Win Screener
           </span>
 
           {/* Counterparty Badge if detected */}
           {item.order_client_counterparty && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
-              <Building2 size={10} className="text-blue-400" />
-              Client: <strong className="text-white font-mono">{item.order_client_counterparty}</strong>
+            <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+              <Building2 size={10} className="text-blue-500 dark:text-blue-400" />
+              Client: <strong className="text-slate-900 dark:text-white font-mono">{item.order_client_counterparty}</strong>
             </span>
           )}
 
@@ -166,7 +167,7 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
             href={screenerUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-[10px] font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-cyan-300 ml-1"
+            className="inline-flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-cyan-700 dark:hover:text-cyan-300 ml-1 border border-slate-200 dark:border-transparent"
             title="View financial balance sheet on Screener.in"
           >
             <span>Screener</span>
@@ -180,20 +181,20 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wider ${theme.badge}`}>
             <Award size={13} className="shrink-0" />
             <span>{tier.replace(/_/g, " ")}</span>
-            <span className="font-mono text-white ml-0.5">{sigScore.toFixed(0)}/100</span>
+            <span className="font-mono text-slate-900 dark:text-white ml-0.5">{sigScore.toFixed(0)}/100</span>
           </span>
 
           {/* AI Upside Probability */}
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono font-bold text-emerald-300">
-            <Target size={12} className="text-emerald-400" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-300">
+            <Target size={12} className="text-emerald-600 dark:text-emerald-400" />
             {upsideProb.toFixed(0)}% Probability
           </span>
         </div>
       </div>
 
       {/* ── CLEAN SUBJECT / HEADLINE ─────────────────────────────── */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
-        <h3 className="text-sm font-semibold text-slate-100 leading-snug">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/60 p-3">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug">
           {cleanHeadline}
         </h3>
       </div>
@@ -201,64 +202,64 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
       {/* ── 4-METRIC QUANTITATIVE INTELLIGENCE GRID ───────────────── */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {/* Metric 1: Order Size & Revenue Contribution */}
-        <div className="rounded-xl border border-amber-500/25 bg-amber-950/15 p-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/15 p-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-1">
             <span>Order Sizing</span>
             <Coins size={12} />
           </div>
           <div>
-            <div className="font-mono text-base font-black text-white">
+            <div className="font-mono text-base font-black text-slate-900 dark:text-white">
               {dealValue ? `₹${dealValue.toLocaleString("en-IN")} Cr` : "Material Win"}
             </div>
-            <div className="font-mono text-[11px] font-bold text-amber-300 mt-0.5">
+            <div className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300 mt-0.5">
               {revPct ? `+${revPct.toFixed(1)}% of TTM Revenue` : "Expanding Backlog"}
             </div>
           </div>
         </div>
 
         {/* Metric 2: Expected Execution Timeline */}
-        <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/15 p-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-cyan-400 mb-1">
+        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 dark:bg-cyan-950/15 p-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-400 mb-1">
             <span>Execution Timeline</span>
             <Clock size={12} />
           </div>
           <div>
-            <div className="font-mono text-base font-black text-white">
+            <div className="font-mono text-base font-black text-slate-900 dark:text-white">
               {executionMonths} Months
             </div>
-            <div className="font-mono text-[11px] text-cyan-300 mt-0.5">
+            <div className="font-mono text-[11px] text-cyan-700 dark:text-cyan-300 mt-0.5">
               {quarters} Quarters Runway
             </div>
           </div>
         </div>
 
         {/* Metric 3: Quarterly Revenue Impact */}
-        <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/15 p-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-1">
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-950/15 p-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-1">
             <span>Quarterly Revenue</span>
             <TrendingUp size={12} />
           </div>
           <div>
-            <div className="font-mono text-base font-black text-emerald-300">
+            <div className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">
               {quarterlyRevCr ? `+₹${quarterlyRevCr.toLocaleString("en-IN")} Cr` : "Accretive"}
             </div>
-            <div className="font-mono text-[11px] text-emerald-400/90 mt-0.5">
+            <div className="font-mono text-[11px] text-emerald-700/90 dark:text-emerald-400/90 mt-0.5">
               {quarterlyLiftPct ? `+${quarterlyLiftPct.toFixed(1)}% Quarterly Lift` : "Revenue Boost"}
             </div>
           </div>
         </div>
 
         {/* Metric 4: Earnings & Accretion Estimate */}
-        <div className="rounded-xl border border-purple-500/25 bg-purple-950/15 p-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-purple-400 mb-1">
+        <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 dark:bg-purple-950/15 p-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400 mb-1">
             <span>Earnings Impact</span>
             <BarChart3 size={12} />
           </div>
           <div>
-            <div className="font-mono text-base font-black text-purple-300">
+            <div className="font-mono text-base font-black text-purple-700 dark:text-purple-300">
               {earningsImpactCr ? `+₹${earningsImpactCr.toLocaleString("en-IN")} Cr` : "Margin Accretive"}
             </div>
-            <div className="font-mono text-[11px] text-purple-300/90 mt-0.5">
+            <div className="font-mono text-[11px] text-purple-700/90 dark:text-purple-300/90 mt-0.5">
               +{patAccretionPct.toFixed(1)}% Annual PAT Lift
             </div>
           </div>
@@ -266,20 +267,20 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
       </div>
 
       {/* ── VALUATION BRIDGE & TARGET PRICE RANGE ──────────────────── */}
-      <div className="rounded-xl border border-slate-800 bg-[#061424]/90 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#061424]/90 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <Target size={14} className="text-emerald-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+            <Target size={14} className="text-emerald-600 dark:text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
               AI Price Target Range & Conviction Bridge
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-400 font-mono">
-              Model Confidence: <strong className="text-white">{confScore.toFixed(0)}%</strong>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+              Model Confidence: <strong className="text-slate-900 dark:text-white">{confScore.toFixed(0)}%</strong>
             </span>
-            <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-black uppercase">
+            <span className="rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-black uppercase">
               {item.recommendation?.replace(/_/g, " ") || "STRONG BUY"}
             </span>
           </div>
@@ -287,16 +288,16 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
 
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs font-mono">
           {/* CMP */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
-            <span className="text-[10px] uppercase font-sans text-slate-400 block font-semibold">Current Price (CMP)</span>
-            <div className="text-sm font-bold text-white mt-1">₹{cmp.toLocaleString("en-IN")}</div>
-            <span className="text-[9px] text-slate-500 font-sans block mt-0.5">Live Market Baseline</span>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 p-2.5 shadow-xs">
+            <span className="text-[10px] uppercase font-sans text-slate-500 dark:text-slate-400 block font-semibold">Current Price (CMP)</span>
+            <div className="text-sm font-bold text-slate-900 dark:text-white mt-1">₹{cmp.toLocaleString("en-IN")}</div>
+            <span className="text-[9px] text-slate-400 dark:text-slate-500 font-sans block mt-0.5">Live Market Baseline</span>
           </div>
 
           {/* Conservative Target (Low) */}
-          <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
-            <span className="text-[10px] uppercase font-sans text-slate-400 block font-semibold">Low Case Target</span>
-            <div className="text-sm font-bold text-slate-300 mt-1">₹{targetLow.toLocaleString("en-IN")}</div>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 p-2.5 shadow-xs">
+            <span className="text-[10px] uppercase font-sans text-slate-500 dark:text-slate-400 block font-semibold">Low Case Target</span>
+            <div className="text-sm font-bold text-slate-700 dark:text-slate-300 mt-1">₹{targetLow.toLocaleString("en-IN")}</div>
             <span className="text-[9px] text-slate-400 font-sans block mt-0.5">
               +{Math.round(((targetLow - cmp) / cmp) * 100)}% Upside
             </span>
@@ -391,7 +392,15 @@ export default function OrderWinCard({ item, onSelectDrawer, onSendAlert }: Orde
             </button>
           )}
 
-          {/* Full Deep Dive Page Link */}
+          {/* Watchlist */}
+          {item.symbol && (
+            <AddToWatchlistButton
+              symbol={item.symbol}
+              companyName={item.company_name}
+              currentPrice={item.current_price ?? undefined}
+              variant="button"
+            />
+          )}
           <Link
             href={`/announcements/${item.id}`}
             className="flex items-center gap-1.5 rounded-lg border border-purple-500/50 bg-purple-500/20 px-3 py-1 text-[11px] font-bold text-purple-200 transition-all hover:bg-purple-500/30 hover:border-purple-400 shadow-sm"

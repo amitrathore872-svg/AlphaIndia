@@ -64,8 +64,13 @@ def get_delivery_opportunities(
 
     # 6. Sorting
     reverse_sort = (sort_order.lower() == "desc")
-    if sort_by in ["conviction_score", "delivery_per", "delivery_spike_x", "current_price", "day_change_pct", "turnover_cr", "deliv_flow_20d"]:
-        items.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse_sort)
+    allowed_sort_fields = [
+        "conviction_score", "delivery_per", "delivery_spike_x", "current_price", 
+        "day_change_pct", "turnover_cr", "deliv_flow_20d", "market_cap_cr", 
+        "ticket_spike_x", "range_contraction_ratio"
+    ]
+    if sort_by in allowed_sort_fields:
+        items.sort(key=lambda x: x.get(sort_by) or 0, reverse=reverse_sort)
 
     total_count = len(items)
     total_pages = max(1, (total_count + limit - 1) // limit)

@@ -1405,6 +1405,14 @@ class VCPEngineService:
         clean_sym = symbol.strip().upper()
 
         try:
+            from app.services.market_data_service import MarketDataService
+            cached_df = MarketDataService.get_symbol_ohlcv(clean_sym, period=period, interval=interval)
+            if cached_df is not None and not cached_df.empty and len(cached_df) >= 15:
+                return cached_df
+        except Exception:
+            pass
+
+        try:
             df = pd.DataFrame()
             ticker_ns = yf.Ticker(f"{clean_sym}.NS")
             df_ns = ticker_ns.history(period=period)

@@ -145,11 +145,50 @@ def toggle_company_visibility(
 @router.get("/companies/dhan-feed/status")
 def get_dhan_feed_status():
     """
-    Returns real-time diagnostics and token expiry for DhanHQ Market Feed.
+    Returns real-time diagnostics and token expiry for live market feeds (5paisa & DhanHQ).
     """
+    from app.clients.fivepaisa_client import FivePaisaClient
     from app.clients.dhan_client import DhanClient
+
+    # Check 5paisa first (Free, 0-delay, Automated TOTP)
+    fp = FivePaisaClient.get_instance()
+    fp_configured = fp.is_configured()
+    fp_active = fp.is_logged_in()
+
+    if fp_configured:
+        # Attempt auto-login if needed
+        if not fp_active:
+            fp_active = fp.ensure_authenticated()
+
+        if fp_active:
+            status_info = fp.get_status_info()
+            import time
+            exp_sec = max(0, int(fp._token_expires_at - time.time()))
+            exp_hrs = round(exp_sec / 3600.0, 1)
+            return {
+                "configured": True,
+                "status": "ACTIVE",
+                "broker": "5paisa Xstream",
+                "trading_api_active": True,
+                "data_api_subscribed": True,
+                "is_expired": False,
+                "client_id": fp.client_code,
+                "free_tier": True,
+                "message": "Connected to 5paisa Xstream Real-Time Feed (0-Latency, Rs. 0 Subscription)",
+                "metadata": {
+                    "valid": True,
+                    "is_expired": False,
+                    "expires_in_hours": exp_hrs,
+                    "expires_in_sec": exp_sec,
+                    "dhan_client_id": fp.client_code,
+                },
+                "fivepaisa": status_info,
+            }
+
+    # Fallback to Dhan diagnostic
     dhan = DhanClient.get_instance()
-    return dhan.check_connection()
+    dhan_conn = dhan.check_connection()
+    return dhan_conn
 
 
 @router.post("/companies/dhan-feed/update-token")

@@ -288,6 +288,8 @@ export const portfolioApi = {
     added_count: number;
     skipped_count: number;
     errors: string[];
+    is_mutual_fund?: boolean;
+    message?: string;
   }> {
     const formData = new FormData();
     formData.append("file", file);
@@ -313,6 +315,8 @@ export const portfolioApi = {
     added_count: number;
     skipped_count: number;
     errors: string[];
+    is_mutual_fund?: boolean;
+    message?: string;
   }> {
     return fetchJson(`/portfolio/${portfolioId}/import-csv-text`, {
       method: "POST",
@@ -331,4 +335,131 @@ export const portfolioApi = {
   async getOpportunities(portfolioId: number, amount: number = 100000): Promise<OpportunityData> {
     return fetchJson<OpportunityData>(`/portfolio/${portfolioId}/opportunities?amount=${amount}`);
   },
+
+  // -------------------------------------------------------------
+  // DEDICATED TELEGRAM RADAR & BUY/SELL SIGNAL METHODS
+  // -------------------------------------------------------------
+  async getTelegramConfig(): Promise<{ success: boolean; config: PortfolioTelegramConfig }> {
+    return fetchJson<{ success: boolean; config: PortfolioTelegramConfig }>("/portfolio/telegram/config");
+  },
+
+  async updateTelegramConfig(
+    data: Partial<PortfolioTelegramConfig>
+  ): Promise<{ success: boolean; message: string; config: PortfolioTelegramConfig }> {
+    return fetchJson<{ success: boolean; message: string; config: PortfolioTelegramConfig }>(
+      "/portfolio/telegram/config",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  },
+
+  async testTelegramPing(data?: {
+    chat_id?: string;
+    bot_token?: string;
+  }): Promise<{ success: boolean; message: string; details: any }> {
+    return fetchJson("/portfolio/telegram/test-ping", {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  async getSignals(portfolioId: number, refresh?: boolean): Promise<PortfolioSignalsResponse> {
+    const url = refresh
+      ? `/portfolio/${portfolioId}/alerts/signals?refresh=true&_t=${Date.now()}`
+      : `/portfolio/${portfolioId}/alerts/signals`;
+    return fetchJson<PortfolioSignalsResponse>(url);
+  },
+
+  async dispatchAlerts(
+    portfolioId: number,
+    forceBroadcast: boolean = true
+  ): Promise<PortfolioDispatchResponse> {
+    return fetchJson<PortfolioDispatchResponse>(
+      `/portfolio/${portfolioId}/alerts/dispatch?force_broadcast=${forceBroadcast}`,
+      {
+        method: "POST",
+      }
+    );
+  },
+
+  async getAlertHistory(
+    portfolioId: number,
+    limit: number = 50
+  ): Promise<{ success: boolean; portfolio_id: number; count: number; history: any[] }> {
+    return fetchJson(`/portfolio/${portfolioId}/alerts/history?limit=${limit}`);
+  },
 };
+
+export interface PortfolioTelegramConfig {
+  id: number;
+  user_id?: number | null;
+  channel_name: string;
+  bot_token?: string | null;
+  has_custom_bot: boolean;
+  chat_id?: string | null;
+  telegram_username?: string | null;
+  is_enabled: boolean;
+  is_configured: boolean;
+  notify_portfolio_buy: boolean;
+  notify_portfolio_sell: boolean;
+  notify_portfolio_rebalance: boolean;
+  notify_watchlist_buy: boolean;
+  notify_watchlist_sell: boolean;
+  min_conviction_score: number;
+  notify_price_cross?: boolean;
+  notify_dma_reclaim?: boolean;
+  notify_vcp_breakout?: boolean;
+  notify_volume_surge?: boolean;
+  notify_target_stop?: boolean;
+  last_dispatched_at?: string | null;
+  total_dispatched_count?: number;
+}
+
+export interface PortfolioSignal {
+  portfolio_id: number;
+  holding_id?: number | null;
+  symbol: string;
+  company_name: string;
+  sector: string;
+  signal_type: "BUY" | "SELL";
+  trigger_category: string;
+  headline: string;
+  cmp: number;
+  avg_buy_price: number;
+  target_price: number;
+  stop_loss: number;
+  pnl_pct: number;
+  conviction_score: number;
+  weight_pct: number;
+  quantity: number;
+  invested_value: number;
+  current_value: number;
+  action_guidance: string;
+  urgency: "CRITICAL" | "HIGH" | "MEDIUM";
+  created_at?: string;
+}
+
+export interface PortfolioSignalsResponse {
+  success: boolean;
+  portfolio_id: number;
+  total_signals: number;
+  buy_signals_count: number;
+  sell_signals_count: number;
+  buy_signals: PortfolioSignal[];
+  sell_signals: PortfolioSignal[];
+  all_signals: PortfolioSignal[];
+}
+
+export interface PortfolioDispatchResponse {
+  success: boolean;
+  portfolio_id: number;
+  total_signals_detected: number;
+  buy_signals_count: number;
+  sell_signals_count: number;
+  dispatched_count: number;
+  skipped_count: number;
+  signals: PortfolioSignal[];
+}
+

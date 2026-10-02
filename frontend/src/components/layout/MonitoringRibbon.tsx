@@ -17,6 +17,7 @@ import {
 } from "@/lib/monitoringApi";
 
 import { useLiveWireStream } from "@/hooks/useLiveWireStream";
+import { useMissionTelemetry } from "@/hooks/useMissionTelemetry";
 
 export interface WarehouseData {
   total_companies: number;
@@ -43,7 +44,9 @@ interface MonitoringRibbonProps {
 }
 
 export default function MonitoringRibbon({ warehouse: propWarehouse, audit: propAudit }: MonitoringRibbonProps = {}) {
-  const { isConnected } = useLiveWireStream();
+  const { isConnected: isLiveWireConnected } = useLiveWireStream();
+  const { telemetry, isConnected: isTelemetryConnected, refetch } = useMissionTelemetry();
+  const isConnected = isLiveWireConnected || isTelemetryConnected;
   const [internalWarehouse, setInternalWarehouse] = useState<WarehouseData | null>(null);
   const [internalAudit, setInternalAudit] = useState<AuditData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,38 +54,23 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
   const warehouse = propWarehouse ?? internalWarehouse;
   const audit = propAudit ?? internalAudit;
 
-  const loadStatus = useCallback(async () => {
-    if (propWarehouse && propAudit) return;
-    try {
-      const telemetry = await fetchMissionControlTelemetry();
-      if (telemetry.warehouse) {
-        setInternalWarehouse(telemetry.warehouse);
-      }
-      if (telemetry.audit) {
-        setInternalAudit(telemetry.audit as unknown as AuditData);
-      }
-    } catch (error) {
-      console.error("Monitoring status failed:", error);
-    }
-  }, [propWarehouse, propAudit]);
-
+  // Sync internal warehouse and audit states directly from real-time WebSocket telemetry stream
   useEffect(() => {
     if (propWarehouse && propAudit) return;
-    loadStatus();
-
-    const timer = setInterval(loadStatus, 5000);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [loadStatus, propWarehouse, propAudit]);
+    if (telemetry?.warehouse) {
+      setInternalWarehouse(telemetry.warehouse);
+    }
+    if (telemetry?.audit) {
+      setInternalAudit(telemetry.audit as unknown as AuditData);
+    }
+  }, [telemetry, propWarehouse, propAudit]);
 
   async function handleStartAudit() {
     setLoading(true);
 
     try {
       await startAuditEngine();
-      await loadStatus();
+      await refetch();
     } catch (error) {
       console.error("Start audit failed:", error);
     } finally {
@@ -95,7 +83,7 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
 
     try {
       await stopAuditEngine();
-      await loadStatus();
+      await refetch();
     } catch (error) {
       console.error("Stop audit failed:", error);
     } finally {
@@ -133,7 +121,7 @@ export default function MonitoringRibbon({ warehouse: propWarehouse, audit: prop
           </div>
 
           <button
-            onClick={loadStatus}
+            onClick={() => refetch()}
             className="rounded-lg bg-slate-100 dark:bg-slate-800 p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             title="Refresh"
           >

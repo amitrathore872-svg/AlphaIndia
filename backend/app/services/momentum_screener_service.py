@@ -30,6 +30,8 @@ from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
+from app.core.redis_cache import cache
+from app.services.market_data_service import MarketDataService
 
 logger = logging.getLogger(__name__)
 
@@ -164,17 +166,8 @@ class MomentumScreenerService:
         ticker_sym = f"{clean_sym}.NS"
 
         try:
-            t = yf.Ticker(ticker_sym)
-            df = t.history(period="2y", interval="1d")
-            if df.empty or len(df) < 60:
-                t = yf.Ticker(f"{clean_sym}.BO")
-                df = t.history(period="2y", interval="1d")
-
-            if df.empty or len(df) < 60:
-                return None
-
-            df = df.dropna(subset=["Close", "Volume"])
-            if len(df) < 60:
+            df = MarketDataService.get_symbol_ohlcv(clean_sym, period="2y", interval="1d")
+            if df is None or df.empty or len(df) < 60:
                 return None
 
             # ---------------- 1. DAILY METRICS ----------------
@@ -440,8 +433,18 @@ class MomentumScreenerService:
 
     @classmethod
     def _load_disk_cache(cls) -> bool:
-        """Loads cached momentum radar results from disk if available."""
+        """Loads cached momentum radar results from Redis / memory cache, with disk fallback."""
         try:
+            # 1. Try VelocityCacheManager (Redis + In-Memory fallback)
+            cached_data = cache.get_json_sync("screener:momentum:universe")
+            if cached_data and isinstance(cached_data, dict) and "data" in cached_data and cached_data["data"]:
+                _CACHE["timestamp"] = cached_data.get("timestamp", 0)
+                _CACHE["data"] = cached_data.get("data", [])
+                _CACHE["metadata"] = cached_data.get("metadata", {})
+                logger.info(f"[MomentumScreenerService] Restored {len(_CACHE['data'])} opportunities from VelocityCacheManager.")
+                return True
+
+            # 2. Disk fallback if cache manager was cold
             if DISK_CACHE_PATH.exists():
                 with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
                     cached = json.load(f)
@@ -449,26 +452,33 @@ class MomentumScreenerService:
                         _CACHE["timestamp"] = cached.get("timestamp", 0)
                         _CACHE["data"] = cached.get("data", [])
                         _CACHE["metadata"] = cached.get("metadata", {})
-                        logger.info(f"[MomentumScreenerService] Restored {len(_CACHE['data'])} opportunities from disk cache.")
+                        # Re-seed cache manager
+                        cache.set_json_sync("screener:momentum:universe", _CACHE, expire_seconds=600)
+                        logger.info(f"[MomentumScreenerService] Restored {len(_CACHE['data'])} opportunities from disk fallback.")
                         return True
         except Exception as e:
-            logger.warning(f"[MomentumScreenerService] Error loading disk cache: {e}")
+            logger.warning(f"[MomentumScreenerService] Error loading cache: {e}")
         return False
 
     @classmethod
     def _save_disk_cache(cls) -> None:
-        """Persists current cache state to disk for instant restore on server restart."""
+        """Persists current cache state to VelocityCacheManager and disk."""
         try:
+            # 1. High-speed sub-millisecond cache store
+            cache.set_json_sync("screener:momentum:universe", _CACHE, expire_seconds=600)
+
+            # 2. Disk persistence for restart durability
             DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
                 json.dump(_CACHE, f, indent=2)
         except Exception as e:
-            logger.warning(f"[MomentumScreenerService] Error saving disk cache: {e}")
+            logger.warning(f"[MomentumScreenerService] Error saving cache: {e}")
 
     @classmethod
     def trigger_background_scan(cls, db: Optional[Session] = None) -> None:
         """
         Launches non-blocking background scan worker if not already running.
+        Spawns an isolated SessionLocal to guarantee thread-safety.
         """
         global _scan_in_progress
         with _scan_lock:
@@ -480,7 +490,12 @@ class MomentumScreenerService:
             global _scan_in_progress
             try:
                 logger.info("[MomentumScreenerService] Starting non-blocking background radar scan...")
-                cls._execute_full_scan(db=db)
+                from app.db.database import SessionLocal
+                worker_db = SessionLocal()
+                try:
+                    cls._execute_full_scan(db=worker_db)
+                finally:
+                    worker_db.close()
                 logger.info("[MomentumScreenerService] Background radar scan completed successfully.")
             except Exception as e:
                 logger.error(f"[MomentumScreenerService] Background scan error: {e}", exc_info=True)
@@ -508,6 +523,10 @@ class MomentumScreenerService:
 
         # 2. If cached data exists and force_refresh is False:
         if has_cache and not force_refresh:
+            if "stage_funnel" not in _CACHE["metadata"]:
+                _CACHE["metadata"]["stage_funnel"] = cls.compute_stage_funnel(
+                    _CACHE["data"], _CACHE["metadata"].get("total_scanned", len(_CACHE["data"]))
+                )
             if is_stale:
                 cls.trigger_background_scan(db=db)
             return {
@@ -517,6 +536,10 @@ class MomentumScreenerService:
 
         # 3. If force_refresh is requested and cache exists: return cached instantly & refresh background
         if has_cache and force_refresh:
+            if "stage_funnel" not in _CACHE["metadata"]:
+                _CACHE["metadata"]["stage_funnel"] = cls.compute_stage_funnel(
+                    _CACHE["data"], _CACHE["metadata"].get("total_scanned", len(_CACHE["data"]))
+                )
             cls.trigger_background_scan(db=db)
             return {
                 "metadata": _CACHE["metadata"],
@@ -556,6 +579,10 @@ class MomentumScreenerService:
             except Exception as e:
                 logger.warning(f"Failed to query DB for growth records: {e}")
 
+        # Batch preload OHLCV data via vectorized MarketDataService (drastically faster than single ticker loops)
+        all_symbols = list(symbols_map.keys())
+        MarketDataService.preload_universe_batch(all_symbols, period="2y", interval="1d")
+
         results: List[Dict[str, Any]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
             futures = {
@@ -588,6 +615,8 @@ class MomentumScreenerService:
         conviction_79_count = sum(1 for r in results if r.get("conviction_score", 0) >= 79)
         avg_rsi = round(float(np.mean([r["indicators"]["daily_rsi"] for r in results])), 1) if results else 50.0
 
+        stage_funnel = cls.compute_stage_funnel(results, total_scanned)
+
         metadata = {
             "total_scanned": total_scanned,
             "perfect_10_count": perfect_count,
@@ -597,6 +626,7 @@ class MomentumScreenerService:
             "avg_daily_rsi": avg_rsi,
             "scan_duration_seconds": elapsed,
             "last_scan_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)),
+            "stage_funnel": stage_funnel,
         }
 
         _CACHE["timestamp"] = now
@@ -609,3 +639,96 @@ class MomentumScreenerService:
             "metadata": metadata,
             "opportunities": results,
         }
+
+    @classmethod
+    def compute_stage_funnel(cls, results: List[Dict[str, Any]], total_scanned: int) -> Dict[str, Any]:
+        """
+        Computes sequential waterfall and independent filter attrition across all 10 momentum screening conditions.
+        """
+        total = max(1, total_scanned if total_scanned > 0 else len(results))
+
+        conditions = [
+            {"id": "vol_gt_sma20", "label": "Daily Volume > SMA(Volume, 20)", "timeframe": "Daily"},
+            {"id": "daily_close_gt_bb_upper", "label": "Daily Close > Upper Bollinger Band (20, 2)", "timeframe": "Daily"},
+            {"id": "weekly_close_gt_bb_upper", "label": "Weekly Close > Upper Bollinger Band (20, 2)", "timeframe": "Weekly"},
+            {"id": "daily_rsi_gt_60", "label": "Daily RSI (14) > 60", "timeframe": "Daily"},
+            {"id": "weekly_rsi_gt_60", "label": "Weekly RSI (14) > 60", "timeframe": "Weekly"},
+            {"id": "monthly_rsi_gt_60", "label": "Monthly RSI (14) > 60", "timeframe": "Monthly"},
+            {"id": "weekly_wma_cross", "label": "Weekly WMA (30) > WMA (50)", "timeframe": "Weekly"},
+            {"id": "weekly_wma30_gt_60", "label": "Weekly WMA (30) > 60", "timeframe": "Weekly"},
+            {"id": "weekly_wma50_gt_60", "label": "Weekly WMA (50) > 60", "timeframe": "Weekly"},
+            {"id": "daily_close_gt_open", "label": "Daily Close > Daily Open (Bull Candle)", "timeframe": "Daily"},
+        ]
+
+        # 1. Sequential Waterfall (Strict funnel progression)
+        waterfall = []
+        current_candidates = list(results)
+
+        waterfall.append({
+            "stage_index": 0,
+            "condition_id": "initial_universe",
+            "condition_label": "NSE Liquid Screener Universe",
+            "timeframe": "All",
+            "candidates_in": total,
+            "passed_count": total,
+            "filtered_out_count": 0,
+            "attrition_pct": 0.0,
+            "retention_pct": 100.0,
+            "cumulative_survival_pct": 100.0,
+        })
+
+        for idx, cond in enumerate(conditions, start=1):
+            c_id = cond["id"]
+            in_count = len(current_candidates)
+            survivors = [r for r in current_candidates if r.get("filters", {}).get(c_id, False)]
+            pass_count = len(survivors)
+            filtered_count = max(0, in_count - pass_count)
+            attrition_pct = round((filtered_count / max(1, in_count)) * 100.0, 1) if in_count > 0 else 0.0
+            retention_pct = round((pass_count / max(1, in_count)) * 100.0, 1) if in_count > 0 else 0.0
+            cumulative_survival = round((pass_count / total) * 100.0, 1)
+
+            waterfall.append({
+                "stage_index": idx,
+                "condition_id": c_id,
+                "condition_label": cond["label"],
+                "timeframe": cond["timeframe"],
+                "candidates_in": in_count,
+                "passed_count": pass_count,
+                "filtered_out_count": filtered_count,
+                "attrition_pct": attrition_pct,
+                "retention_pct": retention_pct,
+                "cumulative_survival_pct": cumulative_survival,
+            })
+            current_candidates = survivors
+
+        # 2. Independent condition pass rates (standalone gate attrition across all scanned)
+        independent = []
+        for idx, cond in enumerate(conditions, start=1):
+            c_id = cond["id"]
+            passed = sum(1 for r in results if r.get("filters", {}).get(c_id, False))
+            filtered = max(0, total - passed)
+            independent.append({
+                "stage_index": idx,
+                "condition_id": c_id,
+                "condition_label": cond["label"],
+                "timeframe": cond["timeframe"],
+                "total_evaluated": total,
+                "passed_count": passed,
+                "filtered_out_count": filtered,
+                "filter_rate_pct": round((filtered / total) * 100.0, 1),
+                "pass_rate_pct": round((passed / total) * 100.0, 1),
+            })
+
+        final_survivors = waterfall[-1]["passed_count"]
+        return {
+            "summary": {
+                "initial_universe": total,
+                "final_matched_stocks": final_survivors,
+                "total_filtered_out": total - final_survivors,
+                "overall_survival_rate_pct": round((final_survivors / total) * 100.0, 1),
+                "overall_attrition_pct": round(((total - final_survivors) / total) * 100.0, 1),
+            },
+            "sequential_waterfall": waterfall,
+            "independent_conditions": independent,
+        }
+

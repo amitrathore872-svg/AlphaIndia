@@ -31,7 +31,12 @@ import {
   ArrowDown,
   Scale,
   Clock,
+  Send,
+  Radio,
+  Sliders,
 } from "lucide-react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import PortfolioTelegramModal from "@/components/portfolio/PortfolioTelegramModal";
 import {
   portfolioApi,
   PortfolioItem,
@@ -40,6 +45,9 @@ import {
   Stock360Analysis,
   OpportunityData,
   RebalanceRecommendation,
+  PortfolioTelegramConfig,
+  PortfolioSignal,
+  PortfolioSignalsResponse,
 } from "@/lib/portfolioApi";
 
 export default function PortfolioIntelligencePage() {
@@ -133,6 +141,14 @@ export default function PortfolioIntelligencePage() {
   const [isImportCsvOpen, setIsImportCsvOpen] = useState<boolean>(false);
   const [editingHolding, setEditingHolding] = useState<PortfolioHolding | null>(null);
 
+  // Dedicated Telegram Radar & BUY/SELL Signals state
+  const [telegramConfig, setTelegramConfig] = useState<PortfolioTelegramConfig | null>(null);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState<boolean>(false);
+  const [signalsData, setSignalsData] = useState<PortfolioSignalsResponse | null>(null);
+  const [isDispatchingAlerts, setIsDispatchingAlerts] = useState<boolean>(false);
+  const [alertDispatchNotice, setAlertDispatchNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [showSignalsDetails, setShowSignalsDetails] = useState<boolean>(false);
+
   // Forms
   const [newStockSymbol, setNewStockSymbol] = useState<string>("");
   const [newStockQty, setNewStockQty] = useState<string>("");
@@ -187,6 +203,9 @@ export default function PortfolioIntelligencePage() {
         const defaultP = list.find((p) => p.is_default) || list[0];
         setSelectedPortfolioId(defaultP.id);
       }
+      portfolioApi.getTelegramConfig().then((res) => {
+        if (res.config) setTelegramConfig(res.config);
+      }).catch((err) => console.error("Failed to load telegram config:", err));
     } catch (err) {
       console.error("Failed to load portfolios:", err);
     } finally {
@@ -197,16 +216,18 @@ export default function PortfolioIntelligencePage() {
   async function loadPortfolioData(portfolioId: number) {
     try {
       setIsLoading(true);
-      const [sumData, holdData, oppData, rebData] = await Promise.all([
+      const [sumData, holdData, oppData, rebData, sigData] = await Promise.all([
         portfolioApi.getSummary(portfolioId),
         portfolioApi.getHoldings(portfolioId),
         portfolioApi.getOpportunities(portfolioId, deployAmount),
         portfolioApi.getRebalance(portfolioId),
+        portfolioApi.getSignals(portfolioId),
       ]);
       setSummary(sumData);
       setHoldings(holdData);
       setOpportunities(oppData);
       setRebalanceData(rebData);
+      setSignalsData(sigData);
       setLastRefreshedAt(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to load portfolio details:", err);
@@ -223,17 +244,53 @@ export default function PortfolioIntelligencePage() {
       if (res.holdings) setHoldings(res.holdings);
       setLastRefreshedAt(new Date().toLocaleTimeString());
 
-      // Also update opportunities and rebalance targets based on new live valuations
-      const [oppData, rebData] = await Promise.all([
+      // Also update opportunities, rebalance targets, and BUY/SELL signals
+      const [oppData, rebData, sigData] = await Promise.all([
         portfolioApi.getOpportunities(portfolioId, deployAmount),
         portfolioApi.getRebalance(portfolioId),
+        portfolioApi.getSignals(portfolioId, true),
       ]);
       setOpportunities(oppData);
       setRebalanceData(rebData);
+      setSignalsData(sigData);
     } catch (err) {
       console.error("Failed to refresh live portfolio prices:", err);
     } finally {
       setIsRefreshingPrices(false);
+    }
+  }
+
+  async function handleDispatchAlerts() {
+    if (!selectedPortfolioId) return;
+    try {
+      setIsDispatchingAlerts(true);
+      setAlertDispatchNotice(null);
+      const res = await portfolioApi.dispatchAlerts(selectedPortfolioId, true);
+      if (res.dispatched_count > 0) {
+        setAlertDispatchNotice({
+          type: "success",
+          msg: `✅ Successfully dispatched ${res.dispatched_count} alerts (${res.buy_signals_count} BUY, ${res.sell_signals_count} SELL) to your dedicated Telegram channel (${telegramConfig?.channel_name || "Radar"})!`,
+        });
+      } else if (res.total_signals_detected === 0) {
+        setAlertDispatchNotice({
+          type: "success",
+          msg: "ℹ️ Scan complete. No holdings currently meet BUY or SELL trigger thresholds.",
+        });
+      } else {
+        setAlertDispatchNotice({
+          type: "success",
+          msg: `ℹ️ ${res.total_signals_detected} active signals found. Alerts are up-to-date or muted in your notification filters.`,
+        });
+      }
+      const freshSignals = await portfolioApi.getSignals(selectedPortfolioId);
+      setSignalsData(freshSignals);
+    } catch (err: any) {
+      setAlertDispatchNotice({
+        type: "error",
+        msg: err.message || "Failed to dispatch alerts to Telegram.",
+      });
+    } finally {
+      setIsDispatchingAlerts(false);
     }
   }
 
@@ -329,6 +386,19 @@ export default function PortfolioIntelligencePage() {
         res = await portfolioApi.importCsvText(selectedPortfolioId, csvRawText);
       }
 
+      if (res.is_mutual_fund) {
+        setCsvImportResult(
+          res.message || "Mutual Fund statement detected! Holdings synced to Mutual Fund Radar."
+        );
+        setTimeout(() => {
+          setIsImportCsvOpen(false);
+          setCsvFile(null);
+          setCsvRawText("");
+          setCsvImportResult(null);
+        }, 2500);
+        return;
+      }
+
       setCsvImportResult(
         `Successfully imported ${res.added_count} holdings (${res.skipped_count} skipped).`
       );
@@ -340,7 +410,7 @@ export default function PortfolioIntelligencePage() {
         if (selectedPortfolioId) loadPortfolioData(selectedPortfolioId);
       }, 1500);
     } catch (err) {
-      alert("CSV import error: " + err);
+      alert("Import error: " + err);
     }
   }
 
@@ -373,7 +443,8 @@ export default function PortfolioIntelligencePage() {
   }, [portfolios, selectedPortfolioId]);
 
   return (
-    <div className="space-y-6">
+    <DashboardLayout>
+      <div className="space-y-6">
       {/* ========================================================= */}
       {/* 1. TOP HEADER & MULTI-PORTFOLIO SWITCHER */}
       {/* ========================================================= */}
@@ -440,6 +511,25 @@ export default function PortfolioIntelligencePage() {
           >
             <Upload className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
             <span>Import CSV</span>
+          </button>
+
+          {/* Dedicated Telegram Alerts Button */}
+          <button
+            onClick={() => setIsTelegramModalOpen(true)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-all shadow-xs ${
+              telegramConfig?.is_configured
+                ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/20"
+                : "bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-white"
+            }`}
+            title="Configure separate Telegram chat group for portfolio & watchlist BUY/SELL signals"
+          >
+            <Send className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+            <span>
+              {telegramConfig?.is_configured ? "Telegram Radar Active" : "Connect Telegram"}
+            </span>
+            {telegramConfig?.is_configured && (
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            )}
           </button>
 
           {/* Auto Refresh Interval Selector */}
@@ -650,6 +740,156 @@ export default function PortfolioIntelligencePage() {
       )}
 
       {/* ========================================================= */}
+      {/* 2.5 DEDICATED TELEGRAM BUY/SELL SIGNALS RADAR BAR */}
+      {/* ========================================================= */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-gradient-to-r dark:from-slate-900/90 dark:via-slate-900/60 dark:to-slate-950/90 p-4 shadow-sm dark:shadow-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
+              <Radio className="w-5 h-5 text-cyan-400 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  Execution Signal Radar (BUY / SELL)
+                </h3>
+                <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-full bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">
+                  SEPARATE TELEGRAM STREAM
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Real-time trade trigger monitoring • Dedicated Channel:{" "}
+                <strong className="text-cyan-600 dark:text-cyan-400 font-mono">
+                  {telegramConfig?.channel_name || "Alpha India | Portfolio Radar"}
+                </strong>{" "}
+                ({telegramConfig?.chat_id ? `ID: ${telegramConfig.chat_id}` : "Not Configured"})
+              </p>
+            </div>
+          </div>
+
+          {/* Metric Counts & Actions */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* BUY Count Pill */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>{signalsData?.buy_signals_count || 0} BUY Setups</span>
+            </div>
+
+            {/* SELL Count Pill */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs font-semibold">
+              <TrendingDown className="w-3.5 h-3.5" />
+              <span>{signalsData?.sell_signals_count || 0} SELL Triggers</span>
+            </div>
+
+            {/* Toggle View Signals */}
+            {signalsData && signalsData.total_signals > 0 && (
+              <button
+                onClick={() => setShowSignalsDetails(!showSignalsDetails)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-white transition"
+              >
+                {showSignalsDetails ? "Hide Signals" : `View Signals (${signalsData.total_signals})`}
+              </button>
+            )}
+
+            {/* Scan & Dispatch Button */}
+            <button
+              onClick={handleDispatchAlerts}
+              disabled={isDispatchingAlerts || !selectedPortfolioId}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-md shadow-cyan-950/40 active:scale-95 disabled:opacity-50"
+            >
+              <Zap className={`w-3.5 h-3.5 ${isDispatchingAlerts ? "animate-spin" : ""}`} />
+              <span>{isDispatchingAlerts ? "Scanning & Sending..." : "Scan & Send Telegram Alerts"}</span>
+            </button>
+
+            {/* Configure Settings Button */}
+            <button
+              onClick={() => setIsTelegramModalOpen(true)}
+              className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-500 hover:text-white hover:bg-slate-800 transition"
+              title="Configure Dedicated Telegram Chat Group"
+            >
+              <Sliders className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Dispatch Notice if any */}
+        {alertDispatchNotice && (
+          <div
+            className={`mt-3 flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-medium animate-in fade-in duration-200 ${
+              alertDispatchNotice.type === "success"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {alertDispatchNotice.type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              )}
+              <span>{alertDispatchNotice.msg}</span>
+            </div>
+            <button
+              onClick={() => setAlertDispatchNotice(null)}
+              className="text-slate-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Collapsible Signal Details Drawer */}
+        {showSignalsDetails && signalsData && signalsData.all_signals && signalsData.all_signals.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800/80 space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">
+              Active Holdings Triggering Alerts ({signalsData.all_signals.length})
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {signalsData.all_signals.map((sig, idx) => {
+                const isBuy = sig.signal_type === "BUY";
+                return (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-xl border text-xs space-y-2 ${
+                      isBuy
+                        ? "border-emerald-500/30 bg-emerald-950/20"
+                        : "border-rose-500/30 bg-rose-950/20"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isBuy ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                          }`}
+                        >
+                          {isBuy ? "🟢 BUY SIGNAL" : "🔴 SELL SIGNAL"}
+                        </span>
+                        <span className="text-white text-sm">{sig.symbol}</span>
+                      </div>
+                      <span className="font-mono text-xs text-slate-300">₹{sig.cmp.toLocaleString()}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-snug font-medium">
+                      {sig.headline}
+                    </p>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      {sig.action_guidance}
+                    </p>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-[10px] text-slate-400">
+                      <span>Avg Buy: ₹{sig.avg_buy_price.toLocaleString()}</span>
+                      <span className={sig.pnl_pct >= 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
+                        P&L: {sig.pnl_pct >= 0 ? "+" : ""}{sig.pnl_pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ========================================================= */}
       {/* 3. INTERACTIVE TAB NAVIGATION */}
       {/* ========================================================= */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 text-xs overflow-x-auto">
@@ -716,6 +956,16 @@ export default function PortfolioIntelligencePage() {
         >
           Factor Radar & Sector Risk
         </button>
+        <a
+          href="/portfolio/fx-swing-screener"
+          className="pb-3 px-3 font-bold transition-all border-b-2 border-transparent text-cyan-500 hover:text-cyan-400 flex items-center gap-1.5 shrink-0 ml-auto"
+        >
+          <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+          <span>FX Swing Screener (12 FX)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            HOT
+          </span>
+        </a>
       </div>
 
       {/* ========================================================= */}
@@ -917,11 +1167,30 @@ export default function PortfolioIntelligencePage() {
                       onClick={() => openStock360(h.symbol)}
                     >
                       {/* Symbol */}
-                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
                         <span>{h.symbol}</span>
                         <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 truncate max-w-[120px]">
                           {h.company_name}
                         </span>
+                        {/* Active BUY / SELL Signal Badge */}
+                        {(() => {
+                          const sig = signalsData?.all_signals.find((s) => s.symbol === h.symbol);
+                          if (!sig) return null;
+                          const isBuy = sig.signal_type === "BUY";
+                          return (
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-tight inline-flex items-center gap-1 shadow-xs ${
+                                isBuy
+                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                  : "bg-rose-500/20 text-rose-400 border border-rose-500/40"
+                              }`}
+                              title={`${sig.headline}\nGuidance: ${sig.action_guidance}`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${isBuy ? "bg-emerald-400" : "bg-rose-400"} animate-pulse`} />
+                              {sig.trigger_category.replace(/_/g, " ")}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Sector */}
@@ -1006,6 +1275,33 @@ export default function PortfolioIntelligencePage() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-center gap-1.5">
+                          {(() => {
+                            const sig = signalsData?.all_signals.find((s) => s.symbol === h.symbol);
+                            if (!sig) return null;
+                            const isBuy = sig.signal_type === "BUY";
+                            return (
+                              <button
+                                onClick={async () => {
+                                  if (!selectedPortfolioId) return;
+                                  try {
+                                    await portfolioApi.dispatchAlerts(selectedPortfolioId, true);
+                                    setAlertDispatchNotice({
+                                      type: "success",
+                                      msg: `Dispatched ${sig.signal_type} alert for ${sig.symbol} to Telegram!`,
+                                    });
+                                  } catch (err: any) {
+                                    alert("Dispatch failed: " + err.message);
+                                  }
+                                }}
+                                className={`p-1 transition-colors ${
+                                  isBuy ? "text-emerald-500 hover:text-emerald-400" : "text-rose-500 hover:text-rose-400"
+                                }`}
+                                title={`Dispatched to Dedicated Telegram: ${sig.headline}`}
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            );
+                          })()}
                           <button
                             onClick={() => openStock360(h.symbol)}
                             className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
@@ -1998,12 +2294,12 @@ export default function PortfolioIntelligencePage() {
                   <select
                     value={newPortfolioBenchmark}
                     onChange={(e) => setNewPortfolioBenchmark(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:border-emerald-500 cursor-pointer shadow-xs"
                   >
-                    <option value="NIFTY 50">NIFTY 50</option>
-                    <option value="NIFTY 500">NIFTY 500</option>
-                    <option value="NIFTY MIDCAP 150">NIFTY MIDCAP 150</option>
-                    <option value="NIFTY SMALLCAP 250">NIFTY SMALLCAP 250</option>
+                    <option value="NIFTY 50" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">NIFTY 50</option>
+                    <option value="NIFTY 500" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">NIFTY 500</option>
+                    <option value="NIFTY MIDCAP 150" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">NIFTY MIDCAP 150</option>
+                    <option value="NIFTY SMALLCAP 250" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">NIFTY SMALLCAP 250</option>
                   </select>
                 </div>
                 <div>
@@ -2078,17 +2374,20 @@ export default function PortfolioIntelligencePage() {
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                 }`}
               >
-                Upload File (.csv)
+                Upload File (.xlsx, .csv)
               </button>
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 space-y-1">
-              <p className="font-semibold text-slate-700 dark:text-slate-300">Supported Format:</p>
+              <p className="font-semibold text-slate-700 dark:text-slate-300">Supported Formats:</p>
               <p className="font-mono text-[11px] text-cyan-600 dark:text-cyan-300">
-                &quot;Instrument&quot;,&quot;Qty.&quot;,&quot;Avg. cost&quot;,&quot;LTP&quot;,&quot;Invested&quot;,...
+                &quot;Instrument&quot;,&quot;Qty.&quot;,&quot;Avg. cost&quot; / &quot;Symbol&quot;,&quot;Open Quantity&quot;,&quot;Open Value&quot;
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                • Zerodha Kite Holdings export, Groww, Angel One, or standard CSV.
+                • Zerodha Kite Holdings (.csv, .xlsx), Zerodha P&L statements, Groww, Angel One.
+              </p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                • Mutual Fund statements are auto-detected and synced to Mutual Fund Radar!
               </p>
             </div>
 
@@ -2109,7 +2408,7 @@ export default function PortfolioIntelligencePage() {
                   <Upload className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto mb-2" />
                   <input
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls,.txt"
                     required
                     onChange={(e) => e.target.files?.[0] && setCsvFile(e.target.files[0])}
                     className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-500 file:text-white dark:file:text-slate-950 hover:file:bg-cyan-400 cursor-pointer"
@@ -2143,6 +2442,14 @@ export default function PortfolioIntelligencePage() {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Dedicated Portfolio & Watchlist Telegram Radar Modal */}
+      <PortfolioTelegramModal
+        isOpen={isTelegramModalOpen}
+        onClose={() => setIsTelegramModalOpen(false)}
+        onConfigSaved={(cfg) => setTelegramConfig(cfg)}
+      />
+      </div>
+    </DashboardLayout>
   );
 }

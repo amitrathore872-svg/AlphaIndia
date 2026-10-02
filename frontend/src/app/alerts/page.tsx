@@ -29,6 +29,9 @@ import {
   Filter,
   Boxes,
   Clock,
+  Rocket,
+  Globe,
+  Link2,
 } from "lucide-react";
 import {
   notificationsApi,
@@ -79,6 +82,8 @@ export default function AlertCenterPage() {
     // 4. Super Momentum Radar (Conviction 79)
     momentum_conviction_79_enabled: true,
     momentum_min_conviction: 79,
+    momentum_universe_enabled: true,
+    momentum_min_mcap_cr: 1000,
     // 5. Tomorrow 5%+ Move Radar
     tomorrow_radar_enabled: true,
     tomorrow_min_conviction: 90,
@@ -112,6 +117,10 @@ export default function AlertCenterPage() {
     growth_min_sales_pct: 25,
     // 13. Live Breakout Execution Cockpit
     breakout_execution_enabled: true,
+    // 14. Mainboard IPO Radar Setups
+    ipo_radar_enabled: true,
+    ipo_min_conviction: 85,
+    ipo_blue_sky_only: false,
     // Multi-Channel External Broadcast
     auto_broadcast_telegram: true,
     auto_broadcast_whatsapp: true,
@@ -119,6 +128,7 @@ export default function AlertCenterPage() {
 
   const [oppScanning, setOppScanning] = useState(false);
   const [orderWinScanning, setOrderWinScanning] = useState(false);
+  const [ipoScanning, setIpoScanning] = useState(false);
   const [oppScanResult, setOppScanResult] = useState<OpportunityScanResult | null>(null);
   const [recentOpportunities, setRecentOpportunities] = useState<SystemNotificationItem[]>([]);
 
@@ -162,11 +172,19 @@ export default function AlertCenterPage() {
     return origin ? `${origin}${path}` : path;
   };
 
+  const getStockLinks = (symbol: string) => {
+    const clean = (symbol || "").trim().toUpperCase().replace(/\.(NS|BO)$/, "");
+    const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://ipodesk.shop";
+    const stockUrl = `${origin}/stocks/${clean}`;
+    const screenerUrl = `https://www.screener.in/company/${clean}/consolidated/`;
+    return `🔗 *Research & Terminal Links:*\n• 📱 [Alpha India Stock 360](${stockUrl})\n• 🌐 [Screener.in Financials](${screenerUrl})`;
+  };
+
   const [composerSymbol, setComposerSymbol] = useState("DIXON");
-  const [composerName, setComposerName] = useState("Dixon Technologies");
+  const [composerName, setComposerName] = useState("Dixon Technologies Ltd");
   const [composerTitle, setComposerTitle] = useState("🎯 VCP BREAKOUT: DIXON TECH (Score 96.2 — Elite Setup)");
   const [composerMessage, setComposerMessage] = useState(
-    `🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Dixon Technologies* (\`DIXON\`)\n⭐ *Score:* 96.2/100 — ELITE SETUP (≥95)\n📐 *Pattern:* 3-Stage VCP (Supply Dry-Up: 68%)\n🎯 *Pivot Point:* ₹14,250.00 | *CMP:* ₹14,285.00\n🚪 *Entry Zone:* ₹14,220–14,460\n🛡️ *Stop Loss:* ₹13,400.00\n🚀 *Targets:* *T1:* ₹15,400.0 | *T2:* ₹16,800.0 | *T3:* ₹18,200.0\n⚖️ *Risk/Reward:* 3.8x | *Breakout Vol:* 3.4x 20DMA\n💡 *Institutional Edge:*\n   • EMS sector leader with multi-quarter margin expansion.\n   • Stage 2 Weinstein breakout with explosive volume confirmation.\n   • MF accumulation up 1.8% in latest filing.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/vcp-discovery")}`
+    `🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Dixon Technologies* (\`DIXON\`)\n⭐ *Institutional Score:* 96.2/100 (ELITE SETUP ≥95)\n📐 *Pattern Archetype:* 3-Stage VCP (Supply Dry-Up: 68%)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹14,285.00\n🎯 *Buy Trigger Price:* ₹14,250.00 (Pivot Point)\n🚪 *Entry Zone:* ₹14,220.00 – ₹14,460.00\n🚀 *Target Price:* ₹15,400.00 (+7.8%) | *T2:* ₹16,800.00 (+17.6%) | *T3:* ₹18,200.00\n🛑 *Stop Loss:* ₹13,400.00 (-6.2%)\n⚖️ *Risk:Reward:* 1:3.8 | *Breakout Vol:* 3.4x 20-DMA\n💡 *Institutional Edge:*\n   • EMS sector leader with multi-quarter margin expansion.\n   • Stage 2 Weinstein breakout with explosive volume confirmation.\n   • MF accumulation up 1.8% in latest filing.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("DIXON")}\n📡 *Live Radar:* ${getRadarUrl("/vcp-discovery")}`
   );
   const [selectedChannels, setSelectedChannels] = useState<("TELEGRAM" | "WHATSAPP")[]>(["TELEGRAM", "WHATSAPP"]);
   const [broadcasting, setBroadcasting] = useState(false);
@@ -372,85 +390,85 @@ export default function AlertCenterPage() {
     setComposerType(type);
     if (type === "VCP") {
       setComposerSymbol("DIXON");
-      setComposerName("Dixon Technologies");
+      setComposerName("Dixon Technologies Ltd");
       setComposerTitle("🎯 VCP BREAKOUT: DIXON TECH (Score 96.2 — Elite Setup)");
       setComposerMessage(
-        `🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Dixon Technologies* (\`DIXON\`)\n⭐ *Score:* 96.2/100 — ELITE SETUP (≥95)\n📐 *Pattern:* 3-Stage VCP (Supply Dry-Up: 68%)\n🎯 *Pivot Point:* ₹14,250.00 | *CMP:* ₹14,285.00\n🚪 *Entry Zone:* ₹14,220–14,460\n🛡️ *Stop Loss:* ₹13,400.00\n🚀 *Targets:* *T1:* ₹15,400.0 | *T2:* ₹16,800.0 | *T3:* ₹18,200.0\n⚖️ *Risk/Reward:* 3.8x | *Breakout Vol:* 3.4x 20DMA\n💡 *Institutional Edge:*\n   • EMS sector leader with multi-quarter margin expansion.\n   • Stage 2 Weinstein breakout with explosive volume confirmation.\n   • MF accumulation up 1.8% in latest filing.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/vcp-discovery")}`
+        `🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Dixon Technologies* (\`DIXON\`)\n⭐ *Institutional Score:* 96.2/100 (ELITE SETUP ≥95)\n📐 *Pattern Archetype:* 3-Stage VCP (Supply Dry-Up: 68%)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹14,285.00\n🎯 *Buy Trigger Price:* ₹14,250.00 (Pivot Point)\n🚪 *Entry Zone:* ₹14,220.00 – ₹14,460.00\n🚀 *Target Price:* ₹15,400.00 (+7.8%) | *T2:* ₹16,800.00 (+17.6%) | *T3:* ₹18,200.00\n🛑 *Stop Loss:* ₹13,400.00 (-6.2%)\n⚖️ *Risk:Reward:* 1:3.8 | *Breakout Vol:* 3.4x 20-DMA\n💡 *Institutional Edge:*\n   • EMS sector leader with multi-quarter margin expansion.\n   • Stage 2 Weinstein breakout with explosive volume confirmation.\n   • MF accumulation up 1.8% in latest filing.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("DIXON")}\n📡 *Live Radar:* ${getRadarUrl("/vcp-discovery")}`
       );
     } else if (type === "PRE_BREAKOUT") {
       setComposerSymbol("ASTRAL");
       setComposerName("Astral Ltd");
       setComposerTitle("⚡ PRE-BREAKOUT A+: ASTRAL (Conviction 88 PTS • Super Coil)");
       setComposerMessage(
-        `⚡ *ALPHA INDIA | PRE-BREAKOUT RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Astral Ltd* (\`ASTRAL\`)\n⭐ *Setup:* A+ SUPER COIL (Conviction: 88 PTS)\n📐 *Base:* 6-Week Contraction Coil (VDU: 0.52x 20DMA)\n🎯 *Trigger Cheat Entry:* ₹2,050.00 | *CMP:* ₹2,028.50\n🛡️ *Stop Loss:* ₹1,965.00 (-3.1%)\n🚀 *Targets:* *T1:* ₹2,210.0 (+9.0%) | *T2:* ₹2,390.0 (+18.0%)\n⚖️ *Risk/Reward:* 3.6x\n💡 *Setup Analysis:*\nVolumetric supply exhaustion holding the 20-day EMA with NR7 compression candle.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/pre-breakout-radar")}`
+        `⚡ *ALPHA INDIA | PRE-BREAKOUT RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Astral Ltd* (\`ASTRAL\`)\n⭐ *Institutional Score:* 88/100 (A+ SUPER COIL)\n📐 *Base Pattern:* 6-Week Contraction Coil (VDU: 0.52x 20-DMA)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹2,028.50\n🎯 *Buy Trigger Price:* ₹2,050.00 (Cheat Entry)\n🚀 *Target Price:* ₹2,210.00 (+9.0%) | *T2:* ₹2,390.00 (+18.0%)\n🛑 *Stop Loss:* ₹1,965.00 (-3.1%)\n⚖️ *Risk:Reward:* 1:3.6\n💡 *Setup Analysis:*\nVolumetric supply exhaustion holding the 20-day EMA with NR7 compression candle.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("ASTRAL")}\n📡 *Live Radar:* ${getRadarUrl("/pre-breakout-radar")}`
       );
     } else if (type === "MOMENTUM") {
       setComposerSymbol("POLYCAB");
-      setComposerName("Polycab India");
+      setComposerName("Polycab India Ltd");
       setComposerTitle("🚀 MOMENTUM CONFLUENCE: POLYCAB (10/10 Perfect Match • 89 PTS)");
       setComposerMessage(
-        `🚀 *ALPHA INDIA | MOMENTUM RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Polycab India* (\`POLYCAB\`)\n🔥 *Match Score:* 10/10 Perfect Match | *Conviction:* 89 PTS\n📊 *Triple RSI:* Daily 68.4 | Weekly 64.2\n📈 *Volume Surge:* 2.85x 20DMA\n🎯 *Trigger:* ₹6,480.00 | *CMP:* ₹6,495.00\n🛡️ *Stop Loss:* ₹6,180.00\n🚀 *Targets:* *T1:* ₹7,010.0 (+8%) | *T2:* ₹7,530.0 (+16%)\n⚖️ *Risk/Reward:* 2.9x\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/momentum-radar")}`
+        `🚀 *ALPHA INDIA | MOMENTUM RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Polycab India* (\`POLYCAB\`)\n⭐ *Institutional Score:* 89/100 (10/10 CONFLUENCE)\n📊 *Triple RSI:* Daily 68.4 | Weekly 64.2\n📈 *Volume Surge:* 2.85x 20-DMA\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹6,495.00\n🎯 *Buy Trigger Price:* ₹6,480.00 (Momentum Breakout)\n🚀 *Target Price:* ₹7,010.00 (+8.0%) | *T2:* ₹7,530.00 (+16.0%)\n🛑 *Stop Loss:* ₹6,180.00 (-4.8%)\n⚖️ *Risk:Reward:* 1:2.9\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("POLYCAB")}\n📡 *Live Radar:* ${getRadarUrl("/momentum-radar")}`
       );
     } else if (type === "TOMORROW") {
       setComposerSymbol("CDSL");
-      setComposerName("Central Depository Services");
+      setComposerName("Central Depository Services Ltd");
       setComposerTitle("🎯 TOMORROW 5%+ RADAR: CDSL (Conviction 92 PTS • Squeeze Coil)");
       setComposerMessage(
-        `🎯 *ALPHA INDIA | TOMORROW 5%+ RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *CDSL* (\`CDSL\`)\n⭐ *Conviction:* 92/100 (Tier A+ Pre-Market Coil)\n🎯 *CMP:* ₹1,482.00 | *Buy Trigger:* ₹1,495.00\n🚀 *Target 1:* ₹1,570.00 (+5.9%) | *Stop Loss:* ₹1,440.00\n⚖️ *Risk:Reward:* 1:1.9\n📐 *Pattern:* NR7 Coil • RS +4.2% vs Nifty 50\n━━━━━━━━━━━━━━━━━━━━━\n*Execution Protocol:* Enter only if 9:15-9:30 AM gap is between +0.2% and +1.2%.\n📡 *Live Radar:* ${getRadarUrl("/intraday-radar")}`
+        `🎯 *ALPHA INDIA | TOMORROW 5%+ RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *CDSL* (\`CDSL\`)\n⭐ *Institutional Score:* 92/100 (TIER A+ HIGH CONVICTION)\n📐 *Setup Structure:* NR7 Coil • RS +4.2% vs Nifty 50\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹1,482.00\n🎯 *Buy Trigger Price:* ₹1,495.00\n🚀 *Target 1:* ₹1,570.00 (+5.9%) | *Target 2:* ₹1,640.00 (+10.6%)\n🛑 *Stop Loss:* ₹1,440.00 (-2.8%)\n⚖️ *Risk:Reward:* 1:1.9\n━━━━━━━━━━━━━━━━━━━━━\n⚠️ *Execution Protocol:* Enter only if 9:15-9:30 AM gap is between +0.2% and +1.2%.\n${getStockLinks("CDSL")}\n📡 *Live Radar:* ${getRadarUrl("/intraday-radar")}`
       );
     } else if (type === "ORDER_WIN") {
       setComposerSymbol("PURVA");
       setComposerName("Puravankara Ltd");
       setComposerTitle("🏆 ORDER WIN: PURAVANKARA (₹2,600 Cr • Transformational)");
       setComposerMessage(
-        `🏆 *ALPHA INDIA | ORDER WIN RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Puravankara Ltd* (\`PURVA\`)\n⭐ *Significance:* 92.0/100 — TRANSFORMATIONAL\n💰 *Order Value:* ₹2,600.0 Cr (+72.5% TTM Sales)\n🏛️ *Client/Agency:* Goregaon West Mumbai Redevelopment\n⏱️ *Runway:* 18 Months (~₹433.3 Cr/Quarter)\n📈 *Annualized PAT Impact:* +₹429.0 Cr\n🎯 *CMP:* ₹212.0 | *Target:* ₹339.2 (+60.0%) | *SL:* ₹190.8\n🎲 *Win Probability:* 79.8%\n💡 *Quant Thesis:*\nMajor Tier-1 metro redevelopment contract significantly enhances forward quarterly cash flows and margin visibility.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/announcements?catalyst_type=ORDER_WIN")}`
+        `🏆 *ALPHA INDIA | ORDER WIN RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Puravankara Ltd* (\`PURVA\`)\n⭐ *Institutional Score:* 92/100 (TRANSFORMATIONAL IMPACT)\n💰 *Order Value:* ₹2,600.0 Cr (+72.5% TTM Sales)\n🏛️ *Client/Agency:* Goregaon West Mumbai Redevelopment\n⏱️ *Runway:* 18 Months (~₹433.3 Cr/Quarter)\n📈 *Annualized PAT Impact:* +₹429.0 Cr\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹212.00\n🎯 *Buy Trigger Price:* ₹215.00 (Catalyst Trigger)\n🚀 *Target Price:* ₹339.20 (+60.0%)\n🛑 *Stop Loss:* ₹190.80 (-10.0%)\n⚖️ *Risk:Reward:* 1:5.2 | *Win Probability:* 79.8%\n💡 *Quant Thesis:*\nMajor Tier-1 metro redevelopment contract significantly enhances forward quarterly cash flows and margin visibility.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("PURVA")}\n📡 *Live Radar:* ${getRadarUrl("/announcements?catalyst_type=ORDER_WIN")}`
       );
     } else if (type === "CATALYST") {
       setComposerSymbol("SOLARINDS");
-      setComposerName("Solar Industries India");
+      setComposerName("Solar Industries India Ltd");
       setComposerTitle("📡 CATALYST RADAR: SOLAR INDUSTRIES (₹2,450 Cr Order)");
       setComposerMessage(
-        `📡 *ALPHA INDIA | CATALYST RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Solar Industries* (\`SOLARINDS\`)\n⚡ *Catalyst:* DEFENSE WEAPON SUPPLY CONTRACT\n💰 *Contract Value:* ₹2,450.0 Cr\n📋 *Summary:* Ministry of Defence awards ammunition supply contract over 36 months.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/announcements")}`
+        `📡 *ALPHA INDIA | CATALYST RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Solar Industries* (\`SOLARINDS\`)\n⭐ *Institutional Score:* 91/100 (HIGH IMPACT CATALYST)\n⚡ *Catalyst:* DEFENSE WEAPON SUPPLY CONTRACT\n💰 *Contract Value:* ₹2,450.0 Cr\n📋 *Summary:* Ministry of Defence awards ammunition supply contract over 36 months.\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹9,850.00\n🎯 *Buy Trigger Price:* ₹9,920.00\n🚀 *Target Price:* ₹11,350.00 (+15.2%)\n🛑 *Stop Loss:* ₹9,220.00 (-6.4%)\n⚖️ *Risk:Reward:* 1:2.4\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("SOLARINDS")}\n📡 *Live Radar:* ${getRadarUrl("/announcements")}`
       );
     } else if (type === "PEAD") {
       setComposerSymbol("TRENT");
       setComposerName("Trent Ltd");
       setComposerTitle("⚡ ATHENA FLASH: TRENT LTD (Grade AAA+)");
       setComposerMessage(
-        `⚡ *ALPHA INDIA | ATHENA PEAD FLASH*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Trent Ltd* (\`TRENT\`)\n🎯 *Signal:* STRONG BUY | *Grade:* AAA+ (94/100)\n📈 *QoQ/YoY Growth:*\n   • PAT: ₹412.5 Cr (+142.5% YoY)\n   • Revenue: ₹3,450.0 Cr (+53.8% YoY)\n🎯 *Upside Potential:* +18.5%\n💡 *Institutional Thesis:*\nAggressive retail store expansion drives exceptional operating leverage with clean earnings quality.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/athena-omega")}`
+        `⚡ *ALPHA INDIA | ATHENA PEAD FLASH*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Trent Ltd* (\`TRENT\`)\n⭐ *Institutional Score:* 94/100 (GRADE: AAA+ STRONG BUY)\n📈 *QoQ/YoY Growth:*\n   • PAT: ₹412.5 Cr (+142.5% YoY)\n   • Revenue: ₹3,450.0 Cr (+53.8% YoY)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹7,150.00\n🎯 *Buy Trigger Price:* ₹7,220.00 (PEAD Drift Entry)\n🚀 *Target Price:* ₹8,470.00 (+18.5%)\n🛑 *Stop Loss:* ₹6,650.00 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.6\n💡 *Institutional Thesis:*\nAggressive retail store expansion drives exceptional operating leverage with clean earnings quality.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("TRENT")}\n📡 *Live Radar:* ${getRadarUrl("/athena-omega")}`
       );
     } else if (type === "TECHNO_FUNDA") {
       setComposerSymbol("KAYNES");
-      setComposerName("Kaynes Technology India");
+      setComposerName("Kaynes Technology India Ltd");
       setComposerTitle("🎯 TECHNO-FUNDA: KAYNES (Score 91.5 • 2.1% from Pivot)");
       setComposerMessage(
-        `🎯 *ALPHA INDIA | TECHNO-FUNDA RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Kaynes Technology* (\`KAYNES\`) • Electronics EMS\n⭐ *Setup Score:* 91.5/100 | *Signal:* \`PRE_BREAKOUT\`\n📐 *Pattern Archetype:* VCP Base (Stage 2 Leader)\n💵 *CMP:* ₹2,710.00 | *Model Pivot:* ₹2,768.00\n📍 *Distance to Pivot:* +2.14%\n🛡️ *Health Score:* 82.0/100\n💡 *Fundamental Acceleration:* PAT Growth +68% YoY, ROCE 22.4%.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/techno-funda")}`
+        `🎯 *ALPHA INDIA | TECHNO-FUNDA RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Kaynes Technology* (\`KAYNES\`) • Electronics EMS\n⭐ *Institutional Score:* 91.5/100 | *Health:* 82.0/100\n⚡ *Signal:* \`PRE_BREAKOUT\` | *Pattern:* VCP Base (Stage 2 Leader)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹2,710.00\n🎯 *Buy Trigger Price:* ₹2,768.00 (Model Pivot • Distance: +2.14%)\n🚀 *Target Price:* ₹3,180.00 (+17.3%)\n🛑 *Stop Loss:* ₹2,520.00 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.5\n💡 *Fundamental Acceleration:* PAT Growth +68% YoY, ROCE 22.4%.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("KAYNES")}\n📡 *Live Radar:* ${getRadarUrl("/techno-funda")}`
       );
     } else if (type === "DELIVERY") {
       setComposerSymbol("WELSPUNLIV");
       setComposerName("Welspun Living Ltd");
       setComposerTitle("⚡ DELIVERY BREAKOUT: WELSPUNLIV (4.8x Surge • 68% Delivery)");
       setComposerMessage(
-        `⚡ *ALPHA INDIA | DELIVERY BREAKOUT RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Welspun Living* (\`WELSPUNLIV\`) • Textiles & Consumer\n📦 *Delivery Absorption:* 68.4% (Massive Institutional Float Lock)\n📈 *Surge Multiplier:* 4.82x 10-DMA Volume\n🎯 *Setup Type:* 50D BREAKOUT | *Conviction:* 88 PTS\n💵 *CMP:* ₹168.50\n🚀 *Target:* ₹185.00 (+10.0%) | *SL:* ₹162.00 (-3.8%) (R:R 3.5:1)\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/delivery-radar")}`
+        `⚡ *ALPHA INDIA | DELIVERY BREAKOUT RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Welspun Living* (\`WELSPUNLIV\`) • Textiles & Consumer\n⭐ *Institutional Score:* 88/100 (ACTIVE SWING)\n📦 *Delivery Absorption:* 68.4% (Massive Institutional Float Lock)\n📈 *Surge Multiplier:* 4.82x 10-DMA Volume\n📐 *Setup Type:* 50D BREAKOUT\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹168.50\n🎯 *Buy Trigger Price:* ₹170.00 (Volume Confirmation)\n🚀 *Target 1:* ₹185.00 (+10.0%) | *Target 2:* ₹200.00 (+18.7%)\n🛑 *Stop Loss:* ₹162.00 (-3.8%)\n⚖️ *Risk:Reward:* 1:2.6\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("WELSPUNLIV")}\n📡 *Live Radar:* ${getRadarUrl("/delivery-radar")}`
       );
     } else if (type === "SMART_MONEY") {
       setComposerSymbol("SUZLON");
       setComposerName("Suzlon Energy Ltd");
       setComposerTitle("🏛️ SMART MONEY RADAR: SUZLON (Score 86.4 • 5 Schemes Added)");
       setComposerMessage(
-        `🏛️ *ALPHA INDIA | INSTITUTIONAL MF RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Suzlon Energy* (\`SUZLON\`) • Green Energy Infrastructure\n⭐ *Smart Money Score:* 86.4/100\n💼 *Fresh AMC Position Initiations:* 5 Schemes\n📊 *Net Holding Change:* +34.2%\n⏱️ *Filing Cycle:* Latest Monthly Portfolios\n💡 *Institutional Edge:*\nMultiple Tier-1 mutual fund houses opened fresh aggressive additions post-balance sheet turnaround.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/institutional-radar/fresh-entries")}`
+        `🏛️ *ALPHA INDIA | INSTITUTIONAL MF RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Suzlon Energy* (\`SUZLON\`) • Green Energy Infrastructure\n⭐ *Institutional Score:* 86.4/100 (SMART MONEY ACCUMULATION)\n💼 *Fresh AMC Position Initiations:* 5 Schemes\n📊 *Net Holding Change:* +34.2%\n⏱️ *Filing Cycle:* Latest Monthly Portfolios\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹68.50\n🎯 *Buy Trigger Price:* ₹69.20 (Institutional Accumulation Pivot)\n🚀 *Target Price:* ₹82.00 (+19.7%)\n🛑 *Stop Loss:* ₹63.70 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.8\n💡 *Institutional Edge:*\nMultiple Tier-1 mutual fund houses opened fresh aggressive additions post-balance sheet turnaround.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("SUZLON")}\n📡 *Live Radar:* ${getRadarUrl("/institutional-radar/fresh-entries")}`
       );
     } else if (type === "GROWTH") {
       setComposerSymbol("KAYNES");
-      setComposerName("Kaynes Technology India");
+      setComposerName("Kaynes Technology India Ltd");
       setComposerTitle("🚀 GROWTH BREAKOUT: KAYNES TECH (+98% YoY PAT)");
       setComposerMessage(
-        `🚀 *ALPHA INDIA | GROWTH BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Kaynes Technology* (\`KAYNES\`)\n📈 *YoY PAT Growth:* +98.4%\n📊 *YoY Revenue Growth:* +64.2%\n🛡️ *Operating Margin:* 14.8% | *P/E:* 68.5x\n💡 *Breakout:* 3-year revenue CAGR crosses institutional acceleration threshold.\n━━━━━━━━━━━━━━━━━━━━━\n📡 *Live Radar:* ${getRadarUrl("/growth-screener")}`
+        `🚀 *ALPHA INDIA | GROWTH BREAKOUT*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Kaynes Technology* (\`KAYNES\`)\n⭐ *Institutional Score:* 93/100 (GROWTH ACCELERATION)\n📈 *YoY PAT Growth:* +98.4%\n📊 *YoY Revenue Growth:* +64.2%\n🛡️ *Operating Margin:* 14.8% | *P/E:* 68.5x\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹2,710.00\n🎯 *Buy Trigger Price:* ₹2,750.00 (Breakout Entry)\n🚀 *Target Price:* ₹3,250.00 (+19.9%)\n🛑 *Stop Loss:* ₹2,520.00 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.8\n💡 *Breakout:* 3-year revenue CAGR crosses institutional acceleration threshold.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("KAYNES")}\n📡 *Live Radar:* ${getRadarUrl("/growth-screener")}`
       );
     } else {
       setComposerTitle("📢 MARKET INTELLIGENCE MEMO");
       setComposerMessage(
-        `📢 *ALPHA INDIA | INSTITUTIONAL MEMO*\n━━━━━━━━━━━━━━━━━━━━━\n[Write institutional trade brief or analyst takeaway here]\n━━━━━━━━━━━━━━━━━━━━━\n📡 _Dispatched via Alpha India Terminal_`
+        `📢 *ALPHA INDIA | INSTITUTIONAL MEMO*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Company Name* (\`SYMBOL\`)\n⭐ *Institutional Score:* 88/100 (HIGH CONVICTION)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹0.00\n🎯 *Buy Trigger Price:* ₹0.00\n🚀 *Target Price:* ₹0.00 (+15.0%)\n🛑 *Stop Loss:* ₹0.00 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.1\n💡 *Institutional Edge:*\n[Write institutional trade brief or analyst takeaway here]\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks(composerSymbol || "TCS")}\n📡 _Dispatched via Alpha India Terminal_`
       );
     }
   };
@@ -523,6 +541,21 @@ export default function AlertCenterPage() {
     }
   };
 
+  const handleTriggerIpoScanAlerts = async () => {
+    try {
+      setIpoScanning(true);
+      const res = await notificationsApi.triggerIpoScanAlerts(true, oppRules.ipo_min_conviction || 85);
+      showNotification("success", `Processed ${res.count} institutional Mainboard IPO Radar alert(s) dispatched to external channels!`);
+      const recent = await notificationsApi.getRecentOpportunities(35);
+      setRecentOpportunities(recent || []);
+      if (activeTab === "logs") loadLogs();
+    } catch (err: unknown) {
+      showNotification("error", `Failed to trigger IPO scan alerts: ${(err as Error).message}`);
+    } finally {
+      setIpoScanning(false);
+    }
+  };
+
   const handleOpenWhatsAppWeb = () => {
     const cleanPhone = waRecipient ? waRecipient.replace(/[^0-9]/g, "") : "";
     const url = cleanPhone
@@ -559,6 +592,8 @@ export default function AlertCenterPage() {
         return { label: "GROWTH PRO", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", icon: BarChart3 };
       case "BREAKOUT_EXECUTION":
         return { label: "EXECUTION COCKPIT", color: "bg-red-500/20 text-red-300 border-red-500/30", icon: Flame };
+      case "IPO_RADAR":
+        return { label: "MAINBOARD IPO RADAR", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", icon: Rocket };
       default:
         return { label: category.replace("_", " "), color: "bg-slate-500/20 text-slate-300 border-slate-500/30", icon: BellRing };
     }
@@ -577,7 +612,7 @@ export default function AlertCenterPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
               External Alert Center
               <span className="text-xs px-2.5 py-0.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-mono font-semibold">
-                13-ENGINE RADAR
+                14-ENGINE RADAR
               </span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -725,11 +760,11 @@ export default function AlertCenterPage() {
                     Institutional Opportunity Radar Alerts
                   </h2>
                   <span className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-bold text-cyan-300 font-mono">
-                    13-ENGINE ACTIVE RADAR
+                    14-ENGINE ACTIVE RADAR
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
-                  Continuous multi-engine scanning across Minervini VCP, Pre-Breakout Coils, Multi-Timeframe Momentum, Tomorrow 5%+ Movers, Order Wins, Corporate Catalysts, Athena PEAD, Techno-Funda Pivots, Delivery Surges, Institutional MF Flows, and Growth Acceleration. Alerts auto-deduplicate daily and dispatch directly to Telegram &amp; WhatsApp.
+                  Continuous multi-engine scanning across Minervini VCP, Pre-Breakout Coils, Multi-Timeframe Momentum, Tomorrow 5%+ Movers, Order Wins, Corporate Catalysts, Athena PEAD, Techno-Funda Pivots, Delivery Surges, Institutional MF Flows, Growth Acceleration, and Mainboard IPO Radar. Alerts auto-deduplicate daily and dispatch directly to Telegram &amp; WhatsApp.
                 </p>
               </div>
 
@@ -740,7 +775,16 @@ export default function AlertCenterPage() {
                   className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 px-4 py-2.5 text-xs font-bold text-black transition shadow-md cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw size={14} className={oppScanning ? "animate-spin" : ""} />
-                  {oppScanning ? "Scanning 13 Engines..." : "Run 13-Engine Opportunity Scan Now"}
+                  {oppScanning ? "Scanning 14 Engines..." : "Run 14-Engine Opportunity Scan Now"}
+                </button>
+
+                <button
+                  onClick={handleTriggerIpoScanAlerts}
+                  disabled={ipoScanning}
+                  className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-2.5 text-xs font-semibold text-cyan-300 transition cursor-pointer disabled:opacity-50"
+                >
+                  <Rocket size={14} className={ipoScanning ? "animate-spin" : ""} />
+                  {ipoScanning ? "Scanning IPOs..." : "Dispatch IPO Radar"}
                 </button>
 
                 <button
@@ -769,8 +813,8 @@ export default function AlertCenterPage() {
                 <Filter size={12} /> Filter:
               </span>
               {[
-                { id: "ALL", label: "All 13 Engines" },
-                { id: "BREAKOUT", label: "Breakout & Base Patterns (4)" },
+                { id: "ALL", label: "All 14 Engines" },
+                { id: "BREAKOUT", label: "Breakout & Base Patterns (5)" },
                 { id: "MOMENTUM", label: "Momentum & Volatility (4)" },
                 { id: "INSTITUTIONAL", label: "Smart Money & Catalysts (3)" },
                 { id: "FUNDAMENTAL", label: "Growth & Earnings Surprise (2)" },
@@ -1144,6 +1188,27 @@ export default function AlertCenterPage() {
                         className="w-full accent-purple-400 cursor-pointer"
                       />
                     </div>
+
+                    {/* Full Universe Scan Findings Inclusion */}
+                    <div className="pt-2 border-t border-purple-500/20 flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] font-bold text-purple-300 flex items-center gap-1.5">
+                          <Globe size={12} className="text-purple-400" />
+                          Include Full Universe Scan Findings
+                        </span>
+                        <p className="text-[10px] text-slate-400">
+                          Dispatches alerts for non-F&amp;O equities passing institutional gates (Mcap ≥ ₹1,000 Cr &amp; Liquid)
+                        </p>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={oppRules.momentum_universe_enabled ?? true}
+                          onChange={(e) => setOppRules({ ...oppRules, momentum_universe_enabled: e.target.checked })}
+                          className="rounded border-slate-700 bg-slate-900 text-purple-500 h-4 w-4 cursor-pointer"
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
@@ -1358,11 +1423,11 @@ export default function AlertCenterPage() {
                       <select
                         value={oppRules.delivery_tier ?? "ACTIVE_SWING"}
                         onChange={(e) => setOppRules({ ...oppRules, delivery_tier: e.target.value })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:border-indigo-500 focus:outline-hidden cursor-pointer shadow-xs"
                       >
-                        <option value="ACTIVE_SWING">⚡ Active Swing + 🎯 Apex Sniper (62%+ WR) — Recommended</option>
-                        <option value="APEX_SNIPER">🎯 Apex Sniper Only (70%+ WR) — Ultra Selective</option>
-                        <option value="ALL">All Radar Signals (incl. Base Watchlist)</option>
+                        <option value="ACTIVE_SWING" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">⚡ Active Swing + 🎯 Apex Sniper (62%+ WR) — Recommended</option>
+                        <option value="APEX_SNIPER" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">🎯 Apex Sniper Only (70%+ WR) — Ultra Selective</option>
+                        <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Radar Signals (incl. Base Watchlist)</option>
                       </select>
                     </div>
 
@@ -1843,6 +1908,89 @@ export default function AlertCenterPage() {
                   </div>
                 </div>
               )}
+
+              {/* Engine 14: Mainboard IPO Radar (Blue-Sky & Base Cheats) */}
+              {(clusterFilter === "ALL" || clusterFilter === "BREAKOUT") && (
+                <div
+                  className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
+                    oppRules.ipo_radar_enabled ? "border-cyan-500/40 bg-[#071824]" : "border-slate-800 bg-[#060c18] opacity-60"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                        <Rocket size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          14. Mainboard IPO Radar
+                          <span className="text-[10px] text-cyan-400 font-mono font-normal">/ipo-radar</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-400">Blue-Sky LDH, Base Cheats &amp; SEBI 30D/90D Anchor Lock-in Exhaustion (Zero SME)</p>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <span className="text-[11px] font-semibold text-slate-300">
+                        {oppRules.ipo_radar_enabled ? "Active" : "Disabled"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={oppRules.ipo_radar_enabled ?? true}
+                        onChange={(e) => setOppRules({ ...oppRules, ipo_radar_enabled: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-cyan-500 h-4 w-4 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="text-xs text-slate-300 space-y-2">
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Monitors all Mainboard NSE/BSE IPOs listed in the last 2.5 years. Dispatches alerts when price breaches Day-1 High (Blue-Sky), completes institutional VCP supply contraction, or rebounds after Anchor lock-in expiry.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <div className="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
+                          <span>Min Conviction:</span>
+                          <span className="text-cyan-400 font-bold">{oppRules.ipo_min_conviction ?? 85} / 100</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="70"
+                          max="95"
+                          step="5"
+                          value={oppRules.ipo_min_conviction ?? 85}
+                          onChange={(e) => setOppRules({ ...oppRules, ipo_min_conviction: Number(e.target.value) })}
+                          className="w-full accent-cyan-400 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center pt-4">
+                        <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={oppRules.ipo_blue_sky_only ?? false}
+                            onChange={(e) => setOppRules({ ...oppRules, ipo_blue_sky_only: e.target.checked })}
+                            className="rounded border-slate-700 bg-slate-900 text-cyan-500 h-4 w-4 cursor-pointer"
+                          />
+                          <span>Blue-Sky LDH Only (Day 1 Breakouts)</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-mono">Mainboard Only • 2R Rule (+15%)</span>
+                    <a
+                      href="/ipo-radar"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
+                    >
+                      <span>Open IPO Radar</span>
+                      <ArrowUpRight size={13} />
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* External Broadcast Auto-Dispatch Toggles */}
@@ -2282,6 +2430,12 @@ export default function AlertCenterPage() {
                       rule: `PAT Growth YoY ≥ +${oppRules.growth_min_pat_pct ?? 50}% & Sales YoY ≥ +${oppRules.growth_min_sales_pct ?? 25}%`,
                       link: "/growth-screener",
                     },
+                    {
+                      name: "Mainboard IPO Radar",
+                      key: "ipo_radar_enabled",
+                      rule: `Conviction ≥ ${oppRules.ipo_min_conviction ?? 85}/100 • Blue-Sky LDH & Base Cheats (Zero SME)`,
+                      link: "/ipo-radar",
+                    },
                   ].map((row) => {
                     const isEnabled = Boolean(oppRules[row.key as keyof OpportunityThresholds]);
                     return (
@@ -2418,6 +2572,14 @@ export default function AlertCenterPage() {
                       <Trophy size={12} />
                       Dispatch Orders
                     </button>
+                    <button
+                      onClick={handleTriggerIpoScanAlerts}
+                      disabled={ipoScanning}
+                      className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1 text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      <Rocket size={12} />
+                      Dispatch IPOs
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2460,11 +2622,29 @@ export default function AlertCenterPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Memo Content (Markdown formatted for Telegram &amp; WhatsApp)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Memo Content (Markdown formatted for Telegram &amp; WhatsApp)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const links = getStockLinks(composerSymbol || "TCS");
+                      if (!composerMessage.includes("Research & Terminal Links")) {
+                        setComposerMessage((prev) => `${prev.trim()}\n━━━━━━━━━━━━━━━━━━━━━\n${links}`);
+                        showNotification("info", `Appended Alpha India 360 & Screener.in links for ${composerSymbol || "TCS"}`);
+                      } else {
+                        showNotification("info", "Research links already present in memo");
+                      }
+                    }}
+                    className="flex items-center gap-1 text-[11px] font-medium text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
+                  >
+                    <Link2 size={12} />
+                    Insert Research Links
+                  </button>
+                </div>
                 <textarea
-                  rows={9}
+                  rows={12}
                   value={composerMessage}
                   onChange={(e) => setComposerMessage(e.target.value)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-900/90 p-3 text-xs text-white font-mono focus:border-cyan-500 focus:outline-hidden leading-relaxed"

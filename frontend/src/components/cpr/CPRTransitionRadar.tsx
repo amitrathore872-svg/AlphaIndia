@@ -252,17 +252,17 @@ export default function CPRTransitionRadar({ onSelectStock }: CPRTransitionRadar
 
           {/* Sort By Selector & Refresh */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-slate-900/80 px-2 py-1 rounded-lg border border-slate-700/60 text-xs font-mono">
-              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900/80 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700/60 text-xs font-mono shadow-xs">
+              <ArrowUpDown className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="bg-transparent text-slate-200 outline-none text-xs cursor-pointer"
+                className="bg-transparent text-slate-800 dark:text-slate-200 outline-none text-xs cursor-pointer font-medium"
               >
-                <option value="cpr_width_pct" className="bg-slate-900 text-slate-200">Narrowest CPR First</option>
-                <option value="dist_to_cpr_pct" className="bg-slate-900 text-slate-200">Closest to CPR First</option>
-                <option value="turnover_cr" className="bg-slate-900 text-slate-200">Highest Turnover</option>
-                <option value="market_cap_cr" className="bg-slate-900 text-slate-200">Highest Market Cap</option>
+                <option value="cpr_width_pct" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Narrowest CPR First</option>
+                <option value="dist_to_cpr_pct" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Closest to CPR First</option>
+                <option value="turnover_cr" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Highest Turnover</option>
+                <option value="market_cap_cr" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Highest Market Cap</option>
               </select>
             </div>
 

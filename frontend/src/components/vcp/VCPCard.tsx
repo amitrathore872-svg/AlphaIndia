@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { type VCPStockPick } from "@/lib/vcpApi";
 import { notificationsApi } from "@/lib/notificationsApi";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
 interface VCPCardProps {
   stock: VCPStockPick;
@@ -159,6 +160,13 @@ export default function VCPCard({ stock, onOpenChart, isCompactMode = false }: V
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 shrink-0">
+            <AddToWatchlistButton
+              symbol={stock.symbol}
+              companyName={stock.company_name || stock.symbol}
+              currentPrice={stock.cmp}
+              variant="button"
+            />
+
             {onOpenChart && (
               <button
                 onClick={() => onOpenChart(stock)}
@@ -495,6 +503,13 @@ export default function VCPCard({ stock, onOpenChart, isCompactMode = false }: V
         {/* Interactive Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800/80">
           <div className="flex items-center gap-2">
+            <AddToWatchlistButton
+              symbol={stock.symbol}
+              companyName={stock.company_name || stock.symbol}
+              currentPrice={stock.cmp}
+              variant="button"
+            />
+
             <button
               onClick={handleTriggerAlert}
               disabled={dispatching || alertDispatched}

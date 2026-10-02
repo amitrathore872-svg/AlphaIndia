@@ -24,6 +24,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import StockInstitutionalModal from "@/components/institutional/StockInstitutionalModal";
 import SectorRotationCard from "@/components/institutional/SectorRotationCard";
 import InstitutionalSubNav from "@/components/institutional/InstitutionalSubNav";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import {
   MacroTelemetry,
   ScreenerItem,
@@ -122,24 +123,24 @@ export default function InstitutionalRadarPage() {
         <InstitutionalSubNav />
 
         {/* HEADER TITLE & ACTION BAR */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800/80 pb-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 shadow-lg shadow-cyan-950/30">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 shadow-sm shadow-cyan-950/20">
               <ShieldCheck size={26} />
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+                <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
                   Mutual Fund Intelligence Engine
                 </h1>
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                   SMART MONEY RADAR
                 </span>
-                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-bold text-cyan-400">
+                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-bold text-cyan-700 dark:text-cyan-400">
                   {totalCount} EQUITIES
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                 Institutional Float Absorption &bull; Monthly AMFI Portfolio Filings &bull; Active Alpha Conviction
               </p>
             </div>
@@ -148,10 +149,10 @@ export default function InstitutionalRadarPage() {
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setShowMacro(!showMacro)}
-              className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition shadow-sm ${
+              className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition shadow-xs ${
                 showMacro
-                  ? "border-cyan-500 bg-cyan-500/20 text-cyan-300"
-                  : "border-slate-700 bg-slate-800/80 text-slate-300 hover:border-slate-600 hover:text-white"
+                  ? "border-cyan-500 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                  : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               <PieChart size={15} />
@@ -161,9 +162,9 @@ export default function InstitutionalRadarPage() {
             <button
               onClick={loadData}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-300 hover:border-slate-600 hover:text-white transition disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-50"
             >
-              <RefreshCw size={14} className={loading ? "animate-spin text-cyan-400" : ""} />
+              <RefreshCw size={14} className={loading ? "animate-spin text-cyan-600 dark:text-cyan-400" : ""} />
               Refresh
             </button>
           </div>
@@ -183,11 +184,11 @@ export default function InstitutionalRadarPage() {
         {/* MARKET CAP CATEGORY FILTER RIBBON */}
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: "ALL", label: "All Caps", count: capCounts.ALL, color: "text-slate-200" },
-            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-400", desc: "> ₹20,000 Cr" },
-            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-400", desc: "₹5,000 - ₹20,000 Cr" },
-            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-400", desc: "₹1,000 - ₹5,000 Cr" },
-            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-400", desc: "< ₹1,000 Cr" },
+            { id: "ALL", label: "All Caps", count: capCounts.ALL, color: "text-slate-800 dark:text-slate-200" },
+            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-700 dark:text-cyan-400", desc: "> ₹20,000 Cr" },
+            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-700 dark:text-emerald-400", desc: "₹5,000 - ₹20,000 Cr" },
+            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-800 dark:text-amber-400", desc: "₹1,000 - ₹5,000 Cr" },
+            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-600 dark:text-slate-400", desc: "< ₹1,000 Cr" },
           ].map((cat) => {
             const active = capCategory === cat.id;
             return (
@@ -197,24 +198,24 @@ export default function InstitutionalRadarPage() {
                   setCapCategory(cat.id);
                   setPage(1);
                 }}
-                className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all shadow-sm ${
+                className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all shadow-xs ${
                   active
-                    ? "border-cyan-500 bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/40"
-                    : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:bg-slate-800/60 hover:text-slate-200"
+                    ? "border-cyan-500 bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 ring-1 ring-cyan-500/40"
+                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
                 }`}
               >
-                <span className={active ? "text-cyan-300 font-extrabold" : cat.color}>
+                <span className={active ? "text-cyan-700 dark:text-cyan-300 font-extrabold" : cat.color}>
                   {cat.label}
                 </span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
-                    active ? "bg-cyan-500 text-slate-950" : "bg-slate-800 text-slate-400"
+                    active ? "bg-cyan-500 text-slate-950" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400"
                   }`}
                 >
                   {cat.count}
                 </span>
                 {cat.desc && (
-                  <span className="hidden text-[10px] text-slate-400 font-normal lg:inline">
+                  <span className="hidden text-[10px] text-slate-500 dark:text-slate-400 font-normal lg:inline">
                     ({cat.desc})
                   </span>
                 )}
@@ -224,9 +225,9 @@ export default function InstitutionalRadarPage() {
         </div>
 
         {/* SEARCH & FILTERS CONTROLS */}
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-[#080E1A]/90 p-4 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#080E1A]/90 p-4 shadow-xs dark:shadow-lg">
           {/* SEARCH INPUT */}
-          <div className="flex w-full max-w-sm items-center gap-2.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-2">
+          <div className="flex w-full max-w-sm items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/80 px-3.5 py-2">
             <Search size={16} className="text-slate-400" />
             <input
               type="text"
@@ -236,7 +237,7 @@ export default function InstitutionalRadarPage() {
                 setSearchTerm(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 outline-none"
+              className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
             />
           </div>
 
@@ -256,8 +257,8 @@ export default function InstitutionalRadarPage() {
                 }}
                 className={`rounded-xl px-3 py-1.5 transition ${
                   selectedFilter === f.id
-                    ? "border border-cyan-500/50 bg-cyan-500/20 text-cyan-300"
-                    : "border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-white"
+                    ? "border border-cyan-500/50 bg-cyan-500/20 text-cyan-800 dark:text-cyan-300"
+                    : "border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/80"
                 }`}
               >
                 {f.label}
@@ -274,7 +275,7 @@ export default function InstitutionalRadarPage() {
                 setSelectedSector(e.target.value);
                 setPage(1);
               }}
-              className="rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-200 outline-none"
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/80 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
             >
               <option value="ALL">All Sectors</option>
               <option value="Electronics EMS">Electronics EMS</option>
@@ -289,16 +290,16 @@ export default function InstitutionalRadarPage() {
         </div>
 
         {/* PRIMARY INSTITUTIONAL SCREENER TABLE */}
-        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-[#080E1A]/90 shadow-2xl">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#080E1A]/90 shadow-xs dark:shadow-2xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/90 text-slate-400">
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400">
                   <th className="py-3.5 px-4 text-center">Cap Tier</th>
                   <th className="py-3.5 pl-4 pr-4 font-semibold">Ticker & Company Name</th>
                   <th
                     onClick={() => handleSort("smart_money_score")}
-                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-white transition"
+                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition"
                   >
                     <div className="flex items-center gap-1.5">
                       Smart Money Score (0-100)
@@ -307,7 +308,7 @@ export default function InstitutionalRadarPage() {
                   </th>
                   <th
                     onClick={() => handleSort("active_alpha_schemes_holding")}
-                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-white transition"
+                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition"
                   >
                     <div className="flex items-center gap-1.5">
                       Active Alpha Funds
@@ -316,7 +317,7 @@ export default function InstitutionalRadarPage() {
                   </th>
                   <th
                     onClick={() => handleSort("net_value_flow_mom_cr")}
-                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-white transition text-right"
+                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition text-right"
                   >
                     <div className="flex items-center justify-end gap-1.5">
                       Net MoM Flow (₹ Cr)
@@ -325,7 +326,7 @@ export default function InstitutionalRadarPage() {
                   </th>
                   <th
                     onClick={() => handleSort("float_absorption_pct")}
-                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-white transition text-right"
+                    className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition text-right"
                   >
                     <div className="flex items-center justify-end gap-1.5">
                       Free Float Absorbed %
@@ -337,10 +338,10 @@ export default function InstitutionalRadarPage() {
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-400">
+                    <td colSpan={8} className="py-16 text-center text-slate-500 dark:text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
                         <span>Loading Institutional Radar...</span>
@@ -349,7 +350,7 @@ export default function InstitutionalRadarPage() {
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-400">
+                    <td colSpan={8} className="py-16 text-center text-slate-500 dark:text-slate-400">
                       No institutional records found matching criteria.
                     </td>
                   </tr>
@@ -357,18 +358,18 @@ export default function InstitutionalRadarPage() {
                   items.map((item) => {
                     const catBadge =
                       item.market_cap_category === "LARGE"
-                        ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400"
+                        ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400"
                         : item.market_cap_category === "MID"
-                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                         : item.market_cap_category === "SMALL"
-                        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                        : "border-slate-600 bg-slate-800 text-slate-400";
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400"
+                        : "border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
 
                     return (
                       <tr
                         key={item.company_id}
                         onClick={() => setSelectedSymbol(item.symbol)}
-                        className="cursor-pointer hover:bg-slate-800/40 transition group"
+                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group"
                       >
                         {/* CAP TIER BADGE */}
                         <td className="py-3.5 px-4 text-center">
@@ -382,43 +383,48 @@ export default function InstitutionalRadarPage() {
                         {/* TICKER & COMPANY */}
                         <td className="py-3.5 pl-4 pr-4">
                           <div className="flex items-center gap-2.5">
-                            <span className="font-bold text-white text-sm font-mono group-hover:text-cyan-400 transition">
+                            <AddToWatchlistButton
+                              symbol={item.symbol}
+                              companyName={item.company_name}
+                              variant="star"
+                            />
+                            <span className="font-bold text-slate-900 dark:text-white text-sm font-mono group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition">
                               {item.symbol}
                             </span>
                             {item.is_stealth_accumulation && (
-                              <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-bold text-cyan-300 flex items-center gap-0.5 border border-cyan-500/30">
+                              <span className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-bold text-cyan-800 dark:text-cyan-300 flex items-center gap-0.5 border border-cyan-500/30">
                                 <Sparkles size={10} /> STEALTH
                               </span>
                             )}
                             {item.is_consensus_bet && (
-                              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300 flex items-center gap-0.5 border border-emerald-500/30">
+                              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-0.5 border border-emerald-500/30">
                                 CONSENSUS
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
-                            <span className="truncate max-w-[220px]">{item.company_name}</span>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
+                            <span className="truncate max-w-[220px] text-slate-700 dark:text-slate-300">{item.company_name}</span>
                             &bull;
-                            <span className="text-slate-500">{item.sector}</span>
+                            <span className="text-slate-400 dark:text-slate-500">{item.sector}</span>
                           </div>
                         </td>
 
                         {/* SMART MONEY SCORE GAUGE */}
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/90 font-mono font-black text-sm text-cyan-400 shadow-inner">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/90 font-mono font-black text-sm text-cyan-700 dark:text-cyan-400 shadow-inner">
                               {item.smart_money_score}
                             </div>
                             <div className="w-20">
-                              <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                              <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                                 <div
                                   style={{ width: `${item.smart_money_score}%` }}
                                   className={`h-full rounded-full ${
                                     item.smart_money_score >= 80
-                                      ? "bg-gradient-to-r from-cyan-400 to-emerald-400"
+                                      ? "bg-gradient-to-r from-cyan-500 to-emerald-500"
                                       : item.smart_money_score >= 65
-                                      ? "bg-cyan-400"
-                                      : "bg-amber-400"
+                                      ? "bg-cyan-500"
+                                      : "bg-amber-500"
                                   }`}
                                 />
                               </div>
@@ -432,7 +438,7 @@ export default function InstitutionalRadarPage() {
                         {/* ACTIVE ALPHA FUNDS */}
                         <td className="py-3.5 px-4 font-mono">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-white text-sm">
+                            <span className="font-bold text-slate-900 dark:text-white text-sm">
                               {item.active_alpha_schemes}
                             </span>
                             <span className="text-[11px] text-slate-500">
@@ -449,10 +455,10 @@ export default function InstitutionalRadarPage() {
                           <span
                             className={`font-bold ${
                               item.net_value_flow_mom_cr > 0
-                                ? "text-emerald-400"
+                                ? "text-emerald-600 dark:text-emerald-400"
                                 : item.net_value_flow_mom_cr < 0
-                                ? "text-red-400"
-                                : "text-slate-400"
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-slate-500 dark:text-slate-400"
                             }`}
                           >
                             {item.net_value_flow_mom_cr > 0 ? "+" : ""}
@@ -466,10 +472,10 @@ export default function InstitutionalRadarPage() {
 
                         {/* FLOAT ABSORPTION */}
                         <td className="py-3.5 px-4 text-right font-mono">
-                          <div className="flex items-center justify-end gap-1 font-bold text-cyan-300">
+                          <div className="flex items-center justify-end gap-1 font-bold text-cyan-700 dark:text-cyan-300">
                             <span>{item.float_absorption_pct}%</span>
                             {item.float_absorption_pct >= 2.0 && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-ping" />
                             )}
                           </div>
                           <div className="text-[10px] text-slate-500">
@@ -481,10 +487,10 @@ export default function InstitutionalRadarPage() {
                         <td className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {Array.from({ length: item.star_manager_count }).map((_, i) => (
-                              <Star key={i} size={12} className="fill-amber-400 text-amber-400" />
+                              <Star key={i} size={12} className="fill-amber-400 text-amber-500 dark:text-amber-400" />
                             ))}
                             {item.star_manager_count === 0 && (
-                              <span className="text-slate-600 text-xs">—</span>
+                              <span className="text-slate-400 dark:text-slate-600 text-xs">—</span>
                             )}
                           </div>
                         </td>
@@ -494,15 +500,15 @@ export default function InstitutionalRadarPage() {
                           <span
                             className={`inline-block rounded-lg px-2.5 py-1 text-[11px] font-black tracking-wider uppercase border ${
                               item.action_recommendation === "STRONG BUY"
-                                ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
+                                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
                                 : item.action_recommendation === "ACCUMULATE"
-                                ? "border-cyan-500/40 bg-cyan-500/20 text-cyan-300"
-                                : "border-slate-700 bg-slate-800 text-slate-400"
+                                ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-800 dark:text-cyan-300"
+                                : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                             }`}
                           >
                             {item.action_recommendation}
                           </span>
-                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono">
                             Target: ₹{item.target_price.toLocaleString("en-IN")}
                           </div>
                         </td>
@@ -515,31 +521,31 @@ export default function InstitutionalRadarPage() {
           </div>
 
           {/* PAGINATION BAR */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-800 px-6 py-4 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4 text-xs text-slate-600 dark:text-slate-400">
             <div>
-              Showing <strong className="text-white">{(page - 1) * 20 + 1}</strong> to{" "}
-              <strong className="text-white">{Math.min(page * 20, totalCount)}</strong> of{" "}
-              <strong className="text-cyan-400">{totalCount}</strong> institutional records
+              Showing <strong className="text-slate-900 dark:text-white">{(page - 1) * 20 + 1}</strong> to{" "}
+              <strong className="text-slate-900 dark:text-white">{Math.min(page * 20, totalCount)}</strong> of{" "}
+              <strong className="text-cyan-700 dark:text-cyan-400">{totalCount}</strong> institutional records
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1 || loading}
-                className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 font-bold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition disabled:opacity-40"
+                className="flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-40"
               >
                 <ChevronLeft size={14} />
                 Previous
               </button>
 
-              <span className="px-2 font-mono font-bold text-white">
+              <span className="px-2 font-mono font-bold text-slate-800 dark:text-white">
                 Page {page} of {totalPages}
               </span>
 
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages || loading}
-                className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 font-bold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition disabled:opacity-40"
+                className="flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1.5 font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-40"
               >
                 Next
                 <ChevronRight size={14} />

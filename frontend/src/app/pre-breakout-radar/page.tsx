@@ -33,6 +33,9 @@ import {
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import WatchlistModal from "@/components/layout/screener/WatchlistModal";
+import PageHeader from "@/components/common/PageHeader";
+import KpiCard from "@/components/common/KpiCard";
+import EmptyState from "@/components/common/EmptyState";
 import { fetchWatchlists, fetchWatchlist } from "@/lib/watchlistApi";
 import type { WatchlistSummary } from "@/types/watchlist";
 import type { GrowthCompany } from "@/lib/api";
@@ -348,29 +351,15 @@ export default function PreBreakoutRadarPage() {
     <DashboardLayout>
       <div className="space-y-4">
         {/* HEADER & BANNER */}
-        <div className="rounded-2xl border border-slate-800 bg-[#07111F]/90 p-5 shadow-xl backdrop-blur-md">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                  <Crosshair className="h-5 w-5" />
-                </div>
-                <h1 className="text-xl md:text-2xl font-black font-mono tracking-tight text-white">
-                  PRE-BREAKOUT CHEAT RADAR
-                </h1>
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-mono font-bold text-emerald-300">
-                  BUY BEFORE THE MOVE
-                </span>
-                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-mono font-bold text-cyan-400">
-                  3.5:1+ ASYMMETRIC R:R
-                </span>
-              </div>
-              <p className="text-xs md:text-sm text-slate-400 max-w-3xl">
-                Scans liquid equities in quiet, high-compression volatility coils with extreme supply exhaustion (Volume Dry-Up) right beneath resistance. Enters on the contraction low to capture explosive +10% to +20% breakouts with tiny 3% risk.
-              </p>
-            </div>
-
-            {/* Actions */}
+        <PageHeader
+          eyebrow="ASYMMETRIC COIL RADAR"
+          icon={<Crosshair className="w-5 h-5" />}
+          iconColor="emerald"
+          title="Pre-Breakout Cheat Radar"
+          badge={{ label: "BUY BEFORE THE MOVE", color: "emerald" }}
+          extraBadges={[{ label: "3.5:1+ ASYMMETRIC R:R", color: "cyan" }]}
+          subtitle="Scans liquid equities in quiet, high-compression volatility coils with extreme supply exhaustion (Volume Dry-Up) right beneath resistance. Enters on the contraction low to capture explosive +10% to +20% breakouts with tiny 3% risk."
+          actions={
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleAutoEnrollFromScreener}
@@ -390,45 +379,45 @@ export default function PreBreakoutRadarPage() {
                 <span>{scanning ? "Scanning Universe..." : "Trigger Live Scan"}</span>
               </button>
             </div>
-          </div>
+          }
+        />
 
-          {/* MODE SWITCHER TABS: Breakout Execution Engine vs Pre-Breakout Coils Screener */}
-          <div className="flex flex-wrap items-center gap-2.5 mt-4 pt-4 border-t border-slate-800/80">
-            <button
-              onClick={() => setActiveTab("execution")}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-mono font-bold transition-all cursor-pointer ${
-                activeTab === "execution"
-                  ? "bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/10 text-emerald-300 border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
-              }`}
-            >
-              <Zap className="h-4 w-4 text-emerald-400" />
-              <span>BREAKOUT EXECUTION ENGINE</span>
-              <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-300">
-                LIVE COCKPIT
+        {/* MODE SWITCHER TABS: Breakout Execution Engine vs Pre-Breakout Coils Screener */}
+        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-800/80 bg-slate-900/40 p-1.5">
+          <button
+            onClick={() => setActiveTab("execution")}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "execution"
+                ? "bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/10 text-emerald-300 border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+            }`}
+          >
+            <Zap className="h-4 w-4 text-emerald-400" />
+            <span>BREAKOUT EXECUTION ENGINE</span>
+            <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-300 font-mono">
+              LIVE COCKPIT
+            </span>
+            {watchedSymbolSet.size > 0 && (
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300 font-mono">
+                {watchedSymbolSet.size} Watching
               </span>
-              {watchedSymbolSet.size > 0 && (
-                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
-                  {watchedSymbolSet.size} Watching
-                </span>
-              )}
-            </button>
+            )}
+          </button>
 
-            <button
-              onClick={() => setActiveTab("screener")}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-mono font-bold transition-all cursor-pointer ${
-                activeTab === "screener"
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
-              }`}
-            >
-              <Search className="h-4 w-4 text-cyan-400" />
-              <span>PRE-BREAKOUT COILS SCREENER</span>
-              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
-                {displayedOpportunities.length} Setups
-              </span>
-            </button>
-          </div>
+          <button
+            onClick={() => setActiveTab("screener")}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "screener"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+            }`}
+          >
+            <Search className="h-4 w-4 text-cyan-400" />
+            <span>PRE-BREAKOUT COILS SCREENER</span>
+            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300 font-mono">
+              {displayedOpportunities.length} Setups
+            </span>
+          </button>
         </div>
 
         {activeTab === "execution" ? (
@@ -440,57 +429,49 @@ export default function PreBreakoutRadarPage() {
         ) : (
           <>
             {/* METRICS & TELEMETRY RIBBON */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="rounded-xl border border-slate-800/80 bg-slate-950/80 p-3.5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono font-bold text-slate-400">Scanned Universe</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-white">{metadata?.total_scanned || 0}</span>
-              <span className="text-[10px] text-slate-500 font-mono">Stocks</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard
+                label="Scanned Universe"
+                value={metadata?.total_scanned || 0}
+                sub="Stocks"
+                icon={<Layers className="w-4 h-4 text-slate-400" />}
+              />
+              <KpiCard
+                label="A+ Super Coils"
+                value={metadata?.super_coils_count || 0}
+                sub="Top Decile"
+                color="emerald"
+                icon={<Sparkles className="w-4 h-4 text-emerald-400" />}
+              />
+              <KpiCard
+                label="High Conviction"
+                value={metadata?.high_conviction_count || 0}
+                sub=">= 70 Pts"
+                color="cyan"
+                icon={<Target className="w-4 h-4 text-cyan-400" />}
+              />
+              <KpiCard
+                label="NR7 / Inside Days"
+                value={(metadata?.nr7_count || 0) + (metadata?.inside_day_count || 0)}
+                sub="Tight Coils"
+                color="purple"
+                icon={<Activity className="w-4 h-4 text-purple-400" />}
+              />
+              <KpiCard
+                label="Volume Dry-Up (VDU)"
+                value={metadata?.vdu_count || 0}
+                sub="<= 0.70x Vol"
+                color="amber"
+                icon={<Flame className="w-4 h-4 text-amber-400" />}
+              />
+              <KpiCard
+                label="Avg Risk:Reward"
+                value={`${metadata?.avg_risk_reward || 3.5}:1`}
+                sub="Asymmetric"
+                color="emerald"
+                icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />}
+              />
             </div>
-          </div>
-
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3.5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono font-bold text-emerald-400">A+ Super Coils</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-emerald-300">{metadata?.super_coils_count || 0}</span>
-              <span className="text-[10px] text-emerald-400/70 font-mono">Top Decile</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3.5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono font-bold text-cyan-400">High Conviction</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-cyan-300">{metadata?.high_conviction_count || 0}</span>
-              <span className="text-[10px] text-cyan-400/70 font-mono">&gt;= 70 Pts</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-purple-500/20 bg-purple-950/20 p-3.5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono font-bold text-purple-400">NR7 / Inside Days</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-purple-300">
-                {(metadata?.nr7_count || 0) + (metadata?.inside_day_count || 0)}
-              </span>
-              <span className="text-[10px] text-purple-400/70 font-mono">Tight Coils</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3.5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono font-bold text-amber-400">Volume Dry-Up (VDU)</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-amber-300">{metadata?.vdu_count || 0}</span>
-              <span className="text-[10px] text-amber-400/70 font-mono">&lt;= 0.70x Vol</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-800/80 bg-slate-950/80 p-3.5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono font-bold text-slate-400">Avg Risk:Reward</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-emerald-400">{metadata?.avg_risk_reward || 3.5}:1</span>
-              <span className="text-[10px] text-slate-500 font-mono">Asymmetric</span>
-            </div>
-          </div>
-        </div>
 
         {/* PATTERN TABS STRIP */}
         <div className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl border border-slate-800 bg-slate-950/70">
@@ -529,7 +510,7 @@ export default function PreBreakoutRadarPage() {
                   setSearchTerm(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-9 pr-4 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+                className="w-full pl-9 pr-4 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 shadow-2xs"
               />
             </div>
 
@@ -540,7 +521,7 @@ export default function PreBreakoutRadarPage() {
                 setSelectedSector(e.target.value);
                 setPage(1);
               }}
-              className="py-1.5 px-3 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500/50"
+              className="py-1.5 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono text-slate-800 dark:text-slate-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer shadow-xs"
             >
               <option value="ALL">All Sectors</option>
               {sectors.map((sec) => (
@@ -551,7 +532,7 @@ export default function PreBreakoutRadarPage() {
             </select>
 
             {/* Minimum Score */}
-            <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+            <div className="flex items-center gap-1.5 text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 shadow-2xs">
               <span>Conviction Tier:</span>
               <select
                 value={minScore}
@@ -559,12 +540,12 @@ export default function PreBreakoutRadarPage() {
                   setMinScore(Number(e.target.value));
                   setPage(1);
                 }}
-                className="bg-transparent text-emerald-300 font-bold focus:outline-none cursor-pointer"
+                className="bg-transparent text-emerald-700 dark:text-emerald-300 font-bold focus:outline-none cursor-pointer"
               >
-                <option value={80} className="bg-slate-900">A+ Super Coils (&gt;= 80)</option>
-                <option value={70} className="bg-slate-900">A High Conviction (&gt;= 70)</option>
-                <option value={60} className="bg-slate-900">B Developing (&gt;= 60)</option>
-                <option value={30} className="bg-slate-900">All Scored (&gt;= 30)</option>
+                <option value={80} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">A+ Super Coils (&gt;= 80)</option>
+                <option value={70} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">A High Conviction (&gt;= 70)</option>
+                <option value={60} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">B Developing (&gt;= 60)</option>
+                <option value={30} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Scored (&gt;= 30)</option>
               </select>
             </div>
 
@@ -615,27 +596,29 @@ export default function PreBreakoutRadarPage() {
             <p className="text-xs font-mono text-slate-500">Checking Toby Crabel NR7, Inside Days, VDU Supply Exhaustion, and Pivot Proximity</p>
           </div>
         ) : displayedOpportunities.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-12 text-center space-y-3">
-            <Info className="h-8 w-8 text-amber-400 mx-auto" />
-            <p className="text-base font-bold font-mono text-white">No Matching Pre-Breakout Coils Found for Current Filters</p>
-            <p className="text-xs font-mono text-slate-400 max-w-md mx-auto">
-              {showWatchlistedOnly
+          <EmptyState
+            icon={<Info className="h-7 w-7 text-amber-400" />}
+            title="No Matching Pre-Breakout Coils Found for Current Filters"
+            description={
+              showWatchlistedOnly
                 ? "You don't have any matching pre-breakout stocks in your watchlists currently. Click the Star icon on any stock to add it."
-                : "Try switching the pattern tab to 'All Pre-Breakout Coils' or lowering the minimum conviction score to see developing setups."}
-            </p>
-            <button
-              onClick={() => {
-                setActivePattern("ALL");
-                setMinScore(60);
-                setSelectedSector("ALL");
-                setSearchTerm("");
-                setShowWatchlistedOnly(false);
-              }}
-              className="mt-2 px-4 py-2 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-700/50 text-xs font-mono font-bold hover:bg-emerald-900 cursor-pointer"
-            >
-              Reset Filters to View All Setups
-            </button>
-          </div>
+                : "Try switching the pattern tab to 'All Pre-Breakout Coils' or lowering the minimum conviction score to see developing setups."
+            }
+            action={
+              <button
+                onClick={() => {
+                  setActivePattern("ALL");
+                  setMinScore(60);
+                  setSelectedSector("ALL");
+                  setSearchTerm("");
+                  setShowWatchlistedOnly(false);
+                }}
+                className="mt-2 px-4 py-2 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-700/50 text-xs font-mono font-bold hover:bg-emerald-900 cursor-pointer"
+              >
+                Reset Filters to View All Setups
+              </button>
+            }
+          />
         ) : viewMode === "table" ? (
           /* TABLE VIEW */
           <div className="rounded-2xl border border-slate-800 bg-[#07111F]/90 overflow-hidden shadow-xl">
@@ -1196,11 +1179,11 @@ export default function PreBreakoutRadarPage() {
                     <span>Exact Position Sizing Calculator</span>
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500">Max Risk:</span>
+                    <span className="text-[10px] text-slate-500 font-semibold">Max Risk:</span>
                     <select
                       value={accountRiskRupees}
                       onChange={(e) => setAccountRiskRupees(Number(e.target.value))}
-                      className="bg-slate-900 text-white px-2 py-0.5 rounded border border-slate-700 text-xs focus:outline-none"
+                      className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 text-xs focus:outline-none cursor-pointer shadow-xs"
                     >
                       <option value={5000}>₹5,000 Risk</option>
                       <option value={10000}>₹10,000 Risk</option>

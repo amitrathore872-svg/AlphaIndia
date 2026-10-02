@@ -231,13 +231,13 @@ export default function StreamOverviewGrid({
             </span>
           </div>
 
-          <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-300 flex items-center gap-1">
-            <Radio className="h-3 w-3 animate-pulse text-cyan-400" />
+          <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-700 dark:text-cyan-300 flex items-center gap-1">
+            <Radio className="h-3 w-3 animate-pulse text-cyan-600 dark:text-cyan-400" />
             Live DB Telemetry
           </span>
 
           {lastUpdated && (
-            <span className="text-[11px] text-slate-400 font-mono">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
               Synced {lastUpdated} IST
             </span>
           )}
@@ -248,10 +248,10 @@ export default function StreamOverviewGrid({
           <button
             onClick={fetchLiveStreams}
             disabled={isSyncing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/80 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition shadow-xs"
             title="Refresh stream matrix"
           >
-            <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin text-cyan-400" : ""}`} />
+            <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin text-cyan-500 dark:text-cyan-400" : ""}`} />
             <span className="text-[11px]">{isSyncing ? "Updating..." : "Refresh"}</span>
           </button>
 

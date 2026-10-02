@@ -486,21 +486,26 @@ class PEADEngine:
 
         pre_beat_score = round(min(100.0, max(0.0, score)), 1)
 
-        # Tier
-        if pre_beat_score >= 80.0:
+        # Tier (Uniform 0-100 Alpha India Architecture)
+        if pre_beat_score >= 85.0:
             beat_tier = "HIGH_PROBABILITY"
             tier_label = "High Pre-Beat Probability"
             color = "emerald"
             velocity = "Imminent (1–3 Days)"
-        elif pre_beat_score >= 60.0:
-            beat_tier = "MODERATE_PROBABILITY"
-            tier_label = "Moderate Pre-Beat"
+        elif pre_beat_score >= 70.0:
+            beat_tier = "STRONG_PROBABILITY"
+            tier_label = "Strong Pre-Beat"
             color = "cyan"
             velocity = "Upcoming (2–5 Days)"
+        elif pre_beat_score >= 55.0:
+            beat_tier = "MODERATE_PROBABILITY"
+            tier_label = "Moderate Pre-Beat"
+            color = "amber"
+            velocity = "Monitor (3–7 Days)"
         elif pre_beat_score >= 40.0:
             beat_tier = "WATCH"
             tier_label = "Watch List"
-            color = "amber"
+            color = "slate"
             velocity = "Monitor"
         else:
             beat_tier = "LOW_PROBABILITY"

@@ -458,11 +458,11 @@ export default function VCPDiscoveryPage() {
                 <select
                   value={selectedSector}
                   onChange={(e) => setSelectedSector(e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 focus:outline-hidden focus:border-cyan-500 cursor-pointer"
+                  className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
                 >
-                  <option value="ALL">All Sectors ({allAvailableSectors.length})</option>
+                  <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">All Sectors ({allAvailableSectors.length})</option>
                   {allAvailableSectors.map((sec) => (
-                    <option key={sec} value={sec}>
+                    <option key={sec} value={sec} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">
                       {sec}
                     </option>
                   ))}
@@ -473,13 +473,13 @@ export default function VCPDiscoveryPage() {
               <select
                 value={minScore}
                 onChange={(e) => setMinScore(Number(e.target.value))}
-                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 focus:outline-hidden focus:border-cyan-500 cursor-pointer"
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
               >
-                <option value={0}>Any Score</option>
-                <option value={80}>Score &ge; 80</option>
-                <option value={85}>Score &ge; 85</option>
-                <option value={90}>Score &ge; 90 (High Conviction)</option>
-                <option value={95}>Score &ge; 95 (Elite)</option>
+                <option value={0} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Any Score</option>
+                <option value={80} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 80</option>
+                <option value={85} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 85</option>
+                <option value={90} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 90 (High Conviction)</option>
+                <option value={95} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 95 (Elite)</option>
               </select>
 
               {/* Reset Filter Button */}

@@ -82,3 +82,6 @@ backend/data/nse_delivery/
 backend/data/*_cache.json
 backend/data/*_cache/
 backend/scratch/
+scratch/
+brain/
+scratch_*.py

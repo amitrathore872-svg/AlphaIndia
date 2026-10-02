@@ -87,3 +87,79 @@ export interface UpdateStockPayload {
   comment?: string;
   target_price?: number;
 }
+
+export interface WatchlistAlertItem {
+  id: number;
+  watchlist_id: number;
+  user_id: number | null;
+  symbol: string;
+  rule_type: string;
+  threshold_value: number | null;
+  timeframe: string;
+  notes: string | null;
+  is_active: boolean;
+  status: "ACTIVE" | "TRIGGERED" | "SNOOZED" | "MUTED";
+  notify_in_app: boolean;
+  notify_telegram: boolean;
+  trigger_count: number;
+  last_triggered_at: string | null;
+  last_triggered_price: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CreateWatchlistAlertPayload {
+  symbol: string;
+  rule_type: string;
+  threshold_value?: number;
+  timeframe?: string;
+  notes?: string;
+  notify_in_app?: boolean;
+  notify_telegram?: boolean;
+}
+
+export interface PersonalTelegramConfig {
+  id?: number;
+  user_id?: number | null;
+  channel_name: string;
+  bot_token?: string | null;
+  has_custom_bot?: boolean;
+  chat_id: string;
+  telegram_username?: string | null;
+  is_enabled: boolean;
+  is_configured: boolean;
+  notify_price_cross: boolean;
+  notify_dma_reclaim: boolean;
+  notify_vcp_breakout: boolean;
+  notify_volume_surge: boolean;
+  notify_target_stop: boolean;
+  notify_portfolio_buy?: boolean;
+  notify_portfolio_sell?: boolean;
+  notify_portfolio_rebalance?: boolean;
+  notify_watchlist_buy?: boolean;
+  notify_watchlist_sell?: boolean;
+  min_conviction_score?: number;
+  last_dispatched_at?: string | null;
+  total_dispatched_count?: number;
+}
+
+export interface UpdatePersonalTelegramPayload {
+  chat_id: string;
+  channel_name?: string;
+  bot_token?: string;
+  telegram_username?: string;
+  is_enabled?: boolean;
+  notify_price_cross?: boolean;
+  notify_dma_reclaim?: boolean;
+  notify_vcp_breakout?: boolean;
+  notify_volume_surge?: boolean;
+  notify_target_stop?: boolean;
+  notify_portfolio_buy?: boolean;
+  notify_portfolio_sell?: boolean;
+  notify_portfolio_rebalance?: boolean;
+  notify_watchlist_buy?: boolean;
+  notify_watchlist_sell?: boolean;
+  min_conviction_score?: number;
+}
+
+

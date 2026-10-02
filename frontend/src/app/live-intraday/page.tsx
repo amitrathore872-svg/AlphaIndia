@@ -36,6 +36,7 @@ import {
   Lock,
   Scale,
 } from "lucide-react";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
 export default function LiveIntradayPage() {
   const [data, setData] = useState<FunnelStatusResponse | null>(null);
@@ -256,6 +257,12 @@ export default function LiveIntradayPage() {
                   </div>
 
                   <div className="flex items-center gap-3">
+                    <AddToWatchlistButton
+                      symbol={sniperTrade.symbol || ""}
+                      companyName={sniperTrade.company_name || sniperTrade.symbol || ""}
+                      currentPrice={sniperTrade.cmp}
+                      variant="button"
+                    />
                     <button
                       onClick={() => sniperTrade.symbol && handleSendTelegram(sniperTrade.symbol)}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 transition-all"
@@ -649,27 +656,27 @@ export default function LiveIntradayPage() {
             </div>
 
             {/* Filter Controls Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 shadow-xs">
               <div className="flex items-center gap-3">
                 <SlidersHorizontal className="w-4 h-4 text-slate-400" />
-                <span className="text-xs font-semibold text-slate-300">Filter Radar:</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Filter Radar:</span>
 
                 {/* Sector Filter */}
                 <select
                   value={selectedSector}
                   onChange={(e) => setSelectedSector(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500"
+                  className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
                 >
-                  <option value="ALL">All Sectors ({sectorsList.length})</option>
+                  <option value="ALL" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">All Sectors ({sectorsList.length})</option>
                   {sectorsList.map((s) => (
-                    <option key={s} value={s}>
+                    <option key={s} value={s} className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">
                       {s}
                     </option>
                   ))}
                 </select>
 
                 {/* Min Score Slider */}
-                <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <span>Min ICE:</span>
                   <input
                     type="range"
@@ -678,14 +685,14 @@ export default function LiveIntradayPage() {
                     step="5"
                     value={minScore}
                     onChange={(e) => setMinScore(Number(e.target.value))}
-                    className="accent-cyan-500 w-24 h-1.5 bg-slate-700 rounded-lg cursor-pointer"
+                    className="accent-cyan-500 w-24 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
                   />
-                  <span className="font-mono text-cyan-400 font-bold">{minScore}+</span>
+                  <span className="font-mono text-cyan-600 dark:text-cyan-400 font-bold">{minScore}+</span>
                 </div>
               </div>
 
-              <div className="text-xs text-slate-400 font-mono">
-                Showing <strong className="text-white">{filteredSetups.length}</strong> qualified setups
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                Showing <strong className="text-slate-900 dark:text-white">{filteredSetups.length}</strong> qualified setups
               </div>
             </div>
 
@@ -698,19 +705,19 @@ export default function LiveIntradayPage() {
                     key={opp.symbol}
                     className={`rounded-2xl p-5 border transition-all hover:scale-[1.01] ${
                       isElite
-                        ? "bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-emerald-500/40 shadow-xl shadow-emerald-500/5"
-                        : "bg-slate-900/80 border-slate-800"
+                        ? "bg-linear-to-b from-white via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border-emerald-500/40 shadow-xl shadow-emerald-500/5"
+                        : "bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 shadow-xs"
                     }`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-bold text-white tracking-wide">{opp.symbol}</span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                          <span className="text-base font-bold text-slate-900 dark:text-white tracking-wide">{opp.symbol}</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                             {opp.sector}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 block truncate max-w-[180px]">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate max-w-[180px]">
                           {opp.company_name}
                         </span>
                       </div>

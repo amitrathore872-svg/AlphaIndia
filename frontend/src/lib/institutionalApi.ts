@@ -351,3 +351,54 @@ export async function fetchStarFundManagers(): Promise<StarFundManager[]> {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+
+export interface FilingStatusResponse {
+  status: string;
+  database_snapshot: {
+    latest_holding_date: string;
+    distinct_periods_ingested: string[];
+    total_schemes_registered: number;
+    total_holdings_rows: number;
+    active_signals_count: number;
+  };
+  filing_lifecycle: {
+    filings_available: boolean;
+    filing_state: string;
+    status_description: string;
+    target_period_end: string;
+    target_period_name: string;
+    posting_window_start: string;
+    sebi_filing_deadline: string;
+    sebi_filing_deadline_ist: string;
+    quarterly_shareholding_pattern_deadline: string;
+    days_until_filing_window: number;
+    days_until_sebi_deadline: number;
+  };
+  regulatory_framework: {
+    amfi_monthly_rule: string;
+    shp_quarterly_rule: string;
+    sast_threshold_rule: string;
+  };
+  scheduler_schedule: {
+    engine_name: string;
+    status: string;
+    poll_frequency: string;
+    next_scheduled_run: string;
+  };
+}
+
+export async function fetchFilingStatus(): Promise<FilingStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/institutional/filing-status`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function triggerFilingSync(force: boolean = false): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/v1/institutional/schedule-sync?force=${force}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+

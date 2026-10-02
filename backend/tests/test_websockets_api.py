@@ -36,7 +36,7 @@ def test_websocket_telemetry_stream(client):
     """Verifies that client can connect to /ws/telemetry."""
     with client.websocket_connect("/ws/telemetry") as ws:
         handshake = ws.receive_json()
-        assert handshake["type"] == "CONNECTION_ESTABLISHED"
+        assert handshake["type"] in ("CONNECTION_ESTABLISHED", "TELEMETRY_SNAPSHOT")
         assert handshake["channel"] == "telemetry"
 
         ws.send_text("ping")

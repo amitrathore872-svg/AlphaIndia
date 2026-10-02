@@ -636,11 +636,11 @@ export default function PeadDriftMatrix({
                 setPeriod(e.target.value);
                 setPage(1);
               }}
-              className="bg-slate-100 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-300 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer"
+              className="bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-300 focus:outline-hidden focus:border-cyan-500 font-mono cursor-pointer shadow-xs"
             >
-              <option value="ALL">All Periods</option>
+              <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Periods</option>
               {summary.available_periods.map((p) => (
-                <option key={p} value={p}>
+                <option key={p} value={p} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                   {p}
                 </option>
               ))}
@@ -654,11 +654,11 @@ export default function PeadDriftMatrix({
               setExchange(e.target.value);
               setPage(1);
             }}
-            className="bg-slate-100 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-300 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer"
+            className="bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-300 focus:outline-hidden focus:border-cyan-500 font-mono cursor-pointer shadow-xs"
           >
-            <option value="ALL">All Exch</option>
-            <option value="NSE">NSE Only</option>
-            <option value="BSE">BSE Only</option>
+            <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Exch</option>
+            <option value="NSE" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">NSE Only</option>
+            <option value="BSE" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">BSE Only</option>
           </select>
 
           {/* Search Box */}

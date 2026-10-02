@@ -37,6 +37,7 @@ import {
   ArrowUpDown,
   Radio,
 } from "lucide-react";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
 export default function IntradayRadarPage() {
   // Navigation Tabs: Main Action Radar vs Backtest Telemetry vs Raw 5M Scanner
@@ -448,17 +449,14 @@ export default function IntradayRadarPage() {
                                   <span className="text-base font-black text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition">
                                     {pick.symbol}
                                   </span>
-                                  <button
-                                    onClick={(e) => toggleWatchlist(pick.symbol, e)}
-                                    className={`p-0.5 rounded transition ${
-                                      watchlist[pick.symbol]
-                                        ? "text-amber-400 hover:text-amber-500"
-                                        : "text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-300"
-                                    }`}
-                                    title={watchlist[pick.symbol] ? "In Watchlist" : "Add to Watchlist"}
-                                  >
-                                    <Star size={13} className={watchlist[pick.symbol] ? "fill-amber-400 text-amber-400" : ""} />
-                                  </button>
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <AddToWatchlistButton
+                                      symbol={pick.symbol}
+                                      companyName={pick.company_name}
+                                      currentPrice={pick.cmp}
+                                      variant="star"
+                                    />
+                                  </div>
                                 </div>
                                 <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[130px]">
                                   {pick.company_name}

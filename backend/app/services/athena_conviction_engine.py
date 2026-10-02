@@ -1,15 +1,15 @@
 """
 ATHENA OMEGA v3.0 — Gate 4 & 5: Conviction Engine & FLASH Decision Publisher
-Sprint 24
+Sprint 24 — Unified 0-100 Alpha India Ranking Architecture
 Master Scoring Formula:
 ATHENA Conviction = 40%(Financial Shock) + 35%(Earnings Quality) + 25%(Valuation Score) - (0.5 * Risk Penalties)
 
-Grades:
-- AAA+ : 90 - 100 -> BUY IMMEDIATELY (Expected Gap-Up +6-10%, 1D +8-12%, 1W +15-20%, 1M +25-35%)
-- AAA  : 80 - 89  -> BUY (Expected Gap-Up +3-6%, 1D +5-8%, 1W +8-14%, 1M +15-22%)
-- AA   : 70 - 79  -> ACCUMULATE (Expected Gap-Up +1-3%, 1D +3-5%, 1W +5-8%, 1M +8-14%)
-- A    : 60 - 69  -> WATCHLIST
-- BELOW_A: < 60   -> AVOID / ARCHIVE
+Uniform 0-100 Institutional Tier Architecture:
+- AAA+    : 85.0 - 100.0 -> BUY IMMEDIATELY (Expected Gap-Up +6-10%, 1D +8-12%, 1W +15-20%, 1M +25-35%)
+- AAA     : 70.0 - 84.9  -> BUY (Expected Gap-Up +3-6%, 1D +5-8%, 1W +8-14%, 1M +15-22%)
+- AA      : 55.0 - 69.9  -> ACCUMULATE (Expected Gap-Up +1-3%, 1D +3-5%, 1W +5-8%, 1M +8-14%)
+- A       : 40.0 - 54.9  -> WATCHLIST (Expected Gap-Up 0-2%, 1D 0-3%, 1W +2-5%, 1M +4-8%)
+- BELOW_A : 0.0 - 39.9   -> AVOID / ARCHIVE
 """
 
 from typing import Any, Dict
@@ -32,7 +32,7 @@ class AthenaConvictionEngine:
         risk_penalties = valuation_result.get("risk_penalties_applied", 0.0)
 
         # -------------------------------------------------------------
-        # Master Conviction Formula
+        # Master Conviction Formula (True 0-100 Scale)
         # -------------------------------------------------------------
         raw_conviction = (
             (0.40 * shock_score)
@@ -40,12 +40,12 @@ class AthenaConvictionEngine:
             + (0.25 * val_score)
             - (0.50 * risk_penalties)
         )
-        conviction = round(min(99.0, max(20.0, raw_conviction)), 1)
+        conviction = round(min(100.0, max(0.0, raw_conviction)), 1)
 
         # -------------------------------------------------------------
-        # Grade Mapping & FLASH Action
+        # Grade Mapping & FLASH Action (Uniform 0-100 Alpha India Architecture)
         # -------------------------------------------------------------
-        if (conviction >= 85.0 and shock_score >= 70.0) or (conviction >= 82.0 and shock_score >= 80.0):
+        if conviction >= 85.0:
             grade = "AAA+"
             signal = "BUY IMMEDIATELY"
             confidence = 98.0
@@ -55,7 +55,7 @@ class AthenaConvictionEngine:
             d1_min, d1_max = 8.0, 12.0
             w1_min, w1_max = 15.0, 20.0
             m1_min, m1_max = 25.0, 35.0
-        elif conviction >= 76.0 and shock_score >= 60.0:
+        elif conviction >= 70.0:
             grade = "AAA"
             signal = "BUY"
             confidence = 92.0
@@ -64,7 +64,7 @@ class AthenaConvictionEngine:
             d1_min, d1_max = 5.0, 8.0
             w1_min, w1_max = 8.0, 14.0
             m1_min, m1_max = 15.0, 22.0
-        elif conviction >= 64.0:
+        elif conviction >= 55.0:
             grade = "AA"
             signal = "ACCUMULATE"
             confidence = 85.0
@@ -73,7 +73,7 @@ class AthenaConvictionEngine:
             d1_min, d1_max = 3.0, 5.0
             w1_min, w1_max = 5.0, 8.0
             m1_min, m1_max = 8.0, 14.0
-        elif conviction >= 58.0:
+        elif conviction >= 40.0:
             grade = "A"
             signal = "WATCHLIST"
             confidence = 78.0

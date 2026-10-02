@@ -189,6 +189,14 @@ export default function SwingOverlayPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-cyan-400" : ""}`} />
               {refreshing ? "Scanning..." : "Re-Scan"}
             </button>
+
+            <a
+              href="/portfolio/fx-swing-screener"
+              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-bold text-cyan-300 transition hover:bg-cyan-500/30 shadow-sm"
+            >
+              <Zap className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+              FX Swing Screener (12 FX)
+            </a>
           </div>
         </div>
 

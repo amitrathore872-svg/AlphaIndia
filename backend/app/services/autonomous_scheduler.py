@@ -36,6 +36,9 @@ class AutonomousEngineScheduler:
     INTERVAL_VCP_SCAN = 300           # 5 mins
     INTERVAL_GROWTH_IMPORT = 900      # 15 mins
     INTERVAL_CPR_SCAN = 300           # 5 mins
+    INTERVAL_MF_RADAR = 1800          # 30 mins (checks AMFI disclosure calendar & syncs)
+    INTERVAL_MOMENTUM_UNIVERSE = 3600 # 60 mins — off-market universe sweep (guards itself internally)
+    INTERVAL_MOMENTUM_INTRADAY = 60   # 60s — re-scores watchlist during market hours
 
     # Execution telemetry state
     _engine_telemetry: Dict[str, Dict[str, Any]] = {
@@ -82,6 +85,36 @@ class AutonomousEngineScheduler:
         "cpr_engine": {
             "name": "CPR Compression & Alert Engine",
             "interval_sec": 300,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
+        "mf_radar": {
+            "name": "Mutual Fund & Institutional Radar Engine",
+            "interval_sec": 1800,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
+        "momentum_universe": {
+            "name": "Momentum Universe Off-Market Scanner",
+            "interval_sec": 3600,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
+        "momentum_intraday": {
+            "name": "Momentum Intraday Breakout Monitor",
+            "interval_sec": 60,
             "last_run": None,
             "next_run": None,
             "status": "IDLE",
@@ -167,6 +200,9 @@ class AutonomousEngineScheduler:
         next_vcp = now + 30               # 30s warmup
         next_cpr = now + 45               # 45s warmup
         next_growth = now + 60            # 60s warmup
+        next_mf_radar = now + 75          # 75s warmup
+        next_momentum_universe = now + 90 # 90s warmup (off-market only)
+        next_momentum_intraday = now + 45 # 45s warmup (market hours only)
 
         while not cls._stop_event.is_set():
             current_time = time.time()
@@ -215,6 +251,35 @@ class AutonomousEngineScheduler:
                     cls._execute_growth_cycle()
                 next_growth = time.time() + cls.INTERVAL_GROWTH_IMPORT
                 cls._update_next_run("growth_engine", cls.INTERVAL_GROWTH_IMPORT)
+
+            # -------------------------------------------------------------
+            # Cycle 6: Mutual Fund & Institutional Radar Engine
+            # -------------------------------------------------------------
+            if current_time >= next_mf_radar:
+                if cls.is_engine_enabled("mf_radar"):
+                    cls._execute_mf_radar_cycle()
+                next_mf_radar = time.time() + cls.INTERVAL_MF_RADAR
+                cls._update_next_run("mf_radar", cls.INTERVAL_MF_RADAR)
+
+            # -------------------------------------------------------------
+            # Cycle 7: Momentum Universe Off-Market Full Scanner
+            # Runs during off-market window (18:00–09:00 IST) every 60 mins
+            # -------------------------------------------------------------
+            if current_time >= next_momentum_universe:
+                if cls.is_engine_enabled("momentum_universe"):
+                    cls._execute_momentum_universe_cycle()
+                next_momentum_universe = time.time() + cls.INTERVAL_MOMENTUM_UNIVERSE
+                cls._update_next_run("momentum_universe", cls.INTERVAL_MOMENTUM_UNIVERSE)
+
+            # -------------------------------------------------------------
+            # Cycle 8: Momentum Intraday Breakout Monitor
+            # Runs every 60s during market hours (09:15–15:30 IST)
+            # -------------------------------------------------------------
+            if current_time >= next_momentum_intraday:
+                if cls.is_engine_enabled("momentum_intraday"):
+                    cls._execute_momentum_intraday_cycle()
+                next_momentum_intraday = time.time() + cls.INTERVAL_MOMENTUM_INTRADAY
+                cls._update_next_run("momentum_intraday", cls.INTERVAL_MOMENTUM_INTRADAY)
 
             # Sleep in 2-second increments for responsive teardown
             for _ in range(2):
@@ -486,6 +551,124 @@ class AutonomousEngineScheduler:
                 error_msg=error_msg,
                 duration_ms=(time.perf_counter() - t0) * 1000.0,
             )
+        finally:
+            db.close()
+
+        cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_mf_radar_cycle(cls):
+        key = "mf_radar"
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        db = SessionLocal()
+        try:
+            from app.services.mf_engine_service import MFEngineService
+            cycle_res = MFEngineService.run_scheduled_mf_cycle(db)
+            records_count = cycle_res.get("holdings_upserted", 0) if isinstance(cycle_res, dict) else 0
+
+            ControlSystemService.record_service_fetch(
+                service_id="mf_radar_engine",
+                records_count=records_count,
+                status="SUCCESS",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] MF Radar cycle error: {exc}", exc_info=True)
+            ControlSystemService.record_service_fetch(
+                service_id="mf_radar_engine",
+                records_count=0,
+                status="ERROR",
+                error_msg=error_msg,
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        finally:
+            db.close()
+
+        cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_momentum_universe_cycle(cls):
+        """Off-market full universe scan. Only executes during off-market window."""
+        from app.services.momentum_universe_scanner import MomentumUniverseScanner, is_off_market_window
+        key = "momentum_universe"
+
+        if not is_off_market_window():
+            # During market hours: skip this cycle — let intraday monitor handle live stocks
+            logger.debug("[AutonomousEngineScheduler] Momentum universe scan skipped (market hours).")
+            return
+
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        db = SessionLocal()
+        try:
+            result = MomentumUniverseScanner.trigger_background_universe_scan(db=db)
+            records_count = 1  # Scan launched (async)
+
+            ControlSystemService.log_action(
+                service_id="momentum_universe_scanner",
+                service_name="Momentum Universe Scanner",
+                level="SUCCESS",
+                action="UNIVERSE_SCAN_LAUNCHED",
+                message=f"Full universe background scan triggered. Status: {result.get('status')}",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+                records_count=records_count,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] Momentum universe cycle error: {exc}", exc_info=True)
+        finally:
+            db.close()
+
+        cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_momentum_intraday_cycle(cls):
+        """Intraday re-scoring of watchlist candidates. Only executes during market hours."""
+        from app.services.momentum_universe_scanner import MomentumIntradayMonitor, is_market_hours
+        key = "momentum_intraday"
+
+        if not is_market_hours():
+            # Outside market hours: skip — universe scanner will handle next promotion
+            logger.debug("[AutonomousEngineScheduler] Momentum intraday scan skipped (outside market hours).")
+            return
+
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        db = SessionLocal()
+        try:
+            result = MomentumIntradayMonitor.run_intraday_scan(db=db, force=False)
+            breakout_count = result.get("metadata", {}).get("breakout_count", 0)
+            records_count = result.get("metadata", {}).get("watchlist_size", 0)
+
+            if breakout_count > 0:
+                logger.info(
+                    f"[AutonomousEngineScheduler] 🚀 MOMENTUM BREAKOUT: {breakout_count} stocks triggered "
+                    f"from watchlist! Symbols: {[b['symbol'] for b in result.get('breakouts', [])]}"
+                )
+
+            ControlSystemService.log_action(
+                service_id="momentum_intraday_monitor",
+                service_name="Momentum Intraday Monitor",
+                level="SUCCESS" if breakout_count == 0 else "INFO",
+                action="INTRADAY_SCAN_COMPLETE",
+                message=f"Watchlist re-scored: {records_count} stocks, {breakout_count} breakouts detected.",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+                records_count=records_count,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] Momentum intraday cycle error: {exc}", exc_info=True)
         finally:
             db.close()
 

@@ -34,11 +34,16 @@ from app.api.vcp_router import router as vcp_router
 from app.api.stocks import router as stocks_router
 from app.api.delivery_radar import router as delivery_radar_router
 from app.api.momentum_screener import router as momentum_screener_router
+from app.api.cup_handle import router as cup_handle_router
+from app.api.pattern_screener import router as pattern_screener_router
 from app.api.prebreakout_radar import router as prebreakout_radar_router
 from app.api.breakout_execution import router as breakout_execution_router
+from app.api.confluence import router as confluence_router
 from app.api.portfolio import router as portfolio_router
 from app.api.swing_overlay import router as swing_overlay_router
+from app.api.fx_portfolio_screener import router as fx_portfolio_screener_router
 from app.api.auth import router as auth_router
+from app.api.mf_radar import router as mf_radar_router
 import asyncio
 from app.api.websockets import router as websockets_router
 from app.core.websocket_manager import ws_manager
@@ -47,6 +52,9 @@ from app.core.telemetry import telemetry
 from app.api.screener_formula import router as screener_formula_router
 from app.api.live_intraday import router as live_intraday_router
 from app.api.cpr_scanner import router as cpr_scanner_router
+from app.api.velocity import router as velocity_router
+from app.api.ipo_radar import router as ipo_radar_router
+from app.api.candlestick_screener import router as candlestick_screener_router
 import time
 from fastapi import Request
 
@@ -57,6 +65,10 @@ from app.services.live_exchange_wire_worker import LiveExchangeWireWorker
 from app.services.raw_file_archiver import RawFileArchiveService
 from app.services.vcp_scheduler import VCPScheduler
 from app.services.autonomous_scheduler import AutonomousEngineScheduler
+from app.services.velocity.velocity_scheduler import VelocityBurstScheduler
+from app.services.cup_handle.cup_handle_scheduler import CupHandleUniverseScheduler
+from app.services.pattern_engine.pattern_scheduler import PatternUniverseScheduler
+from app.services.mf_radar.mf_dip_scanner_service import MFDipScheduler
 
 
 from app.core.config import settings
@@ -78,6 +90,10 @@ async def lifespan(app: FastAPI):
         RawFileArchiveService.start(interval_seconds=600)
         VCPScheduler.start()
         AutonomousEngineScheduler.start()
+        VelocityBurstScheduler.start()
+        CupHandleUniverseScheduler.start()
+        PatternUniverseScheduler.start()
+        MFDipScheduler.start()
 
     yield
 
@@ -89,6 +105,10 @@ async def lifespan(app: FastAPI):
         RawFileArchiveService.stop()
         VCPScheduler.stop()
         AutonomousEngineScheduler.stop()
+        VelocityBurstScheduler.stop()
+        CupHandleUniverseScheduler.stop()
+        PatternUniverseScheduler.stop()
+        MFDipScheduler.stop()
 
 
 
@@ -144,6 +164,7 @@ app.include_router(monitoring_early_stage_router)
 app.include_router(announcements_router)
 app.include_router(announcements_router, prefix="/api/v1")
 app.include_router(athena_omega_router)
+app.include_router(institutional_radar_router)
 app.include_router(institutional_radar_router, prefix="/api/v1")
 app.include_router(quarterly_results_router)
 app.include_router(control_system_router)
@@ -153,11 +174,19 @@ app.include_router(techno_funda_router)
 app.include_router(vcp_router)
 app.include_router(stocks_router)
 app.include_router(delivery_radar_router, prefix="/api/v1")
+app.include_router(momentum_screener_router)
 app.include_router(momentum_screener_router, prefix="/api/v1")
+app.include_router(cup_handle_router, prefix="/api/v1")
+app.include_router(pattern_screener_router, prefix="/api/v1")
+app.include_router(candlestick_screener_router)
+app.include_router(candlestick_screener_router, prefix="/api/v1")
 app.include_router(prebreakout_radar_router, prefix="/api/v1")
 app.include_router(breakout_execution_router, prefix="/api/v1")
+app.include_router(confluence_router, prefix="/api/v1")
+app.include_router(confluence_router)
 app.include_router(portfolio_router)
 app.include_router(swing_overlay_router)
+app.include_router(fx_portfolio_screener_router)
 app.include_router(auth_router)
 app.include_router(websockets_router)
 app.include_router(screener_formula_router)
@@ -165,6 +194,7 @@ app.include_router(live_intraday_router)
 app.include_router(live_intraday_router, prefix="/api/v1")
 app.include_router(cpr_scanner_router)
 app.include_router(cpr_scanner_router, prefix="/api/v1")
+app.include_router(velocity_router)
 
 # ---------------- Dual Mount Under /api (Same-Origin Reverse Proxy Compatibility) ----------------
 # Allows any client calling /api/<path> or direct /<path> to resolve cleanly
@@ -185,6 +215,7 @@ API_DOMAIN_ROUTERS = [
     vcp_router,
     portfolio_router,
     swing_overlay_router,
+    fx_portfolio_screener_router,
     auth_router,
     filings_router,
     downloads_router,
@@ -195,6 +226,10 @@ API_DOMAIN_ROUTERS = [
     dashboard_router,
     import_dashboard_router,
     metrics_router,
+    pattern_screener_router,
+    institutional_radar_router,
+    mf_radar_router,
+    ipo_radar_router,
 ]
 for r in API_DOMAIN_ROUTERS:
     app.include_router(r, prefix="/api")

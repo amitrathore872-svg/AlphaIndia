@@ -926,11 +926,11 @@ export default function ControlAndLogsPage() {
               <select
                 value={activeServiceFilter}
                 onChange={(e) => setActiveServiceFilter(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500"
+                className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
               >
-                <option value="ALL">All Services ({statusData?.services.length || 0})</option>
+                <option value="ALL" className="bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200">All Services ({statusData?.services.length || 0})</option>
                 {statusData?.services.map((svc) => (
-                  <option key={svc.id} value={svc.id}>
+                  <option key={svc.id} value={svc.id} className="bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200">
                     {svc.name}
                   </option>
                 ))}

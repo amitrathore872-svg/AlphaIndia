@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_RECYCLE: int = 1800
 
+    # Redis Cache Settings
+    REDIS_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection URL for high-performance caching",
+    )
+
     # Security & Auth
     SECRET_KEY: str = Field(
         default="alpha-india-super-secure-internal-secret-change-in-prod-2026",
@@ -65,6 +71,28 @@ class Settings(BaseSettings):
     DHAN_ACCESS_TOKEN: Optional[str] = Field(
         default=None,
         description="DhanHQ JWT Access Token",
+    )
+
+    # 5paisa Xstream Live Market Feed Credentials
+    FIVEPAISA_APP_NAME: Optional[str] = Field(default=None)
+    FIVEPAISA_APP_SOURCE: Optional[str] = Field(default=None)
+    FIVEPAISA_USER_ID: Optional[str] = Field(default=None)
+    FIVEPAISA_PASSWORD: Optional[str] = Field(default=None)
+    FIVEPAISA_USER_KEY: Optional[str] = Field(default=None)
+    FIVEPAISA_ENCRYPTION_KEY: Optional[str] = Field(default=None)
+    FIVEPAISA_PIN: Optional[str] = Field(default=None)
+    FIVEPAISA_CLIENT_CODE: Optional[str] = Field(default=None)
+    FIVEPAISA_TOTP_KEY: Optional[str] = Field(default=None)
+    FIVEPAISA_ACCESS_TOKEN: Optional[str] = Field(default=None)
+
+    # Telegram Alert Dispatch Configuration
+    TELEGRAM_BOT_TOKEN: Optional[str] = Field(
+        default=None,
+        description="Default Telegram Bot API Token for platform-wide alerts",
+    )
+    TELEGRAM_DEFAULT_CHAT_ID: Optional[str] = Field(
+        default=None,
+        description="Default Telegram Chat ID / Channel Username for platform-wide alerts",
     )
 
     # CORS Settings

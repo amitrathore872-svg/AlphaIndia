@@ -3,6 +3,7 @@ Alpha India Alert Dispatch & Notification Service
 Sprint 34 — Institutional Alerts & Multi-Channel Broadcasting
 """
 
+import os
 import logging
 import threading
 import time
@@ -146,7 +147,7 @@ class AlertDispatchService:
             "chat_id": chat_id.strip(),
             "text": text,
             "parse_mode": parse_mode,
-            "disable_web_page_preview": False,
+            "disable_web_page_preview": True,
         }
 
         try:
@@ -241,10 +242,121 @@ class AlertDispatchService:
             return {"success": False, "error": str(e)}
 
     # ==========================================================
+    # 2.5 Common Helpers, Credentials & Deduplication Checks
+    # ==========================================================
+    @classmethod
+    def get_telegram_config(cls, db: Session) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves active Telegram credentials and rules with fallback to environment variables.
+        Auto-populates DB if env vars are provided but DB is empty or missing credentials.
+        """
+        tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
+        from app.core.config import settings
+        env_token = getattr(settings, "TELEGRAM_BOT_TOKEN", None) or os.getenv("TELEGRAM_BOT_TOKEN")
+        env_chat = getattr(settings, "TELEGRAM_DEFAULT_CHAT_ID", None) or os.getenv("TELEGRAM_DEFAULT_CHAT_ID")
+
+        bot_token = (tg_cfg.bot_token if tg_cfg and tg_cfg.bot_token else None) or env_token
+        chat_id = (tg_cfg.chat_id if tg_cfg and tg_cfg.chat_id else None) or env_chat
+        is_enabled = tg_cfg.is_enabled if tg_cfg else True
+        auto_rules = tg_cfg.auto_rules if tg_cfg and tg_cfg.auto_rules else {}
+
+        # If DB had null but environment variables exist, heal the DB record
+        if tg_cfg and (not tg_cfg.bot_token or not tg_cfg.chat_id) and (env_token or env_chat):
+            try:
+                if not tg_cfg.bot_token and env_token:
+                    tg_cfg.bot_token = env_token
+                if not tg_cfg.chat_id and env_chat:
+                    tg_cfg.chat_id = env_chat
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"Failed to auto-heal Telegram DB config from env: {e}")
+        elif not tg_cfg and (env_token and env_chat):
+            try:
+                new_cfg = AlertChannelConfig(
+                    channel="TELEGRAM",
+                    bot_token=env_token,
+                    chat_id=env_chat,
+                    is_enabled=True,
+                    auto_rules={},
+                )
+                db.add(new_cfg)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"Failed to auto-create Telegram DB config from env: {e}")
+
+        if not bot_token or not chat_id:
+            return None
+
+        return {
+            "bot_token": bot_token,
+            "chat_id": chat_id,
+            "is_enabled": is_enabled,
+            "auto_rules": auto_rules,
+        }
+
+    @staticmethod
+    def get_stock_urls(symbol: str) -> Dict[str, str]:
+        clean = (symbol or "").strip().upper()
+        for suffix in [".NS", ".BO"]:
+            if clean.endswith(suffix):
+                clean = clean[:-len(suffix)]
+        base_url = os.getenv("FRONTEND_BASE_URL", "https://ipodesk.shop").rstrip("/")
+        stock_url = f"{base_url}/stocks/{clean}" if clean else base_url
+        screener_url = f"https://www.screener.in/company/{clean}/consolidated/" if clean else "https://www.screener.in"
+        return {
+            "clean_symbol": clean,
+            "stock_360_url": stock_url,
+            "screener_url": screener_url,
+            "stock_360_md": f"[Alpha India Stock 360]({stock_url})",
+            "screener_md": f"[Screener.in Financials]({screener_url})",
+        }
+
+    @classmethod
+    def get_stock_links(cls, symbol: str) -> str:
+        urls = cls.get_stock_urls(symbol)
+        if not urls["clean_symbol"]:
+            return ""
+        return (
+            f"🔗 *Research & Terminal Links:*\n"
+            f"• 📱 {urls['stock_360_md']}\n"
+            f"• 🌐 {urls['screener_md']}"
+        )
+
+    @classmethod
+    def is_duplicate_dispatch(
+        cls,
+        db: Session,
+        channel: str,
+        symbol: str,
+        recipient: Optional[str] = None,
+        cooldown_hours: float = 4.0,
+        trigger_tag: Optional[str] = None,
+    ) -> bool:
+        """
+        Verifies if an alert for this symbol and channel was already dispatched
+        successfully within the cooldown period (default: 4 hours).
+        """
+        cutoff = datetime.utcnow() - timedelta(hours=cooldown_hours)
+        query = db.query(AlertDispatchLog).filter(
+            AlertDispatchLog.channel == channel,
+            AlertDispatchLog.symbol == symbol,
+            AlertDispatchLog.status == "SUCCESS",
+            AlertDispatchLog.dispatched_at >= cutoff,
+        )
+        if recipient:
+            query = query.filter(AlertDispatchLog.recipient == recipient)
+        if trigger_tag:
+            query = query.filter(AlertDispatchLog.payload_preview.ilike(f"%{trigger_tag}%"))
+        return query.first() is not None
+
+    # ==========================================================
     # 3. Institutional Memo Formatters
     # ==========================================================
-    @staticmethod
+    @classmethod
     def format_pead_flash_alert(
+        cls,
         symbol: str,
         company_name: str,
         signal: str,
@@ -255,67 +367,146 @@ class AlertDispatchService:
         growth_pat: float,
         upside_pct: float,
         thesis: str,
+        cmp: Optional[float] = None,
+        buy_trigger: Optional[float] = None,
+        target_price: Optional[float] = None,
+        stop_loss: Optional[float] = None,
     ) -> str:
+        cmp_val = cmp or 0.0
+        trigger_val = buy_trigger or cmp_val
+        t_val = target_price or (round(cmp_val * (1 + (upside_pct / 100)), 2) if (cmp_val and upside_pct) else (round(cmp_val * 1.15, 2) if cmp_val else 0.0))
+        sl_val = stop_loss or (round(cmp_val * 0.93, 2) if cmp_val else 0.0)
+        rr = round(abs(t_val - cmp_val) / max(0.01, abs(cmp_val - sl_val)), 1) if cmp_val > 0 else 2.1
+
+        price_block = ""
+        if cmp_val > 0:
+            price_block = (
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 *Live CMP:* ₹{cmp_val:,.2f}\n"
+                f"🎯 *Buy Trigger Price:* ₹{trigger_val:,.2f}\n"
+                f"🚀 *Target Price:* ₹{t_val:,.2f} (+{upside_pct:+.1f}%)\n"
+                f"🛑 *Stop Loss:* ₹{sl_val:,.2f} (-7.0%)\n"
+                f"⚖️ *Risk:Reward:* 1:{rr:.1f}\n"
+            )
+
         return (
             f"⚡ *ALPHA INDIA | ATHENA PEAD FLASH*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
-            f"🎯 *Signal:* {signal.upper()} | *Grade:* {conviction_grade} ({conviction_score}/100)\n"
+            f"⭐ *Institutional Score:* {conviction_score}/100 (Grade: {conviction_grade})\n"
+            f"🎯 *Signal:* {signal.upper()}\n"
             f"📈 *QoQ/YoY Growth:*\n"
             f"   • PAT: ₹{pat:,.1f} Cr ({growth_pat:+.1f}% YoY)\n"
             f"   • Revenue: ₹{revenue:,.1f} Cr\n"
-            f"🎯 *Upside Potential:* {upside_pct:+.1f}%\n"
+            f"{price_block}"
             f"💡 *Institutional Thesis:*\n{thesis}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 _Dispatched via Alpha India Terminal_"
         )
 
-    @staticmethod
+    @classmethod
     def format_catalyst_alert(
+        cls,
         symbol: str,
         company_name: str,
         catalyst_type: str,
         headline: str,
         order_value_cr: Optional[float] = None,
         source_url: Optional[str] = None,
+        cmp: Optional[float] = None,
+        buy_trigger: Optional[float] = None,
+        target_price: Optional[float] = None,
+        stop_loss: Optional[float] = None,
+        score: Optional[float] = 85.0,
     ) -> str:
         cat_label = catalyst_type.replace("_", " ").upper()
         clean_headline = headline.replace("*", "").replace("`", "")
         value_str = f"\n💰 *Contract Value:* ₹{order_value_cr:,.1f} Cr" if order_value_cr else ""
         link_str = f"\n🔗 [Exchange Filing]({source_url})" if source_url else ""
+
+        score_val = score or 85.0
+        cmp_val = cmp or 0.0
+        trigger_val = buy_trigger or cmp_val
+        t_val = target_price or (round(cmp_val * 1.15, 2) if cmp_val else 0.0)
+        sl_val = stop_loss or (round(cmp_val * 0.93, 2) if cmp_val else 0.0)
+        rr = round(abs(t_val - cmp_val) / max(0.01, abs(cmp_val - sl_val)), 1) if cmp_val > 0 else 2.1
+
+        price_block = ""
+        if cmp_val > 0:
+            price_block = (
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 *Live CMP:* ₹{cmp_val:,.2f}\n"
+                f"🎯 *Buy Trigger Price:* ₹{trigger_val:,.2f}\n"
+                f"🚀 *Target Price:* ₹{t_val:,.2f} (+15.0%)\n"
+                f"🛑 *Stop Loss:* ₹{sl_val:,.2f} (-7.0%)\n"
+                f"⚖️ *Risk:Reward:* 1:{rr:.1f}\n"
+            )
+
         return (
             f"📡 *ALPHA INDIA | CATALYST RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
+            f"⭐ *Institutional Score:* {score_val:.0f}/100 (HIGH IMPACT)\n"
             f"⚡ *Catalyst:* {cat_label}{value_str}\n"
             f"📋 *Summary:* {clean_headline}{link_str}\n"
+            f"{price_block}"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 _Dispatched via Alpha India Terminal_"
         )
 
-    @staticmethod
+    @classmethod
     def format_growth_breakout_alert(
+        cls,
         symbol: str,
         company_name: str,
         pat_growth_yoy: float,
         rev_growth_yoy: float,
         opm: float,
         pe: Optional[float] = None,
+        cmp: Optional[float] = None,
+        buy_trigger: Optional[float] = None,
+        target_price: Optional[float] = None,
+        stop_loss: Optional[float] = None,
+        score: Optional[float] = 88.0,
     ) -> str:
         pe_str = f" | *P/E:* {pe:.1f}x" if pe else ""
+        score_val = score or 88.0
+        cmp_val = cmp or 0.0
+        trigger_val = buy_trigger or cmp_val
+        t_val = target_price or (round(cmp_val * 1.18, 2) if cmp_val else 0.0)
+        sl_val = stop_loss or (round(cmp_val * 0.93, 2) if cmp_val else 0.0)
+        rr = round(abs(t_val - cmp_val) / max(0.01, abs(cmp_val - sl_val)), 1) if cmp_val > 0 else 2.5
+
+        price_block = ""
+        if cmp_val > 0:
+            price_block = (
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 *Live CMP:* ₹{cmp_val:,.2f}\n"
+                f"🎯 *Buy Trigger Price:* ₹{trigger_val:,.2f}\n"
+                f"🚀 *Target Price:* ₹{t_val:,.2f} (+18.0%)\n"
+                f"🛑 *Stop Loss:* ₹{sl_val:,.2f} (-7.0%)\n"
+                f"⚖️ *Risk:Reward:* 1:{rr:.1f}\n"
+            )
+
         return (
             f"🚀 *ALPHA INDIA | GROWTH BREAKOUT*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
+            f"⭐ *Institutional Score:* {score_val:.0f}/100 (GROWTH LEADER)\n"
             f"📈 *YoY PAT Growth:* +{pat_growth_yoy:.1f}%\n"
             f"📊 *YoY Revenue Growth:* +{rev_growth_yoy:.1f}%\n"
             f"🛡️ *Operating Margin:* {opm:.1f}%{pe_str}\n"
+            f"{price_block}"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 _Dispatched via Alpha India Terminal_"
         )
 
-    @staticmethod
+    @classmethod
     def format_vcp_breakout_alert(
+        cls,
         symbol: str,
         company_name: str,
         vcp_stage: str,
@@ -342,24 +533,31 @@ class AlertDispatchService:
         elif thesis:
             bullets = f"\n   • {thesis}"
 
+        t1_pct = round(((target_1 - cmp) / max(0.01, cmp)) * 100, 1) if (target_1 and cmp) else 10.0
+        sl_pct = round(((cmp - stop_loss) / max(0.01, cmp)) * 100, 1) if (stop_loss and cmp) else 5.0
+
         return (
             f"🎯 *ALPHA INDIA | MINERVINI VCP BREAKOUT*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
-            f"⭐ *Score:* {total_score:.1f}/100 — {verdict}\n"
-            f"📐 *Pattern:* {vcp_stage} (Supply Dry-Up: {dryup_pct}%)\n"
-            f"🎯 *Pivot Point:* ₹{pivot_price:,.2f} | *CMP:* ₹{cmp:,.2f}\n"
+            f"⭐ *Institutional Score:* {total_score:.1f}/100 — {verdict}\n"
+            f"📐 *Pattern Archetype:* {vcp_stage} (Supply Dry-Up: {dryup_pct}%)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{pivot_price:,.2f} (Pivot Point)\n"
             f"🚪 *Entry Zone:* {entry_zone}\n"
-            f"🛡️ *Stop Loss:* ₹{stop_loss:,.2f}\n"
-            f"🚀 *Targets:* *T1:* ₹{target_1:,.1f} | *T2:* ₹{target_2:,.1f}{t3_str}\n"
+            f"🚀 *Targets:* *T1:* ₹{target_1:,.2f} (+{t1_pct}%) | *T2:* ₹{target_2:,.2f}{t3_str}\n"
+            f"🛑 *Stop Loss:* ₹{stop_loss:,.2f} (-{sl_pct}%)\n"
             f"⚖️ *Risk/Reward:* {reward_risk:.1f}x | *Breakout Vol:* {breakout_volume_ratio:.1f}x 20DMA\n"
             f"💡 *Institutional Edge:*{bullets}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
     def format_prebreakout_alert(
+        cls,
         symbol: str,
         company_name: str,
         conviction_score: int,
@@ -374,22 +572,29 @@ class AlertDispatchService:
         vdu_ratio: float,
         action_url: str = "http://localhost:3000/pre-breakout-radar",
     ) -> str:
+        t1_pct = round(((target_1 - cmp) / max(0.01, cmp)) * 100, 1) if (target_1 and cmp) else 9.0
+        sl_pct = round(((cmp - stop_loss) / max(0.01, cmp)) * 100, 1) if (stop_loss and cmp) else 4.5
+
         return (
             f"⚡ *ALPHA INDIA | PRE-BREAKOUT RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
-            f"🎯 *Tier:* {setup_tier} (Conviction: {conviction_score}/100)\n"
-            f"📐 *Pattern:* {primary_pattern} (VDU: {vdu_ratio:.2f}x)\n"
-            f"💵 *CMP:* ₹{cmp:,.2f} | *Cheat Entry:* ₹{cheat_entry:,.2f}\n"
-            f"🛡️ *Stop Loss:* ₹{stop_loss:,.2f}\n"
-            f"🚀 *Targets:* *T1:* ₹{target_1:,.1f} (+9%) | *T2:* ₹{target_2:,.1f} (+18%)\n"
+            f"⭐ *Institutional Score:* {conviction_score}/100 ({setup_tier})\n"
+            f"📐 *Base Pattern:* {primary_pattern} (VDU: {vdu_ratio:.2f}x)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{cheat_entry:,.2f} (Cheat Entry)\n"
+            f"🚀 *Target 1:* ₹{target_1:,.2f} (+{t1_pct}%) | *Target 2:* ₹{target_2:,.2f}\n"
+            f"🛑 *Stop Loss:* ₹{stop_loss:,.2f} (-{sl_pct}%)\n"
             f"⚖️ *Risk/Reward:* {risk_reward:.1f}x\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
     def format_breakout_triggered_alert(
+        cls,
         symbol: str,
         company_name: str,
         sector: str,
@@ -407,28 +612,32 @@ class AlertDispatchService:
         action_url: str = "http://localhost:3000/pre-breakout-radar",
     ) -> str:
         risk_pct = round(((trigger_price - stop_loss) / max(0.01, trigger_price)) * 100.0, 2)
+        t1_pct = round(((target_1 - trigger_price) / max(0.01, trigger_price)) * 100.0, 1)
+
         return (
             f"🚨 *ALPHA INDIA | BREAKOUT EXECUTION TRIGGERED!*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
             f"⚡ *STATUS:* `BUY ZONE ACTIVE — TAKE ENTRY NOW`\n"
-            f"🎯 *Conviction:* {conviction_score} PTS ({setup_tier})\n"
+            f"⭐ *Institutional Score:* {conviction_score} PTS ({setup_tier})\n"
             f"📐 *Base Pattern:* {pattern_tag}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💵 *Current CMP:* ₹{cmp:,.2f}\n"
-            f"🛒 *Buy Zone:* ₹{trigger_price:,.2f} – ₹{buy_zone_max:,.2f} (+1.5% max)\n"
-            f"🛡️ *Stop Loss:* ₹{stop_loss:,.2f} (Risk: -{risk_pct}%)\n"
-            f"🚀 *Target 1:* ₹{target_1:,.2f} (+9.0%)\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{trigger_price:,.2f} (Buy Zone: ₹{trigger_price:,.2f} – ₹{buy_zone_max:,.2f})\n"
+            f"🚀 *Target 1:* ₹{target_1:,.2f} (+{t1_pct}%)\n"
             f"🚀 *Target 2:* ₹{target_2:,.2f} (+18.0%)\n"
+            f"🛑 *Stop Loss:* ₹{stop_loss:,.2f} (Risk: -{risk_pct}%)\n"
             f"⚖️ *Risk/Reward:* {risk_reward:.1f}:1\n"
             f"📊 *Volume Pace:* {volume_pace_ratio:.2f}x 20-DMA\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚠️ *Execution Rule:* Never chase past ₹{buy_zone_max:,.2f}. Book 50% at Target 1 and trail stop on 10 EMA.\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Open Live Cockpit:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
     def format_momentum_radar_alert(
+        cls,
         symbol: str,
         company_name: str,
         match_count: int,
@@ -443,24 +652,45 @@ class AlertDispatchService:
         weekly_rsi: float,
         vol_surge: float,
         action_url: str = "http://localhost:3000/momentum-radar",
+        market_cap_cr: Optional[float] = None,
+        turnover_lakhs: Optional[float] = None,
+        scan_source: Optional[str] = None,
     ) -> str:
+        header = "🚀 *ALPHA INDIA | MOMENTUM RADAR*"
+        if scan_source == "FULL_UNIVERSE":
+            header = "🌐 *ALPHA INDIA | MOMENTUM RADAR (FULL UNIVERSE)*"
+        elif scan_source == "LIVE_BREAKOUT":
+            header = "🔥 *ALPHA INDIA | LIVE MOMENTUM BREAKOUT*"
+
+        extra_depth = ""
+        if market_cap_cr is not None or turnover_lakhs is not None:
+            mcap_str = f"₹{int(market_cap_cr):,} Cr" if market_cap_cr else "N/A"
+            to_str = f"₹{int(turnover_lakhs):,}L" if turnover_lakhs else "N/A"
+            extra_depth = f"🏦 *Depth:* Mcap {mcap_str} | 20D Turnover {to_str}\n"
+
         return (
-            f"🚀 *ALPHA INDIA | MOMENTUM RADAR*\n"
+            f"{header}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
-            f"🔥 *Match Score:* {match_count}/10 Confluence | *Conviction:* {conviction_score} PTS\n"
+            f"⭐ *Institutional Score:* {conviction_score} PTS ({match_count}/10 Confluence)\n"
+            f"{extra_depth}"
             f"📊 *Triple RSI:* Daily {daily_rsi:.1f} | Weekly {weekly_rsi:.1f}\n"
             f"📈 *Volume Surge:* {vol_surge:.2f}x 20DMA\n"
-            f"🎯 *Trigger Price:* ₹{entry_trigger:,.2f} | *CMP:* ₹{cmp:,.2f}\n"
-            f"🛡️ *Stop Loss:* ₹{stop_loss:,.2f}\n"
-            f"🚀 *Targets:* *T1:* ₹{target_1:,.1f} (+8%) | *T2:* ₹{target_2:,.1f} (+16%)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{entry_trigger:,.2f}\n"
+            f"🚀 *Target 1:* ₹{target_1:,.2f} (+8.0%)\n"
+            f"🚀 *Target 2:* ₹{target_2:,.2f} (+16.0%)\n"
+            f"🛑 *Stop Loss:* ₹{stop_loss:,.2f}\n"
             f"⚖️ *Risk/Reward:* {risk_reward:.1f}x\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
     def format_order_win_alert(
+        cls,
         symbol: str,
         company_name: str,
         deal_value_cr: Optional[float],
@@ -472,6 +702,7 @@ class AlertDispatchService:
         quarterly_rev_cr: Optional[float] = None,
         earnings_impact_cr: Optional[float] = None,
         cmp: Optional[float] = None,
+        buy_trigger: Optional[float] = None,
         target_price: Optional[float] = None,
         upside_pct: Optional[float] = None,
         stop_loss: Optional[float] = None,
@@ -497,15 +728,21 @@ class AlertDispatchService:
 
         pat_line = f"\n📈 *Annualized PAT Impact:* +₹{earnings_impact_cr:,.1f} Cr" if earnings_impact_cr else ""
 
-        price_parts = []
-        if cmp:
-            price_parts.append(f"*CMP:* ₹{cmp:,.1f}")
-        if target_price:
-            up_str = f" (+{upside_pct:.1f}%)" if upside_pct else ""
-            price_parts.append(f"*Target:* ₹{target_price:,.1f}{up_str}")
-        if stop_loss:
-            price_parts.append(f"*SL:* ₹{stop_loss:,.1f}")
-        price_line = f"\n🎯 {' | '.join(price_parts)}" if price_parts else ""
+        cmp_val = cmp or 0.0
+        trigger_val = buy_trigger or cmp_val
+        t_val = target_price or (round(cmp_val * 1.15, 2) if cmp_val else 0.0)
+        sl_val = stop_loss or (round(cmp_val * 0.93, 2) if cmp_val else 0.0)
+
+        price_block = ""
+        if cmp_val > 0:
+            up_str = f" (+{upside_pct:.1f}%)" if upside_pct else f" (+{round(((t_val - cmp_val)/cmp_val)*100, 1)}%)"
+            price_block = (
+                f"\n━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 *Live CMP:* ₹{cmp_val:,.2f}\n"
+                f"🎯 *Buy Trigger Price:* ₹{trigger_val:,.2f}\n"
+                f"🚀 *Target Price:* ₹{t_val:,.2f}{up_str}\n"
+                f"🛑 *Stop Loss:* ₹{sl_val:,.2f}"
+            )
 
         prob_line = f"\n🎲 *Win Probability:* {upside_prob_pct:.1f}%" if upside_prob_pct else ""
 
@@ -523,21 +760,23 @@ class AlertDispatchService:
             f"🏆 *ALPHA INDIA | ORDER WIN RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
-            f"⭐ *Significance:* {significance_score:.1f}/100 — {tier_clean}\n"
+            f"⭐ *Institutional Score:* {significance_score:.1f}/100 — {tier_clean}\n"
             f"💰 *Order Value:* {deal_str}"
             f"{client_line}"
             f"{runway_str}"
             f"{pat_line}"
-            f"{price_line}"
+            f"{price_block}"
             f"{prob_line}"
             f"{thesis_line}"
             f"{link_line}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
     def format_techno_funda_alert(
+        cls,
         symbol: str,
         company_name: str,
         setup_score: float,
@@ -549,22 +788,86 @@ class AlertDispatchService:
         signal: str = "PRE_BREAKOUT",
         pattern: str = "VCP Base",
         action_url: str = "http://localhost:3000/techno-funda",
+        target_price: Optional[float] = None,
+        stop_loss: Optional[float] = None,
     ) -> str:
+        t_val = target_price or round(pivot_price * 1.15, 2)
+        sl_val = stop_loss or round(cmp * 0.93, 2)
+        rr = round(abs(t_val - cmp) / max(0.01, abs(cmp - sl_val)), 1) if cmp > 0 else 2.1
+
         return (
             f"🎯 *ALPHA INDIA | TECHNO-FUNDA RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
-            f"⭐ *Setup Score:* {setup_score:.1f}/100 | *Signal:* `{signal}`\n"
-            f"📐 *Pattern Archetype:* {pattern}\n"
-            f"💵 *CMP:* ₹{cmp:,.2f} | *Model Pivot:* ₹{pivot_price:,.2f}\n"
-            f"📍 *Distance to Pivot:* {distance_to_pivot_pct:+.2f}%\n"
-            f"🛡️ *Health Score:* {health_score:.1f}/100\n"
+            f"⭐ *Institutional Score:* {setup_score:.1f}/100 | *Health:* {health_score:.1f}/100\n"
+            f"⚡ *Signal:* `{signal}` | *Pattern:* {pattern}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{pivot_price:,.2f} (Distance: {distance_to_pivot_pct:+.2f}%)\n"
+            f"🚀 *Target Price:* ₹{t_val:,.2f} (+15.0%)\n"
+            f"🛑 *Stop Loss:* ₹{sl_val:,.2f} (-7.0%)\n"
+            f"⚖️ *Risk:Reward:* 1:{rr:.1f}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
+    def format_ipo_radar_alert(
+        cls,
+        symbol: str,
+        company_name: str,
+        setup_type: str,
+        setup_label: str,
+        setup_status: str,
+        conviction_score: float,
+        cmp: float,
+        pivot_price: float,
+        stop_loss: float,
+        target_1: float,
+        target_2: float,
+        risk_pct: float,
+        day1_high: float,
+        days_since_listing: int,
+        rvol: float = 1.0,
+        anchor_days_left: Optional[int] = None,
+        rationale: Optional[str] = None,
+        action_url: str = "http://localhost:3000/ipo-radar",
+    ) -> str:
+        anchor_line = ""
+        if anchor_days_left is not None and -5 <= anchor_days_left <= 10:
+            if anchor_days_left > 0:
+                anchor_line = f"\n🔒 *SEBI 30D Anchor Cliff:* In {anchor_days_left} Days (50% Float Unlock)"
+            elif anchor_days_left == 0:
+                anchor_line = "\n🔒 *SEBI 30D Anchor Cliff:* UNLOCKS TODAY (Morning Block Deals Active)"
+            else:
+                anchor_line = f"\n✅ *SEBI 30D Anchor Cliff:* Cleared {abs(anchor_days_left)}d Ago (Float Absorbed)"
+
+        clean_rat = f"\n💡 *Edge:* {rationale}" if rationale else ""
+
+        return (
+            f"🚀 *ALPHA INDIA | MAINBOARD IPO RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
+            f"⭐ *Institutional Score:* {conviction_score:.1f}/100 ({setup_status})\n"
+            f"⚡ *Setup:* {setup_label} | *Age:* {days_since_listing}d post-listing\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{pivot_price:,.2f} (Model Pivot)\n"
+            f"📐 *Day 1 High:* ₹{day1_high:,.2f} | *RelVol:* {rvol:.2f}x\n"
+            f"🚀 *Target 1:* ₹{target_1:,.2f} (+15.0%) | *Target 2:* ₹{target_2:,.2f}\n"
+            f"🛑 *Stop Loss:* ₹{stop_loss:,.2f} (-{risk_pct:.1f}% risk)"
+            f"{anchor_line}"
+            f"{clean_rat}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ *Rule:* Book 50% at Target 1 and trail remainder on 10 EMA with Breakeven Stop.\n"
+            f"{cls.get_stock_links(symbol)}\n"
+            f"📡 *Open Radar:* {action_url}"
+        )
+
+    @classmethod
     def format_delivery_breakout_alert(
+        cls,
         symbol: str,
         company_name: str,
         delivery_per: float,
@@ -597,25 +900,26 @@ class AlertDispatchService:
             f"⚡ *ALPHA INDIA | DELIVERY BREAKOUT RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
-            f"🎯 *Conviction Tier:* `{tier_tag}` ({conviction_score:.0f} PTS)\n"
+            f"⭐ *Institutional Score:* {conviction_score:.0f} PTS (`{tier_tag}`)\n"
             f"🏆 *Model Win Rate:* {win_rate_expectation} | *R:R:* {risk_reward}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 *Delivery Absorption:* {delivery_per:.1f}% Float Absorption\n"
-            f"📈 *Surge Multiplier:* {delivery_spike_x:.2f}x 10-DMA\n"
+            f"📦 *Delivery Absorption:* {delivery_per:.1f}% Float | *Surge:* {delivery_spike_x:.2f}x 10-DMA\n"
             f"🌊 *20D Net Flow (D-A/D):* {deliv_flow_20d:.2f}x Net Accumulation\n"
             f"📐 *Setup Structure:* {setup_type.replace('_', ' ')}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💵 *CMP (Suggested Entry):* ₹{cmp:,.2f}\n"
-            f"🛡️ *Initial Stop Loss:* ₹{sl_val:,.2f} (-{risk_pct:.1f}%)\n"
-            f"🔒 *Breakeven Lock Trigger:* ₹{be_val:,.2f} (+2.0%) [Locks Stop to +0.4% BE]\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{cmp:,.2f} (Suggested Entry)\n"
             f"🚀 *Target 1:* ₹{t1_val:,.2f} (+5.0%) [Book 50% Profit]\n"
-            f"🚀 *Target 2:* ₹{t2_val:,.2f} (+10.0%) [Apex Runner]{rule_str}\n"
+            f"🚀 *Target 2:* ₹{t2_val:,.2f} (+10.0%) [Apex Runner]\n"
+            f"🛑 *Initial Stop Loss:* ₹{sl_val:,.2f} (-{risk_pct:.1f}%)\n"
+            f"🔒 *Breakeven Lock Trigger:* ₹{be_val:,.2f} (+2.0%){rule_str}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
-    @staticmethod
+    @classmethod
     def format_institutional_mf_alert(
+        cls,
         symbol: str,
         company_name: str,
         smart_money_score: float,
@@ -624,18 +928,39 @@ class AlertDispatchService:
         sector: str = "Diversified",
         latest_month: str = "Latest Month",
         action_url: str = "http://localhost:3000/institutional-radar/fresh-entries",
+        cmp: Optional[float] = None,
+        buy_trigger: Optional[float] = None,
+        target_price: Optional[float] = None,
+        stop_loss: Optional[float] = None,
     ) -> str:
+        cmp_val = cmp or 0.0
+        trigger_val = buy_trigger or cmp_val
+        t_val = target_price or (round(cmp_val * 1.15, 2) if cmp_val else 0.0)
+        sl_val = stop_loss or (round(cmp_val * 0.93, 2) if cmp_val else 0.0)
+
+        price_block = ""
+        if cmp_val > 0:
+            price_block = (
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 *Live CMP:* ₹{cmp_val:,.2f}\n"
+                f"🎯 *Buy Trigger Price:* ₹{trigger_val:,.2f}\n"
+                f"🚀 *Target Price:* ₹{t_val:,.2f} (+15.0%)\n"
+                f"🛑 *Stop Loss:* ₹{sl_val:,.2f} (-7.0%)\n"
+            )
+
         return (
             f"🏛️ *ALPHA INDIA | INSTITUTIONAL MF RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{company_name or symbol}* (`{symbol}`) • {sector}\n"
-            f"⭐ *Smart Money Score:* {smart_money_score:.1f}/100\n"
+            f"⭐ *Institutional Score:* {smart_money_score:.1f}/100 (SMART MONEY ACCUMULATION)\n"
             f"💼 *Fresh AMC Position Initiations:* {schemes_count} Schemes\n"
             f"📊 *Net Holding Change:* {net_shares_change_pct:+.1f}%\n"
             f"⏱️ *Filing Cycle:* {latest_month}\n"
+            f"{price_block}"
             f"💡 *Institutional Edge:*\n"
             f"Multiple top mutual fund asset managers aggressively accumulating equity float.\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
             f"📡 *Live Radar:* {action_url}"
         )
 
@@ -835,9 +1160,9 @@ class AlertDispatchService:
                 )
 
                 # Check Telegram
-                tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
-                if tg_cfg and tg_cfg.is_enabled and tg_cfg.bot_token and tg_cfg.chat_id:
-                    auto_rules = tg_cfg.auto_rules or {}
+                tg_cfg_dict = cls.get_telegram_config(db)
+                if tg_cfg_dict and tg_cfg_dict.get("is_enabled", True):
+                    auto_rules = tg_cfg_dict.get("auto_rules") or {}
                     vcp_enabled = auto_rules.get("vcp_enabled", True)
                     min_score = float(auto_rules.get("vcp_min_score", 90.0))
                     elite_only = bool(auto_rules.get("vcp_elite_only", False))
@@ -858,14 +1183,14 @@ class AlertDispatchService:
                             logger.info(f"Telegram alert for {sym} already logged SUCCESS at {already_dispatched_tg.dispatched_at}; skipping duplicate external broadcast.")
                         else:
                             tg_res = cls.dispatch_telegram(
-                                bot_token=tg_cfg.bot_token,
-                                chat_id=tg_cfg.chat_id,
+                                bot_token=tg_cfg_dict["bot_token"],
+                                chat_id=tg_cfg_dict["chat_id"],
                                 text=memo,
                             )
                             cls.log_dispatch(
                                 db=db,
                                 channel="TELEGRAM",
-                                recipient=tg_cfg.chat_id,
+                                recipient=tg_cfg_dict["chat_id"],
                                 symbol=sym,
                                 payload_preview=memo,
                                 status="SUCCESS" if tg_res.get("success") else "FAILED",
@@ -966,17 +1291,17 @@ class AlertDispatchService:
 
         # 1. Telegram Dispatch
         try:
-            tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
-            if tg_cfg and tg_cfg.is_enabled and tg_cfg.bot_token and tg_cfg.chat_id:
+            tg_cfg_dict = cls.get_telegram_config(db)
+            if tg_cfg_dict and tg_cfg_dict.get("is_enabled", True):
                 tg_res = cls.dispatch_telegram(
-                    bot_token=tg_cfg.bot_token,
-                    chat_id=tg_cfg.chat_id,
+                    bot_token=tg_cfg_dict["bot_token"],
+                    chat_id=tg_cfg_dict["chat_id"],
                     text=memo,
                 )
                 cls.log_dispatch(
                     db=db,
                     channel="TELEGRAM",
-                    recipient=tg_cfg.chat_id,
+                    recipient=tg_cfg_dict["chat_id"],
                     symbol=sym,
                     payload_preview=memo,
                     status="SUCCESS" if tg_res.get("success") else "FAILED",

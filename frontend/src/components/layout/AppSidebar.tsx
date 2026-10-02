@@ -16,6 +16,7 @@ interface AppSidebarProps {
   onClose?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  isMobileDrawerOnly?: boolean;
 }
 
 export default function AppSidebar({
@@ -23,6 +24,7 @@ export default function AppSidebar({
   onClose,
   isCollapsed = false,
   onToggleCollapse,
+  isMobileDrawerOnly = true,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { isPageHidden } = usePageVisibility();
@@ -45,9 +47,13 @@ export default function AppSidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen max-w-[85vw] flex-col border-r border-slate-200 bg-white text-slate-900 transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-gradient-to-b dark:from-[#07111F] dark:via-[#09182A] dark:to-[#07111F] dark:text-white lg:sticky lg:top-0 lg:z-30 lg:translate-x-0 ${
-          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
-        } ${isCollapsed ? "w-72 lg:w-20" : "w-72"}`}
+        className={`fixed inset-y-0 left-0 z-50 flex h-screen max-w-[85vw] flex-col border-r border-slate-200 bg-white text-slate-900 transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-gradient-to-b dark:from-[#07111F] dark:via-[#09182A] dark:to-[#07111F] dark:text-white ${
+          isMobileDrawerOnly
+            ? `lg:hidden ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} w-72`
+            : `lg:sticky lg:top-0 lg:z-30 lg:translate-x-0 ${
+                isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+              } ${isCollapsed ? "w-72 lg:w-20" : "w-72"}`
+        }`}
       >
         {/* ========================================================= */}
         {/* Alpha India Brand Header */}

@@ -277,11 +277,15 @@ def get_pick_of_the_day(db: Session = Depends(get_db)):
     # -------------------------------------------------------------
     # 4. Resolve Live Verified Market Price (CMP)
     # -------------------------------------------------------------
-    quote = LivePriceService.resolve_single_quote(chosen_symbol)
+    quote = LivePriceService.get_live_price(chosen_symbol, db=db, force_refresh=False)
     cmp_val = quote.get("cmp") or 0.0
+    if cmp_val <= 0:
+        m_rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == chosen_symbol).first()
+        if m_rec and m_rec.current_price:
+            cmp_val = float(m_rec.current_price)
     day_change_pct = quote.get("day_change_pct")
     last_verified_at = datetime.now(timezone.utc).isoformat()
-    data_source = quote.get("source") or "YAHOO_FAST_INFO"
+    data_source = quote.get("source") or "DB_CACHE"
 
     # If target or stop loss need calculation from real CMP
     if cmp_val > 0:

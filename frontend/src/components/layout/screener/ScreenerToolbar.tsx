@@ -435,7 +435,7 @@ function FilterSelect({
         className={`w-full appearance-none truncate rounded-lg border px-2.5 py-1.5 text-xs outline-none transition cursor-pointer ${
           isFiltered
             ? "border-cyan-500 bg-cyan-50 text-cyan-700 font-semibold dark:border-cyan-500/50 dark:bg-cyan-950/20 dark:text-cyan-300"
-            : "border-slate-200 bg-slate-50 text-slate-800 hover:border-slate-300 dark:border-slate-800 dark:bg-[#060B14] dark:text-slate-300 dark:hover:border-slate-700"
+            : "border-slate-300 bg-white text-slate-800 hover:border-slate-400 dark:border-slate-800 dark:bg-[#060B14] dark:text-slate-300 dark:hover:border-slate-700 shadow-xs"
         }`}
       >
         {options.map((opt) => (

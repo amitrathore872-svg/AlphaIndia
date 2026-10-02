@@ -881,12 +881,12 @@ export default function GrowthTable({
               <select
                 value={limit}
                 onChange={(e) => onLimitChange(Number(e.target.value))}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-cyan-400 cursor-pointer"
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-cyan-400 cursor-pointer shadow-xs"
               >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
+                <option value={10} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">10</option>
+                <option value={25} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">25</option>
+                <option value={50} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">50</option>
+                <option value={100} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">100</option>
               </select>
             </div>
           )}

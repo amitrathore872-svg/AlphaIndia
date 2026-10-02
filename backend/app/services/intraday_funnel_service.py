@@ -31,6 +31,7 @@ from app.clients.dhan_client import DhanClient
 from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.alert_dispatch_service import AlertDispatchService
+from app.core.redis_cache import cache
 
 logger = logging.getLogger("alpha_india.intraday_funnel")
 
@@ -470,15 +471,25 @@ class IntradayFunnelService:
 
         try:
             # 1. Fetch 5-day daily data for CPR, Previous Day High/Low, and ATR
-            t = yf.Ticker(ticker_sym)
-            df_daily = t.history(period="7d", interval="1d").dropna(subset=["Close"])
-            if df_daily.empty or len(df_daily) < 3:
+            df_daily = cls._fetch_direct_chart(clean_sym, interval="1d", range_str="7d")
+            if df_daily is None or len(df_daily) < 3:
+                try:
+                    t = yf.Ticker(ticker_sym)
+                    df_daily = t.history(period="7d", interval="1d")
+                except Exception:
+                    df_daily = None
+            if df_daily is None or df_daily.empty or len(df_daily) < 3:
+                return None
+
+            df_daily.columns = [str(c).lower() for c in df_daily.columns]
+            df_daily = df_daily.dropna(subset=["close"])
+            if len(df_daily) < 3:
                 return None
 
             prev_day = df_daily.iloc[-2]
-            p_high = float(prev_day["High"])
-            p_low = float(prev_day["Low"])
-            p_close = float(prev_day["Close"])
+            p_high = float(prev_day["high"])
+            p_low = float(prev_day["low"])
+            p_close = float(prev_day["close"])
 
             # STAGE 1: Central Pivot Range (CPR) Calculation
             pivot = (p_high + p_low + p_close) / 3.0
@@ -507,37 +518,48 @@ class IntradayFunnelService:
                 }
 
             # 2. Fetch today's 5-minute intraday bars
-            df_5m = t.history(period="2d", interval="5m").dropna(subset=["Close", "Volume"])
-            if df_5m.empty or len(df_5m) < 4:
+            df_5m = cls._fetch_direct_chart(clean_sym, interval="5m", range_str="2d")
+            if df_5m is None or len(df_5m) < 4:
+                try:
+                    t = yf.Ticker(ticker_sym)
+                    df_5m = t.history(period="2d", interval="5m")
+                except Exception:
+                    df_5m = None
+            if df_5m is None or df_5m.empty or len(df_5m) < 4:
                 return None
 
-            df_5m["Date"] = df_5m.index.date
-            today_date = df_5m["Date"].iloc[-1]
-            today_bars = df_5m[df_5m["Date"] == today_date].copy()
+            df_5m.columns = [str(c).lower() for c in df_5m.columns]
+            df_5m = df_5m.dropna(subset=["close", "volume"])
+            if len(df_5m) < 4:
+                return None
+
+            df_5m["date"] = df_5m.index.date
+            today_date = df_5m["date"].iloc[-1]
+            today_bars = df_5m[df_5m["date"] == today_date].copy()
 
             if len(today_bars) < 3:
                 return None
 
             # Check if Dhan real-time quote is available
             dhan_q = dhan_quotes.get(clean_sym) if dhan_quotes else None
-            cmp = float(dhan_q["cmp"]) if dhan_q else float(today_bars["Close"].iloc[-1])
+            cmp = float(dhan_q["cmp"]) if dhan_q else float(today_bars["close"].iloc[-1])
             cmp = round(cmp, 2)
 
             # STAGE 2: 15-Minute Opening Range (ORB: first 3 5-min bars = 9:15-9:30 AM)
             orb_bars = today_bars.head(3)
-            orb_high = round(float(orb_bars["High"].max()), 2)
-            orb_low = round(float(orb_bars["Low"].min()), 2)
+            orb_high = round(float(orb_bars["high"].max()), 2)
+            orb_low = round(float(orb_bars["low"].min()), 2)
             orb_range = max(0.01, orb_high - orb_low)
             orb_range_pct = round((orb_range / cmp) * 100.0, 2)
             orb_midpoint = round((orb_high + orb_low) / 2.0, 2)
 
             # 15M Candle Health: Body vs Wick ratio
-            orb_open = float(orb_bars["Open"].iloc[0])
-            orb_close = float(orb_bars["Close"].iloc[-1])
+            orb_open = float(orb_bars["open"].iloc[0])
+            orb_close = float(orb_bars["close"].iloc[-1])
             orb_body_ratio = round((abs(orb_close - orb_open) / orb_range) * 100.0, 1)
 
             # Gap % from yesterday close
-            gap_pct = round(((float(today_bars["Open"].iloc[0]) - p_close) / p_close) * 100.0, 2)
+            gap_pct = round(((float(today_bars["open"].iloc[0]) - p_close) / p_close) * 100.0, 2)
             is_exhaustion_gap = bool(abs(gap_pct) > 3.5)
 
             # Relative Strength vs NIFTY 50
@@ -547,8 +569,8 @@ class IntradayFunnelService:
             sec_name = cls.SECTOR_MAP.get(clean_sym, "Diversified")
 
             # STAGE 3: Intraday VWAP & Dynamic Anchoring
-            cum_vol = today_bars["Volume"].cumsum()
-            cum_pv = (today_bars["Close"] * today_bars["Volume"]).cumsum()
+            cum_vol = today_bars["volume"].cumsum()
+            cum_pv = (today_bars["close"] * today_bars["volume"]).cumsum()
             vwap = float(cum_pv.iloc[-1] / max(1, cum_vol.iloc[-1]))
             vwap = round(vwap, 2)
             vwap_dist_pct = round(((cmp - vwap) / vwap) * 100.0, 2)
@@ -560,8 +582,8 @@ class IntradayFunnelService:
                 vwap_slope_positive = vwap >= vwap_3_ago
 
             # Relative Volume (RVOL) Pace
-            vol_latest = float(today_bars["Volume"].iloc[-1])
-            vol_median = float(today_bars["Volume"].median())
+            vol_latest = float(today_bars["volume"].iloc[-1])
+            vol_median = float(today_bars["volume"].median())
             rvol = round(vol_latest / max(1.0, vol_median), 2)
 
             # Trigger condition: 15M ORB High Breakout + Above VWAP
@@ -692,24 +714,45 @@ class IntradayFunnelService:
             return None
 
     @classmethod
-    def execute_funnel_scan(cls, db: Optional[Session] = None, force_refresh: bool = False) -> Dict[str, Any]:
-        """
-        Executes the complete 5-Stage Elimination Funnel across Nifty 500 equities.
-        Thread-pool accelerated and cached with high-speed memory lock.
-        """
-        global _scan_in_progress
-        now = time.time()
-
-        if not force_refresh and _FUNNEL_CACHE["data"] and (now - _FUNNEL_CACHE["timestamp"] < CACHE_TTL_SECONDS):
+    def _load_persisted_cache(cls) -> Optional[Dict[str, Any]]:
+        global _FUNNEL_CACHE
+        if _FUNNEL_CACHE.get("data") is not None:
             return _FUNNEL_CACHE["data"]
 
+        # 1. Try Redis cache
+        try:
+            r_data = cache.get_json_sync("screener:intraday:funnel")
+            if r_data:
+                _FUNNEL_CACHE["data"] = r_data
+                _FUNNEL_CACHE["timestamp"] = time.time()
+                return r_data
+        except Exception:
+            pass
+
+        # 2. Try disk cache
+        try:
+            if DISK_CACHE_PATH.exists():
+                with open(DISK_CACHE_PATH, "r", encoding="utf-8") as fp:
+                    d_data = json.load(fp)
+                    if d_data:
+                        _FUNNEL_CACHE["data"] = d_data
+                        _FUNNEL_CACHE["timestamp"] = time.time()
+                        return d_data
+        except Exception as e:
+            logger.debug(f"[IntradayFunnel] Could not load disk cache: {e}")
+        return None
+
+    @classmethod
+    def _run_full_scan_worker(cls, db: Optional[Session] = None) -> Dict[str, Any]:
+        global _scan_in_progress, _FUNNEL_CACHE
         with _scan_lock:
-            if _scan_in_progress and _FUNNEL_CACHE["data"]:
-                return _FUNNEL_CACHE["data"]
+            if _scan_in_progress:
+                return _FUNNEL_CACHE.get("data") or {}
             _scan_in_progress = True
 
         try:
-            logger.info("[IntradayFunnel] Starting 5-Stage Intraday Funnel scan across universe...")
+            now = time.time()
+            logger.info("[IntradayFunnel] Starting background 5-Stage Intraday Funnel scan across universe...")
             dhan = DhanClient.get_instance()
             dhan_status = dhan.check_connection()
 
@@ -731,7 +774,7 @@ class IntradayFunnelService:
             stage_4_qualified = []
             stage_5_elite = []
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
                 futures = {
                     executor.submit(cls.analyze_candidate, sym, nifty_chg, dhan_quotes): sym
                     for sym in symbols
@@ -807,54 +850,153 @@ class IntradayFunnelService:
             _FUNNEL_CACHE["timestamp"] = now
             _FUNNEL_CACHE["data"] = funnel_summary
 
-            # Persist cache to disk
+            # Persist cache to VelocityCacheManager & disk
             try:
+                cache.set_json_sync("screener:intraday:funnel", funnel_summary, expire_seconds=300)
                 DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
                 with open(DISK_CACHE_PATH, "w", encoding="utf-8") as fp:
                     json.dump(funnel_summary, fp, indent=2, default=str)
             except Exception as e:
-                logger.debug(f"[IntradayFunnel] Could not save disk cache: {e}")
+                logger.debug(f"[IntradayFunnel] Could not save cache: {e}")
 
             return funnel_summary
 
+        except Exception as exc:
+            logger.error(f"[IntradayFunnel] Scan worker failed: {exc}", exc_info=True)
+            return _FUNNEL_CACHE.get("data") or {}
         finally:
             with _scan_lock:
                 _scan_in_progress = False
 
     @classmethod
+    def trigger_scan_async(cls, db: Optional[Session] = None) -> Dict[str, Any]:
+        """
+        Triggers a fresh scan in a background worker thread and immediately returns current cache.
+        """
+        global _scan_in_progress
+        cached = cls._load_persisted_cache()
+        if not _scan_in_progress:
+            worker_thread = threading.Thread(
+                target=cls._run_full_scan_worker,
+                kwargs={"db": db},
+                daemon=True,
+                name="IntradayFunnelWorker",
+            )
+            worker_thread.start()
+        return cached or {
+            "last_scanned_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": "INITIALIZING",
+            "dhan_connection": {"configured": False, "trading_api_active": False, "data_api_subscribed": False, "message": "Scan in progress"},
+            "nifty_benchmark": {"cmp": 25000.0, "day_change_pct": 0.0, "is_bullish": True},
+            "funnel_metrics": {
+                "total_universe": len(cls.NIFTY_500_UNIVERSE),
+                "stage_1_narrow_cpr_count": 0,
+                "stage_2_sector_aligned_count": 0,
+                "stage_3_triggered_count": 0,
+                "stage_4_qualified_count": 0,
+                "stage_5_elite_count": 0,
+            },
+            "elite_picks": [],
+            "all_setups": [],
+            "narrow_cpr_watchlist": [],
+        }
+
+    @classmethod
+    def execute_funnel_scan(cls, db: Optional[Session] = None, force_refresh: bool = False) -> Dict[str, Any]:
+        """
+        Executes or returns the 5-Stage Elimination Funnel state.
+        Uses high-speed Stale-While-Revalidate so client requests are answered in <10ms.
+        """
+        global _scan_in_progress
+        now = time.time()
+
+        cached_data = cls._load_persisted_cache()
+
+        if cached_data is not None:
+            cache_age = now - _FUNNEL_CACHE.get("timestamp", 0)
+            if force_refresh or cache_age >= CACHE_TTL_SECONDS:
+                # Refresh in background if not already in progress
+                if not _scan_in_progress:
+                    worker_thread = threading.Thread(
+                        target=cls._run_full_scan_worker,
+                        kwargs={"db": db},
+                        daemon=True,
+                        name="IntradayFunnelWorker",
+                    )
+                    worker_thread.start()
+            return cached_data
+
+        # If no cache exists at all anywhere, run initial scan
+        return cls._run_full_scan_worker(db=db)
+
+    _dispatched_cache: Dict[str, float] = {}
+
+    @classmethod
+    def is_symbol_recently_alerted(cls, sym: str, cooldown_hours: float = 4.0) -> bool:
+        last_sent = cls._dispatched_cache.get(sym)
+        if not last_sent:
+            return False
+        return (time.time() - last_sent) < (cooldown_hours * 3600)
+
+    @classmethod
+    def record_dispatched_alert(cls, sym: str):
+        cls._dispatched_cache[sym] = time.time()
+
+    @classmethod
     def _dispatch_telegram_alert_if_eligible(cls, opp: Dict[str, Any]):
         """
         Formats and dispatches high-conviction intraday alert to Telegram.
+        Suppresses duplicate alerts within 4 hours.
         """
         sym = opp["symbol"]
         score = opp["conviction_score"]
         if score < 88:
             return
 
+        # -------------------------------------------------------------
+        # Deduplication Check (4 hours cooldown)
+        # -------------------------------------------------------------
+        if cls.is_symbol_recently_alerted(sym, cooldown_hours=4.0):
+            logger.info(f"[IntradayFunnel] Suppressing duplicate alert for {sym} (within 4-hour cooldown)")
+            return
+
+        links_block = AlertDispatchService.get_stock_links(sym)
+
         msg = (
             f"⚡ *ALPHA INDIA | INTRADAY CONVICTION RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏢 *{opp['company_name']}* (`{sym}`) • {opp['sector']}\n"
-            f"🔥 *CONVICTION:* {score}/100 ({opp['conviction_tier']})\n"
-            f"🎯 *SETUP:* 15M ORB Breakout + Narrow CPR Expansion\n\n"
-            f"📊 *FUNNEL CONFLUENCE:*\n"
+            f"⭐ *Institutional Score:* {score}/100 ({opp['conviction_tier']})\n"
+            f"🎯 *Setup:* 15M ORB Breakout + Narrow CPR Expansion\n\n"
+            f"📊 *Funnel Confluence:*\n"
             f"• *CPR Width:* {opp['cpr_width_pct']}% (Narrow Compression)\n"
             f"• *Volume Pace (RVOL):* {opp['rvol']}x Intraday Pace\n"
             f"• *RS vs NIFTY 50:* {opp['rs_vs_nifty']:+0.2f}%\n"
             f"• *VWAP Status:* CMP ₹{opp['cmp']} ({opp['vwap_dist_pct']:+0.2f}% vs VWAP)\n\n"
-            f"📈 *EXECUTION BLUEPRINT:*\n"
-            f"💵 *CMP:* ₹{opp['cmp']:.2f}\n"
-            f"🎯 *Trigger Entry:* ₹{opp['trigger_entry']:.2f}\n"
-            f"🛡️ *Stop Loss:* ₹{opp['stop_loss']:.2f} (Max Risk: ₹{opp['risk_per_share']:.2f})\n"
+            f"📈 *Execution Blueprint:*\n"
+            f"💵 *Live CMP:* ₹{opp['cmp']:.2f}\n"
+            f"🎯 *Buy Trigger Price:* ₹{opp['trigger_entry']:.2f}\n"
+            f"🛑 *Stop Loss:* ₹{opp['stop_loss']:.2f} (Risk: ₹{opp['risk_per_share']:.2f})\n"
             f"🚀 *Target 1:* ₹{opp['target_1']:.2f} (1:1.5 R:R)\n"
             f"🚀 *Target 2:* ₹{opp['target_2']:.2f} (1:2.5 R:R)\n"
-            f"⚖️ *Risk:Reward:* 1:{opp['risk_reward']}\n\n"
+            f"⚖️ *Risk:Reward:* 1:{opp['risk_reward']}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{links_block}\n\n"
             f"📡 *Live Terminal:* http://localhost:3000/live-intraday\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
 
         try:
             AlertDispatchService.dispatch_telegram_alert(msg)
+            cls.record_dispatched_alert(sym)
             logger.info(f"[IntradayFunnel] Dispatched Telegram alert for {sym} (Score: {score})")
         except Exception as ex:
             logger.debug(f"[IntradayFunnel] Telegram dispatch failed for {sym}: {ex}")
+
+
+# Pre-warm cache on module import
+try:
+    IntradayFunnelService._load_persisted_cache()
+except Exception:
+    pass
+

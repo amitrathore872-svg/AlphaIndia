@@ -18,6 +18,8 @@ import {
 
 import { fetchSprint23Engines } from "@/lib/monitoringApi";
 import type { MissionControlStatus, Sprint23EngineCardItem } from "@/types/monitoring";
+import VelocityBurstCommandCard from "./VelocityBurstCommandCard";
+import { useMissionTelemetry } from "@/hooks/useMissionTelemetry";
 
 interface EngineGridProps {
   status: MissionControlStatus;
@@ -108,17 +110,17 @@ export default function EngineGrid({ status }: EngineGridProps) {
     ];
   }, [status]);
 
+  const { telemetry } = useMissionTelemetry();
+
   const loadEngines = useCallback(async () => {
     try {
       const data = await fetchSprint23Engines();
       if (data?.engines?.length) {
-        // Validate each item has a metrics array with at least one element
         const fallbackList = getFallbackEngines();
         const validated = data.engines.map((e) => {
           if (Array.isArray(e.metrics) && e.metrics.length > 0) {
             return e;
           }
-          // Merge metrics from fallback
           const fb = fallbackList.find((f) => f.name === e.name);
           return {
             ...e,
@@ -132,10 +134,27 @@ export default function EngineGrid({ status }: EngineGridProps) {
     }
   }, [getFallbackEngines]);
 
+  // Sync engine states from real-time WebSocket telemetry stream
+  useEffect(() => {
+    if (telemetry?.engines?.length) {
+      const fallbackList = getFallbackEngines();
+      const validated = telemetry.engines.map((e: any) => {
+        if (Array.isArray(e.metrics) && e.metrics.length > 0) {
+          return e;
+        }
+        const fb = fallbackList.find((f) => f.name === e.name);
+        return {
+          ...e,
+          metrics: fb?.metrics || [["Status", e.status || "ONLINE"]],
+        };
+      });
+      setEngines(validated);
+    }
+  }, [telemetry?.engines, getFallbackEngines]);
+
+  // Initial load once on mount
   useEffect(() => {
     loadEngines();
-    const interval = setInterval(loadEngines, 5000);
-    return () => clearInterval(interval);
   }, [loadEngines]);
 
   // Use engines if loaded and non-empty, otherwise use fallback
@@ -151,21 +170,22 @@ export default function EngineGrid({ status }: EngineGridProps) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* ========================================================= */}
+      {/* Flagship Engine Command Deck: Velocity Burst Elite */}
+      {/* ========================================================= */}
+      <VelocityBurstCommandCard />
+
       {/* Section Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">
-            Live Engine Grid • Pipeline Health Monitor
+            Pipeline Health Monitor
           </p>
 
-          <h2 className="mt-2 text-2xl font-bold text-white">
-            Alpha India 5-Stage Processing Radar
+          <h2 className="mt-1 text-xl font-bold text-white">
+            Alpha India 5-Stage Data Pipelines
           </h2>
-
-          <p className="mt-1 text-sm text-slate-400">
-            Real-time operational status of Discovery, Import, Reconciliation (±2% Tolerance), Audit, and AI Growth engines.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-400">

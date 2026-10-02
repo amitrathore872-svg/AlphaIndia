@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
+from app.core.redis_cache import cache
+from app.services.market_data_service import MarketDataService
 
 logger = logging.getLogger(__name__)
 
@@ -144,13 +146,8 @@ class PreBreakoutRadarService:
         ticker_sym = f"{clean_sym}.NS"
 
         try:
-            t = yf.Ticker(ticker_sym)
-            df = t.history(period="1y", interval="1d")
-            if df.empty or len(df) < 50:
-                t = yf.Ticker(f"{clean_sym}.BO")
-                df = t.history(period="1y", interval="1d")
-
-            if df.empty or len(df) < 50:
+            df = MarketDataService.get_symbol_ohlcv(clean_sym, period="1y", interval="1d")
+            if df is None or df.empty or len(df) < 50:
                 return None
 
             df = df.dropna(subset=["Close", "Volume"])
@@ -356,8 +353,18 @@ class PreBreakoutRadarService:
 
     @classmethod
     def _load_disk_cache(cls) -> bool:
-        """Loads cached pre-breakout radar results from disk if available."""
+        """Loads cached pre-breakout radar results from Redis / memory cache, with disk fallback."""
         try:
+            # 1. Try VelocityCacheManager (Redis + In-Memory fallback)
+            cached_data = cache.get_json_sync("screener:prebreakout:universe")
+            if cached_data and isinstance(cached_data, dict) and "data" in cached_data and cached_data["data"]:
+                _CACHE["timestamp"] = cached_data.get("timestamp", 0)
+                _CACHE["data"] = cached_data.get("data", [])
+                _CACHE["metadata"] = cached_data.get("metadata", {})
+                logger.info(f"[PreBreakoutRadarService] Restored {len(_CACHE['data'])} opportunities from VelocityCacheManager.")
+                return True
+
+            # 2. Disk fallback if cache manager was cold
             if DISK_CACHE_PATH.exists():
                 with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
                     cached = json.load(f)
@@ -365,21 +372,27 @@ class PreBreakoutRadarService:
                         _CACHE["timestamp"] = cached.get("timestamp", 0)
                         _CACHE["data"] = cached.get("data", [])
                         _CACHE["metadata"] = cached.get("metadata", {})
-                        logger.info(f"[PreBreakoutRadarService] Restored {len(_CACHE['data'])} opportunities from disk cache.")
+                        # Re-seed cache manager
+                        cache.set_json_sync("screener:prebreakout:universe", _CACHE, expire_seconds=600)
+                        logger.info(f"[PreBreakoutRadarService] Restored {len(_CACHE['data'])} opportunities from disk fallback.")
                         return True
         except Exception as e:
-            logger.warning(f"[PreBreakoutRadarService] Error loading disk cache: {e}")
+            logger.warning(f"[PreBreakoutRadarService] Error loading cache: {e}")
         return False
 
     @classmethod
     def _save_disk_cache(cls) -> None:
-        """Persists current cache state to disk for instant restore on server restart."""
+        """Persists current cache state to VelocityCacheManager and disk."""
         try:
+            # 1. High-speed sub-millisecond cache store
+            cache.set_json_sync("screener:prebreakout:universe", _CACHE, expire_seconds=600)
+
+            # 2. Disk persistence for restart durability
             DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
                 json.dump(_CACHE, f, indent=2)
         except Exception as e:
-            logger.warning(f"[PreBreakoutRadarService] Error saving disk cache: {e}")
+            logger.warning(f"[PreBreakoutRadarService] Error saving cache: {e}")
 
     @classmethod
     def trigger_background_scan(cls, db: Optional[Session] = None) -> None:
@@ -394,13 +407,16 @@ class PreBreakoutRadarService:
 
         def _worker():
             global _scan_in_progress
+            from app.db.database import SessionLocal
+            worker_db = SessionLocal()
             try:
                 logger.info("[PreBreakoutRadarService] Starting non-blocking background radar scan...")
-                cls._execute_full_scan(db=db)
+                cls._execute_full_scan(db=worker_db)
                 logger.info("[PreBreakoutRadarService] Background radar scan completed successfully.")
             except Exception as e:
                 logger.error(f"[PreBreakoutRadarService] Background scan error: {e}", exc_info=True)
             finally:
+                worker_db.close()
                 with _scan_lock:
                     _scan_in_progress = False
 
@@ -470,19 +486,27 @@ class PreBreakoutRadarService:
             except Exception as e:
                 logger.warning(f"Failed to query DB growth records: {e}")
 
+        # Batch preload OHLCV data via vectorized MarketDataService
+        all_symbols = list(symbols_map.keys())
+        MarketDataService.preload_universe_batch(all_symbols, period="1y", interval="1d")
+
         results: List[Dict[str, Any]] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=14) as executor:
-            futures = {
-                executor.submit(cls.analyze_stock_prebreakout, sym, meta["company_name"], meta["sector"]): sym
-                for sym, meta in symbols_map.items()
-            }
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    opp = future.result()
-                    if opp:
-                        results.append(opp)
-                except Exception as ex:
-                    logger.debug(f"Prebreakout scan exception: {ex}")
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {
+                    executor.submit(cls.analyze_stock_prebreakout, sym, meta["company_name"], meta["sector"]): sym
+                    for sym, meta in symbols_map.items()
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        opp = future.result()
+                        if opp:
+                            results.append(opp)
+                    except Exception as ex:
+                        logger.debug(f"Prebreakout scan exception: {ex}")
+        except RuntimeError as rt_err:
+            logger.debug(f"[PreBreakoutRadarService] Shutdown intercepted: {rt_err}")
+            return
 
         # Sort primarily by conviction_score desc, then by vdu_ratio asc (lowest volume = highest dryup)
         results.sort(

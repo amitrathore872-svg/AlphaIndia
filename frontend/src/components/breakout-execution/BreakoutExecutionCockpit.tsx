@@ -414,20 +414,20 @@ export default function BreakoutExecutionCockpit({
             </button>
 
             {/* Auto-Refresh Cadence */}
-            <div className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-xs font-mono text-slate-400">
-              <Clock className="h-3.5 w-3.5 text-cyan-400" />
+            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 px-2.5 py-1.5 text-xs font-mono text-slate-700 dark:text-slate-400 shadow-xs">
+              <Clock className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
               <span>{countdown}s</span>
-              <div className="h-3 w-px bg-slate-700" />
+              <div className="h-3 w-px bg-slate-300 dark:bg-slate-700" />
               <select
                 value={autoRefreshInterval}
                 onChange={(e) => setAutoRefreshInterval(Number(e.target.value))}
-                className="bg-transparent text-slate-200 focus:outline-none cursor-pointer text-xs"
+                className="bg-transparent text-slate-800 dark:text-slate-200 focus:outline-hidden cursor-pointer text-xs font-semibold"
               >
-                <option value={10}>10s</option>
-                <option value={15}>15s</option>
-                <option value={30}>30s</option>
-                <option value={60}>60s</option>
-                <option value={0}>Manual</option>
+                <option value={10} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">10s</option>
+                <option value={15} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">15s</option>
+                <option value={30} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">30s</option>
+                <option value={60} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">60s</option>
+                <option value={0} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Manual</option>
               </select>
             </div>
 
