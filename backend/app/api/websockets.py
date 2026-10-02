@@ -7,6 +7,7 @@ Provides live bi-directional streaming for exchange catalysts and system telemet
 import asyncio
 from datetime import datetime, timezone
 import logging
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.websocket_manager import ws_manager
