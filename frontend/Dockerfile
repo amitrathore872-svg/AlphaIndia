@@ -17,8 +17,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build argument for baking in public backend URL
-ARG NEXT_PUBLIC_API_URL="https://api.ipodesk.shop"
+# Build argument for baking in public backend URL (defaults to /api same-origin reverse proxy)
+ARG NEXT_PUBLIC_API_URL="/api"
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 # Limit node memory usage on t3.small (2GB RAM)

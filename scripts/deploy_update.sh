@@ -26,15 +26,21 @@ echo "[2/5] Building updated application containers..."
 docker compose build backend worker frontend
 
 # 4. Gracefully restart updated services (keeping db & certbot intact)
-echo "[3/5] Restarting updated containers with force recreate..."
-docker compose up -d --force-recreate --remove-orphans backend worker frontend nginx
+echo "[3/5] Ensuring PostgreSQL database container is healthy..."
+docker compose up -d db
+sleep 3
+
+echo "Restarting updated containers with force recreate..."
+docker compose up -d --force-recreate --remove-orphans db backend worker frontend nginx
 
 echo "Waiting 8s for backend container startup..."
 sleep 8
 echo "--- Container Status ---"
-docker compose ps backend worker frontend nginx
+docker compose ps
 echo "--- Backend Startup Logs ---"
-docker compose logs --tail=40 backend
+docker compose logs --tail=50 backend
+echo "--- Database Status ---"
+docker compose logs --tail=20 db
 
 # 5. Ensure database schema integrity, normalize status, and verify master company list
 echo "[4/5] Verifying database schema, normalization, and master company list..."
