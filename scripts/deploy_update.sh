@@ -46,9 +46,59 @@ docker compose logs --tail=20 db
 echo "[4/5] Verifying database schema, normalization, and master company list..."
 docker compose exec -T backend python -c "
 from app.db.database import Base, engine, SessionLocal
-from app.models.company import Company
+import app.models
+from sqlalchemy import text
 Base.metadata.create_all(bind=engine)
-print('Database tables verified.')
+
+try:
+    with engine.connect() as conn:
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS velocity_market_regime (
+                id SERIAL PRIMARY KEY,
+                calculated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                market_score FLOAT NOT NULL DEFAULT 50.0,
+                market_bias VARCHAR(50) NOT NULL,
+                risk_level VARCHAR(30) NOT NULL DEFAULT 'MODERATE',
+                position_size_multiplier FLOAT NOT NULL DEFAULT 1.0,
+                nifty_price FLOAT,
+                nifty_change_pct FLOAT,
+                banknifty_price FLOAT,
+                banknifty_change_pct FLOAT,
+                vix_value FLOAT,
+                vix_change_pct FLOAT,
+                advance_decline_ratio FLOAT,
+                sector_breadth_pct FLOAT,
+                gift_nifty FLOAT,
+                dollar_index FLOAT,
+                us_10y_yield FLOAT,
+                brent_crude FLOAT,
+                component_scores JSON,
+                weights_used JSON,
+                summary_verdict TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS nifty_price FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS nifty_change_pct FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS banknifty_price FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS banknifty_change_pct FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS vix_value FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS vix_change_pct FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS advance_decline_ratio FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS sector_breadth_pct FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS gift_nifty FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS dollar_index FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS us_10y_yield FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS brent_crude FLOAT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS component_scores JSON;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS weights_used JSON;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS summary_verdict TEXT;
+            ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+        '''))
+        conn.commit()
+    print('Database tables and velocity schema verified.')
+except Exception as e:
+    print(f'Schema verification notice: {e}')
+"
 
 # Run database optimization (normalizes 'ACTIVE' -> 'Active', deduplicates indexes)
 try:
