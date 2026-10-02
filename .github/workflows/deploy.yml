@@ -11,6 +11,9 @@ concurrency:
   group: production-ec2-deployment
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     name: Auto Deploy to EC2
@@ -18,6 +21,9 @@ jobs:
     timeout-minutes: 25
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Trigger Remote Deployment via SSH
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
@@ -84,3 +90,35 @@ jobs:
           else
             echo "Direct /health check returned $STATUS_CODE."
           fi
+
+      - name: Capture and Publish Diagnostics
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USER || 'ec2-user' }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          SSH_PORT: ${{ secrets.EC2_PORT || '22' }}
+        run: |
+          CLEAN_USER=$(echo "$SSH_USER" | tr -d ' \t\r\n')
+          CLEAN_HOST=$(echo "$SSH_HOST" | tr -d ' \t\r\n')
+          CLEAN_PORT=$(echo "$SSH_PORT" | tr -d ' \t\r\n')
+          [ -z "$CLEAN_USER" ] && CLEAN_USER="ec2-user"
+          mkdir -p ~/.ssh && echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -p "$CLEAN_PORT" -o StrictHostKeyChecking=accept-new "$CLEAN_USER@$CLEAN_HOST" '
+            cd "$HOME/AlphaIndia" || cd "/home/ec2-user/AlphaIndia" || cd "/home/ubuntu/AlphaIndia"
+            echo "=== DOCKER PS ===" > /tmp/deploy_diag.txt
+            docker compose ps >> /tmp/deploy_diag.txt 2>&1
+            echo "=== DOCKER COMPOSE LOGS (BACKEND) ===" >> /tmp/deploy_diag.txt
+            docker compose logs --tail=120 backend >> /tmp/deploy_diag.txt 2>&1
+            echo "=== DOCKER COMPOSE LOGS (DB) ===" >> /tmp/deploy_diag.txt
+            docker compose logs --tail=50 db >> /tmp/deploy_diag.txt 2>&1
+            echo "=== DOCKER COMPOSE LOGS (NGINX) ===" >> /tmp/deploy_diag.txt
+            docker compose logs --tail=50 nginx >> /tmp/deploy_diag.txt 2>&1
+          ' || true
+          scp -i ~/.ssh/deploy_key -P "$CLEAN_PORT" "$CLEAN_USER@$CLEAN_HOST:/tmp/deploy_diag.txt" ./deploy_diag.txt || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B deploy-diag
+          git add deploy_diag.txt || true
+          git commit -m "chore: record deployment diagnostics" || true
+          git push -f origin deploy-diag || true
