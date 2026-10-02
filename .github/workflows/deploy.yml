@@ -75,12 +75,12 @@ jobs:
 
       - name: Verify Service Health Check
         run: |
-          echo "Verifying backend health endpoint..."
-          sleep 5
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "http://${{ secrets.EC2_HOST }}/health" || echo "000")
-          echo "HTTP /health status code: $STATUS_CODE"
-          if [ "$STATUS_CODE" -eq 200 ] || [ "$STATUS_CODE" -eq 301 ] || [ "$STATUS_CODE" -eq 302 ]; then
-            echo "Deployment verification successful!"
+          echo "Verifying backend health endpoint via production domain..."
+          sleep 8
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "https://ipodesk.shop/health" || echo "000")
+          echo "HTTPS /health status code: $STATUS_CODE"
+          if [ "$STATUS_CODE" -eq 200 ]; then
+            echo "Production deployment verification successful (200 OK)!"
           else
-            echo "Warning: Direct HTTP /health check returned $STATUS_CODE. Continuing since SSL or custom domain may be enforced."
+            echo "Direct /health check returned $STATUS_CODE."
           fi

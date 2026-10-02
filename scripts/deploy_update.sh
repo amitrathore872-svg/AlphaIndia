@@ -26,8 +26,15 @@ echo "[2/5] Building updated application containers..."
 docker compose build backend worker frontend
 
 # 4. Gracefully restart updated services (keeping db & certbot intact)
-echo "[3/5] Restarting updated containers..."
-docker compose up -d --remove-orphans backend worker frontend nginx
+echo "[3/5] Restarting updated containers with force recreate..."
+docker compose up -d --force-recreate --remove-orphans backend worker frontend nginx
+
+echo "Waiting 8s for backend container startup..."
+sleep 8
+echo "--- Container Status ---"
+docker compose ps backend worker frontend nginx
+echo "--- Backend Startup Logs ---"
+docker compose logs --tail=40 backend
 
 # 5. Ensure database schema integrity, normalize status, and verify master company list
 echo "[4/5] Verifying database schema, normalization, and master company list..."
@@ -56,10 +63,14 @@ try:
         print(f'Seeding completed. Total active companies: {refreshed}')
 finally:
     db.close()
-" || true
+" || {
+    echo "WARNING: Backend container check failed. Outputting full backend logs:"
+    docker compose logs --tail=100 backend
+}
 
 # 6. Reload Nginx to ensure new reverse-proxy routes (/api/, /health) take effect
-echo "Reloading Nginx reverse proxy..."
+echo "Testing and restarting Nginx reverse proxy..."
+docker compose exec -T nginx nginx -t || true
 docker compose restart nginx
 
 # 7. Prune untagged/dangling images to conserve EC2 disk space
@@ -71,6 +82,6 @@ echo "         DEPLOYMENT TO EC2 COMPLETED SUCCESSFULLY!        "
 echo "=========================================================="
 docker compose ps
 echo ""
-echo "--- Backend Container Logs (Last 30 Lines) ---"
-docker compose logs --tail=30 backend
+echo "--- Backend Container Logs (Last 50 Lines) ---"
+docker compose logs --tail=50 backend
 
