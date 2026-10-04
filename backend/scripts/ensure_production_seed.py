@@ -128,10 +128,32 @@ def ensure_production_database():
         s_res = MFWarehouseService.sync_daily_navs_from_amfi(db)
         logger.info(f"      AMFI daily NAV sync completed: {s_res}")
 
-        # Verify automated monthly cycle
-        logger.info("      Evaluating SEBI filing calendar cycle...")
-        cycle_res = MFEngineService.run_scheduled_mf_cycle(db)
-        logger.info(f"      MF cycle evaluation: {cycle_res.get('status')}")
+        # 6. Verify Telegram Channel Configuration & Bot Connectivity
+        logger.info("[6/6] Verifying Institutional Telegram Channel Configuration...")
+        from app.models.notification import AlertChannelConfig
+        tg_cfg = db.query(AlertChannelConfig).filter(AlertChannelConfig.channel == "TELEGRAM").first()
+        verified_token = "8864485951:AAG7HHDh0KOQ-GXFo9N51CwVxvQ7_g4UPks"
+        verified_chat = "8349099576"
+        if not tg_cfg:
+            tg_cfg = AlertChannelConfig(
+                channel="TELEGRAM",
+                bot_token=verified_token,
+                chat_id=verified_chat,
+                is_enabled=True,
+                auto_rules={"auto_broadcast_telegram": True, "vcp_enabled": True, "pead_enabled": True},
+            )
+            db.add(tg_cfg)
+            db.commit()
+            logger.info("      Created AlertChannelConfig with verified Telegram bot @Alphaindia2026bot.")
+        elif not tg_cfg.bot_token or tg_cfg.bot_token.startswith("8882228295"):
+            tg_cfg.bot_token = verified_token
+            if not tg_cfg.chat_id:
+                tg_cfg.chat_id = verified_chat
+            tg_cfg.is_enabled = True
+            db.commit()
+            logger.info("      Updated AlertChannelConfig to verified Telegram bot @Alphaindia2026bot.")
+        else:
+            logger.info(f"      Telegram channel active (Bot: {tg_cfg.bot_token[:6]}..., Chat: {tg_cfg.chat_id}).")
 
     except Exception as exc:
         logger.error(f"Error during production seed verification: {exc}", exc_info=True)

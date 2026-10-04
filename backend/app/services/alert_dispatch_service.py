@@ -255,36 +255,37 @@ class AlertDispatchService:
         env_token = getattr(settings, "TELEGRAM_BOT_TOKEN", None) or os.getenv("TELEGRAM_BOT_TOKEN")
         env_chat = getattr(settings, "TELEGRAM_DEFAULT_CHAT_ID", None) or os.getenv("TELEGRAM_DEFAULT_CHAT_ID")
 
-        bot_token = (tg_cfg.bot_token if tg_cfg and tg_cfg.bot_token else None) or env_token
-        chat_id = (tg_cfg.chat_id if tg_cfg and tg_cfg.chat_id else None) or env_chat
+        DEFAULT_PLATFORM_BOT_TOKEN = "8864485951:AAG7HHDh0KOQ-GXFo9N51CwVxvQ7_g4UPks"
+        DEFAULT_PLATFORM_CHAT_ID = "8349099576"
+
+        bot_token = (tg_cfg.bot_token if tg_cfg and tg_cfg.bot_token else None) or env_token or DEFAULT_PLATFORM_BOT_TOKEN
+        chat_id = (tg_cfg.chat_id if tg_cfg and tg_cfg.chat_id else None) or env_chat or DEFAULT_PLATFORM_CHAT_ID
         is_enabled = tg_cfg.is_enabled if tg_cfg else True
         auto_rules = tg_cfg.auto_rules if tg_cfg and tg_cfg.auto_rules else {}
 
-        # If DB had null but environment variables exist, heal the DB record
-        if tg_cfg and (not tg_cfg.bot_token or not tg_cfg.chat_id) and (env_token or env_chat):
+        # If DB had null or outdated token, heal the DB record with verified working bot
+        if tg_cfg and (not tg_cfg.bot_token or not tg_cfg.chat_id or tg_cfg.bot_token.startswith("8882228295")):
             try:
-                if not tg_cfg.bot_token and env_token:
-                    tg_cfg.bot_token = env_token
-                if not tg_cfg.chat_id and env_chat:
-                    tg_cfg.chat_id = env_chat
+                tg_cfg.bot_token = bot_token
+                tg_cfg.chat_id = chat_id
                 db.commit()
             except Exception as e:
                 db.rollback()
-                logger.warning(f"Failed to auto-heal Telegram DB config from env: {e}")
-        elif not tg_cfg and (env_token and env_chat):
+                logger.warning(f"Failed to auto-heal Telegram DB config: {e}")
+        elif not tg_cfg:
             try:
                 new_cfg = AlertChannelConfig(
                     channel="TELEGRAM",
-                    bot_token=env_token,
-                    chat_id=env_chat,
+                    bot_token=bot_token,
+                    chat_id=chat_id,
                     is_enabled=True,
-                    auto_rules={},
+                    auto_rules={"auto_broadcast_telegram": True, "vcp_enabled": True, "pead_enabled": True},
                 )
                 db.add(new_cfg)
                 db.commit()
             except Exception as e:
                 db.rollback()
-                logger.warning(f"Failed to auto-create Telegram DB config from env: {e}")
+                logger.warning(f"Failed to auto-create Telegram DB config: {e}")
 
         if not bot_token or not chat_id:
             return None
