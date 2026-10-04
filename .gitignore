@@ -81,6 +81,9 @@ backend/data/nse_delivery/
 *.parquet
 backend/data/*_cache.json
 backend/data/*_cache/
+backend/app/data/*_cache.json
+backend/app/data/*_cache/
+backend/data/*_scan_state.json
 backend/scratch/
 scratch/
 brain/
