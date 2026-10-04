@@ -6,7 +6,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --prefer-offline --no-audit --no-fund
 
 # ==========================================================
 # Stage 2: Build the Next.js application
@@ -21,6 +21,9 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL="/api"
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=true
+# Limit worker cores to 1 to avoid parallel process memory thrashing on 2GB RAM EC2
+ENV NEXT_PRIVATE_WORKER_CORES=1
 # Limit node memory usage on t3.small (2GB RAM)
 ENV NODE_OPTIONS="--max-old-space-size=1536"
 

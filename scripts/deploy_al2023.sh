@@ -74,7 +74,9 @@ fi
 
 # 4. Build Containers
 echo "[4/6] Building production Docker images..."
-docker compose build
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+docker compose build backend frontend
 
 # 5. Start Services
 echo "[5/6] Starting containerized microservices..."

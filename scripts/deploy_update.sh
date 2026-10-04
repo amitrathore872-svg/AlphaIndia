@@ -21,14 +21,25 @@ git reset --hard origin/main
 # 2. Ensure scripts have execution permissions
 chmod +x scripts/*.sh
 
-# 3. Build application container images
-echo "[2/5] Building updated application containers..."
-docker compose build backend worker frontend
+# Enable Docker BuildKit for parallel optimization and layer caching
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
 
-# 4. Gracefully restart updated services (keeping db & certbot intact)
+# 3. Free physical RAM on the 2GB t3.small EC2 server before starting builds
+# Pausing background worker and previous frontend frees ~800MB+ RAM so Next.js builds in physical RAM instead of thrashing swap
+echo "Temporarily pausing worker and frontend containers to maximize build RAM..."
+docker compose stop worker frontend || true
+sync
+sudo sysctl -w vm.drop_caches=3 2>/dev/null || true
+
+# 4. Build application container images (worker reuses backend image, no redundant build)
+echo "[2/5] Building updated application containers (backend & frontend)..."
+docker compose build backend frontend
+
+# 5. Gracefully restart updated services (keeping db & certbot intact)
 echo "[3/5] Ensuring PostgreSQL database container is healthy..."
 docker compose up -d db
-sleep 3
+sleep 2
 
 echo "Restarting updated containers with force recreate..."
 docker compose up -d --force-recreate --remove-orphans db backend worker frontend nginx

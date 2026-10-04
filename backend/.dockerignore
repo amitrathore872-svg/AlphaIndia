@@ -13,3 +13,15 @@ venv/
 htmlcov/
 *.log
 .env
+logs/
+scratch/
+tests/
+docs/
+data/bronze/
+data/silver/
+data/gold/
+data/intraday_5m_cache/
+data/import_logs/
+data/nse_delivery/
+data/sec_bhavdata*.csv
+
