@@ -30,7 +30,13 @@ class WatchlistAlert(Base):
     watchlist_id = Column(
         Integer,
         ForeignKey("watchlists.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    portfolio_id = Column(
+        Integer,
+        ForeignKey("portfolios.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
     user_id = Column(
@@ -41,10 +47,13 @@ class WatchlistAlert(Base):
     )
     symbol = Column(String(30), nullable=False, index=True)
 
-    # Rule type:
-    # 'PRICE_CROSS_ABOVE', 'PRICE_CROSS_BELOW', 'DMA_50_RECLAIM', 'DMA_200_BOUNCE',
-    # 'VCP_PIVOT_BREAK', 'VOLUME_SPIKE_2X', 'MOMENTUM_MATCH_9', 'PERCENT_SURGE_3'
+    # Scope: 'STOCK', 'WATCHLIST', 'PORTFOLIO', 'ALL_SCREENERS'
+    target_scope = Column(String(30), default="STOCK", index=True)
+    target_name = Column(String(100), nullable=True)
+
+    # Rule type & signal direction ('BUY', 'SELL', 'NEUTRAL')
     rule_type = Column(String(50), nullable=False, index=True)
+    signal_direction = Column(String(10), default="BUY", index=True)
     threshold_value = Column(Float, nullable=True)  # e.g., 385.0 for price, 2.0 for volume multiplier
     timeframe = Column(String(10), default="1D")
 
@@ -58,20 +67,36 @@ class WatchlistAlert(Base):
     trigger_count = Column(Integer, default=0)
     last_triggered_at = Column(DateTime, nullable=True)
     last_triggered_price = Column(Float, nullable=True)
+    triggered_stocks = Column(Text, nullable=True)  # JSON-encoded array of triggered events: [{"symbol", "price", "triggered_at", "note"}]
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     watchlist = relationship("Watchlist", backref="alerts")
+    portfolio = relationship("Portfolio", backref="alerts")
 
     def to_dict(self):
+        import json
+        parsed_stocks = []
+        if self.triggered_stocks:
+            try:
+                parsed_stocks = json.loads(self.triggered_stocks)
+            except Exception:
+                parsed_stocks = []
+
         return {
             "id": self.id,
             "watchlist_id": self.watchlist_id,
+            "portfolio_id": self.portfolio_id,
+            "watchlist_name": self.watchlist.name if self.watchlist else None,
+            "portfolio_name": self.portfolio.name if self.portfolio else None,
             "user_id": self.user_id,
             "symbol": self.symbol,
+            "target_scope": self.target_scope or "STOCK",
+            "target_name": self.target_name or (self.symbol if self.target_scope == "STOCK" else None),
             "rule_type": self.rule_type,
+            "signal_direction": self.signal_direction or "BUY",
             "threshold_value": self.threshold_value,
             "timeframe": self.timeframe,
             "notes": self.notes,
@@ -79,9 +104,10 @@ class WatchlistAlert(Base):
             "status": self.status,
             "notify_in_app": self.notify_in_app,
             "notify_telegram": self.notify_telegram,
-            "trigger_count": self.trigger_count,
+            "trigger_count": self.trigger_count or 0,
             "last_triggered_at": self.last_triggered_at.isoformat() if self.last_triggered_at else None,
             "last_triggered_price": self.last_triggered_price,
+            "triggered_stocks": parsed_stocks,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

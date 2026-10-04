@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -29,10 +29,12 @@ import {
 import { API_BASE } from "@/lib/apiConfig";
 import { notificationsApi } from "@/lib/notificationsApi";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
+import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
+import { SparklineChart, StageBadge } from "@/components/common";
 
 interface IPOSetup {
   id: number;
@@ -161,18 +163,18 @@ export default function IPORadarPage() {
   };
 
   const handleShareToWhatsApp = (item: IPOSetup) => {
-    const text = `🚀 *ALPHA INDIA RADAR | MAINBOARD IPO SETUP*\n\n` +
-      `📌 *Symbol:* ${item.symbol} (${item.exchange})\n` +
-      `🏢 *Company:* ${item.company}\n` +
-      `⚡ *Setup:* ${item.setup_label} [${item.setup_type}]\n` +
-      `🎯 *Conviction:* ${item.conviction_score}/100\n` +
-      `💰 *CMP:* ₹${item.cmp.toFixed(1)} (${item.day_change_pct >= 0 ? "+" : ""}${item.day_change_pct}%)\n` +
-      `📍 *Pivot Trigger:* ₹${item.pivot_price.toFixed(1)}\n` +
-      `🛑 *Stop Loss:* ₹${item.stop_loss.toFixed(1)} (-${item.risk_pct}%)\n` +
-      `🎯 *Target 1 (Book 50%):* ₹${item.target_1.toFixed(1)} (+15% 2R Rule)\n` +
-      `🏃 *Target 2 (Runner):* ₹${item.target_2.toFixed(1)}\n\n` +
-      `💡 *Institutional Rule:* Book 50% at Target 1, shift stop to Breakeven, trail runner on 20 EMA.\n` +
-      `🔬 *Rationale:* ${item.rationale}`;
+    const text = `ðŸš€ *ALPHA INDIA RADAR | MAINBOARD IPO SETUP*\n\n` +
+      `ðŸ“Œ *Symbol:* ${item.symbol} (${item.exchange})\n` +
+      `ðŸ¢ *Company:* ${item.company}\n` +
+      `âš¡ *Setup:* ${item.setup_label} [${item.setup_type}]\n` +
+      `ðŸŽ¯ *Conviction:* ${item.conviction_score}/100\n` +
+      `ðŸ’° *CMP:* â‚¹${item.cmp.toFixed(1)} (${item.day_change_pct >= 0 ? "+" : ""}${item.day_change_pct}%)\n` +
+      `ðŸ“ *Pivot Trigger:* â‚¹${item.pivot_price.toFixed(1)}\n` +
+      `ðŸ›‘ *Stop Loss:* â‚¹${item.stop_loss.toFixed(1)} (-${item.risk_pct}%)\n` +
+      `ðŸŽ¯ *Target 1 (Book 50%):* â‚¹${item.target_1.toFixed(1)} (+15% 2R Rule)\n` +
+      `ðŸƒ *Target 2 (Runner):* â‚¹${item.target_2.toFixed(1)}\n\n` +
+      `ðŸ’¡ *Institutional Rule:* Book 50% at Target 1, shift stop to Breakeven, trail runner on 20 EMA.\n` +
+      `ðŸ”¬ *Rationale:* ${item.rationale}`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -421,6 +423,8 @@ export default function IPORadarPage() {
                 <th className="py-3.5 px-4">Symbol / Company</th>
                 <th className="py-3.5 px-4">Listed / Age</th>
                 <th className="py-3.5 px-4 text-right">CMP & Day %</th>
+                <th className="py-3.5 px-4 text-center">Trend (90D)</th>
+                <th className="py-3.5 px-4 text-center">Stage</th>
                 <th className="py-3.5 px-4">Setup Classification</th>
                 <th className="py-3.5 px-4 text-center">Score</th>
                 <th className="py-3.5 px-4 text-right">Pivot / Distance</th>
@@ -433,14 +437,14 @@ export default function IPORadarPage() {
             <tbody className="divide-y divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto text-cyan-400 mb-2" />
                     Scanning Mainboard IPO universe...
                   </td>
                 </tr>
               ) : filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8">
+                  <td colSpan={12} className="p-8">
                     <EmptyState
                       icon={<Rocket className="h-7 w-7 text-cyan-400" />}
                       title="No active setups match the current filters"
@@ -472,8 +476,15 @@ export default function IPORadarPage() {
                         }`}
                       >
                         <td className="py-3 px-4">
-                          <div className="font-bold text-white group-hover:text-cyan-400 transition-colors flex items-center gap-1.5">
-                            <span>{item.symbol}</span>
+                          <div className="font-bold text-white transition-colors flex items-center gap-1.5">
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol)}?from=/ipo-radar`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="hover:text-cyan-400 hover:underline transition-colors"
+                              title={`View ${item.symbol} stock details page`}
+                            >
+                              {item.symbol}
+                            </Link>
                             <span className="text-[10px] text-slate-500 font-mono">[{item.exchange}]</span>
                             {isExpanded ? (
                               <ChevronUp className="w-3.5 h-3.5 text-cyan-400 ml-1" />
@@ -490,17 +501,40 @@ export default function IPORadarPage() {
                         </td>
 
                         <td className="py-3 px-4 text-right">
-                          <div className="font-bold text-white font-mono">₹{item.cmp.toFixed(1)}</div>
+                          <div className="font-bold text-white font-mono">â‚¹{item.cmp.toFixed(1)}</div>
                           <div className={`text-[11px] font-semibold ${item.day_change_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                             {item.day_change_pct >= 0 ? `+${item.day_change_pct}%` : `${item.day_change_pct}%`}
                           </div>
                         </td>
 
+                        {/* Trend (90D) */}
+                        <td className="py-3 px-4 text-center">
+                          <SparklineChart
+                            data={(item as any).sparkline}
+                            cmp={item.cmp}
+                            return90d={(item as any).return_90d_pct}
+                            width={78}
+                            height={22}
+                            periodLabel="90D"
+                            showDot={true}
+                            showBadge={true}
+                          />
+                        </td>
+
+                        {/* Current Stage */}
+                        <td className="py-3 px-4 text-center">
+                          <StageBadge
+                            stage={(item as any).current_stage}
+                            stageCode={(item as any).stage_code}
+                            cmp={item.cmp}
+                          />
+                        </td>
+
                         <td className="py-3 px-4">
                           <div className="font-semibold text-slate-200">{item.setup_label}</div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                            <span>Day 1 High: ₹{item.day1_high.toFixed(1)}</span>
-                            <span>•</span>
+                            <span>Day 1 High: â‚¹{item.day1_high.toFixed(1)}</span>
+                            <span>â€¢</span>
                             <span>RVol: {item.rvol}x</span>
                           </div>
                         </td>
@@ -516,20 +550,20 @@ export default function IPORadarPage() {
                         </td>
 
                         <td className="py-3 px-4 text-right font-mono">
-                          <div className="text-slate-200 font-semibold">₹{item.pivot_price.toFixed(1)}</div>
+                          <div className="text-slate-200 font-semibold">â‚¹{item.pivot_price.toFixed(1)}</div>
                           <div className={`text-[11px] ${item.distance_to_pivot_pct >= 0 ? "text-cyan-400" : "text-slate-400"}`}>
                             {item.distance_to_pivot_pct >= 0 ? `+${item.distance_to_pivot_pct}% above` : `${item.distance_to_pivot_pct}% away`}
                           </div>
                         </td>
 
                         <td className="py-3 px-4 text-right font-mono">
-                          <div className="text-rose-400 font-semibold">₹{item.stop_loss.toFixed(1)}</div>
+                          <div className="text-rose-400 font-semibold">â‚¹{item.stop_loss.toFixed(1)}</div>
                           <div className="text-[11px] text-slate-500">-{item.risk_pct}% risk</div>
                         </td>
 
                         <td className="py-3 px-4 text-right font-mono">
-                          <div className="text-emerald-400 font-semibold">₹{item.target_1.toFixed(1)}</div>
-                          <div className="text-[11px] text-slate-500">Runner: ₹{item.target_2.toFixed(1)}</div>
+                          <div className="text-emerald-400 font-semibold">â‚¹{item.target_1.toFixed(1)}</div>
+                          <div className="text-[11px] text-slate-500">Runner: â‚¹{item.target_2.toFixed(1)}</div>
                         </td>
 
                         <td className="py-3 px-4 text-center">
@@ -572,7 +606,7 @@ export default function IPORadarPage() {
                                 <div className="flex items-center gap-2">
                                   <Rocket className="w-4 h-4 text-cyan-400" />
                                   <span className="font-bold text-white text-sm">
-                                    {item.symbol} • {item.setup_label} Deep Intelligence
+                                    {item.symbol} â€¢ {item.setup_label} Deep Intelligence
                                   </span>
                                   <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
                                     {item.setup_type}
@@ -636,11 +670,11 @@ export default function IPORadarPage() {
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-slate-400">Day 1 Range:</span>
-                                      <span className="text-white">₹{item.day1_low.toFixed(1)} — ₹{item.day1_high.toFixed(1)}</span>
+                                      <span className="text-white">â‚¹{item.day1_low.toFixed(1)} â€” â‚¹{item.day1_high.toFixed(1)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-slate-400">All-Time High:</span>
-                                      <span className="text-cyan-400">₹{item.ath.toFixed(1)} ({item.drawdown_from_ath}% DD)</span>
+                                      <span className="text-cyan-400">â‚¹{item.ath.toFixed(1)} ({item.drawdown_from_ath}% DD)</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-slate-400">Relative Vol (RVol):</span>
@@ -696,7 +730,7 @@ export default function IPORadarPage() {
         </div>
         <div className="flex items-center gap-4 text-slate-500 font-mono text-[11px]">
           <span>SEBI 30D Quota: 50%</span>
-          <span>•</span>
+          <span>â€¢</span>
           <span>SEBI 90D Quota: 100%</span>
         </div>
       </div>
@@ -704,3 +738,4 @@ export default function IPORadarPage() {
     </DashboardLayout>
   );
 }
+

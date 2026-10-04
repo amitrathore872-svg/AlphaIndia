@@ -41,6 +41,11 @@ import {
   OpportunityScanResult,
   SystemNotificationItem,
 } from "@/lib/notificationsApi";
+import {
+  fetchSovereignCockpit,
+  dispatchSovereignAlert,
+  SovereignCandidate,
+} from "@/lib/sovereignApi";
 
 interface TelegramTestResponse {
   status: string;
@@ -131,6 +136,13 @@ export default function AlertCenterPage() {
   const [ipoScanning, setIpoScanning] = useState(false);
   const [oppScanResult, setOppScanResult] = useState<OpportunityScanResult | null>(null);
   const [recentOpportunities, setRecentOpportunities] = useState<SystemNotificationItem[]>([]);
+
+  // Sovereign Top 5 Actionable Picks
+  const [top5ApexPicks, setTop5ApexPicks] = useState<SovereignCandidate[]>([]);
+  const [loadingTop5, setLoadingTop5] = useState<boolean>(false);
+  const [dispatchingAllTop5, setDispatchingAllTop5] = useState<boolean>(false);
+  const [dispatchingApexSymbol, setDispatchingApexSymbol] = useState<string | null>(null);
+  const [apexDispatchSuccess, setApexDispatchSuccess] = useState<string | null>(null);
 
   // Channel configs state
   const [configs, setConfigs] = useState<Record<string, ChannelConfig>>({});
@@ -273,8 +285,113 @@ export default function AlertCenterPage() {
     }
   };
 
+  const loadTop5ApexPicks = async () => {
+    try {
+      setLoadingTop5(true);
+      const data = await fetchSovereignCockpit();
+      const all = [
+        ...data.chamber_1_compounders.candidates,
+        ...data.chamber_2_turnarounds.candidates,
+      ];
+      const ignition = all
+        .filter((c) => c.stage === "IGNITION_READY")
+        .sort((a, b) => b.composite_score - a.composite_score)
+        .slice(0, 5);
+      setTop5ApexPicks(ignition.length > 0 ? ignition : all.slice(0, 5));
+    } catch (err) {
+      console.error("Failed to load Top 5 Apex Picks:", err);
+    } finally {
+      setLoadingTop5(false);
+    }
+  };
+
+  const handleDispatchAllTop5Alerts = async () => {
+    if (top5ApexPicks.length === 0) return;
+    setDispatchingAllTop5(true);
+    setApexDispatchSuccess(null);
+    try {
+      const results = await Promise.allSettled(
+        top5ApexPicks.map((p) =>
+          dispatchSovereignAlert(
+            p.symbol,
+            "IGNITION_TRIGGER",
+            `Top 5 Apex Pick: CMP ₹${p.current_price.toFixed(1)}, Buy Box ₹${p.execution.buy_box_range[0].toFixed(1)}-₹${p.execution.buy_box_range[1].toFixed(1)}, Target 1 ₹${p.execution.target_1_harvest.toFixed(1)} (+${p.execution.target_1_pct}%), Hard Stop ₹${p.execution.hard_stop_loss.toFixed(1)} (${p.execution.hard_stop_pct}%)`
+          )
+        )
+      );
+
+      const successful = results.filter((r) => r.status === "fulfilled").length;
+      showNotification(
+        "success",
+        `🚀 Dispatched real-time institutional alerts for ${successful} of ${top5ApexPicks.length} Top Apex picks across In-App notifications and Telegram!`
+      );
+      setApexDispatchSuccess(`Successfully dispatched ${successful} of ${top5ApexPicks.length} Top 5 alerts!`);
+      setTimeout(() => setApexDispatchSuccess(null), 6000);
+
+      const recent = await notificationsApi.getRecentOpportunities(35);
+      setRecentOpportunities(recent || []);
+      if (activeTab === "logs") loadLogs();
+    } catch (err: any) {
+      showNotification("error", `Failed to dispatch Top 5 alerts: ${err?.message || "Unknown error"}`);
+    } finally {
+      setDispatchingAllTop5(false);
+    }
+  };
+
+  const handleDispatchSingleApexAlert = async (candidate: SovereignCandidate) => {
+    setDispatchingApexSymbol(candidate.symbol);
+    try {
+      await dispatchSovereignAlert(
+        candidate.symbol,
+        "IGNITION_TRIGGER",
+        `Apex Pick: CMP ₹${candidate.current_price.toFixed(1)}, Buy Box ₹${candidate.execution.buy_box_range[0].toFixed(1)}-₹${candidate.execution.buy_box_range[1].toFixed(1)}, Target ₹${candidate.execution.target_1_harvest.toFixed(1)} (+${candidate.execution.target_1_pct}%)`
+      );
+      showNotification(
+        "success",
+        `🚀 Live Ignition Alert dispatched for ${candidate.symbol} to Telegram and In-App notification feed!`
+      );
+      const recent = await notificationsApi.getRecentOpportunities(35);
+      setRecentOpportunities(recent || []);
+      if (activeTab === "logs") loadLogs();
+    } catch (err: any) {
+      showNotification("error", `Failed to dispatch alert for ${candidate.symbol}: ${err?.message || "Error"}`);
+    } finally {
+      setDispatchingApexSymbol(null);
+    }
+  };
+
+  const handleComposeTop5PicksMemo = () => {
+    if (top5ApexPicks.length === 0) return;
+    const memo = [
+      `🎯 *ALPHA INDIA | TOP 5 APEX STRIKE PICKS*`,
+      `━━━━━━━━━━━━━━━━━━━━━`,
+      `Institutional-grade high-velocity buys inside the Buy Box today:`,
+      ``,
+      ...top5ApexPicks.map((p, idx) => 
+        `*${idx + 1}. ${p.symbol}* (${p.company_name})\n` +
+        `   • *CMP:* ₹${p.current_price.toFixed(2)} | *Conviction:* ${p.composite_score}%\n` +
+        `   • *Buy Box:* ₹${p.execution.buy_box_range[0].toFixed(1)} – ₹${p.execution.buy_box_range[1].toFixed(1)}\n` +
+        `   • *Target 1:* ₹${p.execution.target_1_harvest.toFixed(1)} (+${p.execution.target_1_pct}%) | *T2:* ₹${p.execution.target_2_harvest.toFixed(1)} (+${p.execution.target_2_pct}%)\n` +
+        `   • *Hard Stop:* ₹${p.execution.hard_stop_loss.toFixed(1)} (${p.execution.hard_stop_pct}%)\n` +
+        `   • *Stage:* ${p.stage.replace(/_/g, " ")} | *ROCE:* ${p.fundamentals.roce ? `${p.fundamentals.roce.toFixed(1)}%` : "N/A"}\n`
+      ),
+      `━━━━━━━━━━━━━━━━━━━━━`,
+      `⚙️ *Execution Rule:* Deploy 60% Pilot at Buy Box, scale remaining 40% when up +2.5%. Strict -3.0% Hard Stop.\n`,
+      `📡 *Live Sovereign Radar:* ${getRadarUrl("/sovereign-cockpit")}`,
+    ].join("\n");
+
+    setComposerType("GROWTH");
+    setComposerSymbol("TOP5");
+    setComposerName("Top 5 Actionable Apex Picks");
+    setComposerTitle("🚀 TOP 5 APEX STRIKE PICKS (Actionable Today)");
+    setComposerMessage(memo);
+    setActiveTab("broadcast");
+    showNotification("info", "Top 5 Picks memo loaded into Broadcast Console. Review and click Broadcast.");
+  };
+
   useEffect(() => {
     loadConfigs();
+    loadTop5ApexPicks();
   }, []);
 
   useEffect(() => {
@@ -748,6 +865,157 @@ export default function AlertCenterPage() {
         {/* ========================================================= */}
         {activeTab === "opportunities" && (
           <div className="space-y-6">
+            {/* ========================================================= */}
+            {/* TOP 5 APEX PICKS: HIGH-VELOCITY DISPATCH BANNER          */}
+            {/* ========================================================= */}
+            <div className="rounded-2xl border border-cyan-500/50 bg-gradient-to-br from-[#06142a] via-[#081832] to-[#040c1a] p-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="relative z-10 space-y-4">
+                {/* Header Row */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-cyan-500/20 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-3 w-3 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                      <h3 className="text-lg font-black text-white tracking-wide flex items-center gap-2">
+                        <span>⚡ TOP 5 APEX PICKS (ACTIONABLE BUYS TODAY)</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
+                          IGNITION READY
+                        </span>
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Evaluated by Dual-Chamber mathematical models. Strictly inside their Buy Box (&lt;3.5% of Pivot) with ≥98% conviction score.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      onClick={handleDispatchAllTop5Alerts}
+                      disabled={dispatchingAllTop5 || top5ApexPicks.length === 0}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-950/60 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Rocket size={15} className={dispatchingAllTop5 ? "animate-pulse" : ""} />
+                      <span>{dispatchingAllTop5 ? "Broadcasting Top 5 Alerts..." : "🚀 Dispatch Alerts for Top 5 Picks"}</span>
+                    </button>
+
+                    <button
+                      onClick={handleComposeTop5PicksMemo}
+                      disabled={top5ApexPicks.length === 0}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 text-xs font-semibold transition cursor-pointer"
+                      title="Open formatted Top 5 digest in Telegram/WhatsApp Composer"
+                    >
+                      <Send size={13} />
+                      <span>Compose Telegram / WA Digest</span>
+                    </button>
+
+                    <button
+                      onClick={loadTop5ApexPicks}
+                      disabled={loadingTop5}
+                      className="p-2.5 rounded-xl border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                      title="Refresh Top 5 Picks"
+                    >
+                      <RefreshCw size={14} className={loadingTop5 ? "animate-spin" : ""} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dispatch Confirmation Banner */}
+                {apexDispatchSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-200">
+                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                    <span>{apexDispatchSuccess}</span>
+                  </div>
+                )}
+
+                {/* 5-Card Responsive Grid */}
+                {loadingTop5 && top5ApexPicks.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                    <RefreshCw size={14} className="animate-spin text-cyan-400" />
+                    <span>Loading Top 5 Apex Picks from Sovereign Radar...</span>
+                  </div>
+                ) : top5ApexPicks.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-slate-500">
+                    No active Ignition Ready candidates at this moment. Mathematical filters ensure zero quota dilution.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    {top5ApexPicks.map((pick, idx) => (
+                      <div
+                        key={pick.symbol}
+                        className="rounded-xl bg-slate-950/80 border border-cyan-500/30 hover:border-cyan-400 p-3.5 space-y-2.5 transition-all shadow-md group relative"
+                      >
+                        {/* Top: Rank & Symbol */}
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-700 text-cyan-300">
+                                #{idx + 1}
+                              </span>
+                              <strong className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors">
+                                {pick.symbol}
+                              </strong>
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate max-w-[120px] mt-0.5">
+                              {pick.company_name}
+                            </div>
+                          </div>
+
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                            {pick.composite_score}%
+                          </span>
+                        </div>
+
+                        {/* Price & Buy Box */}
+                        <div className="space-y-1 text-[11px] font-mono bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                          <div className="flex justify-between items-center text-slate-300">
+                            <span className="text-[10px] text-slate-400 font-sans">CMP:</span>
+                            <span className="font-bold text-white">₹{pick.current_price.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-emerald-400">
+                            <span className="text-[10px] text-slate-400 font-sans">Buy Box:</span>
+                            <span>₹{pick.execution.buy_box_range[0].toFixed(0)} - ₹{pick.execution.buy_box_range[1].toFixed(0)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-rose-400">
+                            <span className="text-[10px] text-slate-400 font-sans">Stop (-3%):</span>
+                            <span>₹{pick.execution.hard_stop_loss.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-cyan-300">
+                            <span className="text-[10px] text-slate-400 font-sans">T1 (+14%):</span>
+                            <span>₹{pick.execution.target_1_harvest.toFixed(0)}</span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="grid grid-cols-2 gap-1.5 pt-1">
+                          <button
+                            onClick={() => handleDispatchSingleApexAlert(pick)}
+                            disabled={dispatchingApexSymbol === pick.symbol}
+                            className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 text-[10px] font-bold transition active:scale-95 cursor-pointer disabled:opacity-50"
+                            title="Dispatch Instant Telegram & In-App Alert for this stock"
+                          >
+                            <Send size={11} className={dispatchingApexSymbol === pick.symbol ? "animate-pulse" : ""} />
+                            <span>{dispatchingApexSymbol === pick.symbol ? "Sending..." : "Alert"}</span>
+                          </button>
+
+                          <a
+                            href={`/sovereign-cockpit?symbol=${pick.symbol}`}
+                            className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[10px] font-semibold transition active:scale-95 text-center"
+                            title="View in Sovereign Cockpit"
+                          >
+                            <ArrowUpRight size={11} className="text-cyan-400" />
+                            <span>Cockpit</span>
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             {/* Header Action Banner */}
             <div className="rounded-2xl border border-cyan-500/30 bg-[#071328] p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-5">
               <div>
@@ -2144,12 +2412,12 @@ export default function AlertCenterPage() {
                     <span>
                       Bot:{" "}
                       <a
-                        href="https://t.me/Alphaindia2026bot"
+                        href="https://t.me/Alphaindiaprodbot"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-sky-400 hover:underline font-semibold inline-flex items-center gap-0.5"
                       >
-                        @Alphaindia2026bot <ArrowUpRight size={11} />
+                        @Alphaindiaprodbot <ArrowUpRight size={11} />
                       </a>
                     </span>
                     <span className="text-emerald-400 font-medium">✓ HTTP Bot API Verified</span>

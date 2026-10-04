@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
@@ -33,6 +33,8 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   PageHeader,
   ActionButton,
+  SparklineChart,
+  StageBadge,
 } from "@/components/common";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 
@@ -219,7 +221,7 @@ const MOCK_GENESIS_CANDIDATES: GenesisCandidate[] = [
     genesisScore: 87,
     ignitionDate: "T+8 Days Since Ignition",
     storyContext:
-      "Markup wave in progress. Ignited at ₹1,680 after 48h anchor hold; now riding the 10 EMA towards primary resistance at ₹2,100.",
+      "Markup wave in progress. Ignited at â‚¹1,680 after 48h anchor hold; now riding the 10 EMA towards primary resistance at â‚¹2,100.",
   },
   {
     symbol: "PNCINFRA",
@@ -248,7 +250,7 @@ const MOCK_GENESIS_CANDIDATES: GenesisCandidate[] = [
     genesisScore: 89,
     ignitionDate: "Day 2 Post-Spike",
     storyContext:
-      "Textbook base coil on 50 EMA. 3.2x delivery volume spike 2 days ago, followed by low-volume consolidation above ₹455 support shelf.",
+      "Textbook base coil on 50 EMA. 3.2x delivery volume spike 2 days ago, followed by low-volume consolidation above â‚¹455 support shelf.",
   },
 ];
 
@@ -472,7 +474,7 @@ export default function TrendGenesisRadarMockup() {
                     >
                       {candidate.isFeaturedCaseStudy && (
                         <div className="absolute top-0 right-0 bg-gradient-to-l from-emerald-500/30 to-transparent px-3 py-0.5 text-[10px] font-mono text-emerald-300 font-semibold border-b border-l border-emerald-500/30 rounded-bl-lg">
-                          ★ Welspun Case Study Setup
+                          â˜… Welspun Case Study Setup
                         </div>
                       )}
 
@@ -485,15 +487,23 @@ export default function TrendGenesisRadarMockup() {
                               currentPrice={candidate.cmp}
                               variant="star"
                             />
-                            <span className="text-base font-bold font-mono text-white group-hover:text-emerald-400 transition-colors">
+                            <Link
+                              href={`/stocks/${encodeURIComponent(candidate.symbol)}?from=/trend-genesis`}
+                              className="text-base font-bold font-mono text-white hover:text-cyan-400 hover:underline transition-colors"
+                              title={`View ${candidate.symbol} stock details page`}
+                            >
                               {candidate.symbol}
-                            </span>
+                            </Link>
                             <span className="text-xs text-slate-400 font-medium">
                               {candidate.name}
                             </span>
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
                               {candidate.sector}
                             </span>
+                            <StageBadge
+                              stage="Stage 2"
+                              cmp={candidate.cmp}
+                            />
                           </div>
                           <div className="text-xs text-slate-400 flex items-center gap-2">
                             <span
@@ -501,7 +511,7 @@ export default function TrendGenesisRadarMockup() {
                             >
                               {stageMeta.title}
                             </span>
-                            <span>• {candidate.ignitionDate}</span>
+                            <span>â€¢ {candidate.ignitionDate}</span>
                           </div>
                         </div>
 
@@ -512,8 +522,22 @@ export default function TrendGenesisRadarMockup() {
                               Live CMP
                             </div>
                             <div className="text-base font-bold font-mono text-white">
-                              ₹{candidate.cmp.toLocaleString()}
+                              â‚¹{candidate.cmp.toLocaleString()}
                             </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
+                              90D Trend
+                            </div>
+                            <SparklineChart
+                              cmp={candidate.cmp}
+                              return90d={candidate.potentialGainPct}
+                              width={76}
+                              height={22}
+                              periodLabel="90D"
+                              showDot={true}
+                              showBadge={true}
+                            />
                           </div>
                           <div>
                             <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
@@ -529,7 +553,7 @@ export default function TrendGenesisRadarMockup() {
                               Upside Target
                             </div>
                             <div className="text-sm font-bold font-mono text-cyan-300">
-                              +₹{(candidate.target2 - candidate.entryPrice).toFixed(1)} (+{candidate.potentialGainPct}%)
+                              +â‚¹{(candidate.target2 - candidate.entryPrice).toFixed(1)} (+{candidate.potentialGainPct}%)
                             </div>
                           </div>
                         </div>
@@ -614,13 +638,13 @@ export default function TrendGenesisRadarMockup() {
                       <div>
                         <span className="text-slate-500">Buy Stop Trigger:</span>
                         <div className="text-white font-bold text-sm">
-                          ₹{selectedCandidate.entryPrice.toLocaleString()}
+                          â‚¹{selectedCandidate.entryPrice.toLocaleString()}
                         </div>
                       </div>
                       <div>
                         <span className="text-slate-500">Tight Stop Loss:</span>
                         <div className="text-rose-400 font-bold text-sm">
-                          ₹{selectedCandidate.stopLoss.toLocaleString()} (-{selectedCandidate.riskPct}%)
+                          â‚¹{selectedCandidate.stopLoss.toLocaleString()} (-{selectedCandidate.riskPct}%)
                         </div>
                       </div>
                     </div>
@@ -629,13 +653,13 @@ export default function TrendGenesisRadarMockup() {
                       <div>
                         <span className="text-slate-500">Target 1 (1st Shelf):</span>
                         <div className="text-cyan-300 font-bold">
-                          ₹{selectedCandidate.target1.toLocaleString()}
+                          â‚¹{selectedCandidate.target1.toLocaleString()}
                         </div>
                       </div>
                       <div>
                         <span className="text-slate-500">Target 2 (Pivot Ceiling):</span>
                         <div className="text-emerald-400 font-bold">
-                          ₹{selectedCandidate.target2.toLocaleString()}
+                          â‚¹{selectedCandidate.target2.toLocaleString()}
                         </div>
                       </div>
                     </div>
@@ -720,7 +744,7 @@ export default function TrendGenesisRadarMockup() {
                   WELSPUNLIV: The August Ignition & Absorption Footprint
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  How the system captures the move at ₹162–₹168 instead of waiting for the ₹225 pivot.
+                  How the system captures the move at â‚¹162â€“â‚¹168 instead of waiting for the â‚¹225 pivot.
                 </p>
               </div>
               <div className="flex items-center gap-3 font-mono text-xs">
@@ -743,7 +767,7 @@ export default function TrendGenesisRadarMockup() {
                   July: The Incubation
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
-                  Stock went dormant between ₹155–₹165. 10 EMA, 20 EMA, and 50 EMA pinched to 1.8% spread. Daily volume dropped by 55% as floating supply dried up.
+                  Stock went dormant between â‚¹155â€“â‚¹165. 10 EMA, 20 EMA, and 50 EMA pinched to 1.8% spread. Daily volume dropped by 55% as floating supply dried up.
                 </p>
                 <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-900">
                   Signal: Placed on Incubation Watchlist
@@ -766,13 +790,13 @@ export default function TrendGenesisRadarMockup() {
               <div className="bg-slate-950 p-4 rounded-xl border border-emerald-500/40 ring-1 ring-emerald-500/20 space-y-2">
                 <div className="text-emerald-400 font-bold flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px]">3</span>
-                  Day 1–3: The Anchor Shelf
+                  Day 1â€“3: The Anchor Shelf
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
-                  Volume shrank by -64% (VDU). Price held above ₹162 without retreating. Inside Day formed. This confirmed the float was 100% absorbed.
+                  Volume shrank by -64% (VDU). Price held above â‚¹162 without retreating. Inside Day formed. This confirmed the float was 100% absorbed.
                 </p>
                 <div className="text-[10px] text-emerald-300 font-bold pt-1 border-t border-slate-900">
-                  Action: Buy Stop ₹168 | Stop ₹162.5
+                  Action: Buy Stop â‚¹168 | Stop â‚¹162.5
                 </div>
               </div>
 
@@ -782,7 +806,7 @@ export default function TrendGenesisRadarMockup() {
                   Sept: The Markup Run
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
-                  Stock launched effortlessly from ₹168 to ₹225 with zero drawdowns, because overhead supply was locked. You captured +34% before the VCP pivot!
+                  Stock launched effortlessly from â‚¹168 to â‚¹225 with zero drawdowns, because overhead supply was locked. You captured +34% before the VCP pivot!
                 </p>
                 <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-900">
                   Result: +34.5% Profit / 1:5.8 R:R
@@ -890,3 +914,4 @@ export default function TrendGenesisRadarMockup() {
     </DashboardLayout>
   );
 }
+

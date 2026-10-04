@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
@@ -36,6 +36,7 @@ import WatchlistModal from "@/components/layout/screener/WatchlistModal";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
+import { SparklineChart, StageBadge } from "@/components/common";
 import { fetchWatchlists, fetchWatchlist } from "@/lib/watchlistApi";
 import type { WatchlistSummary } from "@/types/watchlist";
 import type { GrowthCompany } from "@/lib/api";
@@ -186,7 +187,7 @@ export default function PreBreakoutRadarPage() {
         target_2: opp.blueprint.target_2,
       });
       setWatchedSymbolSet((prev) => new Set([...prev, opp.symbol]));
-      setToastMessage(`🎯 ${opp.symbol} added to Breakout Execution Engine!`);
+      setToastMessage(`ðŸŽ¯ ${opp.symbol} added to Breakout Execution Engine!`);
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {
       console.error("Failed to watch candidate:", err);
@@ -198,7 +199,7 @@ export default function PreBreakoutRadarPage() {
     try {
       const res = await autoEnrollTopBreakoutCandidates(10, 70);
       if (res && res.enrolled_count !== undefined) {
-        setToastMessage(`⚡ Enrolled ${res.enrolled_count} A+ Coils into Breakout Execution Engine!`);
+        setToastMessage(`âš¡ Enrolled ${res.enrolled_count} A+ Coils into Breakout Execution Engine!`);
         await loadWatchedSymbols();
         setActiveTab("execution");
       }
@@ -293,7 +294,7 @@ export default function PreBreakoutRadarPage() {
         Math.min(5, Math.max(1, Math.round(opp.conviction_score / 20))),
       watchlist_comment:
         wlInfo?.comment ??
-        `Pre-Breakout Setup: ${opp.primary_pattern} (${opp.setup_tier}). Cheat Entry: ₹${opp.blueprint.cheat_entry}, SL: ₹${opp.blueprint.stop_loss} (${opp.blueprint.risk_pct}%), Target 1: ₹${opp.blueprint.target_1} (R:R ${opp.blueprint.risk_reward}:1)`,
+        `Pre-Breakout Setup: ${opp.primary_pattern} (${opp.setup_tier}). Cheat Entry: â‚¹${opp.blueprint.cheat_entry}, SL: â‚¹${opp.blueprint.stop_loss} (${opp.blueprint.risk_pct}%), Target 1: â‚¹${opp.blueprint.target_1} (R:R ${opp.blueprint.risk_reward}:1)`,
       target_price: wlInfo?.target_price ?? opp.blueprint.target_1,
       in_watchlist: wlInfo?.in_watchlist ?? false,
       watchlist_id: wlInfo?.watchlist_id ?? null,
@@ -336,7 +337,7 @@ export default function PreBreakoutRadarPage() {
       setToastMessage(`${symbol} removed from watchlist`);
     } else {
       setToastMessage(
-        `${symbol} saved to ${data?.watchlistName || "Watchlist"} (${data?.convictionScore}★)`
+        `${symbol} saved to ${data?.watchlistName || "Watchlist"} (${data?.convictionScore}â˜…)`
       );
     }
     setTimeout(() => setToastMessage(null), 4000);
@@ -628,6 +629,8 @@ export default function PreBreakoutRadarPage() {
                   <tr>
                     <th className="py-3 px-4">Symbol & Sector</th>
                     <th className="py-3 px-3">Price & Return</th>
+                    <th className="py-3 px-3">Trend (90D)</th>
+                    <th className="py-3 px-3">Current Stage</th>
                     <th className="py-3 px-3">Conviction Tier</th>
                     <th className="py-3 px-3">Primary Contraction Pattern</th>
                     <th className="py-3 px-3 text-center">Pivot Dist %</th>
@@ -661,7 +664,7 @@ export default function PreBreakoutRadarPage() {
                               }}
                               title={
                                 isInWatchlist
-                                  ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}★) - Click to edit`
+                                  ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}â˜…) - Click to edit`
                                   : `Add ${opp.symbol} to Watchlist`
                               }
                               className={`p-1.5 rounded-lg border transition-all cursor-pointer shrink-0 ${
@@ -675,9 +678,14 @@ export default function PreBreakoutRadarPage() {
 
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-sm text-white group-hover:text-emerald-400 transition-colors">
+                                <Link
+                                  href={`/stocks/${encodeURIComponent(opp.symbol)}?from=/pre-breakout-radar`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="font-bold text-sm text-white hover:text-cyan-400 hover:underline transition-colors"
+                                  title={`View ${opp.symbol} stock details page`}
+                                >
                                   {opp.symbol}
-                                </span>
+                                </Link>
                                 {opp.setup_tier === "A+ SUPER COIL" && (
                                   <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400">
                                     <Sparkles className="h-3 w-3" />
@@ -698,7 +706,7 @@ export default function PreBreakoutRadarPage() {
                         <td className="py-3.5 px-3">
                           <div className="flex flex-col">
                             <span className="font-bold text-white text-sm">
-                              ₹{opp.cmp.toLocaleString("en-IN")}
+                              â‚¹{opp.cmp.toLocaleString("en-IN")}
                             </span>
                             <span
                               className={`text-[11px] font-bold ${
@@ -711,12 +719,35 @@ export default function PreBreakoutRadarPage() {
                           </div>
                         </td>
 
+                        {/* Trend (90D) */}
+                        <td className="py-3.5 px-3">
+                          <SparklineChart
+                            data={(opp as any).sparkline}
+                            cmp={opp.cmp}
+                            return90d={(opp as any).return_90d_pct}
+                            width={82}
+                            height={22}
+                            periodLabel="90D"
+                            showDot={true}
+                            showBadge={true}
+                          />
+                        </td>
+
+                        {/* Current Stage */}
+                        <td className="py-3.5 px-3">
+                          <StageBadge
+                            stage={(opp as any).current_stage}
+                            stageCode={(opp as any).stage_code}
+                            cmp={opp.cmp}
+                          />
+                        </td>
+
                         {/* Conviction Score & Tier */}
                         <td className="py-3.5 px-3">
                           <span
                             className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold border ${opp.tier_badge}`}
                           >
-                            {opp.conviction_score} PTS • {opp.setup_tier}
+                            {opp.conviction_score} PTS â€¢ {opp.setup_tier}
                           </span>
                         </td>
 
@@ -797,10 +828,10 @@ export default function PreBreakoutRadarPage() {
                         <td className="py-3.5 px-3">
                           <div className="flex flex-col text-[11px]">
                             <span className="text-emerald-400 font-bold">
-                              Entry: ₹{opp.blueprint.cheat_entry}
+                              Entry: â‚¹{opp.blueprint.cheat_entry}
                             </span>
                             <span className="text-slate-400 text-[10px]">
-                              SL: ₹{opp.blueprint.stop_loss} ({opp.blueprint.risk_pct}%) | R:R {opp.blueprint.risk_reward}:1
+                              SL: â‚¹{opp.blueprint.stop_loss} ({opp.blueprint.risk_pct}%) | R:R {opp.blueprint.risk_reward}:1
                             </span>
                           </div>
                         </td>
@@ -817,7 +848,7 @@ export default function PreBreakoutRadarPage() {
                               }}
                               title={
                                 isInWatchlist
-                                  ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}★) - Click to edit`
+                                  ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}â˜…) - Click to edit`
                                   : "Add to Watchlist"
                               }
                               className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
@@ -901,7 +932,7 @@ export default function PreBreakoutRadarPage() {
                             }}
                             title={
                               isInWatchlist
-                                ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}★) - Click to edit`
+                                ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}â˜…) - Click to edit`
                                 : `Add ${opp.symbol} to Watchlist`
                             }
                             className={`p-1 rounded-md border transition-all cursor-pointer ${
@@ -913,38 +944,60 @@ export default function PreBreakoutRadarPage() {
                             <Star className={`h-3.5 w-3.5 ${isInWatchlist ? "fill-amber-400 text-amber-400" : ""}`} />
                           </button>
 
-                          <h3 className="text-base font-bold font-mono text-white hover:text-emerald-400 transition-colors">
+                          <Link
+                            href={`/stocks/${encodeURIComponent(opp.symbol)}?from=/pre-breakout-radar`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-base font-bold font-mono text-white hover:text-cyan-400 hover:underline transition-colors"
+                            title={`View ${opp.symbol} stock details page`}
+                          >
                             {opp.symbol}
-                          </h3>
+                          </Link>
                           {opp.setup_tier === "A+ SUPER COIL" && (
                             <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400">
                               <Sparkles className="h-3 w-3" />
                             </span>
                           )}
+                          <StageBadge
+                            stage={(opp as any).current_stage}
+                            stageCode={(opp as any).stage_code}
+                            cmp={opp.cmp}
+                          />
                         </div>
                         <p className="text-xs text-slate-400 truncate max-w-[180px]">{opp.company_name}</p>
                         <span className="text-[10px] text-slate-500">{opp.sector}</span>
                       </div>
 
-                      <div className="text-right">
-                        <div className="text-base font-bold font-mono text-white">
-                          ₹{opp.cmp.toLocaleString("en-IN")}
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="text-right">
+                          <div className="text-base font-bold font-mono text-white">
+                            â‚¹{opp.cmp.toLocaleString("en-IN")}
+                          </div>
+                          <div
+                            className={`text-xs font-bold font-mono ${
+                              opp.day_change_pct >= 0 ? "text-emerald-400" : "text-rose-400"
+                            }`}
+                          >
+                            {opp.day_change_pct >= 0 ? "+" : ""}
+                            {opp.day_change_pct}%
+                          </div>
                         </div>
-                        <div
-                          className={`text-xs font-bold font-mono ${
-                            opp.day_change_pct >= 0 ? "text-emerald-400" : "text-rose-400"
-                          }`}
-                        >
-                          {opp.day_change_pct >= 0 ? "+" : ""}
-                          {opp.day_change_pct}%
-                        </div>
+                        <SparklineChart
+                          data={(opp as any).sparkline}
+                          cmp={opp.cmp}
+                          return90d={(opp as any).return_90d_pct}
+                          width={76}
+                          height={20}
+                          periodLabel="90D"
+                          showDot={true}
+                          showBadge={false}
+                        />
                       </div>
                     </div>
 
                     {/* Score & Pattern */}
                     <div className="mt-2.5 flex items-center justify-between">
                       <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${opp.tier_badge}`}>
-                        {opp.conviction_score} PTS • {opp.setup_tier}
+                        {opp.conviction_score} PTS â€¢ {opp.setup_tier}
                       </span>
                       <span className="text-[10px] font-mono text-emerald-400 font-bold">
                         R:R {opp.blueprint.risk_reward}:1
@@ -989,9 +1042,9 @@ export default function PreBreakoutRadarPage() {
                   {/* Trade Setup Blueprint Footer */}
                   <div className="pt-3 border-t border-slate-800/80 space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-mono">
-                      <span className="text-slate-400">Cheat Entry: <span className="text-white font-bold">₹{opp.blueprint.cheat_entry}</span></span>
-                      <span className="text-slate-400">Target 1: <span className="text-emerald-400 font-bold">₹{opp.blueprint.target_1}</span></span>
-                      <span className="text-slate-400">Stop: <span className="text-rose-400 font-bold">₹{opp.blueprint.stop_loss}</span></span>
+                      <span className="text-slate-400">Cheat Entry: <span className="text-white font-bold">â‚¹{opp.blueprint.cheat_entry}</span></span>
+                      <span className="text-slate-400">Target 1: <span className="text-emerald-400 font-bold">â‚¹{opp.blueprint.target_1}</span></span>
+                      <span className="text-slate-400">Stop: <span className="text-rose-400 font-bold">â‚¹{opp.blueprint.stop_loss}</span></span>
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">
@@ -1009,7 +1062,7 @@ export default function PreBreakoutRadarPage() {
                         }`}
                         title={
                           isInWatchlist
-                            ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}★)`
+                            ? `In Watchlist: ${wlInfo.watchlist_name} (${wlInfo.confidence_score}â˜…)`
                             : "Add to Watchlist"
                         }
                       >
@@ -1108,7 +1161,7 @@ export default function PreBreakoutRadarPage() {
                       {selectedOpportunity.setup_tier}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">{selectedOpportunity.company_name} — {selectedOpportunity.sector}</p>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">{selectedOpportunity.company_name} â€” {selectedOpportunity.sector}</p>
                 </div>
                 <button
                   onClick={() => setSelectedOpportunity(null)}
@@ -1122,11 +1175,11 @@ export default function PreBreakoutRadarPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono">
                 <div>
                   <span className="text-slate-500 text-[10px] block">Current Market Price</span>
-                  <span className="text-base font-bold text-white">₹{selectedOpportunity.cmp}</span>
+                  <span className="text-base font-bold text-white">â‚¹{selectedOpportunity.cmp}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">20-Day Pivot High</span>
-                  <span className="text-base font-bold text-cyan-300">₹{selectedOpportunity.metrics.pivot_20d}</span>
+                  <span className="text-base font-bold text-cyan-300">â‚¹{selectedOpportunity.metrics.pivot_20d}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">Distance to Pivot</span>
@@ -1151,19 +1204,19 @@ export default function PreBreakoutRadarPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                   <div>
                     <span className="text-slate-500 text-[10px] block">Cheat Entry</span>
-                    <span className="font-bold text-white">₹{selectedOpportunity.blueprint.cheat_entry}</span>
+                    <span className="font-bold text-white">â‚¹{selectedOpportunity.blueprint.cheat_entry}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Tight Stop Loss</span>
-                    <span className="font-bold text-rose-400">₹{selectedOpportunity.blueprint.stop_loss} ({selectedOpportunity.blueprint.risk_pct}%)</span>
+                    <span className="font-bold text-rose-400">â‚¹{selectedOpportunity.blueprint.stop_loss} ({selectedOpportunity.blueprint.risk_pct}%)</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Target 1 (+9%)</span>
-                    <span className="font-bold text-emerald-400">₹{selectedOpportunity.blueprint.target_1}</span>
+                    <span className="font-bold text-emerald-400">â‚¹{selectedOpportunity.blueprint.target_1}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Target 2 (+18%)</span>
-                    <span className="font-bold text-cyan-400">₹{selectedOpportunity.blueprint.target_2}</span>
+                    <span className="font-bold text-cyan-400">â‚¹{selectedOpportunity.blueprint.target_2}</span>
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-300 pt-1 border-t border-emerald-900/40">
@@ -1185,10 +1238,10 @@ export default function PreBreakoutRadarPage() {
                       onChange={(e) => setAccountRiskRupees(Number(e.target.value))}
                       className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 text-xs focus:outline-none cursor-pointer shadow-xs"
                     >
-                      <option value={5000}>₹5,000 Risk</option>
-                      <option value={10000}>₹10,000 Risk</option>
-                      <option value={20000}>₹20,000 Risk</option>
-                      <option value={50000}>₹50,000 Risk</option>
+                      <option value={5000}>â‚¹5,000 Risk</option>
+                      <option value={10000}>â‚¹10,000 Risk</option>
+                      <option value={20000}>â‚¹20,000 Risk</option>
+                      <option value={50000}>â‚¹50,000 Risk</option>
                     </select>
                   </div>
                 </div>
@@ -1207,15 +1260,15 @@ export default function PreBreakoutRadarPage() {
                       </div>
                       <div>
                         <span className="text-slate-500 text-[10px] block">Capital Required</span>
-                        <span className="text-base font-bold text-white">₹{capitalRequired.toLocaleString("en-IN")}</span>
+                        <span className="text-base font-bold text-white">â‚¹{capitalRequired.toLocaleString("en-IN")}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 text-[10px] block">Target 1 Gain</span>
-                        <span className="text-base font-bold text-emerald-400">+₹{profitTarget1.toLocaleString("en-IN")}</span>
+                        <span className="text-base font-bold text-emerald-400">+â‚¹{profitTarget1.toLocaleString("en-IN")}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 text-[10px] block">Target 2 Gain</span>
-                        <span className="text-base font-bold text-cyan-400">+₹{profitTarget2.toLocaleString("en-IN")}</span>
+                        <span className="text-base font-bold text-cyan-400">+â‚¹{profitTarget2.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
                   );
@@ -1290,4 +1343,5 @@ export default function PreBreakoutRadarPage() {
     </DashboardLayout>
   );
 }
+
 

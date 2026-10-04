@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -19,11 +19,13 @@ import {
   ArrowRight,
   ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
+import { SparklineChart, StageBadge } from "@/components/common";
 import {
   DeliveryOpportunity,
   DeliveryRadarMetadata,
@@ -106,8 +108,8 @@ export default function DeliveryRadarPage() {
           icon={<Flame className="w-5 h-5" />}
           iconColor="emerald"
           title="Delivery Breakout Radar"
-          badge={{ label: "INSTITUTIONAL APEX: 78% WIN RATE • MCAP ≥ ₹1,000 CR", color: "purple" }}
-          subtitle="Institutional float absorption engine with ticket size expansion, pre-breakout contraction, and dynamic buy/sell corridors (Price ≥ ₹40, MCap ≥ ₹1,000 Cr)."
+          badge={{ label: "INSTITUTIONAL APEX: 78% WIN RATE â€¢ MCAP â‰¥ â‚¹1,000 CR", color: "purple" }}
+          subtitle="Institutional float absorption engine with ticket size expansion, pre-breakout contraction, and dynamic buy/sell corridors (Price â‰¥ â‚¹40, MCap â‰¥ â‚¹1,000 Cr)."
           actions={
             <button
               onClick={handleTriggerScan}
@@ -125,7 +127,7 @@ export default function DeliveryRadarPage() {
           <KpiCard
             label="Equities Filtered"
             value={metadata?.total_scanned_symbols?.toLocaleString() || "1,473"}
-            sub="MCap ≥ ₹1k Cr | Price ≥ ₹40"
+            sub="MCap â‰¥ â‚¹1k Cr | Price â‰¥ â‚¹40"
             icon={<Layers className="w-4 h-4 text-slate-400" />}
           />
           <KpiCard
@@ -178,7 +180,7 @@ export default function DeliveryRadarPage() {
             },
             {
               id: "APEX_SNIPER",
-              label: "🎯 Apex Sniper",
+              label: "ðŸŽ¯ Apex Sniper",
               count: metadata?.apex_sniper_count ?? 0,
               badge: "70%+ WR",
               activeClass: "border-purple-500 bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40",
@@ -186,7 +188,7 @@ export default function DeliveryRadarPage() {
             },
             {
               id: "ACTIVE_SWING",
-              label: "⚡ Active Swing",
+              label: "âš¡ Active Swing",
               count: metadata?.active_swing_count ?? 0,
               badge: "62% WR",
               activeClass: "border-emerald-500 bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40",
@@ -194,7 +196,7 @@ export default function DeliveryRadarPage() {
             },
             {
               id: "BASE_ACCUMULATION",
-              label: "📡 Base Watchlist",
+              label: "ðŸ“¡ Base Watchlist",
               count: metadata?.base_accumulation_count ?? 0,
               badge: "Early Flow",
               activeClass: "border-amber-500 bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40",
@@ -289,7 +291,7 @@ export default function DeliveryRadarPage() {
           <div className="flex items-center gap-2">
             {/* Min Spike Selector */}
             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-              <span>Spike ≥</span>
+              <span>Spike â‰¥</span>
               <select
                 value={minSpike}
                 onChange={(e) => {
@@ -307,7 +309,7 @@ export default function DeliveryRadarPage() {
 
             {/* Min Deliv % Selector */}
             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-              <span>Deliv ≥</span>
+              <span>Deliv â‰¥</span>
               <select
                 value={minDelivPer}
                 onChange={(e) => {
@@ -335,6 +337,8 @@ export default function DeliveryRadarPage() {
                   <th className="px-3 py-3">Tier & Setup</th>
                   <th className="px-3 py-3 text-right">CMP & Buy Status</th>
                   <th className="px-3 py-3 text-right">Day %</th>
+                  <th className="px-3 py-3 text-center">Trend (90D)</th>
+                  <th className="px-3 py-3 text-center">Stage</th>
                   <th className="px-3 py-3 text-center">Delivery %</th>
                   <th className="px-3 py-3 text-right">10D Spike</th>
                   <th className="px-3 py-3 text-right">Order Ticket</th>
@@ -348,7 +352,7 @@ export default function DeliveryRadarPage() {
               <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-500">
+                    <td colSpan={13} className="py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RefreshCw className="h-6 w-6 animate-spin text-cyan-500" />
                         <span>Scanning institutional delivery footprints & float absorption...</span>
@@ -357,7 +361,7 @@ export default function DeliveryRadarPage() {
                   </tr>
                 ) : opportunities.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="p-8">
+                    <td colSpan={13} className="p-8">
                       <EmptyState
                         icon={<Target className="h-7 w-7 text-cyan-400" />}
                         title="No Qualifying Setups for Selected Tier & Thresholds"
@@ -392,32 +396,36 @@ export default function DeliveryRadarPage() {
                         {/* 1. Symbol & Company */}
                         <td className="py-3 pl-4 pr-3">
                           <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}?from=/delivery-radar`}
+                              className="font-bold text-slate-900 transition hover:text-cyan-600 dark:text-white dark:hover:text-cyan-400 hover:underline"
+                              title={`View ${item.symbol} stock details page`}
+                            >
+                              <span>{item.symbol}</span>
+                            </Link>
                             <a
                               href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="group flex items-center gap-1 font-bold text-slate-900 transition hover:text-cyan-500 dark:text-white dark:hover:text-cyan-400"
-                              title={`Open ${item.symbol} interactive chart on TradingView`}
+                              className="text-slate-400 hover:text-cyan-400 transition"
+                              title={`Open ${item.symbol} on TradingView`}
                             >
-                              <span>{item.symbol}</span>
-                              <ExternalLink size={10} className="text-cyan-400 opacity-60 transition group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                              <ExternalLink size={10} />
                             </a>
                             {item.market_cap_cr && (
                               <span className="rounded bg-indigo-500/10 px-1 py-0.2 font-mono text-[9px] font-bold text-indigo-400">
-                                ₹{item.market_cap_cr.toLocaleString("en-IN")} Cr
+                                â‚¹{item.market_cap_cr.toLocaleString("en-IN")} Cr
                               </span>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                            <a
-                              href={`https://in.tradingview.com/chart/?symbol=NSE:${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}?from=/delivery-radar`}
                               className="max-w-[130px] truncate text-[11px] text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-300 transition hover:underline"
-                              title={`Open ${item.company_name} chart on TradingView`}
+                              title={`View ${item.company_name} details`}
                             >
                               {item.company_name}
-                            </a>
+                            </Link>
                             <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[9px] font-medium text-slate-500 dark:text-slate-400">
                               {item.signal_date}
                             </span>
@@ -429,15 +437,15 @@ export default function DeliveryRadarPage() {
                           <div className="flex flex-wrap items-center gap-1">
                             {isApex ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/40 bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-bold text-purple-300">
-                                🎯 Apex (78% WR)
+                                ðŸŽ¯ Apex (78% WR)
                               </span>
                             ) : isSwing ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
-                                ⚡ Active Swing
+                                âš¡ Active Swing
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                                📡 Base Watchlist
+                                ðŸ“¡ Base Watchlist
                               </span>
                             )}
 
@@ -463,20 +471,20 @@ export default function DeliveryRadarPage() {
                         {/* 3. Price & Buy Zone Status */}
                         <td className="px-3 py-3 text-right">
                           <div className="font-bold text-slate-900 dark:text-white">
-                            ₹{item.current_price.toLocaleString("en-IN")}
+                            â‚¹{item.current_price.toLocaleString("en-IN")}
                           </div>
                           <div className="mt-0.5">
                             {buyStatus === "IN_BUY_ZONE" ? (
                               <span className="inline-flex rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-extrabold text-emerald-400">
-                                🟢 In Buy Zone
+                                ðŸŸ¢ In Buy Zone
                               </span>
                             ) : buyStatus === "EXTENDED_WAIT_DIP" ? (
                               <span className="inline-flex rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-400" title="Extended above pivot. Wait for dip to buy corridor.">
-                                🟡 Extended: Wait Dip
+                                ðŸŸ¡ Extended: Wait Dip
                               </span>
                             ) : buyStatus === "RETEST_CONFIRMED" ? (
                               <span className="inline-flex rounded bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-bold text-cyan-400">
-                                🔵 Retest Bounced
+                                ðŸ”µ Retest Bounced
                               </span>
                             ) : (
                               <span className="inline-flex rounded bg-slate-800 px-1.5 py-0.2 text-[9px] font-medium text-slate-400">
@@ -498,6 +506,29 @@ export default function DeliveryRadarPage() {
                             {item.day_change_pct >= 0 ? "+" : ""}
                             {item.day_change_pct}%
                           </span>
+                        </td>
+
+                        {/* Trend (90D) */}
+                        <td className="px-3 py-3 text-center">
+                          <SparklineChart
+                            data={(item as any).sparkline}
+                            cmp={item.current_price}
+                            return90d={(item as any).return_90d_pct}
+                            width={78}
+                            height={22}
+                            periodLabel="90D"
+                            showDot={true}
+                            showBadge={true}
+                          />
+                        </td>
+
+                        {/* Current Stage */}
+                        <td className="px-3 py-3 text-center">
+                          <StageBadge
+                            stage={(item as any).current_stage}
+                            stageCode={(item as any).stage_code}
+                            cmp={item.current_price}
+                          />
                         </td>
 
                         {/* 5. Delivery % */}
@@ -647,10 +678,10 @@ export default function DeliveryRadarPage() {
                     <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedBlueprint.company_name}</span>
                     {selectedBlueprint.market_cap_cr && (
                       <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-indigo-400">
-                        MCap: ₹{selectedBlueprint.market_cap_cr.toLocaleString("en-IN")} Cr
+                        MCap: â‚¹{selectedBlueprint.market_cap_cr.toLocaleString("en-IN")} Cr
                       </span>
                     )}
-                    <span>•</span>
+                    <span>â€¢</span>
                     <span>Win Rate Expectation:{" "}
                       <strong className="text-emerald-400">
                         {selectedBlueprint.blueprint.win_rate_expectation || "75% - 78% (Apex)"}
@@ -669,7 +700,7 @@ export default function DeliveryRadarPage() {
                     onClick={() => setSelectedBlueprint(null)}
                     className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
                   >
-                    ✕
+                    âœ•
                   </button>
                 </div>
               </div>
@@ -688,28 +719,28 @@ export default function DeliveryRadarPage() {
                         : "bg-cyan-500/20 text-cyan-300"
                     }`}>
                       {selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
-                        ? "🟢 In Optimal Buy Zone"
+                        ? "ðŸŸ¢ In Optimal Buy Zone"
                         : selectedBlueprint.blueprint.buy_status === "EXTENDED_WAIT_DIP"
-                        ? "🟡 Extended: Limit Order on Dip"
+                        ? "ðŸŸ¡ Extended: Limit Order on Dip"
                         : selectedBlueprint.blueprint.buy_status === "RETEST_CONFIRMED"
-                        ? "🔵 Retest Support Held"
-                        : "⚪ Base Accumulation"}
+                        ? "ðŸ”µ Retest Support Held"
+                        : "âšª Base Accumulation"}
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-lg bg-black/30 p-2">
                       <div className="text-[10px] text-slate-400">Pivot Level</div>
-                      <div className="font-mono text-sm font-bold text-white">₹{selectedBlueprint.blueprint.pivot_price || selectedBlueprint.blueprint.entry_price}</div>
+                      <div className="font-mono text-sm font-bold text-white">â‚¹{selectedBlueprint.blueprint.pivot_price || selectedBlueprint.blueprint.entry_price}</div>
                     </div>
                     <div className="rounded-lg bg-black/30 p-2">
                       <div className="text-[10px] text-slate-400">Ideal Buy Corridor</div>
                       <div className="font-mono text-sm font-bold text-emerald-400">
-                        ₹{selectedBlueprint.blueprint.buy_corridor_min || selectedBlueprint.blueprint.entry_price} – ₹{selectedBlueprint.blueprint.buy_corridor_max || selectedBlueprint.blueprint.entry_price}
+                        â‚¹{selectedBlueprint.blueprint.buy_corridor_min || selectedBlueprint.blueprint.entry_price} â€“ â‚¹{selectedBlueprint.blueprint.buy_corridor_max || selectedBlueprint.blueprint.entry_price}
                       </div>
                     </div>
                     <div className="rounded-lg bg-black/30 p-2">
                       <div className="text-[10px] text-slate-400">Do Not Chase Above</div>
-                      <div className="font-mono text-sm font-bold text-amber-400">₹{selectedBlueprint.blueprint.max_chase_price || selectedBlueprint.blueprint.entry_price}</div>
+                      <div className="font-mono text-sm font-bold text-amber-400">â‚¹{selectedBlueprint.blueprint.max_chase_price || selectedBlueprint.blueprint.entry_price}</div>
                     </div>
                   </div>
                 </div>
@@ -722,7 +753,7 @@ export default function DeliveryRadarPage() {
                       Stop Loss (-{selectedBlueprint.blueprint.risk_pct}%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-rose-500">
-                      ₹{selectedBlueprint.blueprint.stop_loss}
+                      â‚¹{selectedBlueprint.blueprint.stop_loss}
                     </div>
                     <div className="mt-0.5 text-[9px] text-rose-400/80">Candle Low Defense</div>
                   </div>
@@ -733,7 +764,7 @@ export default function DeliveryRadarPage() {
                       BE Shield (+1.8%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-amber-300">
-                      ₹{selectedBlueprint.blueprint.breakeven_trigger}
+                      â‚¹{selectedBlueprint.blueprint.breakeven_trigger}
                     </div>
                     <div className="mt-0.5 text-[9px] text-amber-400/80">Lock Stop to Entry+0.4%</div>
                   </div>
@@ -744,7 +775,7 @@ export default function DeliveryRadarPage() {
                       Target 1 (+4.2%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-cyan-400">
-                      ₹{selectedBlueprint.blueprint.target_1}
+                      â‚¹{selectedBlueprint.blueprint.target_1}
                     </div>
                     <div className="mt-0.5 text-[9px] text-cyan-400/80">Book 50% Profit</div>
                   </div>
@@ -755,7 +786,7 @@ export default function DeliveryRadarPage() {
                       Target 2 (+8.5%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-emerald-400">
-                      ₹{selectedBlueprint.blueprint.target_2}
+                      â‚¹{selectedBlueprint.blueprint.target_2}
                     </div>
                     <div className="mt-0.5 text-[9px] text-emerald-400/80">10 EMA Trailing Runner</div>
                   </div>
@@ -767,7 +798,7 @@ export default function DeliveryRadarPage() {
                     <div>
                       <span className="text-slate-400">Current CMP:</span>{" "}
                       <span className="font-semibold text-slate-900 dark:text-white">
-                        ₹{selectedBlueprint.blueprint.entry_price}
+                        â‚¹{selectedBlueprint.blueprint.entry_price}
                       </span>
                     </div>
                     <div>
@@ -841,3 +872,5 @@ export default function DeliveryRadarPage() {
     </DashboardLayout>
   );
 }
+
+

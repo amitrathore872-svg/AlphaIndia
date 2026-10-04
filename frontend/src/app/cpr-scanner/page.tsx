@@ -8,6 +8,7 @@ import CPRBandVisualizer from "@/components/cpr/CPRBandVisualizer";
 import CPRDetailModal from "@/components/cpr/CPRDetailModal";
 import CPRTransitionRadar from "@/components/cpr/CPRTransitionRadar";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
+import { SparklineChart, StageBadge } from "@/components/common";
 import {
   fetchCPRScannerResults,
   fetchCPRSummary,
@@ -379,9 +380,9 @@ export default function CPRScannerPage() {
               >
                 <option value="ALL">All Categories</option>
                 <option value="Ultra Compression">Ultra Compression (&lt;0.10%)</option>
-                <option value="Very Strong">Very Strong (0.10–0.20%)</option>
-                <option value="Strong">Strong (0.20–0.30%)</option>
-                <option value="Average">Average (0.30–0.50%)</option>
+                <option value="Very Strong">Very Strong (0.10â€“0.20%)</option>
+                <option value="Strong">Strong (0.20â€“0.30%)</option>
+                <option value="Average">Average (0.30â€“0.50%)</option>
               </select>
             </div>
 
@@ -396,9 +397,9 @@ export default function CPRScannerPage() {
                 }}
                 className="w-full rounded-lg border border-emerald-500/40 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-emerald-700 dark:text-emerald-300 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
               >
-                <option value={1000}>≥ ₹1,000 Cr (Institutional)</option>
-                <option value={2500}>≥ ₹2,500 Cr</option>
-                <option value={5000}>≥ ₹5,000 Cr</option>
+                <option value={1000}>â‰¥ â‚¹1,000 Cr (Institutional)</option>
+                <option value={2500}>â‰¥ â‚¹2,500 Cr</option>
+                <option value={5000}>â‰¥ â‚¹5,000 Cr</option>
                 <option value={0}>All Market Caps</option>
               </select>
             </div>
@@ -414,9 +415,9 @@ export default function CPRScannerPage() {
                 }}
                 className="w-full rounded-lg border border-cyan-500/40 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-cyan-700 dark:text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
-                <option value={30}>No Penny (≥ ₹30)</option>
-                <option value={50}>Price ≥ ₹50</option>
-                <option value={100}>Price ≥ ₹100</option>
+                <option value={30}>No Penny (â‰¥ â‚¹30)</option>
+                <option value={50}>Price â‰¥ â‚¹50</option>
+                <option value={100}>Price â‰¥ â‚¹100</option>
                 <option value={0}>All Prices</option>
               </select>
             </div>
@@ -433,9 +434,9 @@ export default function CPRScannerPage() {
                 className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-white focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
                 <option value="ALL">All Market Caps</option>
-                <option value="LARGE">Large Cap (&gt;₹20,000 Cr)</option>
-                <option value="MID">Mid Cap (₹5,000–20,000 Cr)</option>
-                <option value="SMALL">Small Cap (&lt;₹5,000 Cr)</option>
+                <option value="LARGE">Large Cap (&gt;â‚¹20,000 Cr)</option>
+                <option value="MID">Mid Cap (â‚¹5,000â€“20,000 Cr)</option>
+                <option value="SMALL">Small Cap (&lt;â‚¹5,000 Cr)</option>
               </select>
             </div>
 
@@ -525,6 +526,8 @@ export default function CPRScannerPage() {
                       CMP <ArrowUpDown className="h-3 w-3" />
                     </div>
                   </th>
+                  <th className="px-4 py-3 text-center">Trend (90D)</th>
+                  <th className="px-4 py-3 text-center">Stage</th>
                   <th className="px-4 py-3">Sector</th>
                   <th
                     onClick={() => handleSort("cpr_width_pct")}
@@ -552,14 +555,14 @@ export default function CPRScannerPage() {
                   </th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3 text-center">Trend & Indicators</th>
-                  <th className="px-4 py-3">Trade Plan (TC • SL • T1)</th>
+                  <th className="px-4 py-3">Trade Plan (TC â€¢ SL â€¢ T1)</th>
                   <th className="px-4 py-3 text-center">CPR Band Visual</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono">
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="py-16 text-center">
+                    <td colSpan={13} className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
                         <span className="text-xs text-slate-500 dark:text-slate-400">Loading CPR universe...</span>
@@ -568,7 +571,7 @@ export default function CPRScannerPage() {
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-16 text-center text-slate-500">
+                    <td colSpan={13} className="py-16 text-center text-slate-500">
                       No stocks met the active filter criteria. Try expanding the CPR Width or lowering the Compression Score slider.
                     </td>
                   </tr>
@@ -596,19 +599,24 @@ export default function CPRScannerPage() {
                               companyName={stock.company_name}
                               currentPrice={stock.current_price}
                               sector={stock.sector}
-                              defaultThesis={`CPR Compression: Width ${stock.cpr_width_pct.toFixed(2)}%, Comp Score ${stock.compression_score}/100, Breakout Score ${stock.breakout_score}/100. TC: ₹${stock.tc.toFixed(1)}, Pivot: ₹${stock.pivot.toFixed(1)}, BC: ₹${stock.bc.toFixed(1)}`}
+                              defaultThesis={`CPR Compression: Width ${stock.cpr_width_pct.toFixed(2)}%, Comp Score ${stock.compression_score}/100, Breakout Score ${stock.breakout_score}/100. TC: â‚¹${stock.tc.toFixed(1)}, Pivot: â‚¹${stock.pivot.toFixed(1)}, BC: â‚¹${stock.bc.toFixed(1)}`}
                             />
                             <div className="flex flex-col min-w-0">
-                              <span className="font-bold text-slate-900 dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 transition flex items-center gap-1.5">
+                              <Link
+                                href={`/stocks/${encodeURIComponent(stock.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}?from=/cpr-scanner`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-bold text-slate-900 dark:text-white hover:text-cyan-600 dark:hover:text-cyan-400 hover:underline transition flex items-center gap-1.5"
+                                title={`View ${stock.symbol} stock details page`}
+                              >
                                 {stock.symbol}
                                 {stock.is_triple_cpr && (
                                   <span title="Triple CPR Compression">
                                     <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-400" />
                                   </span>
                                 )}
-                              </span>
+                              </Link>
                               <Link
-                                href={`/techno-funda/${encodeURIComponent(stock.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}`}
+                                href={`/techno-funda/${encodeURIComponent(stock.symbol.replace(/\.NS$|\.BO$/i, "").toUpperCase())}?from=/cpr-scanner`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
@@ -622,8 +630,31 @@ export default function CPRScannerPage() {
                         </td>
 
                         {/* 3. CMP */}
-                        <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200">
-                          ₹{stock.current_price.toFixed(2)}
+                        <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
+                          â‚¹{stock.current_price?.toFixed(1)}
+                        </td>
+
+                        {/* Trend (90D) */}
+                        <td className="px-4 py-3 text-center">
+                          <SparklineChart
+                            data={(stock as any).sparkline}
+                            cmp={stock.current_price}
+                            return90d={(stock as any).return_90d_pct}
+                            width={78}
+                            height={22}
+                            periodLabel="90D"
+                            showDot={true}
+                            showBadge={true}
+                          />
+                        </td>
+
+                        {/* Current Stage */}
+                        <td className="px-4 py-3 text-center">
+                          <StageBadge
+                            stage={(stock as any).current_stage}
+                            stageCode={(stock as any).stage_code}
+                            cmp={stock.current_price}
+                          />
                         </td>
 
                         {/* 4. Sector */}
@@ -710,10 +741,10 @@ export default function CPRScannerPage() {
                         {/* 10. Trade Plan */}
                         <td className="px-4 py-3 text-[11px]">
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Buy: ₹{stock.entry_price.toFixed(2)}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Buy: â‚¹{stock.entry_price.toFixed(2)}</span>
                             <div className="flex gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                              <span>SL: ₹{stock.stop_loss.toFixed(2)}</span>
-                              <span>T1: ₹{stock.target1.toFixed(2)}</span>
+                              <span>SL: â‚¹{stock.stop_loss.toFixed(2)}</span>
+                              <span>T1: â‚¹{stock.target1.toFixed(2)}</span>
                             </div>
                           </div>
                         </td>
@@ -772,3 +803,4 @@ export default function CPRScannerPage() {
     </DashboardLayout>
   );
 }
+

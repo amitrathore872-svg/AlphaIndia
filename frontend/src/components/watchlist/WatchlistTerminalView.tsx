@@ -418,14 +418,25 @@ export default function WatchlistTerminalView({
               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             </div>
 
-            <button
-              onClick={() => setShowAddStockModal(true)}
-              className="flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-400 hover:bg-cyan-500/20 transition shrink-0"
-              title="Add stock with conviction score and thesis notes"
-            >
-              <Plus size={12} />
-              <span>Add</span>
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => setShowAlertModal(true)}
+                className="flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 transition"
+                title="Institutional Alert Studio (Stocks, Watchlists, Portfolios & Screeners)"
+              >
+                <Bell size={12} className="text-amber-400" />
+                <span>Alerts</span>
+              </button>
+
+              <button
+                onClick={() => setShowAddStockModal(true)}
+                className="flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-bold text-cyan-400 hover:bg-cyan-500/20 transition"
+                title="Add stock with conviction score and thesis notes"
+              >
+                <Plus size={12} />
+                <span>Add</span>
+              </button>
+            </div>
           </div>
 
           {/* 2. Fast Search / Autocomplete to Add Symbol */}
@@ -1034,12 +1045,12 @@ export default function WatchlistTerminalView({
       )}
 
       {/* Rule-Based Watchlist Alerts Modal */}
-      {selectedSymbol && activeWatchlistId && (
+      {showAlertModal && (
         <WatchlistAlertModal
           isOpen={showAlertModal}
           onClose={() => setShowAlertModal(false)}
-          watchlistId={activeWatchlistId}
-          symbol={selectedSymbol}
+          watchlistId={activeWatchlistId || undefined}
+          symbol={selectedSymbol || null}
           currentPrice={activeStock?.current_price || previewStock?.current_price || null}
           dma50={activeStock?.dma_50 || null}
           dma200={activeStock?.dma_200 || null}

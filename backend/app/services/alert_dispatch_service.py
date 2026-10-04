@@ -1339,3 +1339,136 @@ class AlertDispatchService:
             logger.debug(f"WhatsApp dispatch skipped or error: {e}")
 
         return results
+
+    @classmethod
+    def format_transformational_multibagger_alert(
+        cls,
+        symbol: str,
+        company_name: str,
+        opportunity_class: str,
+        catalyst_headline: str,
+        catalyst_category: str,
+        guidance_change: Optional[str],
+        conviction_score: float,
+        cmp: float,
+        dma_50: Optional[float],
+        dma_200: Optional[float],
+        action_verdict: str,
+        entry_corridor: Optional[str] = None,
+        stop_loss: Optional[float] = None,
+        leadership_quote: Optional[str] = None,
+        action_url: str = "http://localhost:3000/investor-intelligence",
+    ) -> str:
+        """
+        Formats an institutional-grade alert for an equity exhibiting transformational
+        guidance/execution aligned with technical stage analysis.
+        """
+        is_ready = "READY_TO_BUY" in opportunity_class.upper() or "STAGE_2" in opportunity_class.upper()
+        header_icon = "🟢" if is_ready else "🟡"
+        class_label = "READY TO BUY (STAGE 2 CONFIRMED)" if is_ready else "INFLECTION RADAR (200 DMA BASE)"
+        
+        guidance_text = "📈 *Guidance:* Upward Revision / Target Raised" if guidance_change == "UPWARD_REVISION" else "📊 *Guidance:* Reaffirmed / Solid Execution Runway"
+        
+        dma_str = ""
+        if dma_50 and dma_200:
+            dma_str = f"📐 *Technicals:* 50 DMA: ₹{dma_50:,.2f} | 200 DMA: ₹{dma_200:,.2f}\n"
+        elif dma_50:
+            dma_str = f"📐 *Technicals:* 50 DMA: ₹{dma_50:,.2f}\n"
+
+        quote_block = ""
+        if leadership_quote:
+            clean_q = leadership_quote[:200].replace("*", "").replace("_", "")
+            quote_block = f"🗣️ *Management:* \"_{clean_q}..._\"\n"
+
+        entry_block = ""
+        if entry_corridor:
+            entry_block = f"🎯 *Action Corridor:* {entry_corridor}\n"
+        if stop_loss:
+            entry_block += f"🛑 *Invalidation Floor:* ₹{stop_loss:,.2f}\n"
+
+        return (
+            f"🚀 *ALPHA INDIA | TRANSFORMATIONAL MULTIBAGGER RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
+            f"{header_icon} *Status:* *{class_label}*\n"
+            f"⭐ *Senior Buy-Side Conviction:* {conviction_score:.1f}/100\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚡ *Catalyst:* {catalyst_headline}\n"
+            f"🏷️ *Category:* `{catalyst_category.replace('_', ' ')}`\n"
+            f"{guidance_text}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"{dma_str}"
+            f"🧭 *Verdict:* *{action_verdict}*\n"
+            f"{entry_block}"
+            f"{quote_block}"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(symbol)}\n"
+            f"📡 *Deep Forensic Memo:* {action_url}"
+        )
+
+    @classmethod
+    def broadcast_multibagger_opportunity(
+        cls,
+        db: Session,
+        symbol: str,
+        company_name: str,
+        opportunity_class: str,
+        catalyst_headline: str,
+        catalyst_category: str,
+        guidance_change: Optional[str],
+        conviction_score: float,
+        cmp: float,
+        dma_50: Optional[float],
+        dma_200: Optional[float],
+        action_verdict: str,
+        entry_corridor: Optional[str] = None,
+        stop_loss: Optional[float] = None,
+        leadership_quote: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Dispatches transformational multibagger opportunity alert across Telegram and WhatsApp.
+        """
+        memo = cls.format_transformational_multibagger_alert(
+            symbol=symbol,
+            company_name=company_name,
+            opportunity_class=opportunity_class,
+            catalyst_headline=catalyst_headline,
+            catalyst_category=catalyst_category,
+            guidance_change=guidance_change,
+            conviction_score=conviction_score,
+            cmp=cmp,
+            dma_50=dma_50,
+            dma_200=dma_200,
+            action_verdict=action_verdict,
+            entry_corridor=entry_corridor,
+            stop_loss=stop_loss,
+            leadership_quote=leadership_quote,
+        )
+
+        results = {"symbol": symbol, "telegram": None, "whatsapp": None}
+        try:
+            tg_cfg_dict = cls.get_telegram_config(db)
+            if tg_cfg_dict and tg_cfg_dict.get("is_enabled", True):
+                tg_res = cls.dispatch_telegram(
+                    bot_token=tg_cfg_dict["bot_token"],
+                    chat_id=tg_cfg_dict["chat_id"],
+                    text=memo,
+                )
+                cls.log_dispatch(
+                    db=db,
+                    channel="TELEGRAM",
+                    recipient=tg_cfg_dict["chat_id"],
+                    symbol=symbol,
+                    payload_preview=memo,
+                    status="SUCCESS" if tg_res.get("success") else "FAILED",
+                    error_message=tg_res.get("error"),
+                )
+                results["telegram"] = tg_res
+                logger.info(f"Broadcast Multibagger Opportunity for {symbol} to Telegram: {tg_res.get('success')}")
+        except Exception as e:
+            logger.error(f"Error dispatching multibagger telegram alert for {symbol}: {e}", exc_info=True)
+            results["telegram"] = {"success": False, "error": str(e)}
+
+        return results
+

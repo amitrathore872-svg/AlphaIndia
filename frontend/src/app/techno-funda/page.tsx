@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useCallback, useTransition } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
+import { SparklineChart, StageBadge } from "@/components/common";
 import {
   fetchTechnoFundaScreener,
   fetchTechnoFundaSummary,
@@ -154,14 +155,14 @@ export default function TechnoFundaPage() {
 
               <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/50 p-3 shadow-2xs">
                 <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Pre-Breakout Coiling Setups</div>
-                <div className="mt-1 text-lg font-bold text-cyan-600 dark:text-cyan-400">Within ≤ 4.5% Pivot</div>
+                <div className="mt-1 text-lg font-bold text-cyan-600 dark:text-cyan-400">Within â‰¤ 4.5% Pivot</div>
                 <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Volume dry-up footprint detected</div>
               </div>
 
               <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/50 p-3 shadow-2xs">
                 <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">High Conviction Buys</div>
                 <div className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-400">Techno-Funda Converged</div>
-                <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Funda Score ≥ 60 + Stage 2</div>
+                <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Funda Score â‰¥ 60 + Stage 2</div>
               </div>
             </div>
           )}
@@ -307,7 +308,9 @@ export default function TechnoFundaPage() {
               <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#09152A] text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Symbol & Company</th>
-                  <th className="px-3 py-3 font-semibold">CMP (₹)</th>
+                  <th className="px-3 py-3 font-semibold">CMP (â‚¹)</th>
+                  <th className="px-3 py-3 font-semibold">Trend (90D)</th>
+                  <th className="px-3 py-3 font-semibold">Current Stage</th>
                   <th className="px-3 py-3 font-semibold">Signal</th>
                   <th className="px-3 py-3 font-semibold">From Pivot</th>
                   <th className="px-3 py-3 font-semibold">Pattern</th>
@@ -322,7 +325,7 @@ export default function TechnoFundaPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[12px]">
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-400 dark:text-slate-500 font-sans">
+                    <td colSpan={13} className="py-12 text-center text-slate-400 dark:text-slate-500 font-sans">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Activity className="h-6 w-6 animate-spin text-cyan-500 dark:text-cyan-400" />
                         <span>Scanning institutional price action & fundamentals...</span>
@@ -331,7 +334,7 @@ export default function TechnoFundaPage() {
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-400 dark:text-slate-500 font-sans">
+                    <td colSpan={13} className="py-12 text-center text-slate-400 dark:text-slate-500 font-sans">
                       No matching setups found. Try resetting your search or filter pills.
                     </td>
                   </tr>
@@ -350,7 +353,7 @@ export default function TechnoFundaPage() {
                             currentPrice={item.current_price}
                             variant="star"
                           />
-                          <Link href={`/techno-funda/${item.symbol}`} className="block">
+                          <Link href={`/stocks/${encodeURIComponent(item.symbol)}?from=/techno-funda`} className="block">
                             <span className="font-bold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition hover:underline">
                               {item.symbol}
                             </span>
@@ -363,10 +366,34 @@ export default function TechnoFundaPage() {
 
                       {/* CMP */}
                       <td className="px-3 py-3 font-bold text-slate-900 dark:text-white">
-                        ₹{item.current_price?.toLocaleString()}
+                        â‚¹{item.current_price?.toLocaleString()}
                         <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
                           {item.return_3m ? `${item.return_3m > 0 ? "+" : ""}${item.return_3m}% 3M` : ""}
                         </div>
+                      </td>
+
+                      {/* Trend (90D) */}
+                      <td className="px-3 py-3">
+                        <SparklineChart
+                          data={(item as any).sparkline}
+                          cmp={item.current_price}
+                          return90d={(item as any).return_90d_pct}
+                          return3m={item.return_3m}
+                          width={80}
+                          height={22}
+                          periodLabel="90D"
+                          showDot={true}
+                          showBadge={true}
+                        />
+                      </td>
+
+                      {/* Current Stage */}
+                      <td className="px-3 py-3">
+                        <StageBadge
+                          stage={(item as any).current_stage}
+                          stageCode={(item as any).stage_code}
+                          cmp={item.current_price}
+                        />
                       </td>
 
                       {/* SIGNAL */}
@@ -405,7 +432,7 @@ export default function TechnoFundaPage() {
                             {item.distance_to_pivot_pct}%
                           </span>
                           <span className="text-[10px] text-slate-500">
-                            Piv: ₹{item.pivot_reference}
+                            Piv: â‚¹{item.pivot_reference}
                           </span>
                         </div>
                       </td>
@@ -490,10 +517,10 @@ export default function TechnoFundaPage() {
                       <td className="px-3 py-3">
                         <div className="flex flex-col font-mono text-[11px]">
                           <span className={item.sales_growth_ttm && item.sales_growth_ttm > 15 ? "text-emerald-400" : "text-slate-300"}>
-                            S: {item.sales_growth_ttm ?? "—"}%
+                            S: {item.sales_growth_ttm ?? "â€”"}%
                           </span>
                           <span className={item.profit_growth_ttm && item.profit_growth_ttm > 15 ? "text-emerald-400" : "text-slate-400"}>
-                            P: {item.profit_growth_ttm ?? "—"}%
+                            P: {item.profit_growth_ttm ?? "â€”"}%
                           </span>
                         </div>
                       </td>
@@ -514,7 +541,7 @@ export default function TechnoFundaPage() {
                           </a>
 
                           <Link
-                            href={`/techno-funda/${item.symbol}`}
+                            href={`/techno-funda/${item.symbol}?from=/techno-funda`}
                             className="flex items-center gap-1 rounded bg-slate-800 border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-300 hover:border-cyan-500/50 hover:text-white transition"
                             title={`Deep Dive Setup Analysis for ${item.symbol}`}
                           >
@@ -560,3 +587,4 @@ export default function TechnoFundaPage() {
     </DashboardLayout>
   );
 }
+

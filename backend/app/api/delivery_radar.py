@@ -5,7 +5,9 @@ and trade execution blueprints.
 """
 
 from typing import Any, Dict, Optional, List
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
 from app.services.delivery_screener_service import DeliveryScreenerService
 
 router = APIRouter(
@@ -28,6 +30,7 @@ def get_delivery_opportunities(
     sort_order: str = Query("desc", description="asc or desc"),
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     raw_data = DeliveryScreenerService.scan_opportunities(
         force_refresh=False,
@@ -76,6 +79,9 @@ def get_delivery_opportunities(
     total_pages = max(1, (total_count + limit - 1) // limit)
     offset = (page - 1) * limit
     paginated_items = items[offset:offset + limit]
+
+    from app.services.stock_trend_enricher import StockTrendEnricher
+    StockTrendEnricher.enrich(db, paginated_items, symbol_key="symbol", cmp_key="current_price")
 
     return {
         "metadata": metadata,

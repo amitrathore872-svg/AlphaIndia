@@ -579,6 +579,21 @@ class CreateWatchlistAlertRequest(BaseModel):
     notify_telegram: Optional[bool] = True
 
 
+class CreateUnifiedAlertRequest(BaseModel):
+    target_scope: str = Field("STOCK", description="'STOCK', 'WATCHLIST', 'PORTFOLIO', 'ALL_SCREENERS'")
+    symbol: Optional[str] = None
+    watchlist_id: Optional[int] = None
+    portfolio_id: Optional[int] = None
+    target_name: Optional[str] = None
+    rule_type: str = Field(..., min_length=2, max_length=50)
+    signal_direction: Optional[str] = Field("BUY", description="'BUY', 'SELL', 'NEUTRAL'")
+    threshold_value: Optional[float] = None
+    timeframe: Optional[str] = "1D"
+    notes: Optional[str] = None
+    notify_in_app: Optional[bool] = True
+    notify_telegram: Optional[bool] = True
+
+
 class UpdateAlertStatusRequest(BaseModel):
     status: str = Field(..., min_length=4, max_length=20)
 
@@ -687,6 +702,64 @@ def test_personal_telegram_ping(
         "success": True,
         "message": "Test ping delivered successfully to personal Telegram channel.",
         "details": res,
+    }
+
+
+@router.get("/alerts/all")
+def get_all_active_alerts(
+    target_scope: Optional[str] = Query(None, description="'STOCK', 'WATCHLIST', 'PORTFOLIO', 'ALL_SCREENERS'"),
+    status: Optional[str] = Query(None, description="'ACTIVE', 'TRIGGERED', 'MUTED'"),
+    signal_direction: Optional[str] = Query(None, description="'BUY', 'SELL'"),
+    rule_type: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns all active and triggered alerts across all scopes (stocks, watchlists, portfolios, screeners)
+    with total trigger count and stocks where alerts fired.
+    """
+    user_id = current_user.id if current_user else None
+    return WatchlistAlertService.get_all_alerts(
+        db=db,
+        user_id=user_id,
+        target_scope=target_scope,
+        status=status,
+        signal_direction=signal_direction,
+        rule_type=rule_type,
+    )
+
+
+@router.post("/alerts")
+def create_unified_alert(
+    req: CreateUnifiedAlertRequest,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Creates an alert rule targeting a single stock, an entire watchlist,
+    an entire portfolio, or all platform screeners.
+    """
+    user_id = current_user.id if current_user else None
+    alert = WatchlistAlertService.create_scoped_alert(
+        db=db,
+        target_scope=req.target_scope,
+        symbol=req.symbol,
+        watchlist_id=req.watchlist_id,
+        portfolio_id=req.portfolio_id,
+        target_name=req.target_name,
+        rule_type=req.rule_type,
+        signal_direction=req.signal_direction or "BUY",
+        threshold_value=req.threshold_value,
+        timeframe=req.timeframe or "1D",
+        notes=req.notes,
+        notify_in_app=req.notify_in_app if req.notify_in_app is not None else True,
+        notify_telegram=req.notify_telegram if req.notify_telegram is not None else True,
+        user_id=user_id,
+    )
+    return {
+        "success": True,
+        "message": f"Alert armed for {alert.target_name or alert.symbol} ({alert.rule_type}).",
+        "alert": alert.to_dict(),
     }
 
 
@@ -805,10 +878,15 @@ class EvaluateAlertsRequest(BaseModel):
     day_change_pct: Optional[float] = 0.0
     volume: Optional[float] = None
     avg_volume_20d: Optional[float] = None
+    dma_9: Optional[float] = None
+    dma_20: Optional[float] = None
     dma_50: Optional[float] = None
     dma_200: Optional[float] = None
+    supertrend_direction: Optional[str] = None
+    supertrend_val: Optional[float] = None
     vcp_score: Optional[int] = None
     momentum_matches: Optional[int] = None
+    delivery_pct: Optional[float] = None
 
 
 @router.post("/alerts/evaluate/{symbol}")
@@ -828,10 +906,15 @@ def evaluate_symbol_alerts(
         day_change_pct=req.day_change_pct or 0.0,
         volume=req.volume,
         avg_volume_20d=req.avg_volume_20d,
+        dma_9=req.dma_9,
+        dma_20=req.dma_20,
         dma_50=req.dma_50,
         dma_200=req.dma_200,
+        supertrend_direction=req.supertrend_direction,
+        supertrend_val=req.supertrend_val,
         vcp_score=req.vcp_score,
         momentum_matches=req.momentum_matches,
+        delivery_pct=req.delivery_pct,
     )
     return {
         "success": True,

@@ -40,6 +40,32 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Dynamic back navigation — read ?from= param
+  const [backHref, setBackHref] = useState("/techno-funda");
+  const [backLabel, setBackLabel] = useState("Back to Techno-Funda Radar");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const from = p.get("from");
+      if (from) {
+        setBackHref(from);
+        const labelMap: Record<string, string> = {
+          "/techno-funda": "Techno-Funda Radar",
+          "/growth-screener": "Growth Screener",
+          "/pre-breakout-radar": "Pre-Breakout Radar",
+          "/candlestick-radar": "Candlestick Radar",
+          "/momentum-radar": "Momentum Radar",
+          "/apex-confluence": "Apex Confluence",
+          "/chart-patterns": "Chart Patterns",
+          "/cpr-scanner": "CPR Scanner",
+          "/home": "Home",
+        };
+        setBackLabel(labelMap[from] ? `Back to ${labelMap[from]}` : "Back to Screener");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
@@ -72,11 +98,11 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              href="/techno-funda"
+              href={backHref}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-cyan-500/50 hover:text-slate-900 dark:hover:text-white transition shadow-2xs"
             >
               <ArrowLeft size={14} />
-              <span>Back to Pre-Breakout Screener</span>
+              <span>{backLabel}</span>
             </Link>
             <span className="text-slate-400 dark:text-slate-600">/</span>
             <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">{symbol}</span>

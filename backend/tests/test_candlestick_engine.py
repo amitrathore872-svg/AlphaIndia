@@ -204,5 +204,26 @@ def test_shooting_star_detection():
     assert stars[0].direction == PatternDirection.BEARISH.value
 
 
+def test_candlestick_api_enrichment():
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    response = client.get("/api/v1/candlesticks?limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert "signals" in data
+    assert "total_count" in data
+    signals = data["signals"]
+    if signals:
+        first = signals[0]
+        assert "symbol" in first
+        assert "cmp" in first
+        assert "sparkline" in first
+        assert "current_stage" in first
+        assert "return_90d_pct" in first
+        assert "day_change_pct" in first
+
+
 if __name__ == "__main__":
     pytest.main(["-s", __file__])

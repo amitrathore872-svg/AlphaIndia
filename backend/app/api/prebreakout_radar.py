@@ -95,6 +95,10 @@ def get_prebreakout_opportunities(
     start_idx = (page - 1) * limit
     end_idx = start_idx + limit
     paginated = filtered[start_idx:end_idx]
+    
+    # Enrich with 90D Trend Sparkline & Stage
+    from app.services.stock_trend_enricher import StockTrendEnricher
+    StockTrendEnricher.enrich(db, paginated, symbol_key="symbol", cmp_key="cmp")
 
     return {
         "metadata": metadata,

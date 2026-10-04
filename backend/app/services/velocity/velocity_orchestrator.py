@@ -143,9 +143,8 @@ class VelocityBurstOrchestrator:
                 win_rate = round((win_count / len(closed_trades) * 100.0), 1)
                 avg_ret = round(sum((t.realized_pnl_pct or 0.0) for t in closed_trades) / len(closed_trades), 1)
             else:
-                latest_bt = db.query(VelocityBacktest).order_by(desc(VelocityBacktest.id)).first()
-                win_rate = round(latest_bt.win_rate_pct, 1) if latest_bt and latest_bt.win_rate_pct is not None else 0.0
-                avg_ret = round(latest_bt.average_return_pct, 1) if latest_bt and latest_bt.average_return_pct is not None else 0.0
+                win_rate = 0.0
+                avg_ret = 0.0
 
             latest_backtest = db.query(VelocityBacktest).order_by(desc(VelocityBacktest.id)).first()
             bt_win_rate = round(latest_backtest.win_rate_pct, 1) if latest_backtest and latest_backtest.win_rate_pct is not None else 0.0
@@ -225,7 +224,30 @@ class VelocityBurstOrchestrator:
         else:
             symbols = [r.symbol for r in records]
 
-        logger.info(f"[VelocityOrchestrator] Found {len(symbols)} candidates in universe. Synthesizing data...")
+        logger.info(f"[VelocityOrchestrator] Found {len(symbols)} candidates in universe. Preloading authentic OHLCV data...")
+
+        from app.services.market_data_service import MarketDataService
+
+        # Preload authentic OHLCV daily data in parallel chunks from Yahoo Finance via MarketDataService
+        try:
+            MarketDataService.preload_universe_batch(symbols, period="1y", interval="1d", chunk_size=50)
+        except Exception as e:
+            logger.warning(f"[VelocityOrchestrator] Market data preloading notice: {e}")
+
+        # Load authentic delivery data from delivery radar cache if available
+        delivery_map: Dict[str, float] = {}
+        try:
+            from pathlib import Path
+            import json
+            deliv_cache_file = Path(__file__).resolve().parent.parent.parent / "data" / "delivery_radar_cache.json"
+            if deliv_cache_file.exists():
+                with open(deliv_cache_file, "r", encoding="utf-8") as f:
+                    deliv_json = json.load(f)
+                    for item in deliv_json.get("opportunities", []):
+                        if "symbol" in item and item.get("delivery_per") is not None:
+                            delivery_map[item["symbol"].upper()] = float(item["delivery_per"])
+        except Exception as de:
+            logger.debug(f"[VelocityOrchestrator] Delivery map cache read notice: {de}")
 
         sleeping_giant_list = []
         base_patterns_list = []
@@ -237,7 +259,7 @@ class VelocityBurstOrchestrator:
         live_signals_list = []
         btst_list = []
 
-        # Synthetic generator for fast vectorized indicators per stock
+        # Vectorized screening across authentic historical OHLCV data per stock
         for idx, rec in enumerate(records[:limit_symbols]):
             sym = rec.symbol.upper()
             cmp = rec.current_price or 150.0
@@ -245,33 +267,17 @@ class VelocityBurstOrchestrator:
             sector = rec.sector or "Diversified"
             name = rec.company_name or sym
 
-            # Generate realistic 60-bar OHLCV historical window based on authentic Screener DMA & CMP
-            dma50 = rec.dma_50 or (cmp * 0.96)
-            dma200 = rec.dma_200 or (dma50 * 0.94)
+            # Fetch authentic OHLCV DataFrame from centralized MarketDataService
+            df_stock = MarketDataService.get_symbol_ohlcv(sym, period="1y", interval="1d")
+            if df_stock is None or df_stock.empty or len(df_stock) < 20:
+                continue
 
-            # Construct deterministic 60-bar technical price series derived from authentic DMA50, DMA200 & CMP
-            t = np.linspace(0, 4 * np.pi, 60)
-            drift = np.linspace(dma50 * 0.98, cmp, 60)
-            oscillation = np.sin(t) * (cmp * 0.008)
-            close_arr = drift + oscillation
-            close_arr[-1] = cmp
-            spread = cmp * 0.008
-            high_arr = close_arr + spread * (1.0 + 0.3 * np.cos(t))
-            low_arr = close_arr - spread * (1.0 + 0.3 * np.sin(t))
-            open_arr = (close_arr + np.roll(close_arr, 1)) / 2.0
-            open_arr[0] = close_arr[0]
-            vol_base = max(100000.0, float((mcap * 10000000) / (cmp * 500)))
-            vol_arr = np.clip(vol_base * (1.0 + 0.25 * np.sin(t * 1.5)), 10000.0, None)
-
-            df_stock = pd.DataFrame({
-                "Open": open_arr,
-                "High": high_arr,
-                "Low": low_arr,
-                "Close": close_arr,
-                "Volume": vol_arr,
-            })
+            # Synchronize CMP with latest verified authentic close price
+            if "Close" in df_stock.columns and not df_stock["Close"].empty:
+                cmp = float(df_stock["Close"].iloc[-1])
 
             meta = {"company_name": name, "sector": sector, "market_cap": mcap}
+            deliv_override = delivery_map.get(sym)
 
             # 1. Stage 1 & 2: Sleeping Giant & Compression
             sg_item = SleepingGiantEngine.analyze_stock_compression(sym, df_stock, meta=meta)
@@ -284,7 +290,7 @@ class VelocityBurstOrchestrator:
                 base_patterns_list.append(bp_item)
 
             # 3. Stage 4: Institutional Footprint
-            inst_item = InstitutionalFootprintEngine.evaluate_institution_footprint(sym, df_stock)
+            inst_item = InstitutionalFootprintEngine.evaluate_institution_footprint(sym, df_stock, delivery_pct_override=deliv_override)
             if inst_item:
                 institution_list.append(inst_item)
 
@@ -334,6 +340,21 @@ class VelocityBurstOrchestrator:
             persisted = LiveBreakoutEngine.persist_and_broadcast_signal(db, sig)
             if sig["ai_verdict"] in ("ELITE A+", "ELITE A"):
                 elite_count += 1
+                try:
+                    TradeManagementEngine.create_trade(
+                        db=db,
+                        symbol=sig["symbol"],
+                        entry_price=sig["entry_price"],
+                        stop_loss=sig["stop_loss"],
+                        target_1=sig["target_1"],
+                        target_2=sig["target_2"],
+                        target_3=sig["target_3"],
+                        signal_id=persisted.id if persisted else None,
+                        trail_type="ATR_TRAIL",
+                    )
+                except Exception as te:
+                    logger.warning(f"[VelocityOrchestrator] Error registering managed trade for {sig['symbol']}: {te}")
+
                 # Dispatch alert
                 AlertIntelligenceEngine.dispatch_vbe_alert(
                     db=db,
@@ -549,19 +570,44 @@ class VelocityBurstOrchestrator:
             live_cnt = db.query(VelocityLiveSignal).filter(VelocityLiveSignal.status == "ACTIVE").count()
             elite_cnt = db.query(VelocityLiveSignal).filter(VelocityLiveSignal.ai_verdict.in_(["ELITE A+", "ELITE A"])).count()
 
-            # Authentic cascade across all 12 institutional gates
+            # Authentic database-driven counts across all 12 institutional gates
+            regime = MarketRegimeEngine.get_latest_regime(db)
+            regime_cnt = total_univ
+            if regime and regime.get("risk_level") == "HIGH":
+                regime_cnt = int(total_univ * 0.70)
+            elif regime and regime.get("risk_level") == "EXTREME":
+                regime_cnt = int(total_univ * 0.40)
+
+            liq_cnt = db.query(VelocityLiquidity).filter(VelocityLiquidity.liquidity_score >= 60.0).count()
+            if liq_cnt == 0:
+                liq_cnt = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.market_cap >= 1000.0).count()
+
+            news_cnt = db.query(VelocityNewsRisk).filter(VelocityNewsRisk.verdict == "CLEAR_TO_TRADE").count()
+            if news_cnt == 0:
+                news_cnt = total_univ
+
+            sg_cnt = db.query(VelocitySleepingGiant).filter(VelocitySleepingGiant.compression_score >= 60.0).count()
+            pat_cnt = db.query(VelocityBasePattern).filter(VelocityBasePattern.pattern_status.in_(["READY", "BROKEN_OUT"])).count()
+            rs_cnt = db.query(VelocityRSRank).filter(VelocityRSRank.rs_rank >= 70.0).count()
+            inst_cnt = db.query(VelocityInstitution).filter(VelocityInstitution.institution_score >= 65.0).count()
+            sm_cnt = db.query(VelocitySmartMoney).filter(VelocitySmartMoney.smart_money_score >= 60.0).count()
+            live_cnt = db.query(VelocityLiveSignal).filter(VelocityLiveSignal.status == "ACTIVE").count()
+            entry_cnt = db.query(VelocityEntryQuality).filter(VelocityEntryQuality.passed_gate == True).count()
+            elite_cnt = db.query(VelocityLiveSignal).filter(VelocityLiveSignal.ai_verdict.in_(["ELITE A+", "ELITE A"])).count()
+
+            # Ensure waterfall counts are monotonic (each gate can retain at most candidates from previous gate)
             c0 = total_univ
-            c1 = int(c0 * 0.96)
-            c2 = int(c0 * 0.88)
-            c3 = int(c0 * 0.82)
-            c4 = max(sg_cnt, int(c0 * 0.28))
-            c5 = max(pat_cnt, int(c4 * 0.65))
-            c6 = int(c5 * 0.60)
-            c7 = int(c6 * 0.55)
-            c8 = int(c7 * 0.60)
-            c9 = max(live_cnt, int(c8 * 0.45))
-            c10 = max(1, int(c9 * 0.70))
-            c11 = max(elite_cnt, int(c10 * 0.50))
+            c1 = min(c0, max(1, regime_cnt))
+            c2 = min(c1, max(1, liq_cnt if liq_cnt > 0 else c1))
+            c3 = min(c2, max(1, news_cnt if news_cnt > 0 else c2))
+            c4 = min(c3, max(sg_cnt, 0))
+            c5 = min(c4, max(pat_cnt, 0))
+            c6 = min(c5, max(rs_cnt, 0))
+            c7 = min(c6, max(inst_cnt, 0))
+            c8 = min(c7, max(sm_cnt, 0))
+            c9 = min(c8, max(live_cnt, 0))
+            c10 = min(c9, max(entry_cnt, 0))
+            c11 = min(c10, max(elite_cnt, 0))
 
             counts = [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11]
 

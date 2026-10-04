@@ -229,7 +229,14 @@ class MFEngineService:
         # Retrieve schemes and companies
         all_schemes = db.query(MFScheme).all()
         if not all_schemes:
-            raise ValueError("No MF Schemes registered. Run seed script first.")
+            logger.info("[MFEngineService] No MF Schemes found. Auto-bootstrapping mutual fund intelligence...")
+            try:
+                from scripts.seed_mutual_fund_data import seed_mutual_fund_intelligence
+                seed_mutual_fund_intelligence()
+                all_schemes = db.query(MFScheme).all()
+            except Exception as e:
+                logger.error(f"[MFEngineService] Auto-seed failed: {e}", exc_info=True)
+                raise ValueError("No MF Schemes registered and auto-seeding encountered an error.") from e
 
         large_schemes = [s for s in all_schemes if "Large" in s.category]
         flexi_schemes = [s for s in all_schemes if "Flexi" in s.category or "Multi" in s.category]

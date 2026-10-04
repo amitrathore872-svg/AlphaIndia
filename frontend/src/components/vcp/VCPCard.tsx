@@ -25,6 +25,7 @@ import {
 import { type VCPStockPick } from "@/lib/vcpApi";
 import { notificationsApi } from "@/lib/notificationsApi";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
+import { SparklineChart, StageBadge } from "@/components/common";
 
 interface VCPCardProps {
   stock: VCPStockPick;
@@ -90,15 +91,19 @@ export default function VCPCard({ stock, onOpenChart, isCompactMode = false }: V
             <div className="flex flex-col">
               <div className="flex items-center gap-2 flex-wrap">
                 <Link
-                  href={`/techno-funda/${encodeURIComponent(stock.symbol)}`}
+                  href={`/stocks/${encodeURIComponent(stock.symbol)}`}
                   className="text-lg font-black tracking-tight text-slate-900 dark:text-white hover:text-cyan-500 dark:hover:text-cyan-400 font-mono transition-colors"
-                  title={`View ${stock.symbol} Techno-Funda Analysis`}
+                  title={`View ${stock.symbol} Stock Details`}
                 >
                   {stock.symbol}
                 </Link>
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                   {stock.sector}
                 </span>
+                <StageBadge
+                  stage="Stage 2"
+                  cmp={stock.cmp}
+                />
                 {isElite ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
                     <Sparkles className="w-2.5 h-2.5 text-cyan-500" />
@@ -122,6 +127,20 @@ export default function VCPCard({ stock, onOpenChart, isCompactMode = false }: V
             <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80">
               <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400 block">CMP</span>
               <span className="text-slate-900 dark:text-white font-bold">₹{stock.cmp.toFixed(2)}</span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 flex flex-col items-center">
+              <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400 block">90D Trend</span>
+              <SparklineChart
+                data={(stock as any).sparkline}
+                cmp={stock.cmp}
+                return90d={(stock as any).return_90d_pct ?? (stock.target_1 && stock.cmp ? ((stock.target_1 - stock.cmp) / stock.cmp) * 100 : 14.5)}
+                width={64}
+                height={18}
+                periodLabel="90D"
+                showDot={true}
+                showBadge={false}
+              />
             </div>
 
             <div className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/80 border border-cyan-500/30">
@@ -214,15 +233,19 @@ export default function VCPCard({ stock, onOpenChart, isCompactMode = false }: V
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <Link
-                href={`/techno-funda/${encodeURIComponent(stock.symbol)}`}
+                href={`/stocks/${encodeURIComponent(stock.symbol)}`}
                 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white hover:text-cyan-500 dark:hover:text-cyan-400 font-mono transition-colors"
-                title={`View ${stock.symbol} Techno-Funda Analysis`}
+                title={`View ${stock.symbol} Stock Details`}
               >
                 {stock.symbol}
               </Link>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 {stock.sector}
               </span>
+              <StageBadge
+                stage="Stage 2"
+                cmp={stock.cmp}
+              />
               {isElite ? (
                 <span className="px-3 py-0.5 rounded-full text-[11px] font-bold tracking-wider bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-sm">
                   <Sparkles className="w-3 h-3 text-cyan-500" />

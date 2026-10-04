@@ -95,6 +95,9 @@ def get_momentum_opportunities(
     end_idx = start_idx + limit
     paginated_items = filtered[start_idx:end_idx]
 
+    from app.services.stock_trend_enricher import StockTrendEnricher
+    StockTrendEnricher.enrich(db, paginated_items, symbol_key="symbol", cmp_key="cmp")
+
     return {
         "metadata": metadata,
         "total_count": total_count,
@@ -265,6 +268,9 @@ def get_universe_scan_results(
     total_pages = max(1, (total_count + limit - 1) // limit)
     start = (page - 1) * limit
     items = filtered[start:start + limit]
+
+    from app.services.stock_trend_enricher import StockTrendEnricher
+    StockTrendEnricher.enrich(db, items, symbol_key="symbol", cmp_key="cmp")
 
     return {
         "status": "SUCCESS",

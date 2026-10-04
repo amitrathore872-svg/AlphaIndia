@@ -203,6 +203,39 @@ export async function fetchAlertsForWatchlist(
   return request(`/watchlists/${watchlistId}/alerts`);
 }
 
+export async function fetchAllActiveAlerts(params?: {
+  target_scope?: string;
+  status?: string;
+  signal_direction?: string;
+  rule_type?: string;
+}): Promise<{
+  success: boolean;
+  count: number;
+  alerts: import("@/types/watchlist").WatchlistAlertItem[];
+  summary: import("@/types/watchlist").AlertsOverviewSummary;
+}> {
+  const q = new URLSearchParams();
+  if (params?.target_scope && params.target_scope !== "ALL") q.append("target_scope", params.target_scope);
+  if (params?.status && params.status !== "ALL") q.append("status", params.status);
+  if (params?.signal_direction && params.signal_direction !== "ALL") q.append("signal_direction", params.signal_direction);
+  if (params?.rule_type) q.append("rule_type", params.rule_type);
+  const queryStr = q.toString() ? `?${q.toString()}` : "";
+  return request(`/watchlists/alerts/all${queryStr}`);
+}
+
+export async function createUnifiedAlert(
+  payload: import("@/types/watchlist").CreateUnifiedAlertPayload
+): Promise<{
+  success: boolean;
+  message: string;
+  alert: import("@/types/watchlist").WatchlistAlertItem;
+}> {
+  return request("/watchlists/alerts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createWatchlistAlert(
   watchlistId: number,
   payload: import("@/types/watchlist").CreateWatchlistAlertPayload
@@ -249,10 +282,15 @@ export async function evaluateSymbolAlerts(
     day_change_pct?: number;
     volume?: number;
     avg_volume_20d?: number;
+    dma_9?: number;
+    dma_20?: number;
     dma_50?: number;
     dma_200?: number;
+    supertrend_direction?: string;
+    supertrend_val?: number;
     vcp_score?: number;
     momentum_matches?: number;
+    delivery_pct?: number;
   }
 ): Promise<{
   success: boolean;

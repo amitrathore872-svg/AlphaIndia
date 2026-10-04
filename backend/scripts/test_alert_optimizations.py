@@ -185,6 +185,96 @@ def run_checks():
     assert AlertDispatchService.get_stock_urls("BAJFINANCE.NS")["stock_360_url"].endswith("/stocks/BAJFINANCE")
     print("   [+] Watchlist Alert integration verified")
 
+    # 6. Test DMA Reclaims/Breakdowns, Crossovers & Supertrend UP/DOWN Rules
+    print("\n[6] Testing DMA (9, 20, 50, 200) Reclaims, Breakdowns, Crossovers & Supertrend Rules...")
+    from app.services.watchlist_alert_service import WatchlistAlertService
+    from app.models.watchlist_alert import WatchlistAlert
+
+    # Clean up any lingering test alerts
+    db.query(WatchlistAlert).filter(WatchlistAlert.symbol == "TEST_DMA_STOCK").delete()
+    db.commit()
+
+    test_rules = [
+        ("DMA_9_RECLAIM", 520.0),
+        ("DMA_9_BREAKDOWN", 500.0),
+        ("DMA_20_RECLAIM", 480.0),
+        ("DMA_20_BREAKDOWN", 530.0),
+        ("DMA_50_RECLAIM", 460.0),
+        ("DMA_50_BREAKDOWN", 540.0),
+        ("DMA_200_RECLAIM", 400.0),
+        ("DMA_200_BREAKDOWN", 600.0),
+        ("DMA_9_CROSS_ABOVE_20", None),
+        ("DMA_9_CROSS_BELOW_20", None),
+        ("GOLDEN_CROSS", None),
+        ("DEATH_CROSS", None),
+        ("SUPERTREND_BUY", None),
+        ("SUPERTREND_SELL", None),
+    ]
+
+    for r_type, t_val in test_rules:
+        a = WatchlistAlert(
+            symbol="TEST_DMA_STOCK",
+            target_scope="STOCK_SPECIFIC",
+            rule_type=r_type,
+            threshold_value=t_val,
+            is_active=True,
+            status="ACTIVE",
+            notify_in_app=True,
+            notify_telegram=False,
+        )
+        db.add(a)
+    db.commit()
+
+    # Scenario A: Bullish state (CMP 510, 9 DMA 505 > 20 DMA 495 > 50 DMA 450 > 200 DMA 390, Supertrend BUY)
+    fired_a = WatchlistAlertService.evaluate_and_dispatch(
+        db=db,
+        symbol="TEST_DMA_STOCK",
+        cmp=510.0,
+        day_change_pct=2.5,
+        dma_9=505.0,
+        dma_20=495.0,
+        dma_50=450.0,
+        dma_200=390.0,
+        supertrend_direction="BUY",
+        supertrend_val=480.0,
+    )
+    fired_rules_a = {res["rule_type"] for res in fired_a}
+    assert "DMA_9_BREAKDOWN" not in fired_rules_a
+    assert "DMA_20_RECLAIM" in fired_rules_a
+    assert "DMA_50_RECLAIM" in fired_rules_a
+    assert "DMA_200_RECLAIM" in fired_rules_a
+    assert "DMA_9_CROSS_ABOVE_20" in fired_rules_a
+    assert "GOLDEN_CROSS" in fired_rules_a
+    assert "SUPERTREND_BUY" in fired_rules_a
+    print("   [+] Bullish DMA Reclaims, Golden Cross & Supertrend BUY triggers verified")
+
+    # Scenario B: Bearish breakdown state (CMP 490, 9 DMA 485 < 20 DMA 500, 50 DMA 520, Supertrend DOWN)
+    fired_b = WatchlistAlertService.evaluate_and_dispatch(
+        db=db,
+        symbol="TEST_DMA_STOCK",
+        cmp=490.0,
+        day_change_pct=-2.5,
+        dma_9=485.0,
+        dma_20=500.0,
+        dma_50=520.0,
+        dma_200=550.0,
+        supertrend_direction="DOWN",
+        supertrend_val=515.0,
+    )
+    fired_rules_b = {res["rule_type"] for res in fired_b}
+    assert "DMA_9_BREAKDOWN" in fired_rules_b
+    assert "DMA_20_BREAKDOWN" in fired_rules_b
+    assert "DMA_50_BREAKDOWN" in fired_rules_b
+    assert "DMA_200_BREAKDOWN" in fired_rules_b
+    assert "DMA_9_CROSS_BELOW_20" in fired_rules_b
+    assert "DEATH_CROSS" in fired_rules_b
+    assert "SUPERTREND_SELL" in fired_rules_b
+    print("   [+] Bearish DMA Breakdowns, Death Cross & Supertrend SELL triggers verified")
+
+    # Clean up test alerts
+    db.query(WatchlistAlert).filter(WatchlistAlert.symbol == "TEST_DMA_STOCK").delete()
+    db.commit()
+
     print("\n=================================================================")
     print("[SUCCESS] ALL ALERT SYSTEM OPTIMIZATIONS VERIFIED SUCCESSFULLY!")
     print("=================================================================")

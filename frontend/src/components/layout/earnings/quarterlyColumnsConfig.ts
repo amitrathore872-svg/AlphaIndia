@@ -686,6 +686,30 @@ export const ALL_AVAILABLE_COLUMNS: ColumnDefinition[] = [
     format: "ratio",
     sortKey: "beta",
   },
+  {
+    id: "current_stage",
+    label: "Current Stage (Stan Weinstein)",
+    shortLabel: "Stage",
+    category: "price",
+    subCategory: "RECENT",
+    align: "center",
+    minWidth: "105px",
+    description: "Stan Weinstein / Minervini Stage (Stage 1 Base, Stage 2 Markup, Stage 3 Distribution, Stage 4 Downtrend)",
+    format: "badge",
+    sortKey: "current_stage",
+  },
+  {
+    id: "sparkline",
+    label: "Price Trend (30D)",
+    shortLabel: "Trend",
+    category: "price",
+    subCategory: "RECENT",
+    align: "center",
+    minWidth: "90px",
+    description: "30-day interactive price sparkline trajectory",
+    format: "badge",
+    sortKey: "return_3m",
+  },
 
   // -------------------------------------------------------------------------
   // 6. BALANCE SHEET & CASH FLOW
@@ -902,6 +926,30 @@ export const ALL_AVAILABLE_COLUMNS: ColumnDefinition[] = [
     format: "badge",
     sortKey: "athena_conviction_score",
   },
+  {
+    id: "broker_conviction_score",
+    label: "Broker Conviction",
+    shortLabel: "Broker Conviction",
+    category: "alpha_india",
+    subCategory: "RECENT",
+    align: "center",
+    minWidth: "120px",
+    description: "Quantitative Institutional Brokerage Conviction Score (0-100)",
+    format: "badge",
+    sortKey: "broker_conviction_score",
+  },
+  {
+    id: "consensus_upside_pct",
+    label: "Consensus Upside %",
+    shortLabel: "Consensus Upside",
+    category: "alpha_india",
+    subCategory: "RECENT",
+    align: "right",
+    minWidth: "120px",
+    description: "Implied upside % to median institutional target price",
+    format: "percent",
+    sortKey: "consensus_upside_pct",
+  },
 ];
 
 // Most Used subset for the Screener.in "Most Used" tab
@@ -964,6 +1012,20 @@ export const COLUMN_PRESETS: { id: string; label: string; columnIds: string[] }[
       "operating_leverage_ratio",
       "run_rate_beat_pct",
       "athena_conviction_grade",
+    ],
+  },
+  {
+    id: "institutional_brokerage",
+    label: "Institutional Brokerage Radar",
+    columnIds: [
+      "current_price",
+      "market_cap",
+      "broker_conviction_score",
+      "consensus_upside_pct",
+      "quarterly_pat_yoy",
+      "quarterly_sales_yoy",
+      "roce",
+      "stock_pe",
     ],
   },
   {

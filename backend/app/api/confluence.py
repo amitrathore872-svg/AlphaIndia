@@ -67,6 +67,9 @@ def get_confluence_radar(
         elif "SOLITARY" in t_clean:
             all_filtered = filt_solitary
 
+    from app.services.stock_trend_enricher import StockTrendEnricher
+    StockTrendEnricher.enrich(db, all_filtered, symbol_key="symbol", cmp_key="cmp")
+
     return {
         "status": "SUCCESS",
         "metadata": {

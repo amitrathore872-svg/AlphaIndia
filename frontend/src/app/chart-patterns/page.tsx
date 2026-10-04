@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -32,9 +32,9 @@ import {
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface PatternMetrics {
   base_high?: number;
@@ -128,9 +128,9 @@ interface SchedulerStatus {
   last_tick_duration_sec?: number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Constants
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import { API_BASE } from "@/lib/apiConfig";
 
@@ -188,7 +188,7 @@ const PATTERN_CONFIG: Record<string, { label: string; color: string; border: str
     border: "border-rose-300 dark:border-rose-500/40",
     bg: "bg-rose-50 dark:bg-rose-950/40",
     text: "text-rose-800 dark:text-rose-300",
-    desc: "100%+ explosive move in ≤8 weeks (Minervini Elite)",
+    desc: "100%+ explosive move in â‰¤8 weeks (Minervini Elite)",
   },
 };
 
@@ -217,12 +217,12 @@ const SORT_OPTIONS = [
   { value: "cmp", label: "Price (CMP)" },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const fmt = (n: number | undefined | null, d = 2) =>
-  n !== undefined && n !== null && !isNaN(n) ? n.toFixed(d) : "—";
+  n !== undefined && n !== null && !isNaN(n) ? n.toFixed(d) : "â€”";
 
 function ConvictionBadge({ score, tier }: { score: number; tier: string }) {
   let badgeCls = "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40";
@@ -259,9 +259,9 @@ function PatternTypeBadge({ type }: { type: string }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Pattern Card Component
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PatternCard({
   item,
@@ -277,10 +277,10 @@ function PatternCard({
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = `🎯 [Alpha India] ${item.symbol} (${item.pattern_label})\n` +
+    const text = `ðŸŽ¯ [Alpha India] ${item.symbol} (${item.pattern_label})\n` +
       `AI Score: ${item.ai_conviction_score}/100 (${item.conviction_tier})\n` +
-      `CMP: ₹${fmt(item.cmp)} | Pivot Buy Point: ₹${fmt(item.pivot_buy_point)} (${fmt(item.breakout_distance_pct)}% from pivot)\n` +
-      `Stop Loss: ₹${fmt(item.stop_loss)} | Target 1: ₹${fmt(item.target_1)} | Target 2: ₹${fmt(item.target_2)}\n` +
+      `CMP: â‚¹${fmt(item.cmp)} | Pivot Buy Point: â‚¹${fmt(item.pivot_buy_point)} (${fmt(item.breakout_distance_pct)}% from pivot)\n` +
+      `Stop Loss: â‚¹${fmt(item.stop_loss)} | Target 1: â‚¹${fmt(item.target_1)} | Target 2: â‚¹${fmt(item.target_2)}\n` +
       `Risk/Reward: ${fmt(item.risk_reward)}:1 | Base Width: ${fmt(item.pattern_width_weeks, 1)}w | Depth: ${fmt(item.pattern_depth_pct)}%`;
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -298,7 +298,7 @@ function PatternCard({
           : "border-slate-200/90 dark:border-indigo-500/20 shadow-xs hover:shadow-md"
       }`}
     >
-      {/* ── Main Summary Row ── */}
+      {/* â”€â”€ Main Summary Row â”€â”€ */}
       <div className="p-4 sm:p-5 flex flex-col gap-4">
         {/* Top line: Symbol, badges, price & score */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -318,7 +318,7 @@ function PatternCard({
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[280px] sm:max-w-[360px] mt-0.5">
-                {item.company_name} • <span className="text-slate-600 dark:text-slate-400 font-medium">{item.sector}</span>
+                {item.company_name} â€¢ <span className="text-slate-600 dark:text-slate-400 font-medium">{item.sector}</span>
               </p>
             </div>
           </div>
@@ -356,7 +356,7 @@ function PatternCard({
           <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#0c1326] border border-slate-200/80 dark:border-slate-800/80">
             <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">CMP</div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">₹{fmt(item.cmp)}</span>
+              <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">â‚¹{fmt(item.cmp)}</span>
               <span
                 className={`font-mono text-[11px] font-bold ${
                   item.day_change_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
@@ -372,7 +372,7 @@ function PatternCard({
           <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#0c1326] border border-slate-200/80 dark:border-slate-800/80">
             <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">Pivot Point</div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="font-mono font-bold text-indigo-700 dark:text-cyan-300 text-sm">₹{fmt(item.pivot_buy_point)}</span>
+              <span className="font-mono font-bold text-indigo-700 dark:text-cyan-300 text-sm">â‚¹{fmt(item.pivot_buy_point)}</span>
               <span
                 className={`font-mono text-[10px] font-bold ${
                   item.breakout_distance_pct <= 2.5
@@ -392,9 +392,9 @@ function PatternCard({
           <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#0c1326] border border-slate-200/80 dark:border-slate-800/80">
             <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">T1 / Stop</div>
             <div className="flex items-baseline gap-1.5 mt-0.5 font-mono text-[11px]">
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{fmt(item.target_1)}</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">â‚¹{fmt(item.target_1)}</span>
               <span className="text-slate-400">/</span>
-              <span className="text-rose-600 dark:text-rose-400 font-bold">₹{fmt(item.stop_loss)}</span>
+              <span className="text-rose-600 dark:text-rose-400 font-bold">â‚¹{fmt(item.stop_loss)}</span>
             </div>
           </div>
 
@@ -428,7 +428,7 @@ function PatternCard({
         </div>
       </div>
 
-      {/* ── Expanded Deep-Dive Blueprint ── */}
+      {/* â”€â”€ Expanded Deep-Dive Blueprint â”€â”€ */}
       {expanded && (
         <div className="px-4 pb-5 pt-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/40 space-y-4">
           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider">
@@ -445,7 +445,7 @@ function PatternCard({
                 <ExternalLink className="w-3 h-3" />
               </a>
               <a
-                href={`/techno-funda/${item.symbol}`}
+                href={`/techno-funda/${item.symbol}?from=/chart-patterns`}
                 onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 font-medium transition-colors"
               >
@@ -462,7 +462,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Base High / Low</div>
                   <div className="font-mono text-slate-800 dark:text-slate-200 mt-1 font-semibold">
-                    ₹{fmt(m.base_high)} / ₹{fmt(m.base_low)}
+                    â‚¹{fmt(m.base_high)} / â‚¹{fmt(m.base_low)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -491,7 +491,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Lows (L1 / L2)</div>
                   <div className="font-mono text-slate-800 dark:text-slate-200 mt-1 font-semibold">
-                    ₹{fmt(m.left_low)} / ₹{fmt(m.right_low)}
+                    â‚¹{fmt(m.left_low)} / â‚¹{fmt(m.right_low)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -503,7 +503,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Middle Pivot Peak</div>
                   <div className="font-mono text-indigo-600 dark:text-cyan-300 mt-1 font-semibold">
-                    ₹{fmt(m.mid_pivot)} (+{fmt(m.pivot_height_pct)}%)
+                    â‚¹{fmt(m.mid_pivot)} (+{fmt(m.pivot_height_pct)}%)
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -520,7 +520,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Horizontal Resistance</div>
                   <div className="font-mono text-indigo-600 dark:text-cyan-300 mt-1 font-semibold">
-                    ₹{fmt(m.resistance_level)}
+                    â‚¹{fmt(m.resistance_level)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -561,7 +561,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Flag Boundary Range</div>
                   <div className="font-mono text-slate-800 dark:text-slate-200 mt-1 font-semibold">
-                    ₹{fmt(m.flag_top)} — ₹{fmt(m.flag_bottom)}
+                    â‚¹{fmt(m.flag_top)} â€” â‚¹{fmt(m.flag_bottom)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -580,18 +580,18 @@ function PatternCard({
               <Target className="w-4 h-4 text-indigo-600 dark:text-cyan-400" />
               <span className="font-bold text-slate-900 dark:text-white">Execution Plan:</span>
               <span className="text-slate-600 dark:text-slate-400">
-                Enter on breakout candle above <strong className="text-indigo-700 dark:text-cyan-300">₹{fmt(item.pivot_buy_point)}</strong> with volume &gt; 1.5× 50 DMA.
+                Enter on breakout candle above <strong className="text-indigo-700 dark:text-cyan-300">â‚¹{fmt(item.pivot_buy_point)}</strong> with volume &gt; 1.5Ã— 50 DMA.
               </span>
             </div>
             <div className="flex items-center gap-4 text-slate-700 dark:text-slate-300 font-medium">
               <div>
-                Stop Loss: <strong className="text-rose-600 dark:text-rose-400 font-bold">₹{fmt(item.stop_loss)}</strong>
+                Stop Loss: <strong className="text-rose-600 dark:text-rose-400 font-bold">â‚¹{fmt(item.stop_loss)}</strong>
               </div>
               <div>
-                Target 1 (+10%): <strong className="text-emerald-600 dark:text-emerald-400 font-bold">₹{fmt(item.target_1)}</strong>
+                Target 1 (+10%): <strong className="text-emerald-600 dark:text-emerald-400 font-bold">â‚¹{fmt(item.target_1)}</strong>
               </div>
               <div>
-                Target 2 (+20%): <strong className="text-emerald-700 dark:text-emerald-300 font-bold">₹{fmt(item.target_2)}</strong>
+                Target 2 (+20%): <strong className="text-emerald-700 dark:text-emerald-300 font-bold">â‚¹{fmt(item.target_2)}</strong>
               </div>
             </div>
           </div>
@@ -601,9 +601,9 @@ function PatternCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main Page Component
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function ChartPatternsPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -635,7 +635,7 @@ export default function ChartPatternsPage() {
     });
   };
 
-  // ── Fetch telemetry ──
+  // â”€â”€ Fetch telemetry â”€â”€
   const fetchSchedulerStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/v1/chart-patterns/scheduler/status`);
@@ -648,7 +648,7 @@ export default function ChartPatternsPage() {
     }
   }, []);
 
-  // ── Fetch patterns ──
+  // â”€â”€ Fetch patterns â”€â”€
   const fetchPatterns = useCallback(
     async (force = false) => {
       try {
@@ -774,12 +774,12 @@ export default function ChartPatternsPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-cyan-300 text-xs font-semibold transition-all disabled:opacity-50 shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              <span>{refreshing ? "Scanning…" : "Fresh Scan"}</span>
+              <span>{refreshing ? "Scanningâ€¦" : "Fresh Scan"}</span>
             </button>
           </div>
         </div>
 
-        {/* ── Pattern Category Pill Selector Bar ── */}
+        {/* â”€â”€ Pattern Category Pill Selector Bar â”€â”€ */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3 pt-1 flex items-center gap-2 overflow-x-auto no-scrollbar text-xs">
           {(["ALL", "INVERSE_HEAD_AND_SHOULDERS", "FLAT_BASE", "DOUBLE_BOTTOM", "ASCENDING_TRIANGLE", "BULL_FLAG", "HIGH_TIGHT_FLAG"] as const).map(
             (pKey) => {
@@ -816,7 +816,7 @@ export default function ChartPatternsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* ── Institutional Stats Bar ── */}
+        {/* â”€â”€ Institutional Stats Bar â”€â”€ */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <div className="p-4 rounded-xl bg-white dark:bg-[#111a30] border border-slate-200/90 dark:border-indigo-500/20 shadow-xs dark:shadow-md">
             <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">
@@ -833,7 +833,7 @@ export default function ChartPatternsPage() {
           <div className="p-4 rounded-xl bg-white dark:bg-[#111a30] border border-emerald-300/80 dark:border-emerald-500/20 shadow-xs dark:shadow-md">
             <div className="text-[11px] text-emerald-700 dark:text-emerald-400 uppercase font-semibold tracking-wider flex items-center gap-1.5">
               <Award className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              Elite Setups (Score ≥ 82)
+              Elite Setups (Score â‰¥ 82)
             </div>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400">
@@ -868,14 +868,14 @@ export default function ChartPatternsPage() {
           </div>
         </div>
 
-        {/* ── Filters & Search Control Bar ── */}
+        {/* â”€â”€ Filters & Search Control Bar â”€â”€ */}
         <div className="p-4 rounded-xl bg-white dark:bg-[#111a30] border border-slate-200/90 dark:border-indigo-500/20 shadow-xs dark:shadow-md flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Search box */}
           <div className="relative flex-1 min-w-[200px] max-w-xs">
             <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
-              placeholder="Search Symbol / Company…"
+              placeholder="Search Symbol / Companyâ€¦"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -963,12 +963,12 @@ export default function ChartPatternsPage() {
           </div>
         </div>
 
-        {/* ── Pattern Cards List ── */}
+        {/* â”€â”€ Pattern Cards List â”€â”€ */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-12 h-12 rounded-full border-2 border-cyan-500/30 border-t-cyan-500 animate-spin" />
             <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-              Scanning 5 institutional chart patterns across the equity universe…
+              Scanning 5 institutional chart patterns across the equity universeâ€¦
             </p>
           </div>
         ) : error ? (
@@ -997,7 +997,7 @@ export default function ChartPatternsPage() {
           </div>
         )}
 
-        {/* ── Pagination ── */}
+        {/* â”€â”€ Pagination â”€â”€ */}
         {data && data.total_pages > 1 && (
           <div className="flex items-center justify-center gap-3 pt-4">
             <button
@@ -1023,3 +1023,4 @@ export default function ChartPatternsPage() {
     </DashboardLayout>
   );
 }
+

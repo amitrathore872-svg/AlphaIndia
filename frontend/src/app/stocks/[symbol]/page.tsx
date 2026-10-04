@@ -19,6 +19,7 @@ import QuarterlyFinancialsTab from "@/components/stock-detail/QuarterlyFinancial
 import OrderBookCatalystsTab from "@/components/stock-detail/OrderBookCatalystsTab";
 import MutualFundHoldingsTab from "@/components/stock-detail/MutualFundHoldingsTab";
 import MomentumDeliveryTab from "@/components/stock-detail/MomentumDeliveryTab";
+import BrokerageResearchTab from "@/components/stock-detail/BrokerageResearchTab";
 import {
   ArrowLeft,
   Activity,
@@ -79,12 +80,38 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
   // Active navigation tab with URL sync
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Dynamic back navigation — read ?from= param so any screener can send us here
+  const [backHref, setBackHref] = useState("/growth-screener");
+  const [backLabel, setBackLabel] = useState("Back to Screener");
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search);
       const tab = p.get("tab");
       if (tab) {
         setActiveTab(tab);
+      }
+      const from = p.get("from");
+      if (from) {
+        setBackHref(from);
+        // Derive a friendly label from the path
+        const labelMap: Record<string, string> = {
+          "/growth-screener": "Growth Screener",
+          "/candlestick-radar": "Candlestick Radar",
+          "/pre-breakout-radar": "Pre-Breakout Radar",
+          "/techno-funda": "Techno-Funda Radar",
+          "/momentum-radar": "Momentum Radar",
+          "/delivery-radar": "Delivery Radar",
+          "/institutional-radar": "Institutional Radar",
+          "/apex-confluence": "Apex Confluence",
+          "/brokerage-radar": "Brokerage Radar",
+          "/alerts": "Alerts",
+          "/cpr-scanner": "CPR Scanner",
+          "/trend-genesis": "Trend Genesis",
+          "/ipo-radar": "IPO Radar",
+          "/home": "Home",
+        };
+        setBackLabel(labelMap[from] ? `Back to ${labelMap[from]}` : "Back to Screener");
       }
     }
   }, []);
@@ -188,11 +215,11 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800/80 pb-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/growth-screener"
+              href={backHref}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-white shadow-xs transition"
             >
               <ArrowLeft size={14} />
-              <span>Back to Screener</span>
+              <span>{backLabel}</span>
             </Link>
             <span className="text-slate-400 dark:text-slate-600">/</span>
             <div className="flex items-center gap-2">
@@ -232,7 +259,7 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
                       onClick={() => {
                         setShowSearchDropdown(false);
                         setSearchQuery("");
-                        router.push(`/stocks/${item.symbol}`);
+                        router.push(`/stocks/${item.symbol}${backHref !== "/growth-screener" ? `?from=${encodeURIComponent(backHref)}` : ""}`);
                       }}
                       className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
                     >
@@ -297,7 +324,7 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
             <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 max-w-md mx-auto">{error}</p>
             <div className="mt-4">
               <Link
-                href="/growth-screener"
+                href={backHref}
                 className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700 transition"
               >
                 Return to Screener
@@ -441,6 +468,7 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
             <div className="sticky top-0 z-30 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#060D19]/95 backdrop-blur-md p-1.5 text-xs font-semibold shadow-xs dark:shadow-lg">
               {[
                 { id: "overview", label: "⚡ Executive Radar" },
+                { id: "brokerage", label: "🎯 Brokerage Consensus" },
                 { id: "financials", label: "📊 Financials (8Q)" },
                 { id: "order-book", label: "📑 Order Book & PPT" },
                 { id: "mutual-funds", label: "🏛️ Mutual Funds" },
@@ -1031,7 +1059,7 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
                               </td>
                               <td className="py-2.5 px-3 text-center font-sans">
                                 <Link
-                                  href={`/stocks/${peer.symbol}`}
+                                  href={`/stocks/${peer.symbol}${backHref !== "/growth-screener" ? `?from=${encodeURIComponent(backHref)}` : ""}`}
                                   className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/40 hover:border-cyan-500 transition"
                                 >
                                   <span>Analyze</span>
@@ -1222,6 +1250,11 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
                   target1={data.scenario_references.target_1}
                 />
               </div>
+            )}
+
+            {/* TAB VIEW: BROKERAGE RADAR & CONSENSUS */}
+            {activeTab === "brokerage" && (
+              <BrokerageResearchTab symbol={symbol} />
             )}
 
             {/* TAB VIEW 8: POSITION SIZING CALCULATOR */}

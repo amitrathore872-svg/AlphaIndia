@@ -102,3 +102,29 @@ option {
   background: rgba(148, 163, 184, 0.45);
 }
 
+/* Institutional Daily One-Pager Print Stylesheet */
+@media print {
+  header,
+  aside,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .dark {
+    --background: #ffffff;
+    --foreground: #000000;
+  }
+}
+
+

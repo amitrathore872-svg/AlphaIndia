@@ -79,6 +79,8 @@ class OpportunityAlertService:
         "ipo_radar_enabled": True,
         "ipo_min_conviction": 85.0,
         "ipo_blue_sky_only": False,
+        "transformational_multibaggers_enabled": True,
+        "transformational_min_conviction": 80.0,
         "auto_broadcast_telegram": True,
         "auto_broadcast_whatsapp": True,
     }
@@ -686,6 +688,16 @@ class OpportunityAlertService:
                 dispatched_alerts.append(item)
         except Exception as ipo_err:
             logger.error(f"Error evaluating IPO radar alerts in master scan: {ipo_err}", exc_info=True)
+
+        # ==================================================================
+        # 13. /investor-intelligence — Transformational Concall Multibaggers
+        # ==================================================================
+        try:
+            trans_res = cls.scan_transformational_multibaggers_alerts(db=db, rules=rules)
+            for item in trans_res:
+                dispatched_alerts.append(item)
+        except Exception as trans_err:
+            logger.error(f"Error evaluating transformational multibagger alerts in master scan: {trans_err}", exc_info=True)
 
         return {
             "status": "SUCCESS",
@@ -1868,6 +1880,98 @@ class OpportunityAlertService:
         return dispatched
 
     @classmethod
+    def scan_transformational_multibaggers_alerts(
+        cls,
+        db: Session,
+        rules: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        Scans investor presentations and concall analyses for multibagger triggers
+        reconciled against real-time technical stage analysis.
+        """
+        if not rules.get("transformational_multibaggers_enabled", True):
+            return []
+
+        dispatched: List[Dict[str, Any]] = []
+        today_start = AlertDispatchService.get_dedup_cutoff(hours=18)
+        min_score = float(rules.get("transformational_min_conviction", 80.0))
+
+        try:
+            from app.services.investor_intelligence_service import InvestorIntelligenceService
+            opps = InvestorIntelligenceService.get_active_opportunities(db)
+            candidates = opps.get("ready_to_buy", []) + opps.get("inflection_radar", [])
+
+            for cand in candidates:
+                sym = cand.get("symbol", "").strip().upper()
+                if not sym:
+                    continue
+
+                c_score = float(cand.get("conviction_score") or 0.0)
+                if c_score < min_score:
+                    continue
+
+                # Deduplication check
+                existing = (
+                    db.query(SystemNotification)
+                    .filter(
+                        SystemNotification.category.in_(["TRANSFORMATIONAL_CATALYST", "MULTIBAGGER_OPPORTUNITY"]),
+                        SystemNotification.created_at >= today_start,
+                        SystemNotification.title.like(f"%{sym}%"),
+                    )
+                    .first()
+                )
+                if existing:
+                    continue
+
+                opp_class = cand.get("opportunity_type", "READY_TO_BUY_STAGE_2")
+                badge = cand.get("badge", "READY TO BUY")
+                is_ready = (opp_class == "READY_TO_BUY_STAGE_2")
+                severity = "critical" if is_ready else "warning"
+
+                headline = cand.get("catalyst_headline") or f"Transformational Growth Radar for {sym}"
+                cmp_price = float(cand.get("cmp") or 0.0)
+                dma_50 = float(cand.get("dma_50") or 0.0)
+                dma_200 = float(cand.get("dma_200") or 0.0)
+                verdict = cand.get("verdict") or ("READY TO BUY" if is_ready else "ACCUMULATE ON BASE BREAKOUT")
+
+                title = f"🚀 MULTIBAGGER RADAR: {sym} ({badge})"
+                message = f"{headline}. Stance: {cand.get('institutional_stance')}. CMP: ₹{cmp_price:,.1f}. Verdict: {verdict}"
+
+                notif = AlertDispatchService.create_in_app_notification(
+                    db=db,
+                    title=title,
+                    message=message,
+                    category="TRANSFORMATIONAL_CATALYST",
+                    severity=severity,
+                    action_url="/investor-intelligence",
+                    metadata=cand,
+                )
+
+                memo = AlertDispatchService.format_transformational_multibagger_alert(
+                    symbol=sym,
+                    company_name=cand.get("company_name", sym),
+                    opportunity_class=opp_class,
+                    catalyst_headline=headline,
+                    catalyst_category=cand.get("catalyst_category") or "GROWTH_LEADER",
+                    guidance_change=cand.get("guidance_change"),
+                    conviction_score=c_score,
+                    cmp=cmp_price,
+                    dma_50=dma_50 if dma_50 > 0 else None,
+                    dma_200=dma_200 if dma_200 > 0 else None,
+                    action_verdict=verdict,
+                    entry_corridor=f"₹{cmp_price*0.99:.1f} – ₹{cmp_price*1.02:.1f}" if cmp_price > 0 else None,
+                    stop_loss=round(dma_50 * 0.97, 1) if dma_50 > 0 else None,
+                )
+
+                cls._dispatch_external_channels(db, sym, memo, rules)
+                dispatched.append({"engine": "investor-intelligence", "symbol": sym, "title": title, "notif_id": notif.id})
+
+        except Exception as e:
+            logger.error(f"Error scanning Transformational Multibaggers for alerts: {e}", exc_info=True)
+
+        return dispatched
+
+    @classmethod
     def get_recent_opportunity_alerts(cls, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Returns recent opportunity notifications across all key radar categories.
@@ -1886,6 +1990,8 @@ class OpportunityAlertService:
             "GROWTH_SCREENER",
             "BREAKOUT_EXECUTION",
             "IPO_RADAR",
+            "TRANSFORMATIONAL_CATALYST",
+            "MULTIBAGGER_OPPORTUNITY",
         ]
         items = (
             db.query(SystemNotification)

@@ -55,6 +55,12 @@ from app.api.cpr_scanner import router as cpr_scanner_router
 from app.api.velocity import router as velocity_router
 from app.api.ipo_radar import router as ipo_radar_router
 from app.api.candlestick_screener import router as candlestick_screener_router
+from app.api.investor_intelligence import router as investor_intelligence_router
+from app.api.market_indices import router as market_indices_router
+from app.api.reports import router as reports_router
+from app.api.sovereign import router as sovereign_router
+from app.api.sovereign_intraday import router as sovereign_intraday_router
+from app.api.brokerage import router as brokerage_router
 import time
 from fastapi import Request
 
@@ -173,6 +179,8 @@ app.include_router(announcements_router, prefix="/api/v1")
 app.include_router(athena_omega_router)
 app.include_router(institutional_radar_router)
 app.include_router(institutional_radar_router, prefix="/api/v1")
+app.include_router(mf_radar_router)
+app.include_router(mf_radar_router, prefix="/api")
 app.include_router(quarterly_results_router)
 app.include_router(control_system_router)
 app.include_router(notifications_router)
@@ -202,11 +210,23 @@ app.include_router(live_intraday_router, prefix="/api/v1")
 app.include_router(cpr_scanner_router)
 app.include_router(cpr_scanner_router, prefix="/api/v1")
 app.include_router(velocity_router)
+app.include_router(investor_intelligence_router)
+app.include_router(market_indices_router)
+app.include_router(market_indices_router, prefix="/api/v1")
+app.include_router(reports_router)
+app.include_router(reports_router, prefix="/api/v1")
+app.include_router(sovereign_router)
+app.include_router(sovereign_router, prefix="/api/v1")
+app.include_router(sovereign_intraday_router)
+app.include_router(sovereign_intraday_router, prefix="/api/v1")
+app.include_router(brokerage_router)
+app.include_router(brokerage_router, prefix="/api/v1")
 
 # ---------------- Dual Mount Under /api (Same-Origin Reverse Proxy Compatibility) ----------------
 # Allows any client calling /api/<path> or direct /<path> to resolve cleanly
 API_DOMAIN_ROUTERS = [
     growth_router,
+    brokerage_router,
     market_intelligence_router,
     companies_router,
     quarterly_results_router,
@@ -237,6 +257,10 @@ API_DOMAIN_ROUTERS = [
     institutional_radar_router,
     mf_radar_router,
     ipo_radar_router,
+    market_indices_router,
+    reports_router,
+    sovereign_router,
+    sovereign_intraday_router,
 ]
 for r in API_DOMAIN_ROUTERS:
     app.include_router(r, prefix="/api")

@@ -39,6 +39,7 @@ class AutonomousEngineScheduler:
     INTERVAL_MF_RADAR = 1800          # 30 mins (checks AMFI disclosure calendar & syncs)
     INTERVAL_MOMENTUM_UNIVERSE = 3600 # 60 mins — off-market universe sweep (guards itself internally)
     INTERVAL_MOMENTUM_INTRADAY = 60   # 60s — re-scores watchlist during market hours
+    INTERVAL_TELEGRAM_ALERTS = 120    # 2 mins — automated opportunity & sovereign telegram alert dispatcher
 
     # Execution telemetry state
     _engine_telemetry: Dict[str, Dict[str, Any]] = {
@@ -115,6 +116,16 @@ class AutonomousEngineScheduler:
         "momentum_intraday": {
             "name": "Momentum Intraday Breakout Monitor",
             "interval_sec": 60,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
+        "telegram_auto_alerts": {
+            "name": "Auto Telegram Opportunity & Apex Radar",
+            "interval_sec": 120,
             "last_run": None,
             "next_run": None,
             "status": "IDLE",
@@ -203,6 +214,7 @@ class AutonomousEngineScheduler:
         next_mf_radar = now + 75          # 75s warmup
         next_momentum_universe = now + 90 # 90s warmup (off-market only)
         next_momentum_intraday = now + 45 # 45s warmup (market hours only)
+        next_telegram_alerts = now + 15   # 15s warmup (auto telegram alerts)
 
         while not cls._stop_event.is_set():
             current_time = time.time()
@@ -280,6 +292,16 @@ class AutonomousEngineScheduler:
                     cls._execute_momentum_intraday_cycle()
                 next_momentum_intraday = time.time() + cls.INTERVAL_MOMENTUM_INTRADAY
                 cls._update_next_run("momentum_intraday", cls.INTERVAL_MOMENTUM_INTRADAY)
+
+            # -------------------------------------------------------------
+            # Cycle 9: Automated Telegram Opportunity & Sovereign Apex Alerts
+            # Runs every 120s autonomously
+            # -------------------------------------------------------------
+            if current_time >= next_telegram_alerts:
+                if cls.is_engine_enabled("telegram_auto_alerts"):
+                    cls._execute_telegram_alerts_cycle()
+                next_telegram_alerts = time.time() + cls.INTERVAL_TELEGRAM_ALERTS
+                cls._update_next_run("telegram_auto_alerts", cls.INTERVAL_TELEGRAM_ALERTS)
 
             # Sleep in 2-second increments for responsive teardown
             for _ in range(2):
@@ -669,6 +691,76 @@ class AutonomousEngineScheduler:
         except Exception as exc:
             error_msg = str(exc)
             logger.error(f"[AutonomousEngineScheduler] Momentum intraday cycle error: {exc}", exc_info=True)
+        finally:
+            db.close()
+
+        cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_telegram_alerts_cycle(cls):
+        key = "telegram_auto_alerts"
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        db = SessionLocal()
+        try:
+            from app.models.notification import AlertDispatchLog
+            from app.services.opportunity_alert_service import OpportunityAlertService
+            from app.services.sovereign_cockpit_service import SovereignCockpitService
+            from app.services.alert_dispatch_service import AlertDispatchService
+
+            # 1. Automated Opportunity Radar scan across 14 engines (auto-broadcasts to Telegram)
+            opp_res = OpportunityAlertService.scan_and_dispatch_opportunity_alerts(db=db, force_scan=False)
+            records_count += opp_res.get("new_alerts_count", 0)
+
+            # 2. Automated Sovereign Cockpit Ignition Ready Apex Scanner
+            sov_data = SovereignCockpitService.evaluate_universe(db)
+            all_sov = (
+                sov_data.get("chamber_1_compounders", {}).get("candidates", []) +
+                sov_data.get("chamber_2_turnarounds", {}).get("candidates", [])
+            )
+            ignition_picks = [c for c in all_sov if c.get("stage") == "IGNITION_READY"]
+
+            cutoff = AlertDispatchService.get_dedup_cutoff(hours=18)
+            for pick in ignition_picks[:5]:
+                sym = pick.get("symbol")
+                if not sym:
+                    continue
+                
+                already = db.query(AlertDispatchLog).filter(
+                    AlertDispatchLog.symbol == sym,
+                    AlertDispatchLog.payload_preview.ilike("%SOVEREIGN IGNITION%"),
+                    AlertDispatchLog.dispatched_at >= cutoff
+                ).first()
+
+                if not already:
+                    res = SovereignCockpitService.dispatch_alert(
+                        db=db,
+                        alert_type="IGNITION_TRIGGER",
+                        symbol=sym,
+                        custom_note=f"Auto Sovereign Radar: CMP ₹{pick.get('current_price', 0):.1f}"
+                    )
+                    if res.get("ok"):
+                        records_count += 1
+
+            ControlSystemService.record_service_fetch(
+                service_id="telegram_auto_alerts",
+                records_count=records_count,
+                status="SUCCESS",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] Auto Telegram alerts cycle error: {exc}", exc_info=True)
+            ControlSystemService.record_service_fetch(
+                service_id="telegram_auto_alerts",
+                records_count=0,
+                status="ERROR",
+                error_msg=error_msg,
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
         finally:
             db.close()
 

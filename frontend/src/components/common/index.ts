@@ -8,4 +8,6 @@ export { default as KpiCard } from "./KpiCard";
 export { default as LoadingSpinner } from "./LoadingSpinner";
 export { default as EmptyState } from "./EmptyState";
 export { default as PageBadge } from "./PageBadge";
+export { default as SparklineChart } from "./SparklineChart";
+export { default as StageBadge } from "./StageBadge";
 export { TabStrip, FilterPill, ActionButton } from "./FilterPill";

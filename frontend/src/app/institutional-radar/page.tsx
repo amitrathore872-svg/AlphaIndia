@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   ShieldCheck,
   TrendingUp,
@@ -11,6 +12,7 @@ import {
   Award,
   Filter,
   ArrowUpRight,
+  ExternalLink,
   SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
@@ -21,6 +23,7 @@ import {
   TableProperties,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { SparklineChart } from "@/components/common";
 import StockInstitutionalModal from "@/components/institutional/StockInstitutionalModal";
 import SectorRotationCard from "@/components/institutional/SectorRotationCard";
 import InstitutionalSubNav from "@/components/institutional/InstitutionalSubNav";
@@ -185,10 +188,10 @@ export default function InstitutionalRadarPage() {
         <div className="flex flex-wrap items-center gap-2">
           {[
             { id: "ALL", label: "All Caps", count: capCounts.ALL, color: "text-slate-800 dark:text-slate-200" },
-            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-700 dark:text-cyan-400", desc: "> ₹20,000 Cr" },
-            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-700 dark:text-emerald-400", desc: "₹5,000 - ₹20,000 Cr" },
-            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-800 dark:text-amber-400", desc: "₹1,000 - ₹5,000 Cr" },
-            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-600 dark:text-slate-400", desc: "< ₹1,000 Cr" },
+            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-700 dark:text-cyan-400", desc: "> â‚¹20,000 Cr" },
+            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-700 dark:text-emerald-400", desc: "â‚¹5,000 - â‚¹20,000 Cr" },
+            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-800 dark:text-amber-400", desc: "â‚¹1,000 - â‚¹5,000 Cr" },
+            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-600 dark:text-slate-400", desc: "< â‚¹1,000 Cr" },
           ].map((cat) => {
             const active = capCategory === cat.id;
             return (
@@ -295,8 +298,10 @@ export default function InstitutionalRadarPage() {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400">
-                  <th className="py-3.5 px-4 text-center">Cap Tier</th>
+                  <th className="py-3.5 px-3 text-center">Cap Tier</th>
                   <th className="py-3.5 pl-4 pr-4 font-semibold">Ticker & Company Name</th>
+                  <th className="py-3.5 px-3 text-center font-semibold">Current Stage</th>
+                  <th className="py-3.5 px-3 text-center font-semibold">Trend (90D)</th>
                   <th
                     onClick={() => handleSort("smart_money_score")}
                     className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition"
@@ -320,7 +325,7 @@ export default function InstitutionalRadarPage() {
                     className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition text-right"
                   >
                     <div className="flex items-center justify-end gap-1.5">
-                      Net MoM Flow (₹ Cr)
+                      Net MoM Flow (â‚¹ Cr)
                       <ArrowUpDown size={12} />
                     </div>
                   </th>
@@ -341,7 +346,7 @@ export default function InstitutionalRadarPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={10} className="py-16 text-center text-slate-500 dark:text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="h-7 w-7 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
                         <span>Loading Institutional Radar...</span>
@@ -350,7 +355,7 @@ export default function InstitutionalRadarPage() {
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={10} className="py-16 text-center text-slate-500 dark:text-slate-400">
                       No institutional records found matching criteria.
                     </td>
                   </tr>
@@ -365,14 +370,33 @@ export default function InstitutionalRadarPage() {
                         ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400"
                         : "border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
 
+                    const isStage2 = item.stage_code === "STAGE_2";
+                    const isStage1 = item.stage_code === "STAGE_1";
+                    const isStage3 = item.stage_code === "STAGE_3";
+
+                    const stageBadgeClass = isStage2
+                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold shadow-xs"
+                      : isStage1
+                      ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 font-bold"
+                      : isStage3
+                      ? "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold"
+                      : "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-400 font-bold";
+
+                    const stageDotClass = isStage2
+                      ? "bg-emerald-400 animate-pulse"
+                      : isStage1
+                      ? "bg-cyan-400"
+                      : isStage3
+                      ? "bg-amber-400"
+                      : "bg-rose-400";
+
                     return (
                       <tr
                         key={item.company_id}
-                        onClick={() => setSelectedSymbol(item.symbol)}
-                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group"
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group"
                       >
                         {/* CAP TIER BADGE */}
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="py-3.5 px-3 text-center">
                           <span
                             className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider uppercase ${catBadge}`}
                           >
@@ -380,7 +404,7 @@ export default function InstitutionalRadarPage() {
                           </span>
                         </td>
 
-                        {/* TICKER & COMPANY */}
+                        {/* TICKER & COMPANY (DIRECT STOCK DETAIL LINK) */}
                         <td className="py-3.5 pl-4 pr-4">
                           <div className="flex items-center gap-2.5">
                             <AddToWatchlistButton
@@ -388,9 +412,14 @@ export default function InstitutionalRadarPage() {
                               companyName={item.company_name}
                               variant="star"
                             />
-                            <span className="font-bold text-slate-900 dark:text-white text-sm font-mono group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition">
-                              {item.symbol}
-                            </span>
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                              className="font-bold text-slate-900 dark:text-white text-sm font-mono hover:text-cyan-600 dark:hover:text-cyan-400 transition inline-flex items-center gap-1"
+                              title={`Open ${item.symbol} Technical Detail Page`}
+                            >
+                              <span>{item.symbol}</span>
+                              <ExternalLink size={11} className="text-cyan-600 dark:text-cyan-400 opacity-60 group-hover:opacity-100" />
+                            </Link>
                             {item.is_stealth_accumulation && (
                               <span className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-bold text-cyan-800 dark:text-cyan-300 flex items-center gap-0.5 border border-cyan-500/30">
                                 <Sparkles size={10} /> STEALTH
@@ -403,10 +432,44 @@ export default function InstitutionalRadarPage() {
                             )}
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
-                            <span className="truncate max-w-[220px] text-slate-700 dark:text-slate-300">{item.company_name}</span>
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                              className="truncate max-w-[200px] text-slate-700 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition"
+                            >
+                              {item.company_name}
+                            </Link>
                             &bull;
                             <span className="text-slate-400 dark:text-slate-500">{item.sector}</span>
                           </div>
+                        </td>
+
+                        {/* CURRENT STAGE */}
+                        <td className="py-3.5 px-3 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] tracking-wide uppercase ${stageBadgeClass}`}
+                            title={`Stan Weinstein / Minervini Stage: ${item.current_stage || "Stage 2 (Markup)"}`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${stageDotClass}`} />
+                            <span>{item.current_stage || "Stage 2 (Markup)"}</span>
+                          </span>
+                        </td>
+
+                        {/* SPARKLINE GRAPH ON ROW */}
+                        <td className="py-3.5 px-3 text-center">
+                          <Link
+                            href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                            className="inline-block hover:opacity-80 transition"
+                            title={`View interactive price history for ${item.symbol}`}
+                          >
+                            <SparklineChart
+                              data={item.sparkline}
+                              width={82}
+                              height={24}
+                              showDot={true}
+                              showBadge={true}
+                              periodLabel="90D"
+                            />
+                          </Link>
                         </td>
 
                         {/* SMART MONEY SCORE GAUGE */}
@@ -446,7 +509,7 @@ export default function InstitutionalRadarPage() {
                             </span>
                           </div>
                           <div className="text-[10px] text-slate-500">
-                            ₹{item.total_value_cr.toLocaleString("en-IN")} Cr AUM
+                            â‚¹{item.total_value_cr.toLocaleString("en-IN")} Cr AUM
                           </div>
                         </td>
 
@@ -462,7 +525,7 @@ export default function InstitutionalRadarPage() {
                             }`}
                           >
                             {item.net_value_flow_mom_cr > 0 ? "+" : ""}
-                            ₹{item.net_value_flow_mom_cr.toLocaleString("en-IN")} Cr
+                            â‚¹{item.net_value_flow_mom_cr.toLocaleString("en-IN")} Cr
                           </span>
                           <div className="text-[10px] text-slate-500">
                             {item.net_shares_flow_mom > 0 ? "+" : ""}
@@ -490,26 +553,38 @@ export default function InstitutionalRadarPage() {
                               <Star key={i} size={12} className="fill-amber-400 text-amber-500 dark:text-amber-400" />
                             ))}
                             {item.star_manager_count === 0 && (
-                              <span className="text-slate-400 dark:text-slate-600 text-xs">—</span>
+                              <span className="text-slate-400 dark:text-slate-600 text-xs">â€”</span>
                             )}
                           </div>
                         </td>
 
                         {/* ACTION BUY ZONE */}
                         <td className="py-3.5 pr-6 pl-4 text-right">
-                          <span
-                            className={`inline-block rounded-lg px-2.5 py-1 text-[11px] font-black tracking-wider uppercase border ${
-                              item.action_recommendation === "STRONG BUY"
-                                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
-                                : item.action_recommendation === "ACCUMULATE"
-                                ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-800 dark:text-cyan-300"
-                                : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                            }`}
-                          >
-                            {item.action_recommendation}
-                          </span>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono">
-                            Target: ₹{item.target_price.toLocaleString("en-IN")}
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`inline-block rounded-lg px-2 py-0.5 text-[10px] font-black tracking-wider uppercase border ${
+                                  item.action_recommendation === "STRONG BUY"
+                                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
+                                    : item.action_recommendation === "ACCUMULATE"
+                                    ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-800 dark:text-cyan-300"
+                                    : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                }`}
+                              >
+                                {item.action_recommendation}
+                              </span>
+                              <Link
+                                href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                                className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 transition shadow-xs inline-flex items-center gap-0.5"
+                                title={`Open ${item.symbol} Stock Detail Page`}
+                              >
+                                <span>Stock</span>
+                                <ArrowUpRight size={10} />
+                              </Link>
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                              Target: â‚¹{item.target_price.toLocaleString("en-IN")}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -565,3 +640,4 @@ export default function InstitutionalRadarPage() {
     </DashboardLayout>
   );
 }
+

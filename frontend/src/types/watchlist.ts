@@ -15,6 +15,8 @@ export interface WatchlistSummary {
   updated_at: string | null;
 }
 
+export type Watchlist = WatchlistSummary;
+
 export interface WatchlistItem {
   id: number;
   watchlist_id: number;
@@ -88,9 +90,22 @@ export interface UpdateStockPayload {
   target_price?: number;
 }
 
+export interface TriggeredStockEvent {
+  symbol: string;
+  price: number;
+  rule_detail?: string;
+  triggered_at: string;
+}
+
 export interface WatchlistAlertItem {
   id: number;
-  watchlist_id: number;
+  watchlist_id: number | null;
+  portfolio_id?: number | null;
+  target_scope?: "STOCK" | "WATCHLIST" | "PORTFOLIO" | "ALL_SCREENERS";
+  target_name?: string | null;
+  watchlist_name?: string | null;
+  portfolio_name?: string | null;
+  signal_direction?: "BUY" | "SELL" | "NEUTRAL";
   user_id: number | null;
   symbol: string;
   rule_type: string;
@@ -104,6 +119,7 @@ export interface WatchlistAlertItem {
   trigger_count: number;
   last_triggered_at: string | null;
   last_triggered_price: number | null;
+  triggered_stocks?: TriggeredStockEvent[];
   created_at: string | null;
   updated_at: string | null;
 }
@@ -116,6 +132,31 @@ export interface CreateWatchlistAlertPayload {
   notes?: string;
   notify_in_app?: boolean;
   notify_telegram?: boolean;
+}
+
+export interface CreateUnifiedAlertPayload {
+  target_scope: "STOCK" | "WATCHLIST" | "PORTFOLIO" | "ALL_SCREENERS";
+  symbol?: string;
+  watchlist_id?: number;
+  portfolio_id?: number;
+  target_name?: string;
+  rule_type: string;
+  signal_direction?: "BUY" | "SELL" | "NEUTRAL";
+  threshold_value?: number;
+  timeframe?: string;
+  notes?: string;
+  notify_in_app?: boolean;
+  notify_telegram?: boolean;
+}
+
+export interface AlertsOverviewSummary {
+  total_alerts: number;
+  active_alerts: number;
+  buy_alerts_count: number;
+  sell_alerts_count: number;
+  total_triggers_fired: number;
+  unique_triggered_stocks_count: number;
+  unique_triggered_stocks: string[];
 }
 
 export interface PersonalTelegramConfig {

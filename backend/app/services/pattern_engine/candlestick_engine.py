@@ -87,6 +87,83 @@ class CandlestickSignal:
     # Raw bar snapshot for visual rendering
     bars: List[Dict[str, float]] = field(default_factory=list)
 
+    # Institutional Quality & Conviction Fields
+    conviction_tier: str = "MODERATE"      # ELITE (>=90) / HIGH (>=80) / MODERATE (>=65) / SPECULATIVE
+    conviction_reasons: List[str] = field(default_factory=list)
+    universe: str = "NIFTY_500"
+    volume_confirmation_level: str = "NEUTRAL"
+
+    def __post_init__(self):
+        # Auto-compute conviction tier
+        if self.ai_conviction_score >= 90:
+            self.conviction_tier = "ELITE"
+        elif self.ai_conviction_score >= 80:
+            self.conviction_tier = "HIGH"
+        elif self.ai_conviction_score >= 65:
+            self.conviction_tier = "MODERATE"
+        else:
+            self.conviction_tier = "SPECULATIVE"
+
+        # Determine volume confirmation level
+        if self.volume_surge_ratio >= 2.5:
+            self.volume_confirmation_level = "ULTRA_INSTITUTIONAL"
+        elif self.volume_surge_ratio >= 2.0:
+            self.volume_confirmation_level = "HEAVY"
+        elif self.volume_surge_ratio >= 1.5:
+            self.volume_confirmation_level = "EXPANSION"
+        elif self.volume_surge_ratio >= 1.2:
+            self.volume_confirmation_level = "ABOVE_AVG"
+        elif self.volume_surge_ratio < 0.65:
+            self.volume_confirmation_level = "ANEMIC_RISK"
+        elif self.volume_surge_ratio < 0.85:
+            self.volume_confirmation_level = "SUBPAR"
+        else:
+            self.volume_confirmation_level = "NEUTRAL"
+
+        # Auto-populate concrete conviction rationale tags
+        if not self.conviction_reasons:
+            reasons = []
+            if self.volume_surge_ratio >= 2.5:
+                reasons.append(f"Institutional Volume Surge ({self.volume_surge_ratio:.1f}x Vol)")
+            elif self.volume_surge_ratio >= 2.0:
+                reasons.append(f"Heavy Volume Surge ({self.volume_surge_ratio:.1f}x Vol)")
+            elif self.volume_surge_ratio >= 1.5:
+                reasons.append(f"Volume Expansion ({self.volume_surge_ratio:.1f}x)")
+            elif self.volume_surge_ratio >= 1.2:
+                reasons.append(f"Above Avg Vol ({self.volume_surge_ratio:.1f}x)")
+            elif self.volume_surge_ratio < 0.65:
+                reasons.append(f"Anemic Vol ({self.volume_surge_ratio:.1f}x) - False Signal Risk")
+
+            if "200_DMA_DEFENSE" in self.dma_confluence or "200_DMA_BOUNCE" in self.dma_confluence:
+                reasons.append("200 DMA Institutional Defense")
+            elif "50_DMA" in self.dma_confluence:
+                reasons.append("50 DMA Support Bounce")
+            elif "20_EMA" in self.dma_confluence:
+                reasons.append("20 EMA Fast Momentum Defense")
+            elif "ABOVE_200_DMA" in self.dma_confluence:
+                reasons.append("Bullish Regime (>200 DMA)")
+
+            if self.risk_reward >= 2.0:
+                reasons.append(f"{self.risk_reward:.1f}:1 Risk-to-Reward")
+            elif self.risk_reward >= 1.5:
+                reasons.append(f"{self.risk_reward:.1f}:1 R:R Setup")
+
+            if self.direction == "BULLISH":
+                if 35 <= self.rsi_14 <= 55:
+                    reasons.append(f"Optimal RSI Bounce ({self.rsi_14:.0f})")
+                elif self.rsi_14 < 30:
+                    reasons.append(f"Oversold Capitulation ({self.rsi_14:.0f})")
+            else:
+                if 48 <= self.rsi_14 <= 70:
+                    reasons.append(f"RSI Supply Test ({self.rsi_14:.0f})")
+                elif self.rsi_14 > 70:
+                    reasons.append(f"Overbought Exhaustion ({self.rsi_14:.0f})")
+
+            if self.reliability == "VERY_HIGH":
+                reasons.append("3-Bar Highest Reliability")
+
+            self.conviction_reasons = reasons
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -806,42 +883,61 @@ class CandlestickEngine:
         confluence: str,
         rsi: float,
         is_bullish: bool,
+        risk_reward: float = 1.5,
     ) -> int:
         """
         Calculates institutional conviction score (0-100) based on volume, trend, and DMA confluence.
         """
         score = float(base_score)
 
-        # 1. Volume confirmation (+/- up to 10 pts)
-        if vol_ratio >= 1.8:
+        # 1. Heavy Institutional Volume Confirmation (+/- up to 18 pts)
+        if vol_ratio >= 2.5:
+            score += 18.0
+        elif vol_ratio >= 2.0:
+            score += 14.0
+        elif vol_ratio >= 1.5:
             score += 10.0
-        elif vol_ratio >= 1.3:
-            score += 6.0
-        elif vol_ratio < 0.7:
-            score -= 8.0
+        elif vol_ratio >= 1.2:
+            score += 5.0
+        elif vol_ratio < 0.65:
+            score -= 16.0  # Anemic volume trap penalty
+        elif vol_ratio < 0.85:
+            score -= 8.0   # Sub-par volume penalty
 
         # 2. Trend validation (+/- 6 pts)
         if trend_valid:
-            score += 5.0
+            score += 6.0
         else:
-            score -= 5.0
+            score -= 6.0
 
-        # 3. DMA confluence (+/- 6 pts)
-        if "BOUNCE" in confluence or "DEFENSE" in confluence:
+        # 3. DMA confluence (+/- 8 pts)
+        if "200_DMA" in confluence and ("DEFENSE" in confluence or "BOUNCE" in confluence):
+            score += 8.0
+        elif "BOUNCE" in confluence or "DEFENSE" in confluence:
             score += 6.0
         elif "200_DMA" in confluence:
             score += 4.0
 
-        # 4. RSI alignment (+/- 5 pts)
+        # 4. RSI alignment (+/- 6 pts)
         if is_bullish:
-            if 30 <= rsi <= 55:  # Sweet spot for bounce
-                score += 5.0
-            elif rsi > 70:       # Overbought
-                score -= 6.0
-        else:
-            if 45 <= rsi <= 75:  # Sweet spot for top
-                score += 5.0
+            if 35 <= rsi <= 55:  # Sweet spot for bounce
+                score += 6.0
             elif rsi < 30:       # Oversold
-                score -= 6.0
+                score += 4.0
+            elif rsi > 70:       # Overbought
+                score -= 8.0
+        else:
+            if 45 <= rsi <= 72:  # Sweet spot for top
+                score += 6.0
+            elif rsi > 75:       # Extreme overbought exhaustion
+                score += 4.0
+            elif rsi < 30:       # Oversold
+                score -= 8.0
+
+        # 5. Risk / Reward bonus (+/- 4 pts)
+        if risk_reward >= 2.5:
+            score += 4.0
+        elif risk_reward >= 2.0:
+            score += 2.0
 
         return int(np.clip(score, 10, 99))

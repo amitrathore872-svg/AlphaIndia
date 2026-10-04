@@ -88,24 +88,26 @@ class CompanyIntelligenceEngine:
         # Historical performance analytics
         total_signals = len(signals)
         wins = sum(1 for s in signals if s.outcome == "WIN")
-        win_rate = round((wins / total_signals * 100.0), 1) if total_signals > 0 else 76.5
-        avg_ret = round(sum((s.return_pct or 14.5) for s in signals) / max(1, total_signals), 1) if total_signals > 0 else 14.2
-        avg_hold = 12
+        win_rate = round((wins / total_signals * 100.0), 1) if total_signals > 0 else 0.0
+        avg_ret = round(sum((s.return_pct or 0.0) for s in signals) / max(1, total_signals), 1) if total_signals > 0 else 0.0
+        avg_hold = int(sum((s.holding_days or 10) for s in signals) / max(1, total_signals)) if total_signals > 0 else 0
 
         # Current Setup Stage
-        stage = "STAGE_1_COMPRESSION"
-        if pattern and pattern.pattern_status == "READY":
-            stage = "STAGE_2_PRE_BREAKOUT"
-        elif pattern and pattern.pattern_status == "BROKEN_OUT":
+        stage = "STAGE_0_UNIVERSE"
+        if pattern and pattern.pattern_status == "BROKEN_OUT":
             stage = "STAGE_3_ACTIVE_RUNNER"
+        elif pattern and pattern.pattern_status == "READY":
+            stage = "STAGE_2_PRE_BREAKOUT"
+        elif sg and (sg.compression_score or 0) >= 60.0:
+            stage = "STAGE_1_COMPRESSION"
 
-        compression_score = comp_intel.compression_score if comp_intel else (sg.compression_score if sg else 65.0)
-        base_quality = pattern.base_quality_score if pattern else 75.0
-        inst_score = inst.institution_score if inst else 70.0
-        rs_score = rs.rs_score if rs else 75.0
-        sm_score = sm.smart_money_score if sm else 68.0
-        liq_score = liq.liquidity_score if liq else 80.0
-        risk_score = news.risk_score if news else 15.0
+        compression_score = comp_intel.compression_score if comp_intel else (sg.compression_score if sg else 0.0)
+        base_quality = pattern.base_quality_score if pattern else 0.0
+        inst_score = inst.institution_score if inst else 0.0
+        rs_score = rs.rs_score if rs else 0.0
+        sm_score = sm.smart_money_score if sm else 0.0
+        liq_score = liq.liquidity_score if liq else 0.0
+        risk_score = news.risk_score if news else 0.0
 
         return {
             "symbol": clean_sym,
@@ -116,42 +118,42 @@ class CompanyIntelligenceEngine:
             "market_cap": mcap,
             "current_stage": stage,
             "scores": {
-                "compression_score": compression_score,
-                "base_quality": base_quality,
-                "institution_score": inst_score,
-                "rs_score": rs_score,
-                "smart_money_score": sm_score,
-                "liquidity_score": liq_score,
-                "news_risk_score": risk_score,
+                "compression_score": round(compression_score, 1),
+                "base_quality": round(base_quality, 1),
+                "institution_score": round(inst_score, 1),
+                "rs_score": round(rs_score, 1),
+                "smart_money_score": round(sm_score, 1),
+                "liquidity_score": round(liq_score, 1),
+                "news_risk_score": round(risk_score, 1),
                 "composite_conviction": round((compression_score * 0.25) + (base_quality * 0.25) + (inst_score * 0.25) + (rs_score * 0.25), 1),
             },
             "pattern_details": {
-                "type": pattern.pattern_type if pattern else "VCP",
-                "depth_pct": pattern.base_depth_pct if pattern else 12.5,
+                "type": pattern.pattern_type if pattern else "No Base Pattern Detected",
+                "depth_pct": pattern.base_depth_pct if pattern else 0.0,
                 "pivot_point": pattern.pivot_point if pattern else round(cmp * 1.02, 2),
-                "status": pattern.pattern_status if pattern else "READY",
-                "explanation": pattern.ai_explanation if pattern else "Clean institutional accumulation base.",
+                "status": pattern.pattern_status if pattern else "EVALUATING",
+                "explanation": pattern.ai_explanation if pattern else "No verified multi-week base contraction detected yet.",
             },
             "institution_footprint": {
-                "accumulation_type": inst.accumulation_type if inst else "STEALTH_ACCUMULATION",
-                "delivery_pct": inst.delivery_pct if inst else 52.0,
-                "pocket_pivot": inst.pocket_pivot if inst else True,
-                "operator_signature": inst.operator_signature if inst else "Block absorption at 50 EMA",
+                "accumulation_type": inst.accumulation_type if inst else "NEUTRAL",
+                "delivery_pct": inst.delivery_pct if inst else 0.0,
+                "pocket_pivot": inst.pocket_pivot if inst else False,
+                "operator_signature": inst.operator_signature if inst else "Normal secondary market activity",
             },
             "performance_metrics": {
-                "total_historical_signals": max(5, total_signals),
+                "total_historical_signals": total_signals,
                 "win_rate_pct": win_rate,
                 "average_return_pct": avg_ret,
                 "average_hold_days": avg_hold,
-                "expected_breakout_window_days": comp_intel.expected_expansion_window_days if comp_intel else 4,
+                "expected_breakout_window_days": comp_intel.expected_expansion_window_days if comp_intel else 0,
             },
             "ai_summary": (
-                f"{clean_sym} ({name}) is coiling in a top-tier institutional {pattern.pattern_type if pattern else 'VCP'} "
-                f"base with {compression_score:.0f}/100 compression tightness and RS Rank {rs_score:.0f}. "
-                f"Smart money footprints confirm {inst.accumulation_type if inst else 'STEALTH_ACCUMULATION'} with zero impending earnings risks."
-            ),
+                f"{clean_sym} ({name}) is tracking at Stage: {stage}. "
+                f"Compression Score: {compression_score:.0f}/100, RS Score: {rs_score:.0f}/100. "
+                f"Pattern: {pattern.pattern_type if pattern else 'Under Formation'}, Institutional Footprint: {inst.accumulation_type if inst else 'Neutral'}."
+            ) if (sg or pattern or inst) else f"{clean_sym} ({name}) has no active contraction setup recorded in recent scans.",
             "risk_summary": (
                 f"News Risk: {news.verdict if news else 'CLEAR_TO_TRADE'} (Score: {risk_score:.0f}/100). "
-                f"Liquidity: ₹{liq.avg_traded_value_cr if liq else 15.0:.1f} Cr daily turnover with minimal slippage."
+                f"Liquidity: ₹{liq.avg_traded_value_cr if liq else 0.0:.1f} Cr daily turnover."
             ),
         }

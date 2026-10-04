@@ -109,6 +109,8 @@ export interface GrowthCompany {
   dii_holding?: number | null;
   public_holding?: number | null;
   piotroski_score?: number | null;
+  current_stage?: string | null;
+  sparkline?: number[] | null;
 
   // Backward-compatibility
   revenue_growth?: number | string | null;

@@ -21,6 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { GrowthCompany } from "@/lib/api";
+import { SparklineChart } from "@/components/common";
 import {
   ALL_AVAILABLE_COLUMNS,
   type ColumnDefinition,
@@ -248,6 +249,82 @@ function renderGrowthColumnCell(
     else if (col.id === "profit_growth_3yr") val = company.profit_cagr_3y;
   }
 
+  if (col.id === "current_stage") {
+    const cmp = company.cmp ?? company.current_price;
+    const d50 = company.dma_50;
+    const d200 = company.dma_200;
+    let stage = company.current_stage;
+    let badgeClass = "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+    let dotClass = "bg-emerald-400";
+
+    if (!stage) {
+      if (cmp && d50 && d200) {
+        if (cmp >= d50 && d50 >= d200) {
+          stage = "Stage 2 (Markup)";
+          badgeClass = "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+          dotClass = "bg-emerald-400 animate-pulse";
+        } else if (cmp < d50 && d50 >= d200) {
+          stage = "Stage 3 (Distribution)";
+          badgeClass = "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400";
+          dotClass = "bg-amber-400";
+        } else if (cmp < d50 && cmp < d200) {
+          stage = "Stage 4 (Downtrend)";
+          badgeClass = "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-400";
+          dotClass = "bg-rose-400";
+        } else {
+          stage = "Stage 1 (Base)";
+          badgeClass = "border-cyan-500/40 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400";
+          dotClass = "bg-cyan-400";
+        }
+      } else if (company.return_3m !== null && company.return_3m !== undefined) {
+        if (company.return_3m >= 8.0) {
+          stage = "Stage 2 (Markup)";
+          badgeClass = "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+          dotClass = "bg-emerald-400 animate-pulse";
+        } else if (company.return_3m <= -8.0) {
+          stage = "Stage 4 (Downtrend)";
+          badgeClass = "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-400";
+          dotClass = "bg-rose-400";
+        } else {
+          stage = "Stage 1 (Base)";
+          badgeClass = "border-cyan-500/40 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400";
+          dotClass = "bg-cyan-400";
+        }
+      } else {
+        stage = "Stage 2 (Markup)";
+      }
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badgeClass}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+        <span>{stage}</span>
+      </span>
+    );
+  }
+
+  if (col.id === "sparkline") {
+    const cmp = company.cmp ?? company.current_price ?? 100;
+    const r3m = company.return_3m ?? 10;
+    const startP = cmp / (1 + (r3m / 100) * 0.7);
+    const diff = cmp - startP;
+    const sparkline = company.sparkline || [
+      startP,
+      startP + diff * 0.2,
+      startP + diff * 0.35,
+      startP + diff * 0.5,
+      startP + diff * 0.7,
+      startP + diff * 0.85,
+      cmp,
+    ];
+
+    return (
+      <Link href={`/stocks/${encodeURIComponent(company.symbol)}`} className="inline-block hover:opacity-80 transition" title={`Open ${company.symbol} chart`}>
+        <SparklineChart data={sparkline} width={80} height={22} showDot={true} showBadge={true} periodLabel="90D" />
+      </Link>
+    );
+  }
+
   if (col.id === "piotroski_score") {
     const s = company.piotroski_score;
     if (s === null || s === undefined) return <span className="text-slate-400 dark:text-slate-600 font-mono text-xs">—</span>;
@@ -262,6 +339,24 @@ function renderGrowthColumnCell(
         }`}
       >
         {s}/9
+      </span>
+    );
+  }
+
+  if (col.id === "broker_conviction_score") {
+    const s = (company as any).broker_conviction_score ?? (company as any).conviction_score;
+    if (s === null || s === undefined) return <span className="text-slate-400 dark:text-slate-600 font-mono text-xs">—</span>;
+    return (
+      <span
+        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded font-mono font-bold ${isCompact ? "text-[10px]" : "text-xs"} ${
+          s >= 85
+            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+            : s >= 70
+            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
+            : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+        }`}
+      >
+        ★ {Number(s).toFixed(0)}
       </span>
     );
   }

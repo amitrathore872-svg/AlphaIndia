@@ -48,9 +48,9 @@ const CATEGORIES: CategoryMeta[] = [
   {
     key: "institutional",
     title: "Institutional Research",
-    shortTitle: "Institutional",
+    shortTitle: "Research",
     icon: ShieldCheck,
-    badge: "MF",
+    badge: "NEW",
     sectionTitles: ["INSTITUTIONAL RESEARCH", "PIPELINE & TRIAGE"],
   },
   {

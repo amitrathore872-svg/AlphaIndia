@@ -4,7 +4,8 @@ Alpha India - Institutional Smart Money Radar
 """
 
 import math
-from typing import Dict, Any, List, Optional
+import time
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, func
@@ -17,6 +18,10 @@ from app.models.mf_models import (
     MFSectorFlow,
     MFAccumulationSignal,
 )
+
+# In-memory TTL cache for 90-day real price sparklines: symbol -> (timestamp, List[float])
+_SPARKLINE_90D_CACHE: Dict[str, Tuple[float, List[float]]] = {}
+_SPARKLINE_CACHE_TTL = 3600  # 1 hour
 
 
 class MFAnalyticsService:
@@ -398,6 +403,8 @@ class MFAnalyticsService:
 
         total_pages = math.ceil(total_records / limit) if limit > 0 else 1
 
+        cls._enrich_stage_and_sparkline(db, items)
+
         return {
             "items": items,
             "total": total_records,
@@ -407,6 +414,15 @@ class MFAnalyticsService:
             "cap_counts": cap_counts,
             "latest_report_date": str(latest_date_subquery),
         }
+
+    @classmethod
+    def _enrich_stage_and_sparkline(cls, db: Session, items: List[Dict[str, Any]]) -> None:
+        """
+        Enriches stock items with Stan Weinstein / Mark Minervini technical stage
+        and an authentic 18-point 90-day price trend sparkline using shared StockTrendEnricher.
+        """
+        from app.services.stock_trend_enricher import StockTrendEnricher
+        StockTrendEnricher.enrich(db, items, symbol_key="symbol", cmp_key="current_price")
 
     @classmethod
     def get_all_schemes(cls, db: Session) -> List[Dict[str, Any]]:
@@ -633,6 +649,8 @@ class MFAnalyticsService:
 
         total_pages = math.ceil(total_records / limit) if limit > 0 else 1
 
+        cls._enrich_stage_and_sparkline(db, items)
+
         return {
             "schemes": scheme_headers,
             "items": items,
@@ -705,10 +723,13 @@ class MFAnalyticsService:
                 max_dep = val
             if (h.weight_pct or 0.0) > max_wt:
                 max_wt = h.weight_pct or 0.0
-            sec = c.sector or "Diversified"
+            sec = c.sector if c.sector and c.sector not in ["Unknown", "Other", "N/A"] else "Diversified"
             sector_inflow_map[sec] = sector_inflow_map.get(sec, 0.0) + val
 
-        top_sector = max(sector_inflow_map.items(), key=lambda x: x[1])[0] if sector_inflow_map else "Capital Goods"
+        meaningful_sectors = {k: v for k, v in sector_inflow_map.items() if k not in ["Unknown", "Other", "Diversified", "N/A"]}
+        top_sector = max(meaningful_sectors.items(), key=lambda x: x[1])[0] if meaningful_sectors else (
+            max(sector_inflow_map.items(), key=lambda x: x[1])[0] if sector_inflow_map else "Capital Goods"
+        )
 
         filtered_query = base_query
         if search:
@@ -771,6 +792,8 @@ class MFAnalyticsService:
             })
 
         total_pages = math.ceil(total_records / limit) if limit > 0 else 1
+
+        cls._enrich_stage_and_sparkline(db, items)
 
         return {
             "items": items,

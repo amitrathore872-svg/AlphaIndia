@@ -359,6 +359,9 @@ class TechnoFundaService:
         end_idx = start_idx + limit
         paginated_items = results[start_idx:end_idx]
 
+        from app.services.stock_trend_enricher import StockTrendEnricher
+        StockTrendEnricher.enrich(db, paginated_items, symbol_key="symbol", cmp_key="current_price")
+
         return {
             "page": page,
             "limit": limit,

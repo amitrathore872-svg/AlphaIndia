@@ -23,7 +23,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118987",
+        "scheme_code": "118955",
         "scheme_name": "HDFC Flexi Cap Fund - Direct Plan - Growth",
         "amc_name": "HDFC Mutual Fund",
         "category": "Flexi Cap",
@@ -34,7 +34,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "120150",
+        "scheme_code": "120166",
         "scheme_name": "Kotak Flexicap Fund - Direct Plan - Growth",
         "amc_name": "Kotak Mahindra Mutual Fund",
         "category": "Flexi Cap",
@@ -56,7 +56,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "120166",
+        "scheme_code": "118535",
         "scheme_name": "Franklin India Flexi Cap Fund - Direct Plan - Growth",
         "amc_name": "Franklin Templeton Mutual Fund",
         "category": "Flexi Cap",
@@ -157,7 +157,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118774",
+        "scheme_code": "118632",
         "scheme_name": "Nippon India Large Cap Fund - Direct Plan - Growth",
         "amc_name": "Nippon India Mutual Fund",
         "category": "Large Cap",
@@ -179,7 +179,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "119808",
+        "scheme_code": "118825",
         "scheme_name": "Mirae Asset Large Cap Fund - Direct Plan - Growth",
         "amc_name": "Mirae Asset Mutual Fund",
         "category": "Large Cap",
@@ -258,7 +258,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2014,
     },
     {
-        "scheme_code": "118776",
+        "scheme_code": "118668",
         "scheme_name": "Nippon India Growth Fund - Direct Plan - Growth",
         "amc_name": "Nippon India Mutual Fund",
         "category": "Mid Cap",
@@ -324,7 +324,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2022,
     },
     {
-        "scheme_code": "120387",
+        "scheme_code": "119178",
         "scheme_name": "Tata Mid Cap Growth Fund - Direct Plan - Growth",
         "amc_name": "Tata Mutual Fund",
         "category": "Mid Cap",
@@ -370,7 +370,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118991",
+        "scheme_code": "130503",
         "scheme_name": "HDFC Small Cap Fund - Direct Plan - Growth",
         "amc_name": "HDFC Mutual Fund",
         "category": "Small Cap",
@@ -436,7 +436,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "120168",
+        "scheme_code": "118525",
         "scheme_name": "Franklin India Smaller Companies Fund - Direct Plan - Growth",
         "amc_name": "Franklin Templeton Mutual Fund",
         "category": "Small Cap",
@@ -460,7 +460,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
 
     # ── 5. MULTI CAP FUNDS (Benchmark: NIFTY 500 MULTICAP 50:25:25) ──
     {
-        "scheme_code": "118772",
+        "scheme_code": "118650",
         "scheme_name": "Nippon India Multi Cap Fund - Direct Plan - Growth",
         "amc_name": "Nippon India Mutual Fund",
         "category": "Multi Cap",
@@ -471,7 +471,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "120845",
+        "scheme_code": "120823",
         "scheme_name": "Quant Multi Cap Fund - Direct Plan - Growth",
         "amc_name": "Quant Mutual Fund",
         "category": "Multi Cap",
@@ -493,7 +493,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "149176",
+        "scheme_code": "149368",
         "scheme_name": "HDFC Multi Cap Fund - Direct Plan - Growth",
         "amc_name": "HDFC Mutual Fund",
         "category": "Multi Cap",
@@ -515,7 +515,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2021,
     },
     {
-        "scheme_code": "140889",
+        "scheme_code": "141226",
         "scheme_name": "Mahindra Manulife Multi Cap Fund - Direct Plan - Growth",
         "amc_name": "Mahindra Manulife Mutual Fund",
         "category": "Multi Cap",
@@ -550,7 +550,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "120151",
+        "scheme_code": "120158",
         "scheme_name": "Kotak Equity Opportunities Fund - Direct Plan - Growth",
         "amc_name": "Kotak Mahindra Mutual Fund",
         "category": "Large & Mid Cap",
@@ -561,7 +561,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118985",
+        "scheme_code": "130498",
         "scheme_name": "HDFC Large and Mid Cap Fund - Direct Plan - Growth",
         "amc_name": "HDFC Mutual Fund",
         "category": "Large & Mid Cap",
@@ -618,7 +618,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118983",
+        "scheme_code": "118950",
         "scheme_name": "HDFC Focused 30 Fund - Direct Plan - Growth",
         "amc_name": "HDFC Mutual Fund",
         "category": "Focused",
@@ -651,7 +651,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "131759",
+        "scheme_code": "131580",
         "scheme_name": "360 ONE Focused Equity Fund - Direct Plan - Growth",
         "amc_name": "360 ONE Mutual Fund",
         "category": "Focused",
@@ -686,7 +686,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2015,
     },
     {
-        "scheme_code": "119859",
+        "scheme_code": "120578",
         "scheme_name": "SBI Technology Opportunities Fund - Direct Plan - Growth",
         "amc_name": "SBI Mutual Fund",
         "category": "Sectoral/Thematic",
@@ -719,7 +719,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118768",
+        "scheme_code": "118759",
         "scheme_name": "Nippon India Pharma Fund - Direct Plan - Growth",
         "amc_name": "Nippon India Mutual Fund",
         "category": "Sectoral/Thematic",
@@ -730,7 +730,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "119847",
+        "scheme_code": "119783",
         "scheme_name": "SBI Healthcare Opportunities Fund - Direct Plan - Growth",
         "amc_name": "SBI Mutual Fund",
         "category": "Sectoral/Thematic",
@@ -765,7 +765,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "135787",
+        "scheme_code": "135781",
         "scheme_name": "Mirae Asset ELSS Tax Saver Fund - Direct Plan - Growth",
         "amc_name": "Mirae Asset Mutual Fund",
         "category": "ELSS",
@@ -787,7 +787,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2013,
     },
     {
-        "scheme_code": "118981",
+        "scheme_code": "119060",
         "scheme_name": "HDFC ELSS Tax saver - Direct Plan - Growth",
         "amc_name": "HDFC Mutual Fund",
         "category": "ELSS",
@@ -855,7 +855,7 @@ TOP_EQUITY_SCHEMES: List[Dict[str, Any]] = [
         "inception_year": 2021,
     },
     {
-        "scheme_code": "125355",
+        "scheme_code": "118481",
         "scheme_name": "Bandhan Sterling Value Fund - Direct Plan - Growth",
         "amc_name": "Bandhan Mutual Fund",
         "category": "Value",

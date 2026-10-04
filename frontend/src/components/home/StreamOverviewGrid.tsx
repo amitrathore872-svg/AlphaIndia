@@ -209,12 +209,29 @@ export default function StreamOverviewGrid({
     return () => clearInterval(interval);
   }, [propStreams, fetchLiveStreams]);
 
+  // Category Filter State
+  const [activeCategory, setActiveCategory] = useState<"ALL" | "FUNDAMENTAL" | "TECHNICAL" | "CATALYST">("ALL");
+
+  const filteredStreams = liveStreams.filter((stream) => {
+    if (activeCategory === "ALL") return true;
+    if (activeCategory === "FUNDAMENTAL") {
+      return ["pead-earnings", "athena-pead", "growth-screener", "growth-compounders", "techno-funda", "early-discovery", "early-stage"].includes(stream.id);
+    }
+    if (activeCategory === "TECHNICAL") {
+      return ["vcp-breakouts", "tomorrow-surge", "sector-breadth", "techno-funda"].includes(stream.id);
+    }
+    if (activeCategory === "CATALYST") {
+      return ["exchange-catalysts", "corporate-catalysts", "smart-money", "smart-money-flow", "sector-rotation"].includes(stream.id);
+    }
+    return true;
+  });
+
   return (
     <section aria-label="Market Streams Overview" className={`w-full ${className}`}>
       {/* ------------------------------------------------------------- */}
       {/* 1. Header Bar: Pill Badge on Left, Open Full Map on Right       */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
         {/* Glowing Pill Badge */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1 text-xs font-black tracking-wide text-emerald-700 dark:text-emerald-300 shadow-sm">
@@ -243,8 +260,31 @@ export default function StreamOverviewGrid({
           )}
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        {/* Action Controls & Category Tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-1 text-xs">
+            {(
+              [
+                { id: "ALL", label: `All (${liveStreams.length})` },
+                { id: "FUNDAMENTAL", label: "📈 Fundamental" },
+                { id: "TECHNICAL", label: "🌀 Technical" },
+                { id: "CATALYST", label: "📜 Catalysts & Flow" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveCategory(tab.id)}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                  activeCategory === tab.id
+                    ? "bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-cyan-300 border border-slate-200 dark:border-slate-700"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={fetchLiveStreams}
             disabled={isSyncing}
@@ -254,24 +294,6 @@ export default function StreamOverviewGrid({
             <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin text-cyan-500 dark:text-cyan-400" : ""}`} />
             <span className="text-[11px]">{isSyncing ? "Updating..." : "Refresh"}</span>
           </button>
-
-          {onOpenFullMap ? (
-            <button
-              onClick={onOpenFullMap}
-              className="group inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition"
-            >
-              <span>Open full map</span>
-              <span className="transition group-hover:translate-x-1">→</span>
-            </button>
-          ) : (
-            <Link
-              href="/techno-funda"
-              className="group inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition"
-            >
-              <span>Open full map</span>
-              <span className="transition group-hover:translate-x-1">→</span>
-            </Link>
-          )}
         </div>
       </div>
 
@@ -297,7 +319,7 @@ export default function StreamOverviewGrid({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
-          {liveStreams.map((stream) => (
+          {filteredStreams.map((stream) => (
             <div
               key={stream.id}
               className="flex flex-col justify-between rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#071322]/95 p-5 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 dark:hover:border-slate-700 backdrop-blur-sm"

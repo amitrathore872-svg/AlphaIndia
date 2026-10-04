@@ -35,6 +35,23 @@ export interface CandlestickSignal {
   dma_confluence: string;
   rsi_14: number;
   bars?: CandlestickBar[];
+  company_name?: string;
+  sector?: string;
+  current_stage?: string;
+  stage_code?: string;
+  stage_badge?: string;
+  sparkline?: number[];
+  return_90d_pct?: number;
+  day_change_pct?: number;
+  conviction_tier?: "ELITE" | "HIGH" | "MODERATE" | "SPECULATIVE";
+  conviction_reasons?: string[];
+  universe?: string;
+  volume_confirmation_level?: string;
+  patterns_count?: number;
+  patterns?: CandlestickSignal[];
+  all_pattern_names?: string[];
+  multi_pattern_confluence?: boolean;
+  confluence_bonus?: number;
 }
 
 export interface CandlestickMetadata {
@@ -43,11 +60,19 @@ export interface CandlestickMetadata {
   duration_seconds: number;
   total_signals: number;
   universe_scanned: number;
+  universe_name?: string;
   bullish_signals: number;
   bearish_signals: number;
   triple_patterns: number;
   double_patterns: number;
   single_patterns: number;
+  elite_signals?: number;
+  high_conviction_signals?: number;
+  moderate_signals?: number;
+  speculative_signals?: number;
+  avg_conviction_score?: number;
+  group_by_stock?: boolean;
+  total_unique_stocks?: number;
 }
 
 export interface CandlestickResponse {
@@ -71,13 +96,32 @@ export interface CandlestickSummaryResponse {
     bullish: number;
     bearish: number;
   };
+  conviction_breakdown?: {
+    elite: number;
+    high: number;
+    moderate: number;
+    speculative: number;
+  };
+  volume_breakdown?: {
+    explosive_2x: number;
+    strong_1_5x: number;
+  };
+  total_unique_stocks?: number;
+  multi_pattern_stocks?: number;
+  avg_conviction_score?: number;
 }
 
 export async function fetchCandlesticks(params: {
+  universe?: string;
+  group_by_stock?: boolean;
+  conviction_tier?: string;
   direction?: string;
   category?: string;
   pattern_key?: string;
   min_score?: number;
+  min_volume_ratio?: number;
+  min_risk_reward?: number;
+  stage?: string;
   search?: string;
   sort_by?: string;
   sort_order?: "asc" | "desc";
@@ -88,10 +132,16 @@ export async function fetchCandlesticks(params: {
   const baseUrl = getBackendUrl();
   const searchParams = new URLSearchParams();
 
+  if (params.universe) searchParams.set("universe", params.universe);
+  if (params.group_by_stock !== undefined) searchParams.set("group_by_stock", params.group_by_stock ? "true" : "false");
+  if (params.conviction_tier && params.conviction_tier !== "ALL") searchParams.set("conviction_tier", params.conviction_tier);
   if (params.direction && params.direction !== "ALL") searchParams.set("direction", params.direction);
   if (params.category && params.category !== "ALL") searchParams.set("category", params.category);
   if (params.pattern_key) searchParams.set("pattern_key", params.pattern_key);
   if (params.min_score !== undefined) searchParams.set("min_score", params.min_score.toString());
+  if (params.min_volume_ratio !== undefined && params.min_volume_ratio > 0) searchParams.set("min_volume_ratio", params.min_volume_ratio.toString());
+  if (params.min_risk_reward !== undefined && params.min_risk_reward > 0) searchParams.set("min_risk_reward", params.min_risk_reward.toString());
+  if (params.stage && params.stage !== "ALL") searchParams.set("stage", params.stage);
   if (params.search) searchParams.set("search", params.search);
   if (params.sort_by) searchParams.set("sort_by", params.sort_by);
   if (params.sort_order) searchParams.set("sort_order", params.sort_order);
@@ -107,9 +157,9 @@ export async function fetchCandlesticks(params: {
   return res.json();
 }
 
-export async function fetchCandlestickSummary(): Promise<CandlestickSummaryResponse> {
+export async function fetchCandlestickSummary(universe: string = "NIFTY_500"): Promise<CandlestickSummaryResponse> {
   const baseUrl = getBackendUrl();
-  const res = await fetch(`${baseUrl}/api/v1/candlesticks/summary`, { cache: "no-store" });
+  const res = await fetch(`${baseUrl}/api/v1/candlesticks/summary?universe=${encodeURIComponent(universe)}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Failed to fetch candlestick summary: ${res.statusText}`);
   }

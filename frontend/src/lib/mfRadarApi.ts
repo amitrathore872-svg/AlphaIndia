@@ -303,7 +303,8 @@ export const mfRadarApi = {
       formData.append("sheet_name", sheetName);
     }
 
-    const res = await fetch(`${API_BASE}/api/v1/mf-radar/portfolio/import-file`, {
+    const targetUrl = `${API_BASE}/api/v1/mf-radar/portfolio/import-file`.replace(/\/api\/api(\/|$)/g, "/api$1");
+    const res = await fetch(targetUrl, {
       method: "POST",
       body: formData,
     });

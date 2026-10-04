@@ -70,6 +70,18 @@ from app.models.user import User, UserSession
 from app.models.breakout_execution import BreakoutExecutionCandidate
 from app.models.cpr_models import CPRScannerDaily
 from app.models.momentum_radar_watchlist import MomentumRadarWatchlist
+from app.models.sovereign_intraday import (
+    SovereignIntradaySignal,
+    SovereignIntradayLog,
+)
+from app.models.investor_intelligence import (
+    InvestorDocument,
+    InvestorIntelligenceInsight,
+)
+from app.models.brokerage_intelligence import (
+    BrokerageReport,
+    BrokerScorecard,
+)
 from app.models.velocity_models import (
     VelocityMarketRegime,
     VelocitySleepingGiant,
@@ -92,6 +104,10 @@ from app.models.velocity_models import (
 )
 
 __all__ = [
+    "BrokerageReport",
+    "BrokerScorecard",
+    "InvestorDocument",
+    "InvestorIntelligenceInsight",
     "User",
     "UserSession",
     "Company",
@@ -153,4 +169,6 @@ __all__ = [
     "UserPersonalTelegramConfig",
     "PortfolioSignalAlert",
     "MomentumRadarWatchlist",
+    "SovereignIntradaySignal",
+    "SovereignIntradayLog",
 ]

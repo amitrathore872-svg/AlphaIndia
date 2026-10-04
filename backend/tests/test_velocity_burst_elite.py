@@ -48,8 +48,26 @@ from app.services.velocity.velocity_orchestrator import VelocityBurstOrchestrato
 def db_session():
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
-    yield session
-    session.close()
+    try:
+        yield session
+    finally:
+        from app.models.velocity_models import (
+            VelocitySleepingGiant, VelocityCompression, VelocityBasePattern,
+            VelocityInstitution, VelocityRSRank, VelocityLiveSignal,
+            VelocityEntryQuality, VelocityTradeManager, VelocityBTST,
+            VelocitySignalHistory, VelocityAlert
+        )
+        models = [
+            VelocitySleepingGiant, VelocityCompression, VelocityBasePattern,
+            VelocityInstitution, VelocityRSRank, VelocityLiveSignal,
+            VelocityEntryQuality, VelocityTradeManager, VelocityBTST,
+            VelocitySignalHistory, VelocityAlert
+        ]
+        for m in models:
+            if hasattr(m, 'symbol'):
+                session.query(m).filter(m.symbol.like('TEST%')).delete(synchronize_session=False)
+        session.commit()
+        session.close()
 
 
 @pytest.fixture(scope="module")

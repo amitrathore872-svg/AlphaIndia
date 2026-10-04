@@ -3,7 +3,7 @@
  * Alpha India - Full-Universe AMC Scheme Matrix & Fresh Entries Radar
  */
 
-import { API_BASE } from "@/lib/apiConfig";
+import { fetchJson } from "@/lib/apiConfig";
 
 
 export interface CapCounts {
@@ -44,6 +44,12 @@ export interface ScreenerItem {
   action_recommendation: string;
   target_price: number;
   signal_type: string;
+  current_stage?: string;
+  stage_code?: string;
+  stage_badge?: string;
+  sparkline?: number[];
+  dma_50?: number | null;
+  dma_200?: number | null;
 }
 
 export interface ScreenerResponse {
@@ -121,6 +127,12 @@ export interface FreshEntryItem {
   market_value_cr: number;
   weight_pct: number;
   report_date: string;
+  current_stage?: string;
+  stage_code?: string;
+  stage_badge?: string;
+  sparkline?: number[];
+  dma_50?: number | null;
+  dma_200?: number | null;
 }
 
 export interface FreshEntriesResponse {
@@ -246,9 +258,7 @@ export interface StarFundManager {
 // -------------------------------------------------------------
 
 export async function fetchMacroTelemetry(): Promise<MacroTelemetry> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/stats`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return fetchJson<MacroTelemetry>("/api/v1/institutional/stats");
 }
 
 export async function fetchInstitutionalRadar(params: {
@@ -261,19 +271,18 @@ export async function fetchInstitutionalRadar(params: {
   sort_by?: string;
   sort_order?: string;
 }): Promise<ScreenerResponse> {
-  const url = new URL(`${API_BASE}/api/v1/institutional/radar`);
-  if (params.page) url.searchParams.set("page", params.page.toString());
-  if (params.limit) url.searchParams.set("limit", params.limit.toString());
-  if (params.search) url.searchParams.set("search", params.search);
-  if (params.sector) url.searchParams.set("sector", params.sector);
-  if (params.market_cap_category) url.searchParams.set("market_cap_category", params.market_cap_category);
-  if (params.filter_type) url.searchParams.set("filter_type", params.filter_type);
-  if (params.sort_by) url.searchParams.set("sort_by", params.sort_by);
-  if (params.sort_order) url.searchParams.set("sort_order", params.sort_order);
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", params.page.toString());
+  if (params.limit) q.set("limit", params.limit.toString());
+  if (params.search) q.set("search", params.search);
+  if (params.sector) q.set("sector", params.sector);
+  if (params.market_cap_category) q.set("market_cap_category", params.market_cap_category);
+  if (params.filter_type) q.set("filter_type", params.filter_type);
+  if (params.sort_by) q.set("sort_by", params.sort_by);
+  if (params.sort_order) q.set("sort_order", params.sort_order);
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const qs = q.toString();
+  return fetchJson<ScreenerResponse>(`/api/v1/institutional/radar${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchInstitutionalMatrix(params: {
@@ -287,20 +296,19 @@ export async function fetchInstitutionalMatrix(params: {
   sort_by?: string;
   sort_order?: string;
 }): Promise<MatrixResponse> {
-  const url = new URL(`${API_BASE}/api/v1/institutional/matrix`);
-  if (params.market_cap_category) url.searchParams.set("market_cap_category", params.market_cap_category);
-  if (params.search) url.searchParams.set("search", params.search);
-  if (params.sector) url.searchParams.set("sector", params.sector);
-  if (params.scheme_category) url.searchParams.set("scheme_category", params.scheme_category);
-  if (params.scheme_ids) url.searchParams.set("scheme_ids", params.scheme_ids);
-  if (params.page) url.searchParams.set("page", params.page.toString());
-  if (params.limit) url.searchParams.set("limit", params.limit.toString());
-  if (params.sort_by) url.searchParams.set("sort_by", params.sort_by);
-  if (params.sort_order) url.searchParams.set("sort_order", params.sort_order);
+  const q = new URLSearchParams();
+  if (params.market_cap_category) q.set("market_cap_category", params.market_cap_category);
+  if (params.search) q.set("search", params.search);
+  if (params.sector) q.set("sector", params.sector);
+  if (params.scheme_category) q.set("scheme_category", params.scheme_category);
+  if (params.scheme_ids) q.set("scheme_ids", params.scheme_ids);
+  if (params.page) q.set("page", params.page.toString());
+  if (params.limit) q.set("limit", params.limit.toString());
+  if (params.sort_by) q.set("sort_by", params.sort_by);
+  if (params.sort_order) q.set("sort_order", params.sort_order);
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const qs = q.toString();
+  return fetchJson<MatrixResponse>(`/api/v1/institutional/matrix${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchFreshEntries(params: {
@@ -312,44 +320,33 @@ export async function fetchFreshEntries(params: {
   sort_by?: string;
   sort_order?: string;
 }): Promise<FreshEntriesResponse> {
-  const url = new URL(`${API_BASE}/api/v1/institutional/fresh-entries`);
-  if (params.market_cap_category) url.searchParams.set("market_cap_category", params.market_cap_category);
-  if (params.search) url.searchParams.set("search", params.search);
-  if (params.sector) url.searchParams.set("sector", params.sector);
-  if (params.page) url.searchParams.set("page", params.page.toString());
-  if (params.limit) url.searchParams.set("limit", params.limit.toString());
-  if (params.sort_by) url.searchParams.set("sort_by", params.sort_by);
-  if (params.sort_order) url.searchParams.set("sort_order", params.sort_order);
+  const q = new URLSearchParams();
+  if (params.market_cap_category) q.set("market_cap_category", params.market_cap_category);
+  if (params.search) q.set("search", params.search);
+  if (params.sector) q.set("sector", params.sector);
+  if (params.page) q.set("page", params.page.toString());
+  if (params.limit) q.set("limit", params.limit.toString());
+  if (params.sort_by) q.set("sort_by", params.sort_by);
+  if (params.sort_order) q.set("sort_order", params.sort_order);
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const qs = q.toString();
+  return fetchJson<FreshEntriesResponse>(`/api/v1/institutional/fresh-entries${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchSchemesList(): Promise<SchemeInfo[]> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/schemes`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return fetchJson<SchemeInfo[]>("/api/v1/institutional/schemes");
 }
 
 export async function fetchStockInstitutionalDetail(symbol: string): Promise<StockInstitutionalDetail> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/stock/${encodeURIComponent(symbol)}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return fetchJson<StockInstitutionalDetail>(`/api/v1/institutional/stock/${encodeURIComponent(symbol)}`);
 }
 
 export async function fetchSectorRotation(): Promise<SectorFlowItem[]> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/sector-rotation`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return fetchJson<SectorFlowItem[]>("/api/v1/institutional/sector-rotation");
 }
 
 export async function fetchStarFundManagers(): Promise<StarFundManager[]> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/fund-managers`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return fetchJson<StarFundManager[]>("/api/v1/institutional/fund-managers");
 }
 
 export interface FilingStatusResponse {
@@ -388,17 +385,12 @@ export interface FilingStatusResponse {
 }
 
 export async function fetchFilingStatus(): Promise<FilingStatusResponse> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/filing-status`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return fetchJson<FilingStatusResponse>("/api/v1/institutional/filing-status");
 }
 
 export async function triggerFilingSync(force: boolean = false): Promise<any> {
-  const res = await fetch(`${API_BASE}/api/v1/institutional/schedule-sync?force=${force}`, {
+  return fetchJson(`/api/v1/institutional/schedule-sync?force=${force}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 

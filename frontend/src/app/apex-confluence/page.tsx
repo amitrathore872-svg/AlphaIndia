@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/confluenceApi";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { SparklineChart, StageBadge } from "@/components/common";
 
 const ENGINE_ICONS: Record<string, any> = {
   VCP: Shield,
@@ -155,12 +156,12 @@ export default function ApexConfluencePage() {
           </div>
         </div>
 
-        {/* ──────────────── Telemetry Ribbon ──────────────── */}
+        {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Telemetry Ribbon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-[#09121F]/80 backdrop-blur border border-slate-800/80 rounded-xl p-3.5">
             <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Scanned</div>
             <div className="text-xl font-bold text-white mt-1">
-              {meta ? meta.total_equities_evaluated : "—"}
+              {meta ? meta.total_equities_evaluated : "â€”"}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">Across 6 Independent Engines</div>
           </div>
@@ -173,7 +174,7 @@ export default function ApexConfluencePage() {
             <div className="text-xl font-bold text-emerald-300 mt-1">
               {meta ? meta.apex_triple_count : 0}
             </div>
-            <div className="text-[11px] text-emerald-500/80 mt-0.5">≥ 3 Concurring Engines</div>
+            <div className="text-[11px] text-emerald-500/80 mt-0.5">â‰¥ 3 Concurring Engines</div>
           </div>
 
           <div className="bg-[#09121F]/80 backdrop-blur border border-cyan-900/40 rounded-xl p-3.5">
@@ -190,13 +191,13 @@ export default function ApexConfluencePage() {
               Engine Matrix Latency
             </div>
             <div className="text-xl font-bold text-slate-200 mt-1">
-              {meta ? `${meta.computation_latency_ms.toFixed(1)} ms` : "—"}
+              {meta ? `${meta.computation_latency_ms.toFixed(1)} ms` : "â€”"}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">Vectorized Cache Buffer</div>
           </div>
         </div>
 
-        {/* ──────────────── Filters & Controls ──────────────── */}
+        {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Filters & Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#09121F]/60 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3 shadow-xs">
           {/* Tier Tabs */}
           <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
@@ -247,7 +248,7 @@ export default function ApexConfluencePage() {
           </div>
         </div>
 
-        {/* ──────────────── Candidates List ──────────────── */}
+        {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Candidates List â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
             <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
@@ -294,8 +295,9 @@ export default function ApexConfluencePage() {
                           variant="star"
                         />
                         <Link
-                          href={`/techno-funda/${candidate.symbol}`}
+                          href={`/stocks/${encodeURIComponent(candidate.symbol)}?from=/apex-confluence`}
                           className="text-lg font-extrabold text-white hover:text-cyan-400 transition-colors flex items-center gap-1 group"
+                          title={`View ${candidate.symbol} stock details page`}
                         >
                           {candidate.symbol}
                           <ArrowUpRight className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -306,6 +308,11 @@ export default function ApexConfluencePage() {
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800/80 text-slate-400 border border-slate-700/60">
                           {candidate.sector}
                         </span>
+                        <StageBadge
+                          stage={(candidate as any).current_stage}
+                          stageCode={(candidate as any).stage_code}
+                          cmp={candidate.cmp}
+                        />
 
                         {isApex ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 animate-pulse">
@@ -352,30 +359,45 @@ export default function ApexConfluencePage() {
                     </div>
 
                     {/* Right: Metrics & Plan */}
-                    <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-800/80">
+                    <div className="flex items-center justify-between sm:justify-end gap-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-800/80">
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-slate-400">CMP</div>
-                        <div className="text-base font-bold text-white font-mono">₹{candidate.cmp.toLocaleString()}</div>
+                        <div className="text-base font-bold text-white font-mono">â‚¹{candidate.cmp.toLocaleString()}</div>
+                      </div>
+
+                      {/* 90D Trend Sparkline */}
+                      <div className="flex flex-col items-end">
+                        <div className="text-[10px] uppercase font-semibold text-slate-400">90D Trend</div>
+                        <SparklineChart
+                          data={(candidate as any).sparkline}
+                          cmp={candidate.cmp}
+                          return90d={(candidate as any).return_90d_pct}
+                          width={80}
+                          height={22}
+                          periodLabel="90D"
+                          showDot={true}
+                          showBadge={true}
+                        />
                       </div>
 
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-cyan-400">Consensus Pivot</div>
                         <div className="text-base font-bold text-cyan-300 font-mono">
-                          ₹{candidate.consensus_pivot.toLocaleString()}
+                          â‚¹{candidate.consensus_pivot.toLocaleString()}
                         </div>
                       </div>
 
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-rose-400">Stop Loss</div>
                         <div className="text-base font-bold text-rose-300 font-mono">
-                          ₹{candidate.consensus_stop_loss.toLocaleString()}
+                          â‚¹{candidate.consensus_stop_loss.toLocaleString()}
                         </div>
                       </div>
 
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-emerald-400">Target</div>
                         <div className="text-base font-bold text-emerald-300 font-mono">
-                          ₹{candidate.consensus_target.toLocaleString()}
+                          â‚¹{candidate.consensus_target.toLocaleString()}
                         </div>
                       </div>
 
@@ -437,15 +459,15 @@ export default function ApexConfluencePage() {
                               <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-800/60 text-[11px] font-mono">
                                 <div>
                                   <span className="text-slate-500 block text-[9px]">PIVOT</span>
-                                  ₹{engData.pivot}
+                                  â‚¹{engData.pivot}
                                 </div>
                                 <div>
                                   <span className="text-slate-500 block text-[9px]">STOP</span>
-                                  ₹{engData.stop_loss}
+                                  â‚¹{engData.stop_loss}
                                 </div>
                                 <div>
                                   <span className="text-slate-500 block text-[9px]">TARGET</span>
-                                  ₹{engData.target}
+                                  â‚¹{engData.target}
                                 </div>
                               </div>
                             </div>
@@ -470,7 +492,7 @@ export default function ApexConfluencePage() {
                             variant="button"
                           />
                           <Link
-                            href={`/techno-funda/${candidate.symbol}`}
+                            href={`/techno-funda/${candidate.symbol}?from=/apex-confluence`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold transition-colors"
                           >
                             <Target className="w-3 h-3" />
@@ -489,3 +511,5 @@ export default function ApexConfluencePage() {
     </DashboardLayout>
   );
 }
+
+

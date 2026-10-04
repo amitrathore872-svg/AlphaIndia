@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   Search,
@@ -18,11 +19,14 @@ import {
   Award,
   Eye,
   EyeOff,
+  ExternalLink,
+  Activity,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import InstitutionalSubNav from "@/components/institutional/InstitutionalSubNav";
 import StockInstitutionalModal from "@/components/institutional/StockInstitutionalModal";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
+import { SparklineChart } from "@/components/common";
 import {
   FreshEntriesResponse,
   FreshEntryItem,
@@ -202,7 +206,7 @@ export default function FreshPortfolioEntriesPage() {
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="font-mono text-2xl font-black text-cyan-700 dark:text-cyan-300">
-                ₹{summary.total_deployment_cr.toLocaleString("en-IN")}
+                â‚¹{summary.total_deployment_cr.toLocaleString("en-IN")}
               </span>
               <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400">Cr</span>
             </div>
@@ -216,7 +220,7 @@ export default function FreshPortfolioEntriesPage() {
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="font-mono text-2xl font-black text-amber-700 dark:text-amber-300">
-                ₹{summary.max_deployment_cr.toLocaleString("en-IN")}
+                â‚¹{summary.max_deployment_cr.toLocaleString("en-IN")}
               </span>
               <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Cr</span>
             </div>
@@ -277,10 +281,10 @@ export default function FreshPortfolioEntriesPage() {
               aria-label="Filter by Market Cap"
             >
               <option value="ALL">Market Cap: All Caps ({capCounts.ALL})</option>
-              <option value="LARGE">Large Cap ({capCounts.LARGE}) • &gt; ₹20k Cr</option>
-              <option value="MID">Mid Cap ({capCounts.MID}) • ₹5k - ₹20k Cr</option>
-              <option value="SMALL">Small Cap ({capCounts.SMALL}) • ₹1k - ₹5k Cr</option>
-              <option value="MICRO">Micro Cap ({capCounts.MICRO}) • &lt; ₹1k Cr</option>
+              <option value="LARGE">Large Cap ({capCounts.LARGE}) â€¢ &gt; â‚¹20k Cr</option>
+              <option value="MID">Mid Cap ({capCounts.MID}) â€¢ â‚¹5k - â‚¹20k Cr</option>
+              <option value="SMALL">Small Cap ({capCounts.SMALL}) â€¢ â‚¹1k - â‚¹5k Cr</option>
+              <option value="MICRO">Micro Cap ({capCounts.MICRO}) â€¢ &lt; â‚¹1k Cr</option>
             </select>
 
             <select
@@ -288,7 +292,7 @@ export default function FreshPortfolioEntriesPage() {
               onChange={(e) => setSortBy(e.target.value)}
               className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer hover:border-slate-400 dark:hover:border-slate-700 transition shadow-xs"
             >
-              <option value="market_value_cr">Sort: Capital Deployed (₹ Cr)</option>
+              <option value="market_value_cr">Sort: Capital Deployed (â‚¹ Cr)</option>
               <option value="weight_pct">Sort: Scheme Weight %</option>
               <option value="shares_held">Sort: Shares Bought</option>
               <option value="symbol">Sort: Ticker Symbol</option>
@@ -319,8 +323,10 @@ export default function FreshPortfolioEntriesPage() {
             <table className="w-full border-collapse text-left text-xs">
               <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/90 text-[11px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
                 <tr>
-                  <th className="px-4 py-3.5 text-center">Cap Tier</th>
+                  <th className="px-3 py-3.5 text-center">Cap Tier</th>
                   <th className="px-4 py-3.5">Company & Symbol</th>
+                  <th className="px-3 py-3.5 text-center">Current Stage</th>
+                  <th className="px-3 py-3.5 text-center">Trend (90D)</th>
                   <th className="px-4 py-3.5">Sector</th>
                   <th className="px-4 py-3.5">Scheme & AMC Name</th>
                   <th className="px-4 py-3.5">Fund Manager</th>
@@ -333,7 +339,7 @@ export default function FreshPortfolioEntriesPage() {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 font-medium">
                 {data?.items?.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-16 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={11} className="py-16 text-center text-slate-500 dark:text-slate-400">
                       <Sparkles size={36} className="mx-auto mb-2 text-slate-400" />
                       <p className="text-sm font-semibold">No fresh entries found for selected criteria.</p>
                     </td>
@@ -349,13 +355,33 @@ export default function FreshPortfolioEntriesPage() {
                         ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
                         : "border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
 
+                    const isStage2 = item.stage_code === "STAGE_2";
+                    const isStage1 = item.stage_code === "STAGE_1";
+                    const isStage3 = item.stage_code === "STAGE_3";
+
+                    const stageBadgeClass = isStage2
+                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold shadow-xs"
+                      : isStage1
+                      ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 font-bold"
+                      : isStage3
+                      ? "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold"
+                      : "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-400 font-bold";
+
+                    const stageDotClass = isStage2
+                      ? "bg-emerald-400 animate-pulse"
+                      : isStage1
+                      ? "bg-cyan-400"
+                      : isStage3
+                      ? "bg-amber-400"
+                      : "bg-rose-400";
+
                     return (
                       <tr
                         key={item.id}
                         className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                       >
                         {/* Cap Tier */}
-                        <td className="px-4 py-3.5 text-center">
+                        <td className="px-3 py-3.5 text-center">
                           <span
                             className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider uppercase ${catBadge}`}
                           >
@@ -363,22 +389,56 @@ export default function FreshPortfolioEntriesPage() {
                           </span>
                         </td>
 
-                        {/* Company & Symbol */}
-                        <td
-                          onClick={() => setModalSymbol(item.symbol)}
-                          className="cursor-pointer px-4 py-3.5"
-                        >
+                        {/* Company & Symbol with direct stock detail link */}
+                        <td className="px-4 py-3.5">
                           <div className="flex flex-col">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-extrabold text-slate-900 dark:text-white text-sm tracking-wide group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                                {item.symbol}
-                              </span>
-                              <ArrowUpRight size={12} className="text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                              <Link
+                                href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                                className="font-extrabold text-slate-900 dark:text-white text-sm tracking-wide hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors inline-flex items-center gap-1.5"
+                                title={`Open comprehensive technical analysis for ${item.symbol}`}
+                              >
+                                <span>{item.symbol}</span>
+                                <ExternalLink size={12} className="text-cyan-600 dark:text-cyan-400 opacity-70 group-hover:opacity-100" />
+                              </Link>
                             </div>
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                              className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 line-clamp-1 transition-colors"
+                              title={`Open ${item.company_name} detail page`}
+                            >
                               {item.company_name}
-                            </span>
+                            </Link>
                           </div>
+                        </td>
+
+                        {/* Current Stage */}
+                        <td className="px-3 py-3.5 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] tracking-wide uppercase ${stageBadgeClass}`}
+                            title={`Stan Weinstein / Minervini Stage: ${item.current_stage || "Stage 2 (Markup)"}`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${stageDotClass}`} />
+                            <span>{item.current_stage || "Stage 2 (Markup)"}</span>
+                          </span>
+                        </td>
+
+                        {/* Small Sparkline Graph on the row */}
+                        <td className="px-3 py-3.5 text-center">
+                          <Link
+                            href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                            className="inline-block hover:opacity-85 transition-opacity"
+                            title={`Click to view interactive chart for ${item.symbol}`}
+                          >
+                            <SparklineChart
+                              data={item.sparkline}
+                              width={82}
+                              height={24}
+                              showDot={true}
+                              showBadge={true}
+                              periodLabel="90D"
+                            />
+                          </Link>
                         </td>
 
                         {/* Sector */}
@@ -412,18 +472,18 @@ export default function FreshPortfolioEntriesPage() {
 
                         {/* Rupee Deployment */}
                         <td className="px-4 py-3.5 text-right font-mono font-black text-cyan-700 dark:text-cyan-300 text-sm">
-                          ₹{item.market_value_cr.toLocaleString("en-IN")} Cr
+                          â‚¹{item.market_value_cr.toLocaleString("en-IN")} Cr
                         </td>
 
                         {/* Scheme Weight % */}
                         <td className="px-4 py-3.5 text-right">
                           <div className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-xs font-black text-emerald-700 dark:text-emerald-400">
-                            <span>★</span>
+                            <span>â˜…</span>
                             <span>{item.weight_pct.toFixed(2)}%</span>
                           </div>
                         </td>
 
-                        {/* Action */}
+                        {/* Action: Stock Detail Link + Fund Intelligence Modal */}
                         <td className="px-4 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <AddToWatchlistButton
@@ -431,11 +491,20 @@ export default function FreshPortfolioEntriesPage() {
                               companyName={item.company_name}
                               variant="star"
                             />
+                            <Link
+                              href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
+                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 transition shadow-xs inline-flex items-center gap-1"
+                              title={`Open ${item.symbol} Stock Detail Page`}
+                            >
+                              <span>Stock</span>
+                              <ArrowUpRight size={11} />
+                            </Link>
                             <button
                               onClick={() => setModalSymbol(item.symbol)}
-                              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:border-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-500/20 hover:text-cyan-700 dark:hover:text-cyan-300 transition shadow-xs"
+                              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/20 hover:text-emerald-700 dark:hover:text-emerald-300 transition shadow-xs"
+                              title="View AMC Scheme Holdings Intelligence Modal"
                             >
-                              Intelligence
+                              Funds
                             </button>
                           </div>
                         </td>
@@ -496,3 +565,4 @@ export default function FreshPortfolioEntriesPage() {
     </DashboardLayout>
   );
 }
+
