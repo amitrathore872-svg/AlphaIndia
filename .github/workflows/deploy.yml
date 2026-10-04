@@ -61,6 +61,21 @@ jobs:
           # Execute remote continuous deployment pipeline
           ssh -i ~/.ssh/deploy_key -p "$CLEAN_PORT" -o StrictHostKeyChecking=accept-new "$CLEAN_USER@$CLEAN_HOST" '
             set -e
+            echo "=========================================="
+            echo "=== Pre-flight Server Disk Space Check ==="
+            echo "=========================================="
+            df -h / || true
+
+            # Emergency reclaim of disk space in case previous builds filled root volume
+            docker builder prune -af 2>/dev/null || true
+            docker image prune -af --filter "until=24h" 2>/dev/null || true
+            sudo journalctl --vacuum-size=50M 2>/dev/null || true
+            sudo find /var/lib/docker/containers/ -name "*-json.log" -size +25M -exec truncate -s 5M {} + 2>/dev/null || true
+            sudo rm -rf /tmp/* 2>/dev/null || true
+
+            echo "=== Disk Space After Pre-flight Cleanup ==="
+            df -h / || true
+
             DEPLOY_PATH="$HOME/AlphaIndia"
             if [ ! -d "$DEPLOY_PATH" ]; then
               if [ -d "/home/ec2-user/AlphaIndia" ]; then

@@ -13,6 +13,27 @@ echo "    Timestamp: $(date -u '+%Y-%m-%d %H:%M:%SZ')           "
 echo "    Directory: $PROJECT_DIR                               "
 echo "=========================================================="
 
+# 0. Emergency & Proactive Disk Space Reclamation (Crucial for EC2 EBS volumes)
+echo "[0/5] Checking and reclaiming disk space on root volume..."
+echo "--- Initial Disk Status ---"
+df -h /
+
+# Prune unused build cache and untagged images before doing any builds or fetches
+echo "Pruning Docker build cache and dangling containers/images..."
+docker builder prune -af --filter "until=1h" 2>/dev/null || docker builder prune -af 2>/dev/null || true
+docker image prune -af --filter "until=24h" 2>/dev/null || true
+docker container prune -f 2>/dev/null || true
+
+# Truncate oversized container logs (>25MB)
+sudo find /var/lib/docker/containers/ -name "*-json.log" -size +25M -exec truncate -s 5M {} + 2>/dev/null || true
+
+# Clean system journal logs and tmp files
+sudo journalctl --vacuum-size=50M 2>/dev/null || true
+sudo rm -rf /tmp/* 2>/dev/null || true
+
+echo "--- Disk Status After Cleanup ---"
+df -h /
+
 # 1. Sync repository to latest commit on main
 echo "[1/5] Fetching and resetting to latest origin/main..."
 git fetch origin main

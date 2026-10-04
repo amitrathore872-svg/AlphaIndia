@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   # ==========================================================
   # 1. PostgreSQL Database
@@ -6,6 +12,7 @@ services:
     image: postgres:16-alpine
     container_name: alpha_india_db
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password must be set}
@@ -32,6 +39,7 @@ services:
     image: alpha_india_backend:latest
     container_name: alpha_india_backend
     restart: unless-stopped
+    logging: *default-logging
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-alpha_india}
@@ -63,6 +71,7 @@ services:
     image: alpha_india_backend:latest
     container_name: alpha_india_worker
     restart: unless-stopped
+    logging: *default-logging
     command: python worker.py --services all
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-alpha_india}
@@ -96,6 +105,7 @@ services:
     image: alpha_india_frontend:latest
     container_name: alpha_india_frontend
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -113,6 +123,7 @@ services:
     image: nginx:alpine
     container_name: alpha_india_nginx
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
