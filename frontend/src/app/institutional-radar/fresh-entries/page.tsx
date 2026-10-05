@@ -206,7 +206,7 @@ export default function FreshPortfolioEntriesPage() {
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="font-mono text-2xl font-black text-cyan-700 dark:text-cyan-300">
-                â‚¹{summary.total_deployment_cr.toLocaleString("en-IN")}
+                ₹{summary.total_deployment_cr.toLocaleString("en-IN")}
               </span>
               <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400">Cr</span>
             </div>
@@ -220,7 +220,7 @@ export default function FreshPortfolioEntriesPage() {
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="font-mono text-2xl font-black text-amber-700 dark:text-amber-300">
-                â‚¹{summary.max_deployment_cr.toLocaleString("en-IN")}
+                ₹{summary.max_deployment_cr.toLocaleString("en-IN")}
               </span>
               <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Cr</span>
             </div>
@@ -281,10 +281,10 @@ export default function FreshPortfolioEntriesPage() {
               aria-label="Filter by Market Cap"
             >
               <option value="ALL">Market Cap: All Caps ({capCounts.ALL})</option>
-              <option value="LARGE">Large Cap ({capCounts.LARGE}) â€¢ &gt; â‚¹20k Cr</option>
-              <option value="MID">Mid Cap ({capCounts.MID}) â€¢ â‚¹5k - â‚¹20k Cr</option>
-              <option value="SMALL">Small Cap ({capCounts.SMALL}) â€¢ â‚¹1k - â‚¹5k Cr</option>
-              <option value="MICRO">Micro Cap ({capCounts.MICRO}) â€¢ &lt; â‚¹1k Cr</option>
+              <option value="LARGE">Large Cap ({capCounts.LARGE}) â€¢ &gt; ₹20k Cr</option>
+              <option value="MID">Mid Cap ({capCounts.MID}) â€¢ ₹5k - ₹20k Cr</option>
+              <option value="SMALL">Small Cap ({capCounts.SMALL}) â€¢ ₹1k - ₹5k Cr</option>
+              <option value="MICRO">Micro Cap ({capCounts.MICRO}) â€¢ &lt; ₹1k Cr</option>
             </select>
 
             <select
@@ -292,7 +292,7 @@ export default function FreshPortfolioEntriesPage() {
               onChange={(e) => setSortBy(e.target.value)}
               className="rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-950/70 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-300 focus:border-emerald-500 focus:outline-none cursor-pointer hover:border-slate-400 dark:hover:border-slate-700 transition shadow-xs"
             >
-              <option value="market_value_cr">Sort: Capital Deployed (â‚¹ Cr)</option>
+              <option value="market_value_cr">Sort: Capital Deployed (₹ Cr)</option>
               <option value="weight_pct">Sort: Scheme Weight %</option>
               <option value="shares_held">Sort: Shares Bought</option>
               <option value="symbol">Sort: Ticker Symbol</option>
@@ -472,7 +472,7 @@ export default function FreshPortfolioEntriesPage() {
 
                         {/* Rupee Deployment */}
                         <td className="px-4 py-3.5 text-right font-mono font-black text-cyan-700 dark:text-cyan-300 text-sm">
-                          â‚¹{item.market_value_cr.toLocaleString("en-IN")} Cr
+                          ₹{item.market_value_cr.toLocaleString("en-IN")} Cr
                         </td>
 
                         {/* Scheme Weight % */}

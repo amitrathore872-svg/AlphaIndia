@@ -325,16 +325,19 @@ export default function SovereignCockpitPage() {
                 <Rocket className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-2xl lg:text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-cyan-100 to-cyan-400 bg-clip-text text-transparent">
                     Sovereign Alpha Cockpit
                   </h1>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
                     APEX ENGINE
                   </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 border border-indigo-500/40 text-indigo-300">
+                    ZERO SME • MAINBOARD ONLY
+                  </span>
                 </div>
                 <p className="text-xs lg:text-sm text-slate-400">
-                  Dual-Chamber Kinetic Breakouts • 360° AI Forensic Auditor • 7-Day Velocity Rule
+                  Dual-Chamber Kinetic Breakouts • 360° AI Forensic Auditor • 7-Day Velocity Rule • Institutional Mainboard Only (Zero SME)
                 </p>
               </div>
             </div>
@@ -366,7 +369,7 @@ export default function SovereignCockpitPage() {
               {data ? data.universe_scanned.toLocaleString() : "..."}
             </div>
             <div className="text-[11px] text-cyan-400/80 mt-1 flex items-center gap-1">
-              <span>Zero-quota pure math filter</span>
+              <span>Mainboard only • Zero SME</span>
             </div>
           </div>
 

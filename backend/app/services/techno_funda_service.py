@@ -576,29 +576,100 @@ class TechnoFundaService:
             "top_setups": screener["items"],
         }
 
-    @classmethod
-    def get_chart_candles(cls, symbol: str, period: str = "6mo") -> Dict[str, Any]:
-        """
-        Fetches daily historical OHLCV candles and calculates 50/200 DMA series.
-        Lightweight and completely free from third-party widget restrictions.
-        """
-        import yfinance as yf
-        clean_sym = symbol.strip().upper()
-        ticker_sym = f"{clean_sym}.NS"
+    _CANDLE_CACHE: Dict[str, Any] = {}
 
+    @classmethod
+    def _fetch_direct_chart_df(cls, clean_sym: str, period: str = "6mo") -> Any:
+        """
+        Direct, rate-limit immune Yahoo chart API fetcher with browser emulation.
+        Bypasses cookie/crumb 429 rate limit issues by querying v8 chart endpoint directly.
+        """
+        import requests
+        import pandas as pd
+        import datetime
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+        }
+
+        # Try endpoints and suffixes
+        endpoints = ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"]
+        suffixes = [".NS", ".BO"]
+
+        for endpoint in endpoints:
+            for suffix in suffixes:
+                try:
+                    url = f"{endpoint}/v8/finance/chart/{clean_sym}{suffix}?interval=1d&range={period}"
+                    resp = requests.get(url, headers=headers, timeout=6)
+                    if resp.status_code == 200:
+                        chart_res = resp.json().get("chart", {}).get("result", [])
+                        if chart_res and "timestamp" in chart_res[0]:
+                            ts = chart_res[0]["timestamp"]
+                            indicators = chart_res[0].get("indicators", {})
+                            quotes = indicators.get("quote", [{}])[0]
+
+                            opens = quotes.get("open", [])
+                            highs = quotes.get("high", [])
+                            lows = quotes.get("low", [])
+                            closes = quotes.get("close", [])
+                            volumes = quotes.get("volume", [])
+
+                            dates = [datetime.date.fromtimestamp(t).strftime("%Y-%m-%d") for t in ts]
+
+                            df = pd.DataFrame({
+                                "Open": opens,
+                                "High": highs,
+                                "Low": lows,
+                                "Close": closes,
+                                "Volume": volumes,
+                            }, index=dates)
+
+                            df = df.dropna(subset=["Close"])
+                            if not df.empty:
+                                return df
+                except Exception as e:
+                    logger.debug(f"Direct chart request failed for {clean_sym}{suffix}: {e}")
+
+        # Fallback to yfinance if direct requests failed
         try:
-            ticker = yf.Ticker(ticker_sym)
+            import yfinance as yf
+            ticker = yf.Ticker(f"{clean_sym}.NS")
             hist = ticker.history(period=period)
             if hist.empty:
                 ticker = yf.Ticker(f"{clean_sym}.BO")
                 hist = ticker.history(period=period)
+            if not hist.empty:
+                hist = hist.dropna(subset=["Close"])
+                return hist
+        except Exception as e:
+            logger.warning(f"yfinance fallback failed for {clean_sym}: {e}")
 
-            if hist.empty:
-                return {"candles": [], "dma_50": [], "dma_200": []}
+        import pandas as pd
+        return pd.DataFrame()
 
-            hist = hist.dropna(subset=["Close"])
+    @classmethod
+    def get_chart_candles(cls, symbol: str, period: str = "6mo") -> Dict[str, Any]:
+        """
+        Fetches daily historical OHLCV candles and calculates 50/200 DMA series.
+        Lightweight, cached, and rate-limit immune.
+        """
+        import time
+        clean_sym = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
+
+        # Check in-memory cache (TTL: 90 seconds)
+        cache_key = f"{clean_sym}_{period}"
+        now_ts = time.time()
+        if cache_key in cls._CANDLE_CACHE:
+            cached_time, cached_val = cls._CANDLE_CACHE[cache_key]
+            if now_ts - cached_time < 90:
+                return cached_val
+
+        try:
+            hist = cls._fetch_direct_chart_df(clean_sym, period)
             if hist.empty:
-                return {"candles": [], "dma_50": [], "dma_200": []}
+                logger.warning(f"No chart candles found for {clean_sym} (period={period})")
+                return {"candles": [], "dma_50": [], "dma_200": [], "pattern_overlays": []}
 
             hist["SMA_50"] = hist["Close"].rolling(window=min(50, len(hist)), min_periods=1).mean()
             hist["SMA_200"] = hist["Close"].rolling(window=min(200, len(hist)), min_periods=1).mean()
@@ -608,11 +679,11 @@ class TechnoFundaService:
             dma_200_series: List[Dict[str, Any]] = []
 
             for idx, row in hist.iterrows():
-                date_str = idx.strftime("%Y-%m-%d")
-                open_p = round(float(row["Open"]), 2) if not math.isnan(row["Open"]) else round(float(row["Close"]), 2)
-                high_p = round(float(row["High"]), 2) if not math.isnan(row["High"]) else round(float(row["Close"]), 2)
-                low_p = round(float(row["Low"]), 2) if not math.isnan(row["Low"]) else round(float(row["Close"]), 2)
+                date_str = str(idx).split(" ")[0] if not isinstance(idx, str) else idx
                 close_p = round(float(row["Close"]), 2)
+                open_p = round(float(row["Open"]), 2) if not math.isnan(row["Open"]) else close_p
+                high_p = round(float(row["High"]), 2) if not math.isnan(row["High"]) else max(open_p, close_p)
+                low_p = round(float(row["Low"]), 2) if not math.isnan(row["Low"]) else min(open_p, close_p)
                 vol = int(row["Volume"]) if not math.isnan(row["Volume"]) else 0
 
                 candles.append({
@@ -638,14 +709,16 @@ class TechnoFundaService:
 
             pattern_overlays = cls._build_pattern_overlays(clean_sym, candles)
 
-            return {
+            result = {
                 "candles": candles,
                 "dma_50": dma_50_series,
                 "dma_200": dma_200_series,
                 "pattern_overlays": pattern_overlays,
             }
+            cls._CANDLE_CACHE[cache_key] = (now_ts, result)
+            return result
         except Exception as e:
-            logger.error(f"Failed to fetch candles for {clean_sym}: {e}")
+            logger.error(f"Failed to fetch candles for {clean_sym}: {e}", exc_info=True)
             return {"candles": [], "dma_50": [], "dma_200": [], "pattern_overlays": []}
 
     @classmethod

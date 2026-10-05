@@ -442,7 +442,7 @@ export default function MomentumRadarPage() {
             Live Breakout Monitor
             {watchlistData && watchlistData.breakout_triggered_count > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] animate-pulse">
-                {watchlistData.breakout_triggered_count} ðŸ”¥
+                {watchlistData.breakout_triggered_count} ”¥
               </span>
             )}
             {watchlistData && watchlistData.total_watchlist > 0 && watchlistData.breakout_triggered_count === 0 && (
@@ -763,7 +763,7 @@ export default function MomentumRadarPage() {
                                   -{stage.filtered_out_count}
                                 </span>
                               ) : (
-                                <span className="text-slate-500">â€”</span>
+                                <span className="text-slate-500">—</span>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-right">
@@ -1010,7 +1010,7 @@ export default function MomentumRadarPage() {
                         <td className="py-3.5 px-3">
                           <div className="flex flex-col">
                             <span className="font-bold text-white text-sm">
-                              â‚¹{opp.cmp.toLocaleString("en-IN")}
+                              ₹{opp.cmp.toLocaleString("en-IN")}
                             </span>
                             <span
                               className={`text-[11px] font-bold ${
@@ -1087,11 +1087,11 @@ export default function MomentumRadarPage() {
                           {opp.filters.daily_close_gt_bb_upper ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2 py-0.5 rounded">
                               <CheckCircle2 className="h-3 w-3" />
-                              <span>â‚¹{opp.indicators.daily_bb_upper}</span>
+                              <span>₹{opp.indicators.daily_bb_upper}</span>
                             </span>
                           ) : (
                             <span className="text-slate-500 text-[11px]">
-                              â‚¹{opp.indicators.daily_bb_upper}
+                              ₹{opp.indicators.daily_bb_upper}
                             </span>
                           )}
                         </td>
@@ -1101,11 +1101,11 @@ export default function MomentumRadarPage() {
                           {opp.filters.weekly_close_gt_bb_upper ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-400 bg-purple-950/60 border border-purple-800/40 px-2 py-0.5 rounded">
                               <CheckCircle2 className="h-3 w-3" />
-                              <span>â‚¹{opp.indicators.weekly_bb_upper}</span>
+                              <span>₹{opp.indicators.weekly_bb_upper}</span>
                             </span>
                           ) : (
                             <span className="text-slate-500 text-[11px]">
-                              â‚¹{opp.indicators.weekly_bb_upper}
+                              ₹{opp.indicators.weekly_bb_upper}
                             </span>
                           )}
                         </td>
@@ -1159,10 +1159,10 @@ export default function MomentumRadarPage() {
                         <td className="py-3.5 px-3">
                           <div className="flex flex-col text-[11px]">
                             <span className="text-emerald-400 font-bold">
-                              Trig: â‚¹{opp.trade_blueprint.entry_trigger}
+                              Trig: ₹{opp.trade_blueprint.entry_trigger}
                             </span>
                             <span className="text-slate-400 text-[10px]">
-                              T1: â‚¹{opp.trade_blueprint.target_1} | SL: â‚¹{opp.trade_blueprint.stop_loss}
+                              T1: ₹{opp.trade_blueprint.target_1} | SL: ₹{opp.trade_blueprint.stop_loss}
                             </span>
                           </div>
                         </td>
@@ -1175,7 +1175,7 @@ export default function MomentumRadarPage() {
                               companyName={opp.company_name}
                               currentPrice={opp.cmp}
                               sector={opp.sector}
-                              defaultThesis={`Super Momentum Radar: ${opp.match_count}/10 conditions met (${opp.setup_tier}). Entry: â‚¹${opp.trade_blueprint.entry_trigger}, Target 1: â‚¹${opp.trade_blueprint.target_1}, SL: â‚¹${opp.trade_blueprint.stop_loss} (R:R ${opp.trade_blueprint.risk_reward}:1)`}
+                              defaultThesis={`Super Momentum Radar: ${opp.match_count}/10 conditions met (${opp.setup_tier}). Entry: ₹${opp.trade_blueprint.entry_trigger}, Target 1: ₹${opp.trade_blueprint.target_1}, SL: ₹${opp.trade_blueprint.stop_loss} (R:R ${opp.trade_blueprint.risk_reward}:1)`}
                               variant="icon"
                             />
                             <a
@@ -1222,7 +1222,7 @@ export default function MomentumRadarPage() {
                           companyName={opp.company_name}
                           currentPrice={opp.cmp}
                           sector={opp.sector}
-                          defaultThesis={`Super Momentum Radar: ${opp.match_count}/10 conditions met (${opp.setup_tier}). Entry: â‚¹${opp.trade_blueprint.entry_trigger}, Target 1: â‚¹${opp.trade_blueprint.target_1}, SL: â‚¹${opp.trade_blueprint.stop_loss}`}
+                          defaultThesis={`Super Momentum Radar: ${opp.match_count}/10 conditions met (${opp.setup_tier}). Entry: ₹${opp.trade_blueprint.entry_trigger}, Target 1: ₹${opp.trade_blueprint.target_1}, SL: ₹${opp.trade_blueprint.stop_loss}`}
                         />
                         <h3 className="text-base font-bold font-mono text-slate-900 dark:text-white">
                           <Link
@@ -1246,7 +1246,7 @@ export default function MomentumRadarPage() {
 
                     <div className="text-right">
                       <div className="text-base font-bold font-mono text-slate-900 dark:text-white">
-                        â‚¹{opp.cmp.toLocaleString("en-IN")}
+                        ₹{opp.cmp.toLocaleString("en-IN")}
                       </div>
                       <div
                         className={`text-xs font-bold font-mono ${
@@ -1313,19 +1313,19 @@ export default function MomentumRadarPage() {
                     <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                       <span>Daily Upper BB (20,2):</span>
                       <span className={opp.filters.daily_close_gt_bb_upper ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-slate-400 dark:text-slate-500"}>
-                        â‚¹{opp.indicators.daily_bb_upper}
+                        ₹{opp.indicators.daily_bb_upper}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                       <span>Weekly Upper BB (20,2):</span>
                       <span className={opp.filters.weekly_close_gt_bb_upper ? "text-purple-600 dark:text-purple-400 font-bold" : "text-slate-400 dark:text-slate-500"}>
-                        â‚¹{opp.indicators.weekly_bb_upper}
+                        ₹{opp.indicators.weekly_bb_upper}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                       <span>Weekly WMA (30/50):</span>
                       <span className={opp.filters.weekly_wma_cross ? "text-cyan-700 dark:text-cyan-400 font-bold" : "text-slate-400 dark:text-slate-500"}>
-                        â‚¹{opp.indicators.weekly_wma30} / â‚¹{opp.indicators.weekly_wma50}
+                        ₹{opp.indicators.weekly_wma30} / ₹{opp.indicators.weekly_wma50}
                       </span>
                     </div>
                   </div>
@@ -1334,9 +1334,9 @@ export default function MomentumRadarPage() {
                 {/* Trade Setup Blueprint Footer */}
                 <div className="pt-3 border-t border-slate-200 dark:border-slate-800/80 space-y-2">
                   <div className="flex items-center justify-between text-[10px] font-mono">
-                    <span className="text-slate-500 dark:text-slate-400">Trigger: <span className="text-slate-900 dark:text-white font-bold">â‚¹{opp.trade_blueprint.entry_trigger}</span></span>
-                    <span className="text-slate-500 dark:text-slate-400">T1: <span className="text-emerald-600 dark:text-emerald-400 font-bold">â‚¹{opp.trade_blueprint.target_1}</span></span>
-                    <span className="text-slate-500 dark:text-slate-400">SL: <span className="text-rose-600 dark:text-rose-400 font-bold">â‚¹{opp.trade_blueprint.stop_loss}</span></span>
+                    <span className="text-slate-500 dark:text-slate-400">Trigger: <span className="text-slate-900 dark:text-white font-bold">₹{opp.trade_blueprint.entry_trigger}</span></span>
+                    <span className="text-slate-500 dark:text-slate-400">T1: <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{opp.trade_blueprint.target_1}</span></span>
+                    <span className="text-slate-500 dark:text-slate-400">SL: <span className="text-rose-600 dark:text-rose-400 font-bold">₹{opp.trade_blueprint.stop_loss}</span></span>
                   </div>
 
                   <div className="flex items-center gap-2 pt-1">
@@ -1413,7 +1413,7 @@ export default function MomentumRadarPage() {
                       {selectedOpportunity.setup_tier}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{selectedOpportunity.company_name} â€” {selectedOpportunity.sector}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">{selectedOpportunity.company_name} — {selectedOpportunity.sector}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <AddToWatchlistButton
@@ -1421,7 +1421,7 @@ export default function MomentumRadarPage() {
                     companyName={selectedOpportunity.company_name}
                     currentPrice={selectedOpportunity.cmp}
                     sector={selectedOpportunity.sector}
-                    defaultThesis={`Super Momentum Radar: ${selectedOpportunity.match_count}/10 match (${selectedOpportunity.setup_tier}). Entry: â‚¹${selectedOpportunity.trade_blueprint.entry_trigger}, Target 1: â‚¹${selectedOpportunity.trade_blueprint.target_1}, SL: â‚¹${selectedOpportunity.trade_blueprint.stop_loss}`}
+                    defaultThesis={`Super Momentum Radar: ${selectedOpportunity.match_count}/10 match (${selectedOpportunity.setup_tier}). Entry: ₹${selectedOpportunity.trade_blueprint.entry_trigger}, Target 1: ₹${selectedOpportunity.trade_blueprint.target_1}, SL: ₹${selectedOpportunity.trade_blueprint.stop_loss}`}
                     variant="button"
                   />
                   <button
@@ -1437,7 +1437,7 @@ export default function MomentumRadarPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-xs font-mono">
                 <div>
                   <span className="text-slate-500 text-[10px] block">Current Price</span>
-                  <span className="text-base font-bold text-slate-900 dark:text-white">â‚¹{selectedOpportunity.cmp}</span>
+                  <span className="text-base font-bold text-slate-900 dark:text-white">₹{selectedOpportunity.cmp}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">1D Change</span>
@@ -1447,11 +1447,11 @@ export default function MomentumRadarPage() {
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">Day High / Low</span>
-                  <span className="text-slate-800 dark:text-white">â‚¹{selectedOpportunity.indicators.daily_high} / â‚¹{selectedOpportunity.indicators.daily_low}</span>
+                  <span className="text-slate-800 dark:text-white">₹{selectedOpportunity.indicators.daily_high} / ₹{selectedOpportunity.indicators.daily_low}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">Day Open</span>
-                  <span className="text-slate-800 dark:text-white">â‚¹{selectedOpportunity.indicators.daily_open}</span>
+                  <span className="text-slate-800 dark:text-white">₹{selectedOpportunity.indicators.daily_open}</span>
                 </div>
               </div>
 
@@ -1497,19 +1497,19 @@ export default function MomentumRadarPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div>
                     <span className="text-slate-500 text-[10px] block">Entry Trigger</span>
-                    <span className="font-bold text-slate-900 dark:text-white">â‚¹{selectedOpportunity.trade_blueprint.entry_trigger}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">₹{selectedOpportunity.trade_blueprint.entry_trigger}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Target 1 (+8%)</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">â‚¹{selectedOpportunity.trade_blueprint.target_1}</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{selectedOpportunity.trade_blueprint.target_1}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Target 2 (+16%)</span>
-                    <span className="font-bold text-cyan-700 dark:text-cyan-400">â‚¹{selectedOpportunity.trade_blueprint.target_2}</span>
+                    <span className="font-bold text-cyan-700 dark:text-cyan-400">₹{selectedOpportunity.trade_blueprint.target_2}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Stop Loss</span>
-                    <span className="font-bold text-rose-600 dark:text-rose-400">â‚¹{selectedOpportunity.trade_blueprint.stop_loss}</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">₹{selectedOpportunity.trade_blueprint.stop_loss}</span>
                   </div>
                 </div>
               </div>
@@ -1548,37 +1548,37 @@ export default function MomentumRadarPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <KpiCard
                 label="Universe Size"
-                value={universeResultsMeta?.universe_size?.toLocaleString() ?? universeStatus?.last_universe_scan?.universe_size?.toLocaleString() ?? "â€”"}
+                value={universeResultsMeta?.universe_size?.toLocaleString() ?? universeStatus?.last_universe_scan?.universe_size?.toLocaleString() ?? "—"}
                 sub="Total Equities"
                 color="purple"
               />
               <KpiCard
                 label="Scanned"
-                value={universeResultsMeta?.scanned_count?.toLocaleString() ?? "â€”"}
+                value={universeResultsMeta?.scanned_count?.toLocaleString() ?? "—"}
                 sub="Processed"
                 color="cyan"
               />
               <KpiCard
                 label="â‰¥7/10 Near-Breakout"
-                value={universeResultsMeta?.near_breakout_count ?? universeStatus?.last_universe_scan?.near_breakout_count ?? "â€”"}
+                value={universeResultsMeta?.near_breakout_count ?? universeStatus?.last_universe_scan?.near_breakout_count ?? "—"}
                 sub="Watchlist Promoted"
                 color="amber"
               />
               <KpiCard
                 label="High Conviction"
-                value={universeResultsMeta?.high_conviction_count ?? "â€”"}
+                value={universeResultsMeta?.high_conviction_count ?? "—"}
                 sub="â‰¥8/10 Conditions"
                 color="emerald"
               />
               <KpiCard
                 label="Perfect 10/10"
-                value={universeResultsMeta?.perfect_10_count ?? "â€”"}
+                value={universeResultsMeta?.perfect_10_count ?? "—"}
                 sub="All Filters"
                 color="emerald"
               />
               <KpiCard
                 label="Scan Duration"
-                value={universeResultsMeta?.scan_duration_seconds ? `${universeResultsMeta.scan_duration_seconds}s` : "â€”"}
+                value={universeResultsMeta?.scan_duration_seconds ? `${universeResultsMeta.scan_duration_seconds}s` : "—"}
                 sub={universeResultsMeta?.last_scan_time ?? (universeStatus?.universe_scan_in_progress ? "In Progress..." : "Not yet run")}
               />
             </div>
@@ -1603,8 +1603,8 @@ export default function MomentumRadarPage() {
               <Clock className="h-4 w-4 flex-shrink-0" />
               <div>
                 {universeStatus?.is_off_market_window
-                  ? "âœ… Off-market window active â€” Autonomous scheduler will trigger full universe scan every 60 minutes. You can also trigger manually above."
-                  : "ðŸ• Market hours active â€” Universe scanner paused. Intraday breakout monitor is watching your watchlist candidates live. Switch to the Live Breakout Monitor tab."}
+                  ? "âœ… Off-market window active — Autonomous scheduler will trigger full universe scan every 60 minutes. You can also trigger manually above."
+                  : "• Market hours active — Universe scanner paused. Intraday breakout monitor is watching your watchlist candidates live. Switch to the Live Breakout Monitor tab."}
               </div>
             </div>
 
@@ -1654,13 +1654,13 @@ export default function MomentumRadarPage() {
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/60 text-[11px] font-mono flex-wrap">
                   <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Active Institutional Gates:</span>
                   <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                    âœ“ Market Cap â‰¥ â‚¹1,000 Cr
+                    âœ“ Market Cap â‰¥ ₹1,000 Cr
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30 font-bold">
-                    âœ“ Non-Penny (CMP â‰¥ â‚¹20)
+                    âœ“ Non-Penny (CMP â‰¥ ₹20)
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold">
-                    âœ“ Liquid (Turnover â‰¥ â‚¹50L &amp; Vol â‰¥ 25k)
+                    âœ“ Liquid (Turnover â‰¥ ₹50L &amp; Vol â‰¥ 25k)
                   </span>
                   <span className="text-slate-600 dark:text-slate-400 ml-auto font-bold">
                     {filteredUniverseResults.length} / {universeTotalCount} stocks showing
@@ -1678,7 +1678,7 @@ export default function MomentumRadarPage() {
                 </p>
                 <p className="text-xs font-mono text-slate-500 dark:text-slate-600 mt-1">
                   Click <span className="text-purple-600 dark:text-purple-400">"Run Full Universe Scan"</span> to sweep all NSE/BSE equities for momentum setups.
-                  The autonomous scheduler will also run this automatically during off-market hours (18:00â€“09:00 IST).
+                  The autonomous scheduler will also run this automatically during off-market hours (18:00–09:00 IST).
                 </p>
               </div>
             )}
@@ -1739,10 +1739,10 @@ export default function MomentumRadarPage() {
                             </td>
                             <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{stock.sector}</td>
                             <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                              {stock.market_cap_cr ? `â‚¹${Math.round(stock.market_cap_cr).toLocaleString()} Cr` : "â‰¥ â‚¹1,000 Cr"}
+                              {stock.market_cap_cr ? `₹${Math.round(stock.market_cap_cr).toLocaleString()} Cr` : "â‰¥ ₹1,000 Cr"}
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900 dark:text-white">
-                              â‚¹{stock.cmp?.toLocaleString()}
+                              ₹{stock.cmp?.toLocaleString()}
                             </td>
                             <td className="px-3 py-2.5 text-center">
                               <SparklineChart
@@ -1764,7 +1764,7 @@ export default function MomentumRadarPage() {
                               />
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono font-bold text-cyan-700 dark:text-cyan-300">
-                              {stock.turnover_lakhs ? `â‚¹${stock.turnover_lakhs.toLocaleString()} L` : "â€”"}
+                              {stock.turnover_lakhs ? `₹${stock.turnover_lakhs.toLocaleString()} L` : "—"}
                             </td>
                             <td className="px-4 py-2.5">
                               <div className="flex flex-col items-center gap-1">
@@ -1790,17 +1790,17 @@ export default function MomentumRadarPage() {
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`font-bold ${(stock.indicators?.daily_rsi ?? 0) > 70 ? "text-emerald-600 dark:text-emerald-400" : (stock.indicators?.daily_rsi ?? 0) > 60 ? "text-cyan-700 dark:text-cyan-400" : "text-slate-600 dark:text-slate-400"}`}>
-                                {stock.indicators?.daily_rsi?.toFixed(1) ?? "â€”"}
+                                {stock.indicators?.daily_rsi?.toFixed(1) ?? "—"}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`font-bold ${(stock.indicators?.weekly_rsi ?? 0) > 60 ? "text-purple-600 dark:text-purple-400" : "text-slate-600 dark:text-slate-400"}`}>
-                                {stock.indicators?.weekly_rsi?.toFixed(1) ?? "â€”"}
+                                {stock.indicators?.weekly_rsi?.toFixed(1) ?? "—"}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`font-bold ${(stock.indicators?.volume_surge_ratio ?? 0) >= 2 ? "text-amber-600 dark:text-amber-400" : "text-slate-600 dark:text-slate-400"}`}>
-                                {stock.indicators?.volume_surge_ratio?.toFixed(2) ?? "â€”"}Ã—
+                                {stock.indicators?.volume_surge_ratio?.toFixed(2) ?? "—"}Ã—
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-center">
@@ -1872,8 +1872,8 @@ export default function MomentumRadarPage() {
                   <Radio className={`h-4 w-4 flex-shrink-0 ${intradayData?.is_market_hours ? "text-emerald-400 animate-pulse" : "text-slate-500"}`} />
                   <div className="flex-1">
                     {intradayData?.is_market_hours
-                      ? `ðŸŸ¢ MARKET HOURS ACTIVE â€” Auto-polling every 60s. Watchlist: ${intradayData?.metadata?.watchlist_size ?? 0} stocks being monitored. Last scan: ${intradayData?.metadata?.last_scan_time ?? "â€”"}`
-                      : `âš« MARKET CLOSED â€” Live monitoring paused. Run the Full Universe Scan tonight to build tomorrow's watchlist. Watchlist: ${watchlistData?.total_watchlist ?? 0} candidates from last scan.`}
+                      ? `Ÿ¢ MARKET HOURS ACTIVE — Auto-polling every 60s. Watchlist: ${intradayData?.metadata?.watchlist_size ?? 0} stocks being monitored. Last scan: ${intradayData?.metadata?.last_scan_time ?? "—"}`
+                      : `âš« MARKET CLOSED — Live monitoring paused. Run the Full Universe Scan tonight to build tomorrow's watchlist. Watchlist: ${watchlistData?.total_watchlist ?? 0} candidates from last scan.`}
                   </div>
                 </div>
 
@@ -1882,7 +1882,7 @@ export default function MomentumRadarPage() {
                   <div className="space-y-2">
                     <h3 className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-2 uppercase tracking-wider">
                       <Zap className="h-4 w-4" />
-                      ðŸ”¥ LIVE BREAKOUTS DETECTED ({intradayData.breakouts.length})
+                      ”¥ LIVE BREAKOUTS DETECTED ({intradayData.breakouts.length})
                     </h3>
                     {intradayData.breakouts.map((stock: any) => (
                       <div key={stock.symbol} className="flex items-center gap-4 p-4 rounded-xl border border-emerald-500/40 bg-emerald-950/15 hover:border-emerald-400/60 transition-all">
@@ -1908,7 +1908,7 @@ export default function MomentumRadarPage() {
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
-                          <div className="text-white font-bold font-mono">â‚¹{stock.cmp?.toLocaleString()}</div>
+                          <div className="text-white font-bold font-mono">₹{stock.cmp?.toLocaleString()}</div>
                           <div className={`text-xs font-mono ${(stock.day_change_pct ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                             {(stock.day_change_pct ?? 0) >= 0 ? "+" : ""}{stock.day_change_pct?.toFixed(2)}%
                           </div>
@@ -1933,7 +1933,7 @@ export default function MomentumRadarPage() {
                       <h3 className="text-xs font-mono font-bold text-slate-800 dark:text-slate-300 flex items-center gap-2">
                         <Eye className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
                         Watchlist Monitor ({watchlistData.total_watchlist} candidates)
-                        <span className="text-slate-500 font-normal">â€” Stocks promoted from last night's â‰¥7/10 universe scan</span>
+                        <span className="text-slate-500 font-normal">— Stocks promoted from last night's â‰¥7/10 universe scan</span>
                       </h3>
                     </div>
                     <div className="overflow-x-auto">
@@ -1971,7 +1971,7 @@ export default function MomentumRadarPage() {
                                   <div className="text-slate-500 text-[10px] truncate max-w-[100px]">{cand.company_name}</div>
                                 </td>
                                 <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                                  {cand.market_cap_cr ? `â‚¹${Math.round(cand.market_cap_cr).toLocaleString()} Cr` : "â‰¥ â‚¹1,000 Cr"}
+                                  {cand.market_cap_cr ? `₹${Math.round(cand.market_cap_cr).toLocaleString()} Cr` : "â‰¥ ₹1,000 Cr"}
                                 </td>
                                 <td className="px-4 py-2.5 text-center">
                                   <span className={`font-bold ${cand.match_count >= 8 ? "text-amber-700 dark:text-amber-400" : "text-slate-600 dark:text-slate-400"}`}>
@@ -1984,27 +1984,27 @@ export default function MomentumRadarPage() {
                                       {liveScore}/10
                                     </span>
                                   ) : (
-                                    <span className="text-slate-400 dark:text-slate-600">â€”</span>
+                                    <span className="text-slate-400 dark:text-slate-600">—</span>
                                   )}
                                 </td>
                                 <td className="px-4 py-2.5 text-right text-slate-600 dark:text-slate-400">
-                                  {cand.cmp_at_scan ? `â‚¹${cand.cmp_at_scan?.toLocaleString()}` : "â€”"}
+                                  {cand.cmp_at_scan ? `₹${cand.cmp_at_scan?.toLocaleString()}` : "—"}
                                 </td>
                                 <td className="px-4 py-2.5 text-right">
                                   {cand.intraday_cmp ? (
-                                    <span className="text-slate-900 dark:text-slate-200">â‚¹{cand.intraday_cmp?.toLocaleString()}</span>
+                                    <span className="text-slate-900 dark:text-slate-200">₹{cand.intraday_cmp?.toLocaleString()}</span>
                                   ) : (
-                                    <span className="text-slate-400 dark:text-slate-600">â€”</span>
+                                    <span className="text-slate-400 dark:text-slate-600">—</span>
                                   )}
                                 </td>
                                 <td className="px-4 py-2.5 text-center">
                                   {isBreakout ? (
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] border border-emerald-500/30 font-bold">
-                                      ðŸ”¥ BREAKOUT
+                                      ”¥ BREAKOUT
                                     </span>
                                   ) : (
                                     <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 text-[10px] border border-cyan-500/20">
-                                      ðŸ‘ WATCHING
+                                      ‘ WATCHING
                                     </span>
                                   )}
                                 </td>

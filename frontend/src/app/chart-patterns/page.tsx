@@ -222,7 +222,7 @@ const SORT_OPTIONS = [
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const fmt = (n: number | undefined | null, d = 2) =>
-  n !== undefined && n !== null && !isNaN(n) ? n.toFixed(d) : "â€”";
+  n !== undefined && n !== null && !isNaN(n) ? n.toFixed(d) : "—";
 
 function ConvictionBadge({ score, tier }: { score: number; tier: string }) {
   let badgeCls = "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40";
@@ -277,10 +277,10 @@ function PatternCard({
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = `ðŸŽ¯ [Alpha India] ${item.symbol} (${item.pattern_label})\n` +
+    const text = `🎯 [Alpha India] ${item.symbol} (${item.pattern_label})\n` +
       `AI Score: ${item.ai_conviction_score}/100 (${item.conviction_tier})\n` +
-      `CMP: â‚¹${fmt(item.cmp)} | Pivot Buy Point: â‚¹${fmt(item.pivot_buy_point)} (${fmt(item.breakout_distance_pct)}% from pivot)\n` +
-      `Stop Loss: â‚¹${fmt(item.stop_loss)} | Target 1: â‚¹${fmt(item.target_1)} | Target 2: â‚¹${fmt(item.target_2)}\n` +
+      `CMP: ₹${fmt(item.cmp)} | Pivot Buy Point: ₹${fmt(item.pivot_buy_point)} (${fmt(item.breakout_distance_pct)}% from pivot)\n` +
+      `Stop Loss: ₹${fmt(item.stop_loss)} | Target 1: ₹${fmt(item.target_1)} | Target 2: ₹${fmt(item.target_2)}\n` +
       `Risk/Reward: ${fmt(item.risk_reward)}:1 | Base Width: ${fmt(item.pattern_width_weeks, 1)}w | Depth: ${fmt(item.pattern_depth_pct)}%`;
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -356,7 +356,7 @@ function PatternCard({
           <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#0c1326] border border-slate-200/80 dark:border-slate-800/80">
             <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">CMP</div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">â‚¹{fmt(item.cmp)}</span>
+              <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">₹{fmt(item.cmp)}</span>
               <span
                 className={`font-mono text-[11px] font-bold ${
                   item.day_change_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
@@ -372,7 +372,7 @@ function PatternCard({
           <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#0c1326] border border-slate-200/80 dark:border-slate-800/80">
             <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">Pivot Point</div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="font-mono font-bold text-indigo-700 dark:text-cyan-300 text-sm">â‚¹{fmt(item.pivot_buy_point)}</span>
+              <span className="font-mono font-bold text-indigo-700 dark:text-cyan-300 text-sm">₹{fmt(item.pivot_buy_point)}</span>
               <span
                 className={`font-mono text-[10px] font-bold ${
                   item.breakout_distance_pct <= 2.5
@@ -392,9 +392,9 @@ function PatternCard({
           <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#0c1326] border border-slate-200/80 dark:border-slate-800/80">
             <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">T1 / Stop</div>
             <div className="flex items-baseline gap-1.5 mt-0.5 font-mono text-[11px]">
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">â‚¹{fmt(item.target_1)}</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">₹{fmt(item.target_1)}</span>
               <span className="text-slate-400">/</span>
-              <span className="text-rose-600 dark:text-rose-400 font-bold">â‚¹{fmt(item.stop_loss)}</span>
+              <span className="text-rose-600 dark:text-rose-400 font-bold">₹{fmt(item.stop_loss)}</span>
             </div>
           </div>
 
@@ -462,7 +462,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Base High / Low</div>
                   <div className="font-mono text-slate-800 dark:text-slate-200 mt-1 font-semibold">
-                    â‚¹{fmt(m.base_high)} / â‚¹{fmt(m.base_low)}
+                    ₹{fmt(m.base_high)} / ₹{fmt(m.base_low)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -491,7 +491,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Lows (L1 / L2)</div>
                   <div className="font-mono text-slate-800 dark:text-slate-200 mt-1 font-semibold">
-                    â‚¹{fmt(m.left_low)} / â‚¹{fmt(m.right_low)}
+                    ₹{fmt(m.left_low)} / ₹{fmt(m.right_low)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -503,7 +503,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Middle Pivot Peak</div>
                   <div className="font-mono text-indigo-600 dark:text-cyan-300 mt-1 font-semibold">
-                    â‚¹{fmt(m.mid_pivot)} (+{fmt(m.pivot_height_pct)}%)
+                    ₹{fmt(m.mid_pivot)} (+{fmt(m.pivot_height_pct)}%)
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -520,7 +520,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Horizontal Resistance</div>
                   <div className="font-mono text-indigo-600 dark:text-cyan-300 mt-1 font-semibold">
-                    â‚¹{fmt(m.resistance_level)}
+                    ₹{fmt(m.resistance_level)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -561,7 +561,7 @@ function PatternCard({
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
                   <div className="text-slate-500 text-[10px]">Flag Boundary Range</div>
                   <div className="font-mono text-slate-800 dark:text-slate-200 mt-1 font-semibold">
-                    â‚¹{fmt(m.flag_top)} â€” â‚¹{fmt(m.flag_bottom)}
+                    ₹{fmt(m.flag_top)} — ₹{fmt(m.flag_bottom)}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-[#0c1326] border border-slate-200 dark:border-slate-800">
@@ -580,18 +580,18 @@ function PatternCard({
               <Target className="w-4 h-4 text-indigo-600 dark:text-cyan-400" />
               <span className="font-bold text-slate-900 dark:text-white">Execution Plan:</span>
               <span className="text-slate-600 dark:text-slate-400">
-                Enter on breakout candle above <strong className="text-indigo-700 dark:text-cyan-300">â‚¹{fmt(item.pivot_buy_point)}</strong> with volume &gt; 1.5Ã— 50 DMA.
+                Enter on breakout candle above <strong className="text-indigo-700 dark:text-cyan-300">₹{fmt(item.pivot_buy_point)}</strong> with volume &gt; 1.5Ã— 50 DMA.
               </span>
             </div>
             <div className="flex items-center gap-4 text-slate-700 dark:text-slate-300 font-medium">
               <div>
-                Stop Loss: <strong className="text-rose-600 dark:text-rose-400 font-bold">â‚¹{fmt(item.stop_loss)}</strong>
+                Stop Loss: <strong className="text-rose-600 dark:text-rose-400 font-bold">₹{fmt(item.stop_loss)}</strong>
               </div>
               <div>
-                Target 1 (+10%): <strong className="text-emerald-600 dark:text-emerald-400 font-bold">â‚¹{fmt(item.target_1)}</strong>
+                Target 1 (+10%): <strong className="text-emerald-600 dark:text-emerald-400 font-bold">₹{fmt(item.target_1)}</strong>
               </div>
               <div>
-                Target 2 (+20%): <strong className="text-emerald-700 dark:text-emerald-300 font-bold">â‚¹{fmt(item.target_2)}</strong>
+                Target 2 (+20%): <strong className="text-emerald-700 dark:text-emerald-300 font-bold">₹{fmt(item.target_2)}</strong>
               </div>
             </div>
           </div>

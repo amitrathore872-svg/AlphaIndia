@@ -52,6 +52,7 @@ import {
   X,
   RotateCcw,
   TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
 
 export interface ActiveIndicators {
@@ -140,6 +141,9 @@ function TradingViewChartComponent({
 
   const [period, setPeriod] = useState<string>(initialPeriod);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<boolean>(false);
+  const [dataVersion, setDataVersion] = useState<number>(0);
+  const [retryTrigger, setRetryTrigger] = useState<number>(0);
   const [lastCandle, setLastCandle] = useState<CandleData | null>(null);
 
   // Indicator values at latest bar
@@ -193,6 +197,7 @@ function TradingViewChartComponent({
   useEffect(() => {
     let isCancelled = false;
     setLoading(true);
+    setFetchError(false);
 
     fetchTechnoFundaCandles(symbol, period)
       .then((data) => {
@@ -204,16 +209,28 @@ function TradingViewChartComponent({
         setOverlays(fetchedOverlays);
         setSelectedOverlayIdx(0);
         chartDataRef.current = {
-          candles: data.candles,
-          dma_50: data.dma_50,
-          dma_200: data.dma_200,
+          candles: data.candles || [],
+          dma_50: data.dma_50 || [],
+          dma_200: data.dma_200 || [],
           pattern_overlays: fetchedOverlays,
         };
+        setDataVersion((v) => v + 1);
+        if (!data.candles || data.candles.length === 0) {
+          setFetchError(true);
+        }
         setLoading(false);
       })
       .catch((err) => {
         if (!isCancelled) {
           console.error("Failed to fetch candle data:", err);
+          chartDataRef.current = {
+            candles: [],
+            dma_50: [],
+            dma_200: [],
+            pattern_overlays: [],
+          };
+          setDataVersion((v) => v + 1);
+          setFetchError(true);
           setLoading(false);
         }
       });
@@ -221,7 +238,7 @@ function TradingViewChartComponent({
     return () => {
       isCancelled = true;
     };
-  }, [symbol, period, propsOverlays]);
+  }, [symbol, period, propsOverlays, retryTrigger]);
 
   // Count active indicators
   const activeCount = useMemo(() => {
@@ -1148,6 +1165,7 @@ function TradingViewChartComponent({
       chart.remove();
     };
   }, [
+    dataVersion,
     overlays,
     selectedOverlayIdx,
     indicators,
@@ -1920,6 +1938,42 @@ function TradingViewChartComponent({
             </span>
           </div>
         )}
+
+        {!loading && fetchError && (!chartDataRef.current || chartDataRef.current.candles.length === 0) && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-6 text-center bg-white/95 dark:bg-[#050B14]/95 backdrop-blur-xs">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-500">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Candle Data Temporarily Unavailable for {symbol}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
+                Market data feed did not return historical candles. You can retry the fetch or open directly on TradingView.
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setRetryTrigger((v) => v + 1)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs hover:bg-cyan-400 transition cursor-pointer"
+              >
+                <RotateCcw size={12} />
+                <span>Retry Fetch</span>
+              </button>
+              <a
+                href={tvUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-cyan-500 transition cursor-pointer"
+              >
+                <span>TradingView</span>
+                <ExternalLink size={12} />
+              </a>
+            </div>
+          </div>
+        )}
+
         <div
           ref={chartContainerRef}
           className="w-full h-full"

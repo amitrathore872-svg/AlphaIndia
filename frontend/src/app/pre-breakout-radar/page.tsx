@@ -187,7 +187,7 @@ export default function PreBreakoutRadarPage() {
         target_2: opp.blueprint.target_2,
       });
       setWatchedSymbolSet((prev) => new Set([...prev, opp.symbol]));
-      setToastMessage(`ðŸŽ¯ ${opp.symbol} added to Breakout Execution Engine!`);
+      setToastMessage(`🎯 ${opp.symbol} added to Breakout Execution Engine!`);
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {
       console.error("Failed to watch candidate:", err);
@@ -294,7 +294,7 @@ export default function PreBreakoutRadarPage() {
         Math.min(5, Math.max(1, Math.round(opp.conviction_score / 20))),
       watchlist_comment:
         wlInfo?.comment ??
-        `Pre-Breakout Setup: ${opp.primary_pattern} (${opp.setup_tier}). Cheat Entry: â‚¹${opp.blueprint.cheat_entry}, SL: â‚¹${opp.blueprint.stop_loss} (${opp.blueprint.risk_pct}%), Target 1: â‚¹${opp.blueprint.target_1} (R:R ${opp.blueprint.risk_reward}:1)`,
+        `Pre-Breakout Setup: ${opp.primary_pattern} (${opp.setup_tier}). Cheat Entry: ₹${opp.blueprint.cheat_entry}, SL: ₹${opp.blueprint.stop_loss} (${opp.blueprint.risk_pct}%), Target 1: ₹${opp.blueprint.target_1} (R:R ${opp.blueprint.risk_reward}:1)`,
       target_price: wlInfo?.target_price ?? opp.blueprint.target_1,
       in_watchlist: wlInfo?.in_watchlist ?? false,
       watchlist_id: wlInfo?.watchlist_id ?? null,
@@ -706,7 +706,7 @@ export default function PreBreakoutRadarPage() {
                         <td className="py-3.5 px-3">
                           <div className="flex flex-col">
                             <span className="font-bold text-white text-sm">
-                              â‚¹{opp.cmp.toLocaleString("en-IN")}
+                              ₹{opp.cmp.toLocaleString("en-IN")}
                             </span>
                             <span
                               className={`text-[11px] font-bold ${
@@ -828,10 +828,10 @@ export default function PreBreakoutRadarPage() {
                         <td className="py-3.5 px-3">
                           <div className="flex flex-col text-[11px]">
                             <span className="text-emerald-400 font-bold">
-                              Entry: â‚¹{opp.blueprint.cheat_entry}
+                              Entry: ₹{opp.blueprint.cheat_entry}
                             </span>
                             <span className="text-slate-400 text-[10px]">
-                              SL: â‚¹{opp.blueprint.stop_loss} ({opp.blueprint.risk_pct}%) | R:R {opp.blueprint.risk_reward}:1
+                              SL: ₹{opp.blueprint.stop_loss} ({opp.blueprint.risk_pct}%) | R:R {opp.blueprint.risk_reward}:1
                             </span>
                           </div>
                         </td>
@@ -970,7 +970,7 @@ export default function PreBreakoutRadarPage() {
                       <div className="flex flex-col items-end gap-1">
                         <div className="text-right">
                           <div className="text-base font-bold font-mono text-white">
-                            â‚¹{opp.cmp.toLocaleString("en-IN")}
+                            ₹{opp.cmp.toLocaleString("en-IN")}
                           </div>
                           <div
                             className={`text-xs font-bold font-mono ${
@@ -1042,9 +1042,9 @@ export default function PreBreakoutRadarPage() {
                   {/* Trade Setup Blueprint Footer */}
                   <div className="pt-3 border-t border-slate-800/80 space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-mono">
-                      <span className="text-slate-400">Cheat Entry: <span className="text-white font-bold">â‚¹{opp.blueprint.cheat_entry}</span></span>
-                      <span className="text-slate-400">Target 1: <span className="text-emerald-400 font-bold">â‚¹{opp.blueprint.target_1}</span></span>
-                      <span className="text-slate-400">Stop: <span className="text-rose-400 font-bold">â‚¹{opp.blueprint.stop_loss}</span></span>
+                      <span className="text-slate-400">Cheat Entry: <span className="text-white font-bold">₹{opp.blueprint.cheat_entry}</span></span>
+                      <span className="text-slate-400">Target 1: <span className="text-emerald-400 font-bold">₹{opp.blueprint.target_1}</span></span>
+                      <span className="text-slate-400">Stop: <span className="text-rose-400 font-bold">₹{opp.blueprint.stop_loss}</span></span>
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">
@@ -1161,7 +1161,7 @@ export default function PreBreakoutRadarPage() {
                       {selectedOpportunity.setup_tier}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">{selectedOpportunity.company_name} â€” {selectedOpportunity.sector}</p>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">{selectedOpportunity.company_name} — {selectedOpportunity.sector}</p>
                 </div>
                 <button
                   onClick={() => setSelectedOpportunity(null)}
@@ -1175,11 +1175,11 @@ export default function PreBreakoutRadarPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono">
                 <div>
                   <span className="text-slate-500 text-[10px] block">Current Market Price</span>
-                  <span className="text-base font-bold text-white">â‚¹{selectedOpportunity.cmp}</span>
+                  <span className="text-base font-bold text-white">₹{selectedOpportunity.cmp}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">20-Day Pivot High</span>
-                  <span className="text-base font-bold text-cyan-300">â‚¹{selectedOpportunity.metrics.pivot_20d}</span>
+                  <span className="text-base font-bold text-cyan-300">₹{selectedOpportunity.metrics.pivot_20d}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-[10px] block">Distance to Pivot</span>
@@ -1204,19 +1204,19 @@ export default function PreBreakoutRadarPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                   <div>
                     <span className="text-slate-500 text-[10px] block">Cheat Entry</span>
-                    <span className="font-bold text-white">â‚¹{selectedOpportunity.blueprint.cheat_entry}</span>
+                    <span className="font-bold text-white">₹{selectedOpportunity.blueprint.cheat_entry}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Tight Stop Loss</span>
-                    <span className="font-bold text-rose-400">â‚¹{selectedOpportunity.blueprint.stop_loss} ({selectedOpportunity.blueprint.risk_pct}%)</span>
+                    <span className="font-bold text-rose-400">₹{selectedOpportunity.blueprint.stop_loss} ({selectedOpportunity.blueprint.risk_pct}%)</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Target 1 (+9%)</span>
-                    <span className="font-bold text-emerald-400">â‚¹{selectedOpportunity.blueprint.target_1}</span>
+                    <span className="font-bold text-emerald-400">₹{selectedOpportunity.blueprint.target_1}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Target 2 (+18%)</span>
-                    <span className="font-bold text-cyan-400">â‚¹{selectedOpportunity.blueprint.target_2}</span>
+                    <span className="font-bold text-cyan-400">₹{selectedOpportunity.blueprint.target_2}</span>
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-300 pt-1 border-t border-emerald-900/40">
@@ -1238,10 +1238,10 @@ export default function PreBreakoutRadarPage() {
                       onChange={(e) => setAccountRiskRupees(Number(e.target.value))}
                       className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 text-xs focus:outline-none cursor-pointer shadow-xs"
                     >
-                      <option value={5000}>â‚¹5,000 Risk</option>
-                      <option value={10000}>â‚¹10,000 Risk</option>
-                      <option value={20000}>â‚¹20,000 Risk</option>
-                      <option value={50000}>â‚¹50,000 Risk</option>
+                      <option value={5000}>₹5,000 Risk</option>
+                      <option value={10000}>₹10,000 Risk</option>
+                      <option value={20000}>₹20,000 Risk</option>
+                      <option value={50000}>₹50,000 Risk</option>
                     </select>
                   </div>
                 </div>
@@ -1260,15 +1260,15 @@ export default function PreBreakoutRadarPage() {
                       </div>
                       <div>
                         <span className="text-slate-500 text-[10px] block">Capital Required</span>
-                        <span className="text-base font-bold text-white">â‚¹{capitalRequired.toLocaleString("en-IN")}</span>
+                        <span className="text-base font-bold text-white">₹{capitalRequired.toLocaleString("en-IN")}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 text-[10px] block">Target 1 Gain</span>
-                        <span className="text-base font-bold text-emerald-400">+â‚¹{profitTarget1.toLocaleString("en-IN")}</span>
+                        <span className="text-base font-bold text-emerald-400">+₹{profitTarget1.toLocaleString("en-IN")}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 text-[10px] block">Target 2 Gain</span>
-                        <span className="text-base font-bold text-cyan-400">+â‚¹{profitTarget2.toLocaleString("en-IN")}</span>
+                        <span className="text-base font-bold text-cyan-400">+₹{profitTarget2.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
                   );

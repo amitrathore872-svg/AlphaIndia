@@ -234,7 +234,7 @@ export default function BrokerageRadarPage() {
         )}
 
         {/* ===================================================================== */}
-        {/* 3. ðŸ”¥ HOT PICKS CLUSTERS CAROUSEL                                     */}
+        {/* 3. ”¥ HOT PICKS CLUSTERS CAROUSEL                                     */}
         {/* ===================================================================== */}
         {hotPicks.length > 0 && activeView === "feed" && (
           <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/20 via-[#071325] to-[#050C17] p-5 shadow-xl space-y-3">
@@ -272,7 +272,7 @@ export default function BrokerageRadarPage() {
                       <span className="text-xs font-black font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded">
                         +{pick.upside_pct}%
                       </span>
-                      <span className="text-[9px] text-slate-400 font-mono mt-0.5">Target: â‚¹{pick.target_price.toLocaleString()}</span>
+                      <span className="text-[9px] text-slate-400 font-mono mt-0.5">Target: ₹{pick.target_price.toLocaleString()}</span>
                     </div>
                   </div>
 
@@ -342,7 +342,7 @@ export default function BrokerageRadarPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>ðŸ›ï¸ Large Cap</span>
+                <span>›ï¸ Large Cap</span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                   selectedCap === "LARGE_CAP" ? "bg-slate-950/40 text-slate-900" : "bg-slate-800 text-slate-400"
                 }`}>
@@ -380,7 +380,7 @@ export default function BrokerageRadarPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>ðŸš€ Small / Micro Cap</span>
+                <span>š€ Small / Micro Cap</span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                   selectedCap === "SMALL_CAP" ? "bg-slate-950/40 text-slate-900" : "bg-slate-800 text-slate-400"
                 }`}>
@@ -566,7 +566,7 @@ export default function BrokerageRadarPage() {
                               </span>
                               {r.market_cap ? (
                                 <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                  â‚¹{r.market_cap >= 100000 ? (r.market_cap / 100000).toFixed(1) + "L Cr" : Math.round(r.market_cap).toLocaleString() + " Cr"}
+                                  ₹{r.market_cap >= 100000 ? (r.market_cap / 100000).toFixed(1) + "L Cr" : Math.round(r.market_cap).toLocaleString() + " Cr"}
                                 </div>
                               ) : null}
                             </td>
@@ -600,7 +600,7 @@ export default function BrokerageRadarPage() {
 
                             <td className="py-3.5 px-4 whitespace-nowrap">
                               <div className="text-white font-bold">
-                                â‚¹{r.price_at_reco.toLocaleString()} âž” â‚¹{r.target_price.toLocaleString()}
+                                ₹{r.price_at_reco.toLocaleString()} âž” ₹{r.target_price.toLocaleString()}
                               </div>
                               <div
                                 className={`text-[11px] font-bold ${
@@ -657,7 +657,7 @@ export default function BrokerageRadarPage() {
                             </td>
 
                             <td className="py-3.5 px-4 font-sans text-slate-300 max-w-xs truncate" title={r.headline || r.investment_thesis || ""}>
-                              {r.headline || r.investment_thesis || "â€”"}
+                              {r.headline || r.investment_thesis || "—"}
                             </td>
 
                             <td className="py-3.5 px-4 text-right whitespace-nowrap">
@@ -810,7 +810,7 @@ export default function BrokerageRadarPage() {
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase">Target Price</div>
-                  <div className="text-cyan-400 font-bold mt-0.5">â‚¹{selectedReport.target_price.toLocaleString()} (+{selectedReport.upside_pct}%)</div>
+                  <div className="text-cyan-400 font-bold mt-0.5">₹{selectedReport.target_price.toLocaleString()} (+{selectedReport.upside_pct}%)</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase">Target Horizon</div>

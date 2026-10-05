@@ -63,12 +63,25 @@ def run_classification():
         total = len(companies)
         print(f"Loaded {total:,} companies from database.")
 
+        sme_json_path = BACKEND_ROOT / "data" / "sme_companies.json"
+        sme_symbols = set()
+        sme_codes = set()
+        sme_isins = set()
+        if sme_json_path.exists():
+            import json
+            with open(sme_json_path, "r", encoding="utf-8") as f:
+                sme_data = json.load(f)
+                sme_symbols = set(s.upper() for s in sme_data.get("bse_sme_symbols", []))
+                sme_codes = set(str(c) for c in sme_data.get("bse_sme_codes", []))
+                sme_isins = set(i.upper() for i in sme_data.get("bse_sme_isins", []))
+
         stats = {
             "EQUITY_ACTIVE": 0,
             "EQUITY_INACTIVE": 0,
             "MUTUAL_FUND": 0,
             "DEBT": 0,
             "RIGHTS_ENTITLEMENT": 0,
+            "SME": 0,
             "GROWTH_ELIGIBLE": 0,
             "EXCLUDED": 0,
         }
@@ -79,6 +92,8 @@ def run_classification():
             name = (c.company or "").strip()
             name_lower = name.lower()
             isin = (c.isin or "").strip().upper()
+            series = (c.series or "").strip().upper()
+            bse_code = str(c.bse_code or "").strip()
 
             is_active = status == "active"
 
@@ -121,7 +136,18 @@ def run_classification():
                 sec_type = "DEBT"
                 stats["DEBT"] += 1
 
-            # 4. Standard Equity
+            # 4. SME Equities (BSE SME Groups M/MT/MS/TS and NSE Emerge)
+            elif (
+                series in ("SM", "ST")
+                or symbol.endswith(("-SM", "-ST", ".SM", ".ST"))
+                or symbol in sme_symbols
+                or (bse_code and bse_code in sme_codes)
+                or (isin and isin in sme_isins)
+            ):
+                sec_type = "SME"
+                stats["SME"] += 1
+
+            # 5. Standard Mainboard Equity
             else:
                 sec_type = "EQUITY"
                 if is_active:

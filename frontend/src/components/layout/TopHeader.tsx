@@ -89,7 +89,7 @@ export default function TopHeader({
         </div>
 
         {/* CENTER COMPANY SEARCH */}
-        <div className="flex-1 mx-1 sm:mx-2 flex items-center justify-center min-w-[180px] max-w-sm xl:max-w-md">
+        <div className="flex-1 mx-1 sm:mx-2 flex items-center justify-end xl:justify-center min-w-[200px] max-w-xs md:max-w-sm xl:max-w-md">
           <GlobalCompanySearch />
         </div>
 

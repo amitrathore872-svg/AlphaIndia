@@ -380,9 +380,9 @@ export default function CPRScannerPage() {
               >
                 <option value="ALL">All Categories</option>
                 <option value="Ultra Compression">Ultra Compression (&lt;0.10%)</option>
-                <option value="Very Strong">Very Strong (0.10â€“0.20%)</option>
-                <option value="Strong">Strong (0.20â€“0.30%)</option>
-                <option value="Average">Average (0.30â€“0.50%)</option>
+                <option value="Very Strong">Very Strong (0.10–0.20%)</option>
+                <option value="Strong">Strong (0.20–0.30%)</option>
+                <option value="Average">Average (0.30–0.50%)</option>
               </select>
             </div>
 
@@ -397,9 +397,9 @@ export default function CPRScannerPage() {
                 }}
                 className="w-full rounded-lg border border-emerald-500/40 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-emerald-700 dark:text-emerald-300 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-xs"
               >
-                <option value={1000}>â‰¥ â‚¹1,000 Cr (Institutional)</option>
-                <option value={2500}>â‰¥ â‚¹2,500 Cr</option>
-                <option value={5000}>â‰¥ â‚¹5,000 Cr</option>
+                <option value={1000}>â‰¥ ₹1,000 Cr (Institutional)</option>
+                <option value={2500}>â‰¥ ₹2,500 Cr</option>
+                <option value={5000}>â‰¥ ₹5,000 Cr</option>
                 <option value={0}>All Market Caps</option>
               </select>
             </div>
@@ -415,9 +415,9 @@ export default function CPRScannerPage() {
                 }}
                 className="w-full rounded-lg border border-cyan-500/40 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-cyan-700 dark:text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
-                <option value={30}>No Penny (â‰¥ â‚¹30)</option>
-                <option value={50}>Price â‰¥ â‚¹50</option>
-                <option value={100}>Price â‰¥ â‚¹100</option>
+                <option value={30}>No Penny (â‰¥ ₹30)</option>
+                <option value={50}>Price â‰¥ ₹50</option>
+                <option value={100}>Price â‰¥ ₹100</option>
                 <option value={0}>All Prices</option>
               </select>
             </div>
@@ -434,9 +434,9 @@ export default function CPRScannerPage() {
                 className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono text-slate-800 dark:text-white focus:border-cyan-500 focus:outline-none cursor-pointer shadow-xs"
               >
                 <option value="ALL">All Market Caps</option>
-                <option value="LARGE">Large Cap (&gt;â‚¹20,000 Cr)</option>
-                <option value="MID">Mid Cap (â‚¹5,000â€“20,000 Cr)</option>
-                <option value="SMALL">Small Cap (&lt;â‚¹5,000 Cr)</option>
+                <option value="LARGE">Large Cap (&gt;₹20,000 Cr)</option>
+                <option value="MID">Mid Cap (₹5,000–20,000 Cr)</option>
+                <option value="SMALL">Small Cap (&lt;₹5,000 Cr)</option>
               </select>
             </div>
 
@@ -599,7 +599,7 @@ export default function CPRScannerPage() {
                               companyName={stock.company_name}
                               currentPrice={stock.current_price}
                               sector={stock.sector}
-                              defaultThesis={`CPR Compression: Width ${stock.cpr_width_pct.toFixed(2)}%, Comp Score ${stock.compression_score}/100, Breakout Score ${stock.breakout_score}/100. TC: â‚¹${stock.tc.toFixed(1)}, Pivot: â‚¹${stock.pivot.toFixed(1)}, BC: â‚¹${stock.bc.toFixed(1)}`}
+                              defaultThesis={`CPR Compression: Width ${stock.cpr_width_pct.toFixed(2)}%, Comp Score ${stock.compression_score}/100, Breakout Score ${stock.breakout_score}/100. TC: ₹${stock.tc.toFixed(1)}, Pivot: ₹${stock.pivot.toFixed(1)}, BC: ₹${stock.bc.toFixed(1)}`}
                             />
                             <div className="flex flex-col min-w-0">
                               <Link
@@ -631,7 +631,7 @@ export default function CPRScannerPage() {
 
                         {/* 3. CMP */}
                         <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
-                          â‚¹{stock.current_price?.toFixed(1)}
+                          ₹{stock.current_price?.toFixed(1)}
                         </td>
 
                         {/* Trend (90D) */}
@@ -741,10 +741,10 @@ export default function CPRScannerPage() {
                         {/* 10. Trade Plan */}
                         <td className="px-4 py-3 text-[11px]">
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Buy: â‚¹{stock.entry_price.toFixed(2)}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Buy: ₹{stock.entry_price.toFixed(2)}</span>
                             <div className="flex gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                              <span>SL: â‚¹{stock.stop_loss.toFixed(2)}</span>
-                              <span>T1: â‚¹{stock.target1.toFixed(2)}</span>
+                              <span>SL: ₹{stock.stop_loss.toFixed(2)}</span>
+                              <span>T1: ₹{stock.target1.toFixed(2)}</span>
                             </div>
                           </div>
                         </td>

@@ -64,5 +64,5 @@ export async function fetchConfluenceRadar(params?: {
 
   const qs = query.toString();
   const url = `/api/v1/confluence${qs ? `?${qs}` : ""}`;
-  return fetchJson<ConfluenceResponse>(url, { timeoutMs: 15000 });
+  return fetchJson<ConfluenceResponse>(url, { timeoutMs: 30000 });
 }

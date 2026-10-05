@@ -1,7 +1,7 @@
 ﻿"use client";
 
 // =========================================================================
-// Alpha India â€” Personalized Daily One-Pager
+// Alpha India — Personalized Daily One-Pager
 // Designed from scratch around the 3 core pillars:
 // 1. All Screeners' Top 1% Picks (VCP, PEAD, Momentum, Techno-Funda, Growth, Smart Money, Order Wins)
 // 2. Most Active Stocks in Amit's Watchlist (Live prices, 3M gains, pivot proximity, 1-click add/remove)
@@ -333,7 +333,7 @@ export default function HomePage() {
             statusBadge: "FRESH EARNINGS BEAT",
             keyMetric: `Athena Score: ${p.athena_conviction_score || 94}/100 (${p.conviction_grade || "AAA+"})`,
             concreteInsight: `Exploits post-earnings drift with ${p.growth_category || "Accelerating Profits"}. Verified by 5-gate financial shock engine.`,
-            entryZone: `â‚¹${Math.round(cmp * 0.99)} - â‚¹${Math.round(cmp * 1.02)}`,
+            entryZone: `₹${Math.round(cmp * 0.99)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside > 0 ? upside : 25,
             stopLoss: stop,
@@ -357,7 +357,7 @@ export default function HomePage() {
             engineId: "vcp",
             engineName: "Minervini VCP Volume Breakout",
             engineCategory: "TECHNICALS",
-            engineBadge: "ðŸŒ€ MINERVINI VCP",
+            engineBadge: "Œ€ MINERVINI VCP",
             badgeColor: "cyan",
             symbol: v.symbol,
             company: v.company_name || v.symbol,
@@ -365,9 +365,9 @@ export default function HomePage() {
             cmp,
             changeToday: 0.0,
             statusBadge: "STAGE 2 PIVOT BREAKOUT",
-            keyMetric: `Pivot: â‚¹${pivot} Â· Entry: ${v.entry_zone || `â‚¹${cmp}`}`,
+            keyMetric: `Pivot: ₹${pivot} Â· Entry: ${v.entry_zone || `₹${cmp}`}`,
             concreteInsight: `Volatility contraction base coiling complete. Dry-up volume precedes high-momentum institutional expansion.`,
-            entryZone: v.entry_zone || `â‚¹${cmp} - â‚¹${Math.round(cmp * 1.02)}`,
+            entryZone: v.entry_zone || `₹${cmp} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -390,7 +390,7 @@ export default function HomePage() {
             engineId: "velocity",
             engineName: "Velocity Burst Elite (18-Stage)",
             engineCategory: "TECHNICALS",
-            engineBadge: "ðŸ”¥ VELOCITY BURST",
+            engineBadge: "”¥ VELOCITY BURST",
             badgeColor: "purple",
             symbol: vel.symbol,
             company: vel.symbol,
@@ -400,7 +400,7 @@ export default function HomePage() {
             statusBadge: vel.signal_type || "BREAKOUT ACTIVE",
             keyMetric: `Confidence: ${vel.confidence_score || 85}% Â· Rel Vol: ${vel.relative_volume || 1.2}x`,
             concreteInsight: `Passed 18-stage velocity funnel with VWAP confirmation. AI Verdict: ${vel.ai_verdict || "EXECUTE"}.`,
-            entryZone: `â‚¹${cmp} - â‚¹${Math.round(cmp * 1.015)}`,
+            entryZone: `₹${cmp} - ₹${Math.round(cmp * 1.015)}`,
             targetPrice: target,
             upsidePct: upside > 0 ? upside : 15,
             stopLoss: stop,
@@ -426,7 +426,7 @@ export default function HomePage() {
               engineId: "confluence",
               engineName: "Technical Confluence Apex Radar",
               engineCategory: "TECHNICALS",
-              engineBadge: "ðŸŽ¯ CONFLUENCE",
+              engineBadge: "🎯 CONFLUENCE",
               badgeColor: "indigo",
               symbol: conf.symbol,
               company: conf.company_name || conf.symbol,
@@ -435,8 +435,8 @@ export default function HomePage() {
               changeToday: 0.0,
               statusBadge: conf.confluence_tier || "APEX TRIPLE+ CONFLUENCE",
               keyMetric: `Score: ${conf.confluence_score || 98}/100 Â· ${conf.concurrence_count || 4} Concurring Systems`,
-              concreteInsight: `Simultaneous algorithmic breakout alignment across: ${engines}. Consensus pivot â‚¹${conf.consensus_pivot || cmp}.`,
-              entryZone: `â‚¹${conf.consensus_pivot || cmp} - â‚¹${Math.round(cmp * 1.015)}`,
+              concreteInsight: `Simultaneous algorithmic breakout alignment across: ${engines}. Consensus pivot ₹${conf.consensus_pivot || cmp}.`,
+              entryZone: `₹${conf.consensus_pivot || cmp} - ₹${Math.round(cmp * 1.015)}`,
               targetPrice: target,
               upsidePct: upside > 0 ? upside : 18,
               stopLoss: stop,
@@ -460,7 +460,7 @@ export default function HomePage() {
             engineId: "momentum",
             engineName: "Super Momentum Radar",
             engineCategory: "TECHNICALS",
-            engineBadge: "ðŸš€ SUPER MOMENTUM",
+            engineBadge: "š€ SUPER MOMENTUM",
             badgeColor: "emerald",
             symbol: m.symbol,
             company: m.company_name || m.symbol,
@@ -470,7 +470,7 @@ export default function HomePage() {
             statusBadge: m.setup_tier || "HIGH CONVICTION (9/10)",
             keyMetric: `Match: ${m.match_count || 9}/10 Â· Vol Surge: ${m.indicators?.volume_surge_ratio || 1.5}x`,
             concreteInsight: `Triple timeframe RSI > 60 bullish alignment with weekly WMA crossover and Bollinger band breakout.`,
-            entryZone: `â‚¹${m.trade_blueprint?.entry_trigger || cmp}`,
+            entryZone: `₹${m.trade_blueprint?.entry_trigger || cmp}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -501,9 +501,9 @@ export default function HomePage() {
             cmp,
             changeToday: Number(ch.day_change_pct || 0.0),
             statusBadge: ch.conviction_tier || "ELITE CUP SETUP",
-            keyMetric: `AI Score: ${ch.ai_conviction_score || 85}/100 Â· Pivot: â‚¹${ch.pivot_buy_point || cmp}`,
+            keyMetric: `AI Score: ${ch.ai_conviction_score || 85}/100 Â· Pivot: ₹${ch.pivot_buy_point || cmp}`,
             concreteInsight: `William O'Neil classic institutional base pattern. Volume contraction on handle with breakout expansion.`,
-            entryZone: `â‚¹${ch.pivot_buy_point || cmp} - â‚¹${Math.round(cmp * 1.02)}`,
+            entryZone: `₹${ch.pivot_buy_point || cmp} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -526,7 +526,7 @@ export default function HomePage() {
             engineId: "candlestick",
             engineName: "Candlestick Pattern Radar",
             engineCategory: "TECHNICALS",
-            engineBadge: "ðŸ•¯ï¸ CANDLESTICK",
+            engineBadge: "•¯ï¸ CANDLESTICK",
             badgeColor: "teal",
             symbol: cnd.symbol,
             company: cnd.symbol,
@@ -536,7 +536,7 @@ export default function HomePage() {
             statusBadge: `${cnd.pattern_name || "BULLISH FORMATION"} (${cnd.direction || "BULLISH"})`,
             keyMetric: `Reliability: ${cnd.reliability || "VERY HIGH"} Â· Conviction: ${cnd.ai_conviction_score || 88}/100`,
             concreteInsight: `${cnd.description || "Institutional demand candle pattern confirmed with volume surge."}`,
-            entryZone: `â‚¹${cnd.trigger_price || cmp}`,
+            entryZone: `₹${cnd.trigger_price || cmp}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -559,7 +559,7 @@ export default function HomePage() {
             engineId: "delivery",
             engineName: "Institutional Delivery Breakout Surge",
             engineCategory: "INSTITUTIONAL",
-            engineBadge: "ðŸ“¦ DELIVERY SURGE",
+            engineBadge: "📍¦ DELIVERY SURGE",
             badgeColor: "cyan",
             symbol: del.symbol,
             company: del.company_name || del.symbol,
@@ -568,8 +568,8 @@ export default function HomePage() {
             changeToday: Number(del.day_change_pct || 1.3),
             statusBadge: "HIGH DELIVERY ACCUMULATION",
             keyMetric: `Delivery: ${del.delivery_per}% Â· Spike: ${del.delivery_spike_x}x 10D SMA`,
-            concreteInsight: `Massive institutional absorption with ${del.delivery_per}% delivery. 20D accumulation flow +â‚¹${del.deliv_flow_20d || 10} Cr.`,
-            entryZone: `â‚¹${Math.round(cmp * 0.99)} - â‚¹${Math.round(cmp * 1.02)}`,
+            concreteInsight: `Massive institutional absorption with ${del.delivery_per}% delivery. 20D accumulation flow +₹${del.deliv_flow_20d || 10} Cr.`,
+            entryZone: `₹${Math.round(cmp * 0.99)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -601,8 +601,8 @@ export default function HomePage() {
             changeToday: Number(intra.day_change_pct || 1.2),
             statusBadge: intra.conviction_tier || "STAGE 5 ELITE",
             keyMetric: `ICE Score: ${intra.conviction_score || 93}/100 Â· CPR Width: ${intra.cpr_width_pct || 0.01}%`,
-            concreteInsight: `Passed 5-Stage Intraday Funnel with Super Narrow CPR compression and ORB breakout. Pivot â‚¹${intra.pivot || cmp}.`,
-            entryZone: `â‚¹${intra.pivot || cmp} - â‚¹${cmp}`,
+            concreteInsight: `Passed 5-Stage Intraday Funnel with Super Narrow CPR compression and ORB breakout. Pivot ₹${intra.pivot || cmp}.`,
+            entryZone: `₹${intra.pivot || cmp} - ₹${cmp}`,
             targetPrice: target,
             upsidePct: upside > 0 ? upside : 3,
             stopLoss: stop,
@@ -625,7 +625,7 @@ export default function HomePage() {
             engineId: "cpr",
             engineName: "Narrow CPR Compression Scanner",
             engineCategory: "TECHNICALS",
-            engineBadge: "ðŸ“ CPR COMPRESSION",
+            engineBadge: "📍 CPR COMPRESSION",
             badgeColor: "purple",
             symbol: cprCandidate.symbol,
             company: cprCandidate.company_name || cprCandidate.symbol,
@@ -635,7 +635,7 @@ export default function HomePage() {
             statusBadge: cprCandidate.category || "ULTRA COMPRESSION (TOP 1%)",
             keyMetric: `CPR Width: ${cprCandidate.cpr_width_pct || 0.0}% Â· Percentile: ${cprCandidate.cpr_percentile || 99}%`,
             concreteInsight: `Extremely narrow Central Pivot Range. Massive volatility compression indicates imminent explosive trend breakout.`,
-            entryZone: `â‚¹${cmp} - â‚¹${Math.round(cmp * 1.015)}`,
+            entryZone: `₹${cmp} - ₹${Math.round(cmp * 1.015)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -658,7 +658,7 @@ export default function HomePage() {
             engineId: "technofunda",
             engineName: "Techno-Funda Base Radar",
             engineCategory: "TECHNICALS",
-            engineBadge: "ðŸ“Š TECHNO-FUNDA",
+            engineBadge: "📍Š TECHNO-FUNDA",
             badgeColor: "sky",
             symbol: t.symbol,
             company: t.company_name || t.symbol,
@@ -667,8 +667,8 @@ export default function HomePage() {
             changeToday: 0.0,
             statusBadge: t.signal || "INSTITUTIONAL PATTERN BREAKOUT",
             keyMetric: `Pattern: ${t.pattern || "Ascending Triangle"} (Score ${t.setup_score || 99})`,
-            concreteInsight: `High-conviction pattern base with ROCE ${t.roce || 23}%. Pivot reference at â‚¹${t.pivot_reference || cmp}.`,
-            entryZone: `â‚¹${t.pivot_reference || cmp} - â‚¹${Math.round(cmp * 1.01)}`,
+            concreteInsight: `High-conviction pattern base with ROCE ${t.roce || 23}%. Pivot reference at ₹${t.pivot_reference || cmp}.`,
+            entryZone: `₹${t.pivot_reference || cmp} - ₹${Math.round(cmp * 1.01)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -691,7 +691,7 @@ export default function HomePage() {
             engineId: "growth",
             engineName: "Growth Screener PRO",
             engineCategory: "FUNDAMENTALS",
-            engineBadge: "ðŸ“ˆ GROWTH PRO",
+            engineBadge: "📍ˆ GROWTH PRO",
             badgeColor: "emerald",
             symbol: g.symbol,
             company: g.company || g.symbol,
@@ -699,9 +699,9 @@ export default function HomePage() {
             cmp,
             changeToday: 0.0,
             statusBadge: "HIGH ROCE COMPOUNDER",
-            keyMetric: `Market Cap: â‚¹${Math.round((g.market_cap || 10000) / 100)} Cr Â· PE: ${g.pe_ratio || 21}x`,
+            keyMetric: `Market Cap: ₹${Math.round((g.market_cap || 10000) / 100)} Cr Â· PE: ${g.pe_ratio || 21}x`,
             concreteInsight: `Accelerating multi-quarter profitability with high capital efficiency and institutional moat.`,
-            entryZone: `â‚¹${Math.round(cmp * 0.98)} - â‚¹${Math.round(cmp * 1.02)}`,
+            entryZone: `₹${Math.round(cmp * 0.98)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -724,7 +724,7 @@ export default function HomePage() {
             engineId: "smartmoney",
             engineName: "Smart Money Inflow Radar",
             engineCategory: "INSTITUTIONAL",
-            engineBadge: "ðŸ›¡ï¸ SMART MONEY",
+            engineBadge: "›¡ï¸ SMART MONEY",
             badgeColor: "indigo",
             symbol: s.symbol,
             company: s.company_name || s.symbol,
@@ -733,8 +733,8 @@ export default function HomePage() {
             changeToday: 0.0,
             statusBadge: "INSTITUTIONAL ACCUMULATION",
             keyMetric: `Smart Score: ${Math.round(s.smart_money_score || 88)}/100 Â· ${s.total_schemes || 12} AMC Funds`,
-            concreteInsight: `Net institutional inflow of +â‚¹${Math.round(s.net_value_flow_mom_cr || 350)} Cr MoM. Top AMCs absorbing free float.`,
-            entryZone: `â‚¹${Math.round(cmp * 0.98)} - â‚¹${Math.round(cmp * 1.01)}`,
+            concreteInsight: `Net institutional inflow of +₹${Math.round(s.net_value_flow_mom_cr || 350)} Cr MoM. Top AMCs absorbing free float.`,
+            entryZone: `₹${Math.round(cmp * 0.98)} - ₹${Math.round(cmp * 1.01)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -760,7 +760,7 @@ export default function HomePage() {
             engineId: "orderwin",
             engineName: "Corporate Catalysts & Order Wins",
             engineCategory: "FUNDAMENTALS",
-            engineBadge: "ðŸ“œ ORDER WIN",
+            engineBadge: "📍œ ORDER WIN",
             badgeColor: "amber",
             symbol: a.symbol || "CONTRACT",
             company: a.company_name || "Contract Winner",
@@ -768,9 +768,9 @@ export default function HomePage() {
             cmp,
             changeToday: 0.0,
             statusBadge: `${a.impact_level || "HIGH"} IMPACT FILING`,
-            keyMetric: a.deal_value_cr ? `Contract Award: â‚¹${a.deal_value_cr.toLocaleString("en-IN")} Cr` : "Material Exchange Disclosure",
+            keyMetric: a.deal_value_cr ? `Contract Award: ₹${a.deal_value_cr.toLocaleString("en-IN")} Cr` : "Material Exchange Disclosure",
             concreteInsight: a.headline || "Official regulatory filing with significant revenue accretive trajectory.",
-            entryZone: `â‚¹${Math.round(cmp * 0.98)} - â‚¹${Math.round(cmp * 1.02)}`,
+            entryZone: `₹${Math.round(cmp * 0.98)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
@@ -795,7 +795,7 @@ export default function HomePage() {
               engineId: "ipo",
               engineName: "Mainboard IPO Radar",
               engineCategory: "FUNDAMENTALS",
-              engineBadge: "ðŸš€ IPO RADAR",
+              engineBadge: "š€ IPO RADAR",
               badgeColor: "rose",
               symbol: ipo.symbol,
               company: ipo.company || ipo.company_name || ipo.symbol,
@@ -804,8 +804,8 @@ export default function HomePage() {
               changeToday: Number(ipo.day_change_pct || 0.0),
               statusBadge: ipo.setup_label || "LISTING DAY HIGH BREAKOUT",
               keyMetric: `Setup: ${ipo.setup_type || "LDH Breakout"} Â· Conviction: ${ipo.conviction_score || 90}/100`,
-              concreteInsight: ipo.rationale || `Mainboard IPO base breakout. Pivot â‚¹${ipo.pivot_price || cmp} with SEBI anchor float absorption.`,
-              entryZone: `â‚¹${ipo.pivot_price || cmp} - â‚¹${Math.round(cmp * 1.02)}`,
+              concreteInsight: ipo.rationale || `Mainboard IPO base breakout. Pivot ₹${ipo.pivot_price || cmp} with SEBI anchor float absorption.`,
+              entryZone: `₹${ipo.pivot_price || cmp} - ₹${Math.round(cmp * 1.02)}`,
               targetPrice: target,
               upsidePct: upside > 0 ? upside : 25,
               stopLoss: stop,
@@ -887,7 +887,7 @@ export default function HomePage() {
 
   // 1-Click Copy Bracket Order
   const handleCopyBracket = (symbol: string, cmp: number, target: number, stop: number) => {
-    const text = `BUY ${symbol} LIMIT:â‚¹${cmp} TARGET:â‚¹${target} SL:â‚¹${stop}`;
+    const text = `BUY ${symbol} LIMIT:₹${cmp} TARGET:₹${target} SL:₹${stop}`;
     navigator.clipboard.writeText(text);
     setCopiedSymbol(symbol);
     setTimeout(() => setCopiedSymbol(null), 2500);
@@ -1102,7 +1102,7 @@ export default function HomePage() {
               </div>
 
               <div className="text-[11px] text-slate-500 dark:text-slate-400 italic md:text-right max-w-xl">
-                ðŸ’¡ <strong className="text-slate-700 dark:text-slate-300 not-italic">Verdict:</strong> {marketRegime.summary_verdict}
+                ’¡ <strong className="text-slate-700 dark:text-slate-300 not-italic">Verdict:</strong> {marketRegime.summary_verdict}
               </div>
             </div>
           )}
@@ -1204,7 +1204,7 @@ export default function HomePage() {
 
                     <div className="flex items-baseline justify-between">
                       <span className="font-mono text-slate-500 dark:text-slate-400 text-[10px]">
-                        â‚¹{Math.round(sec.cmp).toLocaleString("en-IN")}
+                        ₹{Math.round(sec.cmp).toLocaleString("en-IN")}
                       </span>
                       <span
                         className={`font-mono font-black text-[11px] ${
@@ -1243,10 +1243,10 @@ export default function HomePage() {
             <div className="flex items-center gap-1 overflow-x-auto pb-1">
               {[
                 { id: "ALL", label: `All Engines (${screenerPicks.length})` },
-                { id: "TECHNICALS", label: "ðŸŒ€ Technicals & Patterns" },
+                { id: "TECHNICALS", label: "Œ€ Technicals & Patterns" },
                 { id: "INTRADAY", label: "âš¡ Intraday & VWAP" },
-                { id: "FUNDAMENTALS", label: "ðŸ’Ž Fundamentals & Catalysts" },
-                { id: "INSTITUTIONAL", label: "ðŸ›¡ï¸ Institutional & Delivery" },
+                { id: "FUNDAMENTALS", label: "’Ž Fundamentals & Catalysts" },
+                { id: "INSTITUTIONAL", label: "›¡ï¸ Institutional & Delivery" },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1324,7 +1324,7 @@ export default function HomePage() {
 
                       {/* Engine's Special Discovery Metric */}
                       <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-1">
-                        ðŸŽ¯ <strong className="text-slate-900 dark:text-white font-mono">{pick.keyMetric}</strong>
+                        🎯 <strong className="text-slate-900 dark:text-white font-mono">{pick.keyMetric}</strong>
                       </p>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
                         {pick.concreteInsight}
@@ -1336,14 +1336,14 @@ export default function HomePage() {
                       <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800">
                         <span className="text-[9px] uppercase font-bold text-slate-400 block font-sans">CMP</span>
                         <span className="font-black text-sm text-slate-900 dark:text-white">
-                          â‚¹{pick.cmp.toLocaleString("en-IN")}
+                          ₹{pick.cmp.toLocaleString("en-IN")}
                         </span>
                       </div>
 
                       <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800">
                         <span className="text-[9px] uppercase font-bold text-slate-400 block font-sans">Target Fair Value</span>
                         <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">
-                          â‚¹{pick.targetPrice.toLocaleString("en-IN")}{" "}
+                          ₹{pick.targetPrice.toLocaleString("en-IN")}{" "}
                           <span className="text-[10px]">(+{pick.upsidePct}%)</span>
                         </span>
                       </div>
@@ -1351,7 +1351,7 @@ export default function HomePage() {
                       <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800">
                         <span className="text-[9px] uppercase font-bold text-slate-400 block font-sans">Stop Loss</span>
                         <span className="font-black text-sm text-rose-600 dark:text-rose-400">
-                          â‚¹{pick.stopLoss.toLocaleString("en-IN")}
+                          ₹{pick.stopLoss.toLocaleString("en-IN")}
                         </span>
                       </div>
 
@@ -1442,8 +1442,8 @@ export default function HomePage() {
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold text-slate-400">Sort Watchlist By:</span>
               {[
-                { id: "return3m", label: "ðŸ”¥ Top 3M Gainers" },
-                { id: "roce", label: "ðŸ’Ž Highest ROCE" },
+                { id: "return3m", label: "”¥ Top 3M Gainers" },
+                { id: "roce", label: "’Ž Highest ROCE" },
                 { id: "confidence", label: "â˜… Conviction" },
                 { id: "symbol", label: "Ticker A-Z" },
               ].map((btn) => (
@@ -1478,7 +1478,7 @@ export default function HomePage() {
                   <tr>
                     <th className="py-3 px-4">Ticker & Name</th>
                     <th className="py-3 px-3">Sector</th>
-                    <th className="py-3 px-3 text-right">CMP (â‚¹)</th>
+                    <th className="py-3 px-3 text-right">CMP (₹)</th>
                     <th className="py-3 px-3 text-right">3M Gain</th>
                     <th className="py-3 px-3 text-right">ROCE</th>
                     <th className="py-3 px-3 text-right">Target Value</th>
@@ -1512,7 +1512,7 @@ export default function HomePage() {
 
                         {/* CMP */}
                         <td className="py-3 px-3 text-right whitespace-nowrap font-mono font-bold text-slate-900 dark:text-white">
-                          â‚¹{(stock.current_price || 0).toLocaleString("en-IN")}
+                          ₹{(stock.current_price || 0).toLocaleString("en-IN")}
                         </td>
 
                         {/* 3M Gain */}
@@ -1536,7 +1536,7 @@ export default function HomePage() {
 
                         {/* Target Value */}
                         <td className="py-3 px-3 text-right whitespace-nowrap font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {stock.target_price ? `â‚¹${stock.target_price.toLocaleString("en-IN")}` : "--"}
+                          {stock.target_price ? `₹${stock.target_price.toLocaleString("en-IN")}` : "--"}
                         </td>
 
                         {/* Comment */}

@@ -188,10 +188,10 @@ export default function InstitutionalRadarPage() {
         <div className="flex flex-wrap items-center gap-2">
           {[
             { id: "ALL", label: "All Caps", count: capCounts.ALL, color: "text-slate-800 dark:text-slate-200" },
-            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-700 dark:text-cyan-400", desc: "> â‚¹20,000 Cr" },
-            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-700 dark:text-emerald-400", desc: "â‚¹5,000 - â‚¹20,000 Cr" },
-            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-800 dark:text-amber-400", desc: "â‚¹1,000 - â‚¹5,000 Cr" },
-            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-600 dark:text-slate-400", desc: "< â‚¹1,000 Cr" },
+            { id: "LARGE", label: "Large Cap", count: capCounts.LARGE, color: "text-cyan-700 dark:text-cyan-400", desc: "> ₹20,000 Cr" },
+            { id: "MID", label: "Mid Cap", count: capCounts.MID, color: "text-emerald-700 dark:text-emerald-400", desc: "₹5,000 - ₹20,000 Cr" },
+            { id: "SMALL", label: "Small Cap", count: capCounts.SMALL, color: "text-amber-800 dark:text-amber-400", desc: "₹1,000 - ₹5,000 Cr" },
+            { id: "MICRO", label: "Micro Cap", count: capCounts.MICRO, color: "text-slate-600 dark:text-slate-400", desc: "< ₹1,000 Cr" },
           ].map((cat) => {
             const active = capCategory === cat.id;
             return (
@@ -325,7 +325,7 @@ export default function InstitutionalRadarPage() {
                     className="cursor-pointer py-3.5 px-4 font-semibold hover:text-slate-900 dark:hover:text-white transition text-right"
                   >
                     <div className="flex items-center justify-end gap-1.5">
-                      Net MoM Flow (â‚¹ Cr)
+                      Net MoM Flow (₹ Cr)
                       <ArrowUpDown size={12} />
                     </div>
                   </th>
@@ -509,7 +509,7 @@ export default function InstitutionalRadarPage() {
                             </span>
                           </div>
                           <div className="text-[10px] text-slate-500">
-                            â‚¹{item.total_value_cr.toLocaleString("en-IN")} Cr AUM
+                            ₹{item.total_value_cr.toLocaleString("en-IN")} Cr AUM
                           </div>
                         </td>
 
@@ -525,7 +525,7 @@ export default function InstitutionalRadarPage() {
                             }`}
                           >
                             {item.net_value_flow_mom_cr > 0 ? "+" : ""}
-                            â‚¹{item.net_value_flow_mom_cr.toLocaleString("en-IN")} Cr
+                            ₹{item.net_value_flow_mom_cr.toLocaleString("en-IN")} Cr
                           </span>
                           <div className="text-[10px] text-slate-500">
                             {item.net_shares_flow_mom > 0 ? "+" : ""}
@@ -553,7 +553,7 @@ export default function InstitutionalRadarPage() {
                               <Star key={i} size={12} className="fill-amber-400 text-amber-500 dark:text-amber-400" />
                             ))}
                             {item.star_manager_count === 0 && (
-                              <span className="text-slate-400 dark:text-slate-600 text-xs">â€”</span>
+                              <span className="text-slate-400 dark:text-slate-600 text-xs">—</span>
                             )}
                           </div>
                         </td>
@@ -583,7 +583,7 @@ export default function InstitutionalRadarPage() {
                               </Link>
                             </div>
                             <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                              Target: â‚¹{item.target_price.toLocaleString("en-IN")}
+                              Target: ₹{item.target_price.toLocaleString("en-IN")}
                             </div>
                           </div>
                         </td>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
@@ -21,6 +21,7 @@ import {
   GitBranch,
   Crosshair,
   TrendingUp,
+  AlertCircle,
 } from "lucide-react";
 import {
   fetchConfluenceRadar,
@@ -48,11 +49,16 @@ const ENGINE_COLORS: Record<string, { bg: string; text: string; border: string }
   PRE_BREAKOUT: { bg: "bg-purple-950/40", text: "text-purple-400", border: "border-purple-800/60" },
   DELIVERY: { bg: "bg-rose-950/40", text: "text-rose-400", border: "border-rose-800/60" },
 };
+const formatINR = (val: number | null | undefined): string => {
+  if (val == null || isNaN(val) || val <= 0) return "—";
+  return `₹${val.toLocaleString("en-IN", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`;
+};
 
 export default function ApexConfluencePage() {
   const [data, setData] = useState<ConfluenceResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
   const [selectedSector, setSelectedSector] = useState<string>("All");
@@ -61,12 +67,15 @@ export default function ApexConfluencePage() {
   const loadData = useCallback(async (force = false) => {
     if (force) setRefreshing(true);
     else setLoading(true);
+    setError(null);
 
     try {
       const res = await fetchConfluenceRadar({ force_refresh: force });
       setData(res);
+      setError(null);
     } catch (err) {
       console.error("Failed to load Confluence Radar data:", err);
+      setError(err instanceof Error ? err.message : "Failed to load Confluence Radar data");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -161,7 +170,7 @@ export default function ApexConfluencePage() {
           <div className="bg-[#09121F]/80 backdrop-blur border border-slate-800/80 rounded-xl p-3.5">
             <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Scanned</div>
             <div className="text-xl font-bold text-white mt-1">
-              {meta ? meta.total_equities_evaluated : "â€”"}
+              {meta ? meta.total_equities_evaluated : "—"}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">Across 6 Independent Engines</div>
           </div>
@@ -191,7 +200,7 @@ export default function ApexConfluencePage() {
               Engine Matrix Latency
             </div>
             <div className="text-xl font-bold text-slate-200 mt-1">
-              {meta ? `${meta.computation_latency_ms.toFixed(1)} ms` : "â€”"}
+              {meta ? `${meta.computation_latency_ms.toFixed(1)} ms` : "—"}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">Vectorized Cache Buffer</div>
           </div>
@@ -256,6 +265,20 @@ export default function ApexConfluencePage() {
             <p className="text-xs text-slate-500 max-w-md">
               Evaluating VCP geometry, Cup & Handle baselines, multi-pattern coils, momentum filters and delivery volume.
             </p>
+          </div>
+        ) : error && !data ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 bg-rose-500/5 border border-rose-500/20 rounded-xl p-8">
+            <AlertCircle className="w-10 h-10 text-rose-400" />
+            <div className="text-base font-bold text-rose-300">Confluence Matrix Unavailable</div>
+            <p className="text-xs text-slate-400 max-w-md">
+              {error}
+            </p>
+            <button
+              onClick={() => loadData(true)}
+              className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry Scan
+            </button>
           </div>
         ) : filteredCandidates.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 bg-slate-50 dark:bg-[#09121F]/40 border border-slate-200 dark:border-slate-800/60 rounded-xl p-8">
@@ -362,7 +385,7 @@ export default function ApexConfluencePage() {
                     <div className="flex items-center justify-between sm:justify-end gap-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-800/80">
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-slate-400">CMP</div>
-                        <div className="text-base font-bold text-white font-mono">â‚¹{candidate.cmp.toLocaleString()}</div>
+                        <div className="text-base font-bold text-white font-mono">{formatINR(candidate.cmp)}</div>
                       </div>
 
                       {/* 90D Trend Sparkline */}
@@ -383,21 +406,21 @@ export default function ApexConfluencePage() {
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-cyan-400">Consensus Pivot</div>
                         <div className="text-base font-bold text-cyan-300 font-mono">
-                          â‚¹{candidate.consensus_pivot.toLocaleString()}
+                          {formatINR(candidate.consensus_pivot)}
                         </div>
                       </div>
 
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-rose-400">Stop Loss</div>
                         <div className="text-base font-bold text-rose-300 font-mono">
-                          â‚¹{candidate.consensus_stop_loss.toLocaleString()}
+                          {formatINR(candidate.consensus_stop_loss)}
                         </div>
                       </div>
 
                       <div className="text-right">
                         <div className="text-[10px] uppercase font-semibold text-emerald-400">Target</div>
                         <div className="text-base font-bold text-emerald-300 font-mono">
-                          â‚¹{candidate.consensus_target.toLocaleString()}
+                          {formatINR(candidate.consensus_target)}
                         </div>
                       </div>
 
@@ -459,15 +482,15 @@ export default function ApexConfluencePage() {
                               <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-800/60 text-[11px] font-mono">
                                 <div>
                                   <span className="text-slate-500 block text-[9px]">PIVOT</span>
-                                  â‚¹{engData.pivot}
+                                  {formatINR(engData.pivot)}
                                 </div>
                                 <div>
                                   <span className="text-slate-500 block text-[9px]">STOP</span>
-                                  â‚¹{engData.stop_loss}
+                                  {formatINR(engData.stop_loss)}
                                 </div>
                                 <div>
                                   <span className="text-slate-500 block text-[9px]">TARGET</span>
-                                  â‚¹{engData.target}
+                                  {formatINR(engData.target)}
                                 </div>
                               </div>
                             </div>

@@ -108,8 +108,8 @@ export default function DeliveryRadarPage() {
           icon={<Flame className="w-5 h-5" />}
           iconColor="emerald"
           title="Delivery Breakout Radar"
-          badge={{ label: "INSTITUTIONAL APEX: 78% WIN RATE â€¢ MCAP â‰¥ â‚¹1,000 CR", color: "purple" }}
-          subtitle="Institutional float absorption engine with ticket size expansion, pre-breakout contraction, and dynamic buy/sell corridors (Price â‰¥ â‚¹40, MCap â‰¥ â‚¹1,000 Cr)."
+          badge={{ label: "INSTITUTIONAL APEX: 78% WIN RATE â€¢ MCAP â‰¥ ₹1,000 CR", color: "purple" }}
+          subtitle="Institutional float absorption engine with ticket size expansion, pre-breakout contraction, and dynamic buy/sell corridors (Price â‰¥ ₹40, MCap â‰¥ ₹1,000 Cr)."
           actions={
             <button
               onClick={handleTriggerScan}
@@ -127,7 +127,7 @@ export default function DeliveryRadarPage() {
           <KpiCard
             label="Equities Filtered"
             value={metadata?.total_scanned_symbols?.toLocaleString() || "1,473"}
-            sub="MCap â‰¥ â‚¹1k Cr | Price â‰¥ â‚¹40"
+            sub="MCap â‰¥ ₹1k Cr | Price â‰¥ ₹40"
             icon={<Layers className="w-4 h-4 text-slate-400" />}
           />
           <KpiCard
@@ -180,7 +180,7 @@ export default function DeliveryRadarPage() {
             },
             {
               id: "APEX_SNIPER",
-              label: "ðŸŽ¯ Apex Sniper",
+              label: "🎯 Apex Sniper",
               count: metadata?.apex_sniper_count ?? 0,
               badge: "70%+ WR",
               activeClass: "border-purple-500 bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40",
@@ -196,7 +196,7 @@ export default function DeliveryRadarPage() {
             },
             {
               id: "BASE_ACCUMULATION",
-              label: "ðŸ“¡ Base Watchlist",
+              label: "📍¡ Base Watchlist",
               count: metadata?.base_accumulation_count ?? 0,
               badge: "Early Flow",
               activeClass: "border-amber-500 bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40",
@@ -414,7 +414,7 @@ export default function DeliveryRadarPage() {
                             </a>
                             {item.market_cap_cr && (
                               <span className="rounded bg-indigo-500/10 px-1 py-0.2 font-mono text-[9px] font-bold text-indigo-400">
-                                â‚¹{item.market_cap_cr.toLocaleString("en-IN")} Cr
+                                ₹{item.market_cap_cr.toLocaleString("en-IN")} Cr
                               </span>
                             )}
                           </div>
@@ -437,7 +437,7 @@ export default function DeliveryRadarPage() {
                           <div className="flex flex-wrap items-center gap-1">
                             {isApex ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/40 bg-purple-500/15 px-1.5 py-0.5 text-[10px] font-bold text-purple-300">
-                                ðŸŽ¯ Apex (78% WR)
+                                🎯 Apex (78% WR)
                               </span>
                             ) : isSwing ? (
                               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
@@ -445,7 +445,7 @@ export default function DeliveryRadarPage() {
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                                ðŸ“¡ Base Watchlist
+                                📍¡ Base Watchlist
                               </span>
                             )}
 
@@ -471,20 +471,20 @@ export default function DeliveryRadarPage() {
                         {/* 3. Price & Buy Zone Status */}
                         <td className="px-3 py-3 text-right">
                           <div className="font-bold text-slate-900 dark:text-white">
-                            â‚¹{item.current_price.toLocaleString("en-IN")}
+                            ₹{item.current_price.toLocaleString("en-IN")}
                           </div>
                           <div className="mt-0.5">
                             {buyStatus === "IN_BUY_ZONE" ? (
                               <span className="inline-flex rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-extrabold text-emerald-400">
-                                ðŸŸ¢ In Buy Zone
+                                Ÿ¢ In Buy Zone
                               </span>
                             ) : buyStatus === "EXTENDED_WAIT_DIP" ? (
                               <span className="inline-flex rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-400" title="Extended above pivot. Wait for dip to buy corridor.">
-                                ðŸŸ¡ Extended: Wait Dip
+                                Ÿ¡ Extended: Wait Dip
                               </span>
                             ) : buyStatus === "RETEST_CONFIRMED" ? (
                               <span className="inline-flex rounded bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.2 text-[9px] font-bold text-cyan-400">
-                                ðŸ”µ Retest Bounced
+                                ”µ Retest Bounced
                               </span>
                             ) : (
                               <span className="inline-flex rounded bg-slate-800 px-1.5 py-0.2 text-[9px] font-medium text-slate-400">
@@ -678,7 +678,7 @@ export default function DeliveryRadarPage() {
                     <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedBlueprint.company_name}</span>
                     {selectedBlueprint.market_cap_cr && (
                       <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-indigo-400">
-                        MCap: â‚¹{selectedBlueprint.market_cap_cr.toLocaleString("en-IN")} Cr
+                        MCap: ₹{selectedBlueprint.market_cap_cr.toLocaleString("en-IN")} Cr
                       </span>
                     )}
                     <span>â€¢</span>
@@ -719,28 +719,28 @@ export default function DeliveryRadarPage() {
                         : "bg-cyan-500/20 text-cyan-300"
                     }`}>
                       {selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
-                        ? "ðŸŸ¢ In Optimal Buy Zone"
+                        ? "Ÿ¢ In Optimal Buy Zone"
                         : selectedBlueprint.blueprint.buy_status === "EXTENDED_WAIT_DIP"
-                        ? "ðŸŸ¡ Extended: Limit Order on Dip"
+                        ? "Ÿ¡ Extended: Limit Order on Dip"
                         : selectedBlueprint.blueprint.buy_status === "RETEST_CONFIRMED"
-                        ? "ðŸ”µ Retest Support Held"
+                        ? "”µ Retest Support Held"
                         : "âšª Base Accumulation"}
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-lg bg-black/30 p-2">
                       <div className="text-[10px] text-slate-400">Pivot Level</div>
-                      <div className="font-mono text-sm font-bold text-white">â‚¹{selectedBlueprint.blueprint.pivot_price || selectedBlueprint.blueprint.entry_price}</div>
+                      <div className="font-mono text-sm font-bold text-white">₹{selectedBlueprint.blueprint.pivot_price || selectedBlueprint.blueprint.entry_price}</div>
                     </div>
                     <div className="rounded-lg bg-black/30 p-2">
                       <div className="text-[10px] text-slate-400">Ideal Buy Corridor</div>
                       <div className="font-mono text-sm font-bold text-emerald-400">
-                        â‚¹{selectedBlueprint.blueprint.buy_corridor_min || selectedBlueprint.blueprint.entry_price} â€“ â‚¹{selectedBlueprint.blueprint.buy_corridor_max || selectedBlueprint.blueprint.entry_price}
+                        ₹{selectedBlueprint.blueprint.buy_corridor_min || selectedBlueprint.blueprint.entry_price} – ₹{selectedBlueprint.blueprint.buy_corridor_max || selectedBlueprint.blueprint.entry_price}
                       </div>
                     </div>
                     <div className="rounded-lg bg-black/30 p-2">
                       <div className="text-[10px] text-slate-400">Do Not Chase Above</div>
-                      <div className="font-mono text-sm font-bold text-amber-400">â‚¹{selectedBlueprint.blueprint.max_chase_price || selectedBlueprint.blueprint.entry_price}</div>
+                      <div className="font-mono text-sm font-bold text-amber-400">₹{selectedBlueprint.blueprint.max_chase_price || selectedBlueprint.blueprint.entry_price}</div>
                     </div>
                   </div>
                 </div>
@@ -753,7 +753,7 @@ export default function DeliveryRadarPage() {
                       Stop Loss (-{selectedBlueprint.blueprint.risk_pct}%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-rose-500">
-                      â‚¹{selectedBlueprint.blueprint.stop_loss}
+                      ₹{selectedBlueprint.blueprint.stop_loss}
                     </div>
                     <div className="mt-0.5 text-[9px] text-rose-400/80">Candle Low Defense</div>
                   </div>
@@ -764,7 +764,7 @@ export default function DeliveryRadarPage() {
                       BE Shield (+1.8%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-amber-300">
-                      â‚¹{selectedBlueprint.blueprint.breakeven_trigger}
+                      ₹{selectedBlueprint.blueprint.breakeven_trigger}
                     </div>
                     <div className="mt-0.5 text-[9px] text-amber-400/80">Lock Stop to Entry+0.4%</div>
                   </div>
@@ -775,7 +775,7 @@ export default function DeliveryRadarPage() {
                       Target 1 (+4.2%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-cyan-400">
-                      â‚¹{selectedBlueprint.blueprint.target_1}
+                      ₹{selectedBlueprint.blueprint.target_1}
                     </div>
                     <div className="mt-0.5 text-[9px] text-cyan-400/80">Book 50% Profit</div>
                   </div>
@@ -786,7 +786,7 @@ export default function DeliveryRadarPage() {
                       Target 2 (+8.5%)
                     </div>
                     <div className="mt-1 text-base font-extrabold text-emerald-400">
-                      â‚¹{selectedBlueprint.blueprint.target_2}
+                      ₹{selectedBlueprint.blueprint.target_2}
                     </div>
                     <div className="mt-0.5 text-[9px] text-emerald-400/80">10 EMA Trailing Runner</div>
                   </div>
@@ -798,7 +798,7 @@ export default function DeliveryRadarPage() {
                     <div>
                       <span className="text-slate-400">Current CMP:</span>{" "}
                       <span className="font-semibold text-slate-900 dark:text-white">
-                        â‚¹{selectedBlueprint.blueprint.entry_price}
+                        ₹{selectedBlueprint.blueprint.entry_price}
                       </span>
                     </div>
                     <div>

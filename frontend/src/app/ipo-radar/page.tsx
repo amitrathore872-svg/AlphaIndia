@@ -163,18 +163,18 @@ export default function IPORadarPage() {
   };
 
   const handleShareToWhatsApp = (item: IPOSetup) => {
-    const text = `ðŸš€ *ALPHA INDIA RADAR | MAINBOARD IPO SETUP*\n\n` +
-      `ðŸ“Œ *Symbol:* ${item.symbol} (${item.exchange})\n` +
-      `ðŸ¢ *Company:* ${item.company}\n` +
+    const text = `š€ *ALPHA INDIA RADAR | MAINBOARD IPO SETUP*\n\n` +
+      `📍Œ *Symbol:* ${item.symbol} (${item.exchange})\n` +
+      `¢ *Company:* ${item.company}\n` +
       `âš¡ *Setup:* ${item.setup_label} [${item.setup_type}]\n` +
-      `ðŸŽ¯ *Conviction:* ${item.conviction_score}/100\n` +
-      `ðŸ’° *CMP:* â‚¹${item.cmp.toFixed(1)} (${item.day_change_pct >= 0 ? "+" : ""}${item.day_change_pct}%)\n` +
-      `ðŸ“ *Pivot Trigger:* â‚¹${item.pivot_price.toFixed(1)}\n` +
-      `ðŸ›‘ *Stop Loss:* â‚¹${item.stop_loss.toFixed(1)} (-${item.risk_pct}%)\n` +
-      `ðŸŽ¯ *Target 1 (Book 50%):* â‚¹${item.target_1.toFixed(1)} (+15% 2R Rule)\n` +
-      `ðŸƒ *Target 2 (Runner):* â‚¹${item.target_2.toFixed(1)}\n\n` +
-      `ðŸ’¡ *Institutional Rule:* Book 50% at Target 1, shift stop to Breakeven, trail runner on 20 EMA.\n` +
-      `ðŸ”¬ *Rationale:* ${item.rationale}`;
+      `🎯 *Conviction:* ${item.conviction_score}/100\n` +
+      `💰 *CMP:* ₹${item.cmp.toFixed(1)} (${item.day_change_pct >= 0 ? "+" : ""}${item.day_change_pct}%)\n` +
+      `📍 *Pivot Trigger:* ₹${item.pivot_price.toFixed(1)}\n` +
+      `🛑 *Stop Loss:* ₹${item.stop_loss.toFixed(1)} (-${item.risk_pct}%)\n` +
+      `🎯 *Target 1 (Book 50%):* ₹${item.target_1.toFixed(1)} (+15% 2R Rule)\n` +
+      `ƒ *Target 2 (Runner):* ₹${item.target_2.toFixed(1)}\n\n` +
+      `’¡ *Institutional Rule:* Book 50% at Target 1, shift stop to Breakeven, trail runner on 20 EMA.\n` +
+      `”¬ *Rationale:* ${item.rationale}`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -501,7 +501,7 @@ export default function IPORadarPage() {
                         </td>
 
                         <td className="py-3 px-4 text-right">
-                          <div className="font-bold text-white font-mono">â‚¹{item.cmp.toFixed(1)}</div>
+                          <div className="font-bold text-white font-mono">₹{item.cmp.toFixed(1)}</div>
                           <div className={`text-[11px] font-semibold ${item.day_change_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                             {item.day_change_pct >= 0 ? `+${item.day_change_pct}%` : `${item.day_change_pct}%`}
                           </div>
@@ -533,7 +533,7 @@ export default function IPORadarPage() {
                         <td className="py-3 px-4">
                           <div className="font-semibold text-slate-200">{item.setup_label}</div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                            <span>Day 1 High: â‚¹{item.day1_high.toFixed(1)}</span>
+                            <span>Day 1 High: ₹{item.day1_high.toFixed(1)}</span>
                             <span>â€¢</span>
                             <span>RVol: {item.rvol}x</span>
                           </div>
@@ -550,20 +550,20 @@ export default function IPORadarPage() {
                         </td>
 
                         <td className="py-3 px-4 text-right font-mono">
-                          <div className="text-slate-200 font-semibold">â‚¹{item.pivot_price.toFixed(1)}</div>
+                          <div className="text-slate-200 font-semibold">₹{item.pivot_price.toFixed(1)}</div>
                           <div className={`text-[11px] ${item.distance_to_pivot_pct >= 0 ? "text-cyan-400" : "text-slate-400"}`}>
                             {item.distance_to_pivot_pct >= 0 ? `+${item.distance_to_pivot_pct}% above` : `${item.distance_to_pivot_pct}% away`}
                           </div>
                         </td>
 
                         <td className="py-3 px-4 text-right font-mono">
-                          <div className="text-rose-400 font-semibold">â‚¹{item.stop_loss.toFixed(1)}</div>
+                          <div className="text-rose-400 font-semibold">₹{item.stop_loss.toFixed(1)}</div>
                           <div className="text-[11px] text-slate-500">-{item.risk_pct}% risk</div>
                         </td>
 
                         <td className="py-3 px-4 text-right font-mono">
-                          <div className="text-emerald-400 font-semibold">â‚¹{item.target_1.toFixed(1)}</div>
-                          <div className="text-[11px] text-slate-500">Runner: â‚¹{item.target_2.toFixed(1)}</div>
+                          <div className="text-emerald-400 font-semibold">₹{item.target_1.toFixed(1)}</div>
+                          <div className="text-[11px] text-slate-500">Runner: ₹{item.target_2.toFixed(1)}</div>
                         </td>
 
                         <td className="py-3 px-4 text-center">
@@ -670,11 +670,11 @@ export default function IPORadarPage() {
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-slate-400">Day 1 Range:</span>
-                                      <span className="text-white">â‚¹{item.day1_low.toFixed(1)} â€” â‚¹{item.day1_high.toFixed(1)}</span>
+                                      <span className="text-white">₹{item.day1_low.toFixed(1)} — ₹{item.day1_high.toFixed(1)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-slate-400">All-Time High:</span>
-                                      <span className="text-cyan-400">â‚¹{item.ath.toFixed(1)} ({item.drawdown_from_ath}% DD)</span>
+                                      <span className="text-cyan-400">₹{item.ath.toFixed(1)} ({item.drawdown_from_ath}% DD)</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-slate-400">Relative Vol (RVol):</span>

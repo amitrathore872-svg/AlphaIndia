@@ -159,13 +159,18 @@ class ConfluenceEngine:
                             "cmp": float(sc.cmp or 0.0),
                             "engines": {},
                         }
+                    pivot_val = float(sc.pivot_price or 0.0)
+                    cmp_val = float(sc.cmp or 0.0)
+                    sl_val = float(sc.stop_loss or 0.0)
+                    target_val = float(sc.target_1 or 0.0)
+
                     raw_signals_by_symbol[sym]["engines"]["VCP"] = {
                         "name": "VCP Discovery Engine",
                         "score": round(float(sc.total_score or 80.0), 1),
                         "setup": getattr(sc, "vcp_stage", "Institutional VCP") or "Institutional VCP",
-                        "pivot": round(float(sc.pivot_price or sc.cmp or 0.0), 2),
-                        "stop_loss": round(float(sc.stop_loss or 0.0), 2),
-                        "target": round(float(sc.target_1 or 0.0), 2),
+                        "pivot": round(pivot_val if pivot_val > 0 else (cmp_val * 1.02 if cmp_val > 0 else 0.0), 2),
+                        "stop_loss": round(sl_val if sl_val > 0 else (cmp_val * 0.95 if cmp_val > 0 else 0.0), 2),
+                        "target": round(target_val if target_val > 0 else (pivot_val * 1.15 if pivot_val > 0 else cmp_val * 1.15), 2),
                         "conviction": "ELITE" if sc.is_elite else "HIGH",
                         "verdict": sc.verdict or "ACCUMULATE",
                     }
@@ -186,22 +191,27 @@ class ConfluenceEngine:
                             "symbol": sym,
                             "company_name": p.get("company_name", sym),
                             "sector": p.get("sector", "Diversified"),
-                            "cmp": float(p.get("current_price") or 0.0),
+                            "cmp": float(p.get("current_price") or p.get("cmp") or 0.0),
                             "engines": {},
                         }
                     score = float(p.get("ai_conviction_score") or 70.0)
+                    cmp_val = float(p.get("current_price") or p.get("cmp") or 0.0)
+                    pivot_val = float(p.get("pivot_buy_point") or p.get("pivot_price") or 0.0)
+                    sl_val = float(p.get("stop_loss_tight") or p.get("stop_loss_wide") or p.get("stop_loss") or 0.0)
+                    target_val = float(p.get("target_1") or p.get("target_2") or p.get("target") or 0.0)
+
                     raw_signals_by_symbol[sym]["engines"]["CUP_HANDLE"] = {
                         "name": "Cup & Handle AI",
                         "score": round(score, 1),
                         "setup": f"Cup & Handle ({p.get('pattern_stage', 'Stage 8')})",
-                        "pivot": round(float(p.get("pivot_price") or 0.0), 2),
-                        "stop_loss": round(float(p.get("stop_loss") or 0.0), 2),
-                        "target": round(float(p.get("target_1") or 0.0), 2),
+                        "pivot": round(pivot_val if pivot_val > 0 else (cmp_val * 1.02 if cmp_val > 0 else 0.0), 2),
+                        "stop_loss": round(sl_val if sl_val > 0 else (cmp_val * 0.95 if cmp_val > 0 else 0.0), 2),
+                        "target": round(target_val if target_val > 0 else (pivot_val * 1.15 if pivot_val > 0 else cmp_val * 1.15), 2),
                         "conviction": p.get("conviction_tier", "HIGH"),
                         "verdict": "BREAKOUT" if p.get("is_breakout") else "BASE_FORMING",
                     }
-                    if raw_signals_by_symbol[sym]["cmp"] <= 0 and p.get("current_price"):
-                        raw_signals_by_symbol[sym]["cmp"] = float(p["current_price"])
+                    if raw_signals_by_symbol[sym]["cmp"] <= 0 and cmp_val > 0:
+                        raw_signals_by_symbol[sym]["cmp"] = cmp_val
             except Exception as e:
                 logger.warning(f"[ConfluenceEngine] Error querying Cup & Handle: {e}")
 
@@ -217,23 +227,28 @@ class ConfluenceEngine:
                             "symbol": sym,
                             "company_name": p.get("company_name", sym),
                             "sector": p.get("sector", "Diversified"),
-                            "cmp": float(p.get("current_price") or 0.0),
+                            "cmp": float(p.get("current_price") or p.get("cmp") or 0.0),
                             "engines": {},
                         }
                     score = float(p.get("ai_conviction_score") or 70.0)
                     p_name = p.get("pattern_name") or p.get("pattern_type", "Pattern")
+                    cmp_val = float(p.get("current_price") or p.get("cmp") or 0.0)
+                    pivot_val = float(p.get("pivot_buy_point") or p.get("pivot_price") or p.get("resistance_level") or p.get("pivot") or 0.0)
+                    sl_val = float(p.get("stop_loss") or p.get("stop_loss_tight") or 0.0)
+                    target_val = float(p.get("target_1") or p.get("target_price") or p.get("target") or 0.0)
+
                     raw_signals_by_symbol[sym]["engines"]["CHART_PATTERNS"] = {
                         "name": "Chart Pattern Screener",
                         "score": round(score, 1),
                         "setup": p_name.replace("_", " ").title(),
-                        "pivot": round(float(p.get("pivot_price") or 0.0), 2),
-                        "stop_loss": round(float(p.get("stop_loss") or 0.0), 2),
-                        "target": round(float(p.get("target_price") or 0.0), 2),
+                        "pivot": round(pivot_val if pivot_val > 0 else (cmp_val * 1.02 if cmp_val > 0 else 0.0), 2),
+                        "stop_loss": round(sl_val if sl_val > 0 else (cmp_val * 0.95 if cmp_val > 0 else 0.0), 2),
+                        "target": round(target_val if target_val > 0 else (pivot_val * 1.15 if pivot_val > 0 else cmp_val * 1.15), 2),
                         "conviction": "ELITE" if score >= 80 else "HIGH",
                         "verdict": "BREAKOUT" if p.get("is_breakout") else "CONSOLIDATING",
                     }
-                    if raw_signals_by_symbol[sym]["cmp"] <= 0 and p.get("current_price"):
-                        raw_signals_by_symbol[sym]["cmp"] = float(p["current_price"])
+                    if raw_signals_by_symbol[sym]["cmp"] <= 0 and cmp_val > 0:
+                        raw_signals_by_symbol[sym]["cmp"] = cmp_val
             except Exception as e:
                 logger.warning(f"[ConfluenceEngine] Error querying Multi-Pattern: {e}")
 
@@ -254,13 +269,20 @@ class ConfluenceEngine:
                         }
                     match_count = int(m.get("match_count", 5))
                     score = min(100.0, float(match_count * 10))
+                    blueprint = m.get("trade_blueprint") or {}
+                    indicators = m.get("indicators") or {}
+                    cmp_val = float(m.get("cmp") or 0.0)
+                    pivot_val = float(blueprint.get("entry_trigger") or indicators.get("daily_bb_upper") or indicators.get("daily_high") or m.get("pivot_price") or 0.0)
+                    sl_val = float(blueprint.get("stop_loss") or m.get("stop_loss") or 0.0)
+                    target_val = float(blueprint.get("target_1") or blueprint.get("target_2") or m.get("target_1") or 0.0)
+
                     raw_signals_by_symbol[sym]["engines"]["MOMENTUM"] = {
                         "name": "Momentum MTF Screener",
                         "score": round(score, 1),
                         "setup": f"MTF Momentum ({match_count}/10 Filters)",
-                        "pivot": round(float(m.get("pivot_price") or m.get("cmp") or 0.0), 2),
-                        "stop_loss": round(float(m.get("stop_loss") or 0.0), 2),
-                        "target": round(float(m.get("target_1") or 0.0), 2),
+                        "pivot": round(pivot_val if pivot_val > 0 else (cmp_val * 1.015 if cmp_val > 0 else 0.0), 2),
+                        "stop_loss": round(sl_val if sl_val > 0 else (cmp_val * 0.95 if cmp_val > 0 else 0.0), 2),
+                        "target": round(target_val if target_val > 0 else (pivot_val * 1.12 if pivot_val > 0 else cmp_val * 1.12), 2),
                         "conviction": "ELITE" if match_count >= 8 else "HIGH",
                         "verdict": "STRONG_MOMENTUM",
                     }
@@ -285,13 +307,20 @@ class ConfluenceEngine:
                             "engines": {},
                         }
                     score = float(pr.get("conviction_score") or 70.0)
+                    blueprint = pr.get("blueprint") or {}
+                    metrics = pr.get("metrics") or {}
+                    cmp_val = float(pr.get("cmp") or 0.0)
+                    pivot_val = float(blueprint.get("cheat_entry") or metrics.get("pivot_20d") or pr.get("pivot_price") or 0.0)
+                    sl_val = float(blueprint.get("stop_loss") or pr.get("stop_loss") or 0.0)
+                    target_val = float(blueprint.get("target_1") or blueprint.get("target_2") or pr.get("target_price") or 0.0)
+
                     raw_signals_by_symbol[sym]["engines"]["PRE_BREAKOUT"] = {
                         "name": "Pre-Breakout Cheat Radar",
                         "score": round(score, 1),
                         "setup": pr.get("setup_tier", "Pre-Breakout Coil"),
-                        "pivot": round(float(pr.get("pivot_price") or 0.0), 2),
-                        "stop_loss": round(float(pr.get("stop_loss") or 0.0), 2),
-                        "target": round(float(pr.get("target_price") or 0.0), 2),
+                        "pivot": round(pivot_val if pivot_val > 0 else (cmp_val * 1.015 if cmp_val > 0 else 0.0), 2),
+                        "stop_loss": round(sl_val if sl_val > 0 else (cmp_val * 0.96 if cmp_val > 0 else 0.0), 2),
+                        "target": round(target_val if target_val > 0 else (pivot_val * 1.10 if pivot_val > 0 else cmp_val * 1.10), 2),
                         "conviction": "ELITE" if "A+" in pr.get("setup_tier", "") else "HIGH",
                         "verdict": "QUIET_CONTRACTION",
                     }
@@ -312,22 +341,28 @@ class ConfluenceEngine:
                             "symbol": sym,
                             "company_name": d.get("company_name", sym),
                             "sector": d.get("sector", "Diversified"),
-                            "cmp": float(d.get("cmp") or 0.0),
+                            "cmp": float(d.get("current_price") or d.get("cmp") or 0.0),
                             "engines": {},
                         }
-                    score = float(d.get("score") or 75.0)
+                    score = float(d.get("score") or d.get("conviction_score") or 75.0)
+                    blueprint = d.get("blueprint") or {}
+                    cmp_val = float(d.get("current_price") or d.get("cmp") or 0.0)
+                    pivot_val = float(blueprint.get("pivot_price") or d.get("50d_high") or d.get("pivot_price") or 0.0)
+                    sl_val = float(blueprint.get("stop_loss") or d.get("stop_loss") or 0.0)
+                    target_val = float(blueprint.get("target_1") or blueprint.get("target_2") or d.get("target_1") or 0.0)
+
                     raw_signals_by_symbol[sym]["engines"]["DELIVERY"] = {
                         "name": "Delivery Accumulation Screener",
                         "score": round(score, 1),
-                        "setup": f"Delivery Spike ({d.get('deliv_spike_ratio', 2.0):.1f}x Vol, {d.get('delivery_pct', 60):.0f}% Deliv)",
-                        "pivot": round(float(d.get("pivot_price") or d.get("cmp") or 0.0), 2),
-                        "stop_loss": round(float(d.get("stop_loss") or 0.0), 2),
-                        "target": round(float(d.get("target_1") or 0.0), 2),
+                        "setup": f"Delivery Spike ({d.get('deliv_spike_ratio', d.get('delivery_spike_x', 2.0)):.1f}x Vol, {d.get('delivery_pct', d.get('delivery_per', 60)):.0f}% Deliv)",
+                        "pivot": round(pivot_val if pivot_val > 0 else (cmp_val * 1.02 if cmp_val > 0 else 0.0), 2),
+                        "stop_loss": round(sl_val if sl_val > 0 else (cmp_val * 0.965 if cmp_val > 0 else 0.0), 2),
+                        "target": round(target_val if target_val > 0 else (pivot_val * 1.08 if pivot_val > 0 else cmp_val * 1.08), 2),
                         "conviction": "ELITE" if score >= 85 else "HIGH",
                         "verdict": "INSTITUTIONAL_ABSORPTION",
                     }
-                    if raw_signals_by_symbol[sym]["cmp"] <= 0 and d.get("cmp"):
-                        raw_signals_by_symbol[sym]["cmp"] = float(d["cmp"])
+                    if raw_signals_by_symbol[sym]["cmp"] <= 0 and cmp_val > 0:
+                        raw_signals_by_symbol[sym]["cmp"] = cmp_val
             except Exception as e:
                 logger.warning(f"[ConfluenceEngine] Error querying Delivery Screener: {e}")
 
@@ -347,13 +382,23 @@ class ConfluenceEngine:
                 avg_score = sum(scores) / len(scores)
 
                 # Consensus pricing
-                pivots = [e["pivot"] for e in engines_map.values() if e["pivot"] > 0]
-                stop_losses = [e["stop_loss"] for e in engines_map.values() if e["stop_loss"] > 0]
-                targets = [e["target"] for e in engines_map.values() if e["target"] > 0]
+                pivots = [e["pivot"] for e in engines_map.values() if e.get("pivot", 0) > 0]
+                stop_losses = [e["stop_loss"] for e in engines_map.values() if e.get("stop_loss", 0) > 0]
+                targets = [e["target"] for e in engines_map.values() if e.get("target", 0) > 0]
 
-                consensus_pivot = round(sum(pivots) / len(pivots), 2) if pivots else data["cmp"]
-                consensus_stop_loss = round(max(stop_losses), 2) if stop_losses else round(data["cmp"] * 0.95, 2)
-                consensus_target = round(min(targets), 2) if targets else round(consensus_pivot * 1.15, 2)
+                cmp_val = data["cmp"]
+                # Prefer true breakout/trigger pivots distinct from raw CMP when available
+                if pivots:
+                    distinct_pivots = [p for p in pivots if abs(p - cmp_val) > 0.05]
+                    if distinct_pivots:
+                        consensus_pivot = round(sum(distinct_pivots) / len(distinct_pivots), 2)
+                    else:
+                        consensus_pivot = round(sum(pivots) / len(pivots), 2)
+                else:
+                    consensus_pivot = round(cmp_val * 1.015, 2) if cmp_val > 0 else 0.0
+
+                consensus_stop_loss = round(max(stop_losses), 2) if stop_losses else round(cmp_val * 0.95, 2)
+                consensus_target = round(sum(targets) / len(targets), 2) if targets else round(consensus_pivot * 1.15, 2)
 
                 # Risk:Reward computation
                 risk = max(0.01, consensus_pivot - consensus_stop_loss)
@@ -406,6 +451,14 @@ class ConfluenceEngine:
             apex_candidates.sort(key=lambda x: (x["concurrence_count"], x["confluence_score"]), reverse=True)
             dual_candidates.sort(key=lambda x: x["confluence_score"], reverse=True)
             solitary_alpha.sort(key=lambda x: x["confluence_score"], reverse=True)
+
+            # Pre-enrich all candidates with Stage & Sparkline prior to caching
+            try:
+                from app.services.stock_trend_enricher import StockTrendEnricher
+                all_candidates = apex_candidates + dual_candidates + solitary_alpha
+                StockTrendEnricher.enrich(db, all_candidates, symbol_key="symbol", cmp_key="cmp")
+            except Exception as e:
+                logger.warning(f"[ConfluenceEngine] Pre-enrichment warning: {e}")
 
             total_evaluated = len(raw_signals_by_symbol)
             elapsed_ms = round((time.time() - t0) * 1000, 2)

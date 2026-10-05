@@ -67,8 +67,11 @@ def get_confluence_radar(
         elif "SOLITARY" in t_clean:
             all_filtered = filt_solitary
 
-    from app.services.stock_trend_enricher import StockTrendEnricher
-    StockTrendEnricher.enrich(db, all_filtered, symbol_key="symbol", cmp_key="cmp")
+    # Only enrich items that don't already have sparkline / stage metadata
+    missing_enrich = [x for x in all_filtered if "sparkline" not in x or "current_stage" not in x]
+    if missing_enrich:
+        from app.services.stock_trend_enricher import StockTrendEnricher
+        StockTrendEnricher.enrich(db, missing_enrich, symbol_key="symbol", cmp_key="cmp")
 
     return {
         "status": "SUCCESS",

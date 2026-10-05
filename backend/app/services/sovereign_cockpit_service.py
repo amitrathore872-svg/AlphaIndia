@@ -6,10 +6,12 @@ Implements the Dual-Chamber Quant Filter, 360° AI Forensic Auditor,
 Mechanical Entry/Exit Execution Protocols, and Multi-Channel Alert Dispatching.
 """
 
+import json
 import logging
 import math
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Set, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -26,7 +28,75 @@ class SovereignCockpitService:
     """
     Apex Institutional Sovereign Radar and Fast-Compounding Velocity Cockpit.
     Eliminates arbitrary quotas: surfaces genuine mathematical and fundamental setups.
+    Zero SME Policy: Strictly restricted to Institutional Mainboard Equities (NSE & BSE).
     """
+
+    _sme_cache: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def _get_sme_catalog(cls) -> Dict[str, Any]:
+        """
+        Loads and caches verified SME equities catalog (BSE SME Groups M/MT/MS/TS and NSE Emerge).
+        """
+        if cls._sme_cache is not None:
+            return cls._sme_cache
+
+        sme_path = Path(__file__).resolve().parents[2] / "data" / "sme_companies.json"
+        sme_symbols: Set[str] = set()
+        sme_codes: Set[str] = set()
+        sme_isins: Set[str] = set()
+
+        if sme_path.exists():
+            try:
+                with open(sme_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    sme_symbols = set(s.upper() for s in data.get("bse_sme_symbols", []))
+                    sme_codes = set(str(c) for c in data.get("bse_sme_codes", []))
+                    sme_isins = set(i.upper() for i in data.get("bse_sme_isins", []))
+            except Exception as e:
+                logger.warning(f"Could not load SME catalog from {sme_path}: {e}")
+
+        cls._sme_cache = {
+            "symbols": sme_symbols,
+            "codes": sme_codes,
+            "isins": sme_isins,
+        }
+        return cls._sme_cache
+
+    @classmethod
+    def is_sme_company(cls, db: Session, symbol: str, isin: Optional[str] = None) -> bool:
+        """
+        Determines if a ticker belongs to BSE SME or NSE Emerge platforms.
+        Strictly excludes SME securities from institutional Sovereign Cockpit scans.
+        """
+        sym = (symbol or "").strip().upper()
+        if not sym:
+            return False
+
+        # 1. Obvious SME symbol suffixes
+        if sym.endswith(("-SM", "-ST", ".SM", ".ST")):
+            return True
+
+        # 2. Check cached catalog
+        catalog = cls._get_sme_catalog()
+        if sym in catalog["symbols"]:
+            return True
+        if isin and isin.strip().upper() in catalog["isins"]:
+            return True
+
+        # 3. Check Company table classification
+        comp = db.query(Company).filter(Company.symbol == sym).first()
+        if comp:
+            if comp.security_type == "SME":
+                return True
+            if comp.series in ("SM", "ST"):
+                return True
+            if comp.isin and comp.isin.strip().upper() in catalog["isins"]:
+                return True
+            if comp.bse_code and str(comp.bse_code).strip() in catalog["codes"]:
+                return True
+
+        return False
 
     @classmethod
     def evaluate_universe(cls, db: Session) -> Dict[str, Any]:
@@ -44,10 +114,54 @@ class SovereignCockpitService:
         all_records = query.all()
         total_scanned = len(all_records)
 
+        # ── Zero SME Institutional Policy ──────────────────────────────
+        # Sovereign Cockpit strictly screens Mainboard equities (No SME).
+        sme_catalog = cls._get_sme_catalog()
+        sme_catalog_symbols = sme_catalog["symbols"]
+        sme_catalog_isins = sme_catalog["isins"]
+        sme_catalog_codes = sme_catalog["codes"]
+
+        # Batch query all companies marked as SME or SME series in DB
+        db_sme_symbols = set(
+            row[0]
+            for row in db.query(Company.symbol)
+            .filter(
+                (Company.security_type == "SME")
+                | (Company.series.in_(["SM", "ST"]))
+            )
+            .all()
+        )
+        all_sme_symbols = sme_catalog_symbols.union(db_sme_symbols)
+
+        # Batch lookup for company metadata to avoid per-record DB roundtrips
+        screened_symbols = [r.symbol for r in all_records]
+        comp_records = db.query(
+            Company.symbol, Company.bse_code, Company.isin, Company.series, Company.security_type
+        ).filter(Company.symbol.in_(screened_symbols)).all()
+        comp_map = {c[0]: c for c in comp_records}
+
         chamber_1_compounders: List[Dict[str, Any]] = []
         chamber_2_turnarounds: List[Dict[str, Any]] = []
 
         for r in all_records:
+            sym_upper = (r.symbol or "").strip().upper()
+
+            # Zero SME Institutional Policy: exclude any BSE SME or NSE Emerge listings
+            if sym_upper in all_sme_symbols or sym_upper.endswith(("-SM", "-ST", ".SM", ".ST")):
+                continue
+            if r.isin and r.isin.strip().upper() in sme_catalog_isins:
+                continue
+
+            comp_info = comp_map.get(r.symbol)
+            if comp_info:
+                # comp_info: (symbol, bse_code, isin, series, security_type)
+                if comp_info[4] == "SME" or comp_info[3] in ("SM", "ST"):
+                    continue
+                if comp_info[1] and str(comp_info[1]).strip() in sme_catalog_codes:
+                    continue
+                if comp_info[2] and str(comp_info[2]).strip().upper() in sme_catalog_isins:
+                    continue
+
             curr_p = float(r.current_price or 0.0)
             mcap = float(r.market_cap or 0.0)
             roce = float(r.roce or 0.0)
@@ -110,6 +224,8 @@ class SovereignCockpitService:
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": "ACTIVE_HARVEST",
+            "universe_policy": "Institutional Mainboard Equities Only (Zero SME)",
+            "sme_filter": "STRICT_ZERO_SME",
             "universe_scanned": total_scanned,
             "total_qualified": len(all_candidates),
             "average_conviction": avg_score,
@@ -243,7 +359,13 @@ class SovereignCockpitService:
         Deep 360° AI Forensic & Qualitative Investigation.
         Scans filings, concall takeaways, headwinds/tailwinds, and institutional flags.
         Uses Google Gemini API if configured; otherwise provides structured institutional analysis.
+        Strictly excludes SME securities.
         """
+        if cls.is_sme_company(db, symbol):
+            return {
+                "error": f"Symbol {symbol.upper()} is an SME listed equity. Sovereign Cockpit is strictly reserved for Institutional Mainboard equities (Zero SME)."
+            }
+
         rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == symbol).first()
         if not rec:
             return {"error": f"Symbol {symbol} not found in database universe"}

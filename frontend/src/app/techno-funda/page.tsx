@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback, useTransition } from "react";
 import Link from "next/link";
@@ -155,14 +155,14 @@ export default function TechnoFundaPage() {
 
               <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/50 p-3 shadow-2xs">
                 <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Pre-Breakout Coiling Setups</div>
-                <div className="mt-1 text-lg font-bold text-cyan-600 dark:text-cyan-400">Within â‰¤ 4.5% Pivot</div>
+                <div className="mt-1 text-lg font-bold text-cyan-600 dark:text-cyan-400">Within &le; 4.5% Pivot</div>
                 <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Volume dry-up footprint detected</div>
               </div>
 
               <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/50 p-3 shadow-2xs">
                 <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">High Conviction Buys</div>
                 <div className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-400">Techno-Funda Converged</div>
-                <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Funda Score â‰¥ 60 + Stage 2</div>
+                <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">Funda Score &ge; 60 + Stage 2</div>
               </div>
             </div>
           )}
@@ -308,7 +308,7 @@ export default function TechnoFundaPage() {
               <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#09152A] text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Symbol & Company</th>
-                  <th className="px-3 py-3 font-semibold">CMP (â‚¹)</th>
+                  <th className="px-3 py-3 font-semibold">CMP (₹)</th>
                   <th className="px-3 py-3 font-semibold">Trend (90D)</th>
                   <th className="px-3 py-3 font-semibold">Current Stage</th>
                   <th className="px-3 py-3 font-semibold">Signal</th>
@@ -366,7 +366,7 @@ export default function TechnoFundaPage() {
 
                       {/* CMP */}
                       <td className="px-3 py-3 font-bold text-slate-900 dark:text-white">
-                        â‚¹{item.current_price?.toLocaleString()}
+                        ₹{item.current_price?.toLocaleString()}
                         <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
                           {item.return_3m ? `${item.return_3m > 0 ? "+" : ""}${item.return_3m}% 3M` : ""}
                         </div>
@@ -432,7 +432,7 @@ export default function TechnoFundaPage() {
                             {item.distance_to_pivot_pct}%
                           </span>
                           <span className="text-[10px] text-slate-500">
-                            Piv: â‚¹{item.pivot_reference}
+                            Piv: ₹{item.pivot_reference}
                           </span>
                         </div>
                       </td>
@@ -517,10 +517,10 @@ export default function TechnoFundaPage() {
                       <td className="px-3 py-3">
                         <div className="flex flex-col font-mono text-[11px]">
                           <span className={item.sales_growth_ttm && item.sales_growth_ttm > 15 ? "text-emerald-400" : "text-slate-300"}>
-                            S: {item.sales_growth_ttm ?? "â€”"}%
+                            S: {item.sales_growth_ttm ?? "—"}%
                           </span>
                           <span className={item.profit_growth_ttm && item.profit_growth_ttm > 15 ? "text-emerald-400" : "text-slate-400"}>
-                            P: {item.profit_growth_ttm ?? "â€”"}%
+                            P: {item.profit_growth_ttm ?? "—"}%
                           </span>
                         </div>
                       </td>

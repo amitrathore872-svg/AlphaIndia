@@ -493,8 +493,8 @@ export default function CandlestickRadarPage() {
                 <option value={0}>All Volume</option>
                 <option value={1.2}>â‰¥1.2x (Above Avg)</option>
                 <option value={1.5}>âš¡ â‰¥1.5x (Institutional)</option>
-                <option value={2.0}>ðŸ”¥ â‰¥2.0x (Heavy Surge)</option>
-                <option value={2.5}>ðŸ’¥ â‰¥2.5x (Ultra Climax)</option>
+                <option value={2.0}>”¥ â‰¥2.0x (Heavy Surge)</option>
+                <option value={2.5}>’¥ â‰¥2.5x (Ultra Climax)</option>
               </select>
             </div>
 
@@ -702,7 +702,7 @@ export default function CandlestickRadarPage() {
                                   currentPrice={sig.cmp}
                                   sector={sig.sector}
                                   defaultConviction={sig.ai_conviction_score >= 80 ? 5 : 4}
-                                  defaultThesis={`Candlestick Radar: ${sig.pattern_name} (${sig.direction}, ${sig.category}). Score: ${sig.ai_conviction_score}/100. Entry: â‚¹${sig.trigger_price}, SL: â‚¹${sig.stop_loss}, T1: â‚¹${sig.target_1}, T2: â‚¹${sig.target_2}`}
+                                  defaultThesis={`Candlestick Radar: ${sig.pattern_name} (${sig.direction}, ${sig.category}). Score: ${sig.ai_conviction_score}/100. Entry: ₹${sig.trigger_price}, SL: ₹${sig.stop_loss}, T1: ₹${sig.target_1}, T2: ₹${sig.target_2}`}
                                   variant="star"
                                 />
                               </div>
@@ -742,7 +742,7 @@ export default function CandlestickRadarPage() {
                           <td className="py-3.5 px-3">
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 dark:text-white text-sm">
-                                â‚¹{sig.cmp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹{sig.cmp.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                               <span
                                 className={`text-[11px] font-bold ${
@@ -964,19 +964,19 @@ export default function CandlestickRadarPage() {
                               <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
                                 <span className="text-slate-400">Trig:</span>
                                 <span className="font-bold text-slate-900 dark:text-white">
-                                  â‚¹{sig.trigger_price.toFixed(2)}
+                                  ₹{sig.trigger_price.toFixed(2)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
                                 <span className="text-slate-400">SL:</span>
                                 <span className="font-bold">
-                                  â‚¹{sig.stop_loss.toFixed(2)}
+                                  ₹{sig.stop_loss.toFixed(2)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                                 <span className="text-slate-400">T1:</span>
                                 <span className="font-bold">
-                                  â‚¹{sig.target_1.toFixed(2)}
+                                  ₹{sig.target_1.toFixed(2)}
                                 </span>
                               </div>
                             </div>
@@ -1112,13 +1112,13 @@ export default function CandlestickRadarPage() {
                                               {subSig.rsi_14}
                                             </td>
                                             <td className="py-2 px-2 text-right font-bold text-slate-900 dark:text-white">
-                                              â‚¹{subSig.trigger_price.toFixed(2)}
+                                              ₹{subSig.trigger_price.toFixed(2)}
                                             </td>
                                             <td className="py-2 px-2 text-right text-rose-600 dark:text-rose-400 font-bold">
-                                              â‚¹{subSig.stop_loss.toFixed(2)}
+                                              ₹{subSig.stop_loss.toFixed(2)}
                                             </td>
                                             <td className="py-2 px-2 text-right text-emerald-600 dark:text-emerald-400 font-bold">
-                                              â‚¹{subSig.target_1.toFixed(2)}
+                                              ₹{subSig.target_1.toFixed(2)}
                                             </td>
                                             <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
                                               <button
@@ -1260,7 +1260,7 @@ export default function CandlestickRadarPage() {
                         <div className="flex flex-col items-end gap-1">
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm font-bold text-slate-900 dark:text-white font-mono">
-                              â‚¹{sig.cmp.toFixed(2)}
+                              ₹{sig.cmp.toFixed(2)}
                             </span>
                             <span
                               className={`text-[10px] font-mono font-bold ${
@@ -1427,25 +1427,25 @@ export default function CandlestickRadarPage() {
                         <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
                           <span className="text-slate-500">Trigger Level:</span>
                           <span className="font-semibold text-slate-900 dark:text-white">
-                            â‚¹{sig.trigger_price.toFixed(2)}
+                            ₹{sig.trigger_price.toFixed(2)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-rose-600 dark:text-rose-300">
                           <span className="text-slate-500">Invalidation Stop:</span>
                           <span className="font-semibold text-rose-600 dark:text-rose-400">
-                            â‚¹{sig.stop_loss.toFixed(2)}
+                            ₹{sig.stop_loss.toFixed(2)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-300">
                           <span className="text-slate-500">Target 1 (Harvest):</span>
                           <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                            â‚¹{sig.target_1.toFixed(2)}
+                            ₹{sig.target_1.toFixed(2)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-cyan-700 dark:text-cyan-300">
                           <span className="text-slate-500">Target 2 (Runner):</span>
                           <span className="font-semibold text-cyan-600 dark:text-cyan-400">
-                            â‚¹{sig.target_2.toFixed(2)}
+                            ₹{sig.target_2.toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -1545,7 +1545,7 @@ export default function CandlestickRadarPage() {
 
                 <div className="text-right">
                   <div className="text-lg font-bold font-mono text-slate-900 dark:text-white">
-                    â‚¹{selectedSignal.cmp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    ₹{selectedSignal.cmp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-xs font-mono text-cyan-600 dark:text-cyan-400">
                     AI Score: {selectedSignal.ai_conviction_score}/100
@@ -1687,25 +1687,25 @@ export default function CandlestickRadarPage() {
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
                   <span className="text-[10px] text-slate-500 block uppercase">Trigger Entry</span>
                   <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    â‚¹{selectedSignal.trigger_price.toFixed(2)}
+                    ₹{selectedSignal.trigger_price.toFixed(2)}
                   </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40">
                   <span className="text-[10px] text-rose-600 dark:text-rose-400 block uppercase">Stop Loss</span>
                   <span className="text-sm font-bold text-rose-700 dark:text-rose-300">
-                    â‚¹{selectedSignal.stop_loss.toFixed(2)}
+                    ₹{selectedSignal.stop_loss.toFixed(2)}
                   </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40">
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block uppercase">Target 1</span>
                   <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                    â‚¹{selectedSignal.target_1.toFixed(2)}
+                    ₹{selectedSignal.target_1.toFixed(2)}
                   </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-900/40">
                   <span className="text-[10px] text-cyan-600 dark:text-cyan-400 block uppercase">Target 2</span>
                   <span className="text-sm font-bold text-cyan-700 dark:text-cyan-300">
-                    â‚¹{selectedSignal.target_2.toFixed(2)}
+                    ₹{selectedSignal.target_2.toFixed(2)}
                   </span>
                 </div>
               </div>

@@ -64,6 +64,8 @@ export interface ChamberData {
 export interface SovereignCockpitResponse {
   timestamp: string;
   status: string;
+  universe_policy?: string;
+  sme_filter?: string;
   universe_scanned: number;
   total_qualified: number;
   average_conviction: number;
