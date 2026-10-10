@@ -48,8 +48,8 @@ class BasePatternEngine:
 
         cmp = float(closes.iloc[-1])
         base_len = min(60, len(df))
-        base_high = float(highs.iloc[-base_len:].max())
-        base_low = float(lows.iloc[-base_len:].min())
+        base_high = float(highs.iloc[-base_len:-1].max()) if len(df) > 1 else float(highs.iloc[-1])
+        base_low = float(lows.iloc[-base_len:-1].min()) if len(df) > 1 else float(lows.iloc[-1])
 
         # Base Depth %
         base_depth_pct = round(((base_high - base_low) / base_high) * 100.0, 1) if base_high > 0 else 0.0
@@ -131,10 +131,10 @@ class BasePatternEngine:
             )
 
         # Status
-        if dist_to_pivot_pct <= 2.5:
-            status = "READY"
-        elif dist_to_pivot_pct <= 0.0:
+        if dist_to_pivot_pct <= 0.0:
             status = "BROKEN_OUT"
+        elif dist_to_pivot_pct <= 2.5:
+            status = "READY"
         else:
             status = "FORMING"
 

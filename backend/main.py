@@ -28,6 +28,7 @@ from app.api.institutional_radar import router as institutional_radar_router
 from app.api.quarterly_results import router as quarterly_results_router
 from app.api.control_system import router as control_system_router
 from app.api.notifications import router as notifications_router
+from app.api.earnings_calendar import router as earnings_calendar_router
 from app.api.alerts import router as alerts_router
 from app.api.techno_funda import router as techno_funda_router
 from app.api.vcp_router import router as vcp_router
@@ -61,6 +62,7 @@ from app.api.reports import router as reports_router
 from app.api.sovereign import router as sovereign_router
 from app.api.sovereign_intraday import router as sovereign_intraday_router
 from app.api.brokerage import router as brokerage_router
+from app.api.backtest import router as backtest_router
 import time
 from fastapi import Request
 
@@ -90,31 +92,55 @@ async def lifespan(app: FastAPI):
 
     # Conditionally launch background services if enabled in settings
     if settings.ENABLE_BACKGROUND_WORKERS:
-        ScreenerScheduler.start()
-        EarlyStageScheduler.start()
-        LiveExchangeWireWorker.start(poll_interval_seconds=settings.WORKER_POLL_INTERVAL_SECONDS)
-        RawFileArchiveService.start(interval_seconds=600)
-        VCPScheduler.start()
-        AutonomousEngineScheduler.start()
-        VelocityBurstScheduler.start()
-        CupHandleUniverseScheduler.start()
-        PatternUniverseScheduler.start()
-        MFDipScheduler.start()
+        # Core autonomous orchestrator & flagship institutional scanner
+        if settings.ENABLE_AUTONOMOUS_ENGINE:
+            AutonomousEngineScheduler.start()
+        if settings.ENABLE_VELOCITY_SCHEDULER:
+            VelocityBurstScheduler.start()
+
+        # Optional standalone / high-overhead workers (opt-in via settings)
+        if settings.ENABLE_STANDALONE_WIRE_WORKER:
+            LiveExchangeWireWorker.start(poll_interval_seconds=settings.WORKER_POLL_INTERVAL_SECONDS)
+        if settings.ENABLE_STANDALONE_VCP_SCHEDULER:
+            VCPScheduler.start()
+        if settings.ENABLE_CUP_HANDLE_SCHEDULER:
+            CupHandleUniverseScheduler.start()
+        if settings.ENABLE_PATTERN_SCHEDULER:
+            PatternUniverseScheduler.start()
+        if settings.ENABLE_EARLY_STAGE_SCHEDULER:
+            EarlyStageScheduler.start()
+        if settings.ENABLE_SCREENER_SCHEDULER:
+            ScreenerScheduler.start()
+        if settings.ENABLE_RAW_FILE_ARCHIVER:
+            RawFileArchiveService.start(interval_seconds=600)
+        if settings.ENABLE_MF_DIP_SCHEDULER:
+            MFDipScheduler.start()
 
     yield
 
     # Shutdown: graceful cleanup of background threads
     if settings.ENABLE_BACKGROUND_WORKERS:
-        ScreenerScheduler.stop()
-        EarlyStageScheduler.stop()
-        LiveExchangeWireWorker.stop()
-        RawFileArchiveService.stop()
-        VCPScheduler.stop()
-        AutonomousEngineScheduler.stop()
-        VelocityBurstScheduler.stop()
-        CupHandleUniverseScheduler.stop()
-        PatternUniverseScheduler.stop()
-        MFDipScheduler.stop()
+        if settings.ENABLE_AUTONOMOUS_ENGINE:
+            AutonomousEngineScheduler.stop()
+        if settings.ENABLE_VELOCITY_SCHEDULER:
+            VelocityBurstScheduler.stop()
+
+        if settings.ENABLE_STANDALONE_WIRE_WORKER:
+            LiveExchangeWireWorker.stop()
+        if settings.ENABLE_STANDALONE_VCP_SCHEDULER:
+            VCPScheduler.stop()
+        if settings.ENABLE_CUP_HANDLE_SCHEDULER:
+            CupHandleUniverseScheduler.stop()
+        if settings.ENABLE_PATTERN_SCHEDULER:
+            PatternUniverseScheduler.stop()
+        if settings.ENABLE_EARLY_STAGE_SCHEDULER:
+            EarlyStageScheduler.stop()
+        if settings.ENABLE_SCREENER_SCHEDULER:
+            ScreenerScheduler.stop()
+        if settings.ENABLE_RAW_FILE_ARCHIVER:
+            RawFileArchiveService.stop()
+        if settings.ENABLE_MF_DIP_SCHEDULER:
+            MFDipScheduler.stop()
 
 
 
@@ -186,6 +212,7 @@ app.include_router(control_system_router)
 app.include_router(notifications_router)
 app.include_router(alerts_router)
 app.include_router(techno_funda_router)
+app.include_router(techno_funda_router, prefix="/api/v1")
 app.include_router(vcp_router)
 app.include_router(stocks_router)
 app.include_router(delivery_radar_router, prefix="/api/v1")
@@ -221,6 +248,10 @@ app.include_router(sovereign_intraday_router)
 app.include_router(sovereign_intraday_router, prefix="/api/v1")
 app.include_router(brokerage_router)
 app.include_router(brokerage_router, prefix="/api/v1")
+app.include_router(backtest_router)
+app.include_router(backtest_router, prefix="/api/v1")
+app.include_router(backtest_router, prefix="/api")
+app.include_router(earnings_calendar_router)
 
 # ---------------- Dual Mount Under /api (Same-Origin Reverse Proxy Compatibility) ----------------
 # Allows any client calling /api/<path> or direct /<path> to resolve cleanly
@@ -261,6 +292,22 @@ API_DOMAIN_ROUTERS = [
     reports_router,
     sovereign_router,
     sovereign_intraday_router,
+    techno_funda_router,
+    stocks_router,
+    watchlist_router,
+    announcements_router,
+    delivery_radar_router,
+    momentum_screener_router,
+    cup_handle_router,
+    candlestick_screener_router,
+    prebreakout_radar_router,
+    breakout_execution_router,
+    confluence_router,
+    live_intraday_router,
+    cpr_scanner_router,
+    velocity_router,
+    investor_intelligence_router,
+    earnings_calendar_router,
 ]
 for r in API_DOMAIN_ROUTERS:
     app.include_router(r, prefix="/api")

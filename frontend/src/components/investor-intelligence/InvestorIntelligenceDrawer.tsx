@@ -18,6 +18,9 @@ import {
   Sparkles,
   HelpCircle,
   RefreshCw,
+  Flame,
+  Scale,
+  AlertCircle,
 } from "lucide-react";
 import {
   fetchCompanyInvestorIntelligence,
@@ -89,6 +92,33 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
     bg: "bg-slate-900/60",
     text: "text-slate-300",
     border: "border-slate-700",
+  };
+
+  const getTensionBadge = (score?: number | null) => {
+    const val = score ?? 3.0;
+    if (val >= 7.0) return { label: "High-Conflict Grill", color: "text-rose-400 bg-rose-950/80 border-rose-500/50", bar: "bg-rose-500" };
+    if (val >= 4.5) return { label: "Active Interrogation", color: "text-amber-400 bg-amber-950/80 border-amber-500/50", bar: "bg-amber-500" };
+    return { label: "Constructive Dialogue", color: "text-emerald-400 bg-emerald-950/80 border-emerald-500/50", bar: "bg-emerald-500" };
+  };
+
+  const getEvasivenessBadge = (score?: number | null) => {
+    const val = score ?? 2.0;
+    if (val >= 6.5) return { label: "High Obfuscation / Hedging", color: "text-rose-400 bg-rose-950/80 border-rose-500/50", bar: "bg-rose-500" };
+    if (val >= 3.5) return { label: "Moderate Hedging", color: "text-amber-400 bg-amber-950/80 border-amber-500/50", bar: "bg-amber-500" };
+    return { label: "Candid & Data-Driven", color: "text-emerald-400 bg-emerald-950/80 border-emerald-500/50", bar: "bg-emerald-500" };
+  };
+
+  const getDiscrepancySeverityBadge = (severity?: string) => {
+    switch (severity?.toUpperCase()) {
+      case "CRITICAL":
+        return "bg-rose-950/90 text-rose-300 border-rose-500/70";
+      case "HIGH":
+        return "bg-amber-950/90 text-amber-300 border-amber-500/70";
+      case "MEDIUM":
+        return "bg-cyan-950/90 text-cyan-300 border-cyan-500/60";
+      default:
+        return "bg-emerald-950/90 text-emerald-300 border-emerald-500/60";
+    }
   };
 
   return (
@@ -211,6 +241,93 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                     <ExternalLink className="w-3.5 h-3.5" />
                     Official NSE/BSE PDF
                   </a>
+                )}
+              </div>
+
+              {/* Phase 2: Analyst Tension & Forensic Evasiveness Radar */}
+              <div className="p-4 rounded-xl bg-[#081120] border border-cyan-800/40 shadow-lg space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-900/30 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-300">
+                      Concall Forensic Radar · Evasiveness & Analyst Tension Meter
+                    </h3>
+                  </div>
+
+                  {selectedInsight.management_defense_strategy && (
+                    <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-cyan-300">
+                      Strategy: <strong className="text-white">{selectedInsight.management_defense_strategy.replace(/_/g, " ")}</strong>
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Gauge 1: Analyst Tension */}
+                  {(() => {
+                    const tension = getTensionBadge(selectedInsight.analyst_tension_score);
+                    const score = selectedInsight.analyst_tension_score ?? 3.0;
+                    const pct = Math.min(100, Math.max(10, (score / 10) * 100));
+                    return (
+                      <div className="p-3 rounded-lg bg-black/40 border border-slate-800/80 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 flex items-center gap-1.5 font-mono">
+                            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                            Analyst Tension Index:
+                          </span>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded border font-mono ${tension.color}`}>
+                            {score.toFixed(1)} / 10 · {tension.label}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                          <div className={`h-full ${tension.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Measures analyst pushback aggression, question repetition, and scrutiny on guidance.
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Gauge 2: Forensic Evasiveness */}
+                  {(() => {
+                    const evasive = getEvasivenessBadge(selectedInsight.evasiveness_score);
+                    const score = selectedInsight.evasiveness_score ?? 2.0;
+                    const pct = Math.min(100, Math.max(10, (score / 10) * 100));
+                    return (
+                      <div className="p-3 rounded-lg bg-black/40 border border-slate-800/80 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400 flex items-center gap-1.5 font-mono">
+                            <Scale className="w-3.5 h-3.5 text-amber-400" />
+                            Executive Evasiveness Index:
+                          </span>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded border font-mono ${evasive.color}`}>
+                            {score.toFixed(1)} / 10 · {evasive.label}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                          <div className={`h-full ${evasive.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Quantifies qualitative dodging, vague macro excuses, vs verifiable numeric commitments.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Hot-Seat Question Spotlight */}
+                {selectedInsight.hot_seat_question && (
+                  <div className="p-3.5 rounded-lg bg-gradient-to-r from-rose-950/40 via-black to-slate-950 border border-rose-500/30 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] uppercase font-mono font-bold text-rose-400 flex items-center gap-1.5 tracking-wider">
+                        <Flame className="w-3.5 h-3.5 text-rose-400" />
+                        The Hot-Seat Grill (Hardest Question Faced by Management)
+                      </span>
+                    </div>
+                    <p className="text-xs text-rose-100 italic leading-relaxed">
+                      {selectedInsight.hot_seat_question}
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -558,6 +675,70 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                   )}
                 </div>
               </div>
+
+              {/* Phase 2: Balance Sheet & P&L Cross-Verification Radar */}
+              {selectedInsight.forensic_discrepancies && selectedInsight.forensic_discrepancies.length > 0 && (
+                <div className="p-4 rounded-xl bg-[#07101E] border border-cyan-800/40 space-y-3.5 shadow-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-900/40 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-cyan-400" />
+                      <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-300">
+                        Balance Sheet & P&L Cross-Verification Radar
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Comparing spoken concall claims directly with audited financial records
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {selectedInsight.forensic_discrepancies.map((disc, idx) => {
+                      const sevBadge = getDiscrepancySeverityBadge(disc.severity);
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-lg bg-black/50 border border-slate-800/90 space-y-2.5 hover:border-cyan-900/60 transition"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 text-cyan-400" />
+                              {disc.category.replace(/_/g, " ")}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${sevBadge}`}>
+                              {disc.severity} RISK
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/60 space-y-1">
+                              <span className="text-[11px] font-mono font-semibold text-cyan-300 block">
+                                🎙️ Spoken Concall Narrative:
+                              </span>
+                              <p className="text-slate-300 italic text-[11px] leading-relaxed">
+                                &ldquo;{disc.claim}&rdquo;
+                              </p>
+                            </div>
+
+                            <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/60 space-y-1">
+                              <span className="text-[11px] font-mono font-semibold text-amber-300 block">
+                                📊 Ground Audited Financial Reality:
+                              </span>
+                              <p className="text-slate-200 text-[11px] font-sans leading-relaxed">
+                                {disc.financial_reality}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-900/80 text-[11px] text-slate-400 flex items-start gap-1.5">
+                            <span className="font-mono font-semibold text-rose-300 shrink-0">Institutional Impact:</span>
+                            <span className="text-slate-300">{disc.impact}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Pillar 6: Critical Monitorables Checklist */}
               {selectedInsight.critical_monitorables && selectedInsight.critical_monitorables.length > 0 && (

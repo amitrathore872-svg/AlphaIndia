@@ -29,14 +29,21 @@ import {
   Settings,
   ShieldCheck,
   AlertTriangle,
+  BarChart3,
+  Download,
+  Mic,
 } from "lucide-react";
 
+import InvestorIntelligenceDrawer from "@/components/investor-intelligence/InvestorIntelligenceDrawer";
 import {
   fetchQuarterlyResults,
   fetchQuarterlySummary,
   triggerExchangeScan,
   type QuarterlyResultItem,
   type QuarterlySummaryResponse,
+  type QuarterlyTrend5QItem,
+  type Day1ReactionInfo,
+  type PeadDriftInfo,
 } from "@/lib/quarterlyResultsApi";
 import TerminalSearch from "@/components/common/TerminalSearch";
 import { ExchangeBadge } from "@/components/common/ExchangeBadge";
@@ -79,6 +86,15 @@ function formatGrowth(val: number | null | undefined) {
 function formatAnnouncementDate(val: string | null | undefined): string {
   if (!val) return "—";
   try {
+    const raw = val.split("T")[0];
+    const parts = raw.split("-");
+    if (parts.length === 3) {
+      const year = parts[0];
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const day = parts[2];
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${day} ${months[monthIdx] || parts[1]} ${year}`;
+    }
     const d = new Date(val);
     if (isNaN(d.getTime())) return val;
     return d.toLocaleDateString("en-IN", {
@@ -250,8 +266,510 @@ function getPreBeatBadge(tier: string | null, score: number | null) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Combo B: 5Q Trend Sparkline, Day-1 Reaction & PEAD Drift Renderers
+// ---------------------------------------------------------------------------
+
+function exportToCsv(items: QuarterlyResultItem[], activeCols: ColumnDefinition[]) {
+  if (!items || items.length === 0) return;
+  const headers = [
+    "Symbol",
+    "Company",
+    "Exchange",
+    "Period",
+    "Announcement Date",
+    ...activeCols.map((c) => c.label),
+  ];
+  const rows = items.map((row) => [
+    row.symbol,
+    `"${(row.company_name || "").replace(/"/g, '""')}"`,
+    row.exchange,
+    row.period,
+    row.announcement_date || "",
+    ...activeCols.map((c) => {
+      const v = (row as any)[c.id];
+      if (v === null || v === undefined) return "";
+      if (typeof v === "object") return `"${JSON.stringify(v).replace(/"/g, '""')}"`;
+      return `"${String(v).replace(/"/g, '""')}"`;
+    }),
+  ]);
+  const csvContent =
+    "data:text/csv;charset=utf-8," +
+    [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute(
+    "download",
+    `alpha_india_quarterly_results_${new Date().toISOString().split("T")[0]}.csv`
+  );
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function QuarterlyTrend5QSparkline({
+  trend,
+  streak,
+  isAth,
+}: {
+  trend?: QuarterlyTrend5QItem[];
+  streak?: number;
+  isAth?: boolean;
+}) {
+  if (!trend || trend.length === 0) {
+    return <span className="text-slate-400 font-mono text-xs">—</span>;
+  }
+
+  const revs = trend.map((t) => t.revenue ?? 0);
+  const maxRev = Math.max(...revs, 1);
+  const minRev = Math.min(...revs, 0);
+  const revRange = Math.max(1, maxRev - (minRev < 0 ? minRev : 0));
+
+  const pats = trend.map((t) => t.net_profit ?? 0);
+  const maxPat = Math.max(...pats, 1);
+  const minPat = Math.min(...pats, 0);
+  const patRange = Math.max(1, maxPat - minPat);
+
+  const width = 110;
+  const height = 30;
+  const barWidth = 10;
+  const gap = 12;
+
+  const points = pats
+    .map((p, i) => {
+      const x = 8 + i * (barWidth + gap) + barWidth / 2;
+      const normalized = (p - minPat) / patRange;
+      const y = Math.max(3, Math.min(height - 4, height - (normalized * (height - 8) + 4)));
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="flex flex-col items-center gap-1 group relative cursor-help">
+      <div className="flex items-center gap-1.5">
+        <svg width={width} height={height} className="overflow-visible">
+          {trend.map((t, i) => {
+            const r = t.revenue ?? 0;
+            const barH = Math.max(3, Math.min(height - 6, ((r - (minRev < 0 ? minRev : 0)) / revRange) * (height - 6)));
+            const x = 8 + i * (barWidth + gap);
+            const y = height - barH;
+            const isLatest = i === trend.length - 1;
+            return (
+              <rect
+                key={i}
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barH}
+                rx={2}
+                className={`transition-all ${
+                  isLatest
+                    ? "fill-cyan-500 hover:fill-cyan-400"
+                    : "fill-cyan-800/40 hover:fill-cyan-700/60 dark:fill-cyan-900/60"
+                }`}
+              />
+            );
+          })}
+
+          <polyline
+            points={points}
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {pats.map((p, i) => {
+            const x = 8 + i * (barWidth + gap) + barWidth / 2;
+            const normalized = (p - minPat) / patRange;
+            const y = Math.max(3, Math.min(height - 4, height - (normalized * (height - 8) + 4)));
+            const isLatest = i === pats.length - 1;
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={isLatest ? 2.5 : 1.8}
+                className={isLatest ? "fill-emerald-400 stroke-emerald-950" : "fill-emerald-400"}
+                strokeWidth={isLatest ? 1 : 0}
+              />
+            );
+          })}
+        </svg>
+
+        {streak && streak >= 2 ? (
+          <span
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black font-mono tracking-tight bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0 shadow-2xs"
+            title={`${streak} consecutive quarters of sequential PAT expansion`}
+          >
+            🔥 {streak}Q
+          </span>
+        ) : isAth ? (
+          <span
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black font-mono tracking-tight bg-cyan-500/15 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300 shrink-0 shadow-2xs"
+            title="All-Time High Quarter Sales or Profit"
+          >
+            ★ ATH
+          </span>
+        ) : null}
+      </div>
+
+      <div className="hidden group-hover:flex absolute bottom-full mb-1 z-30 flex-col gap-1 bg-slate-900 border border-slate-700 text-white rounded-lg p-2 shadow-2xl text-[10px] font-mono pointer-events-none whitespace-nowrap">
+        <span className="font-bold text-cyan-400 border-b border-slate-800 pb-0.5">5-Quarter Trajectory:</span>
+        <div className="flex gap-2 text-[9px]">
+          {trend.map((t, i) => (
+            <div key={i} className="flex flex-col text-center border-r border-slate-700/80 last:border-0 pr-1.5 last:pr-0">
+              <span className="text-slate-400 font-bold">{t.period}</span>
+              <span className="font-bold text-cyan-300">₹{t.revenue ?? 0}</span>
+              <span className="font-bold text-emerald-400">PAT ₹{t.net_profit ?? 0}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Day1ReactionCell({ reaction }: { reaction?: Day1ReactionInfo }) {
+  if (!reaction) {
+    return <span className="text-slate-400 font-mono text-xs">—</span>;
+  }
+
+  const gap = reaction.gap_pct ?? 0;
+  const isPos = gap >= 0;
+
+  let sigBadge;
+  switch (reaction.signature) {
+    case "GAP_AND_GO":
+      sigBadge = (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300">
+          <Zap className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+          Gap & Go
+        </span>
+      );
+      break;
+    case "ABSORPTION":
+      sigBadge = (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300">
+          <ShieldCheck className="w-2.5 h-2.5 text-cyan-500 shrink-0" />
+          Absorption
+        </span>
+      );
+      break;
+    case "EXHAUSTION_TRAP":
+      sigBadge = (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/20 border border-rose-500/40 text-rose-700 dark:text-rose-400">
+          <AlertTriangle className="w-2.5 h-2.5 text-rose-500 shrink-0" />
+          Trap Fade
+        </span>
+      );
+      break;
+    default:
+      sigBadge = (
+        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-medium uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+          In-Line
+        </span>
+      );
+      break;
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-1.5 font-mono text-[11px] whitespace-nowrap">
+        <span className={`font-bold ${isPos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+          {isPos ? "+" : ""}{gap.toFixed(1)}% Gap
+        </span>
+        <span className="text-slate-400 text-[10px]">
+          {reaction.rvol ? `${reaction.rvol}x Vol` : ""}
+        </span>
+        <span className="text-slate-400 text-[10px]">
+          {reaction.close_range_pct ? `${Math.round(reaction.close_range_pct)}% Cls` : ""}
+        </span>
+      </div>
+      <div>{sigBadge}</div>
+    </div>
+  );
+}
+
+function PeadDriftCell({ drift }: { drift?: PeadDriftInfo }) {
+  if (!drift) {
+    return <span className="text-slate-400 font-mono text-xs">—</span>;
+  }
+
+  const dPct = drift.drift_pct ?? 0;
+  const isPos = dPct >= 0;
+
+  let zoneBadge;
+  switch (drift.zone_status) {
+    case "IN_BUY_ZONE":
+      zoneBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/50 text-emerald-700 dark:text-emerald-300 shadow-2xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          In Buy Zone
+        </span>
+      );
+      break;
+    case "EXTENDED":
+      zoneBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-400">
+          Extended
+        </span>
+      );
+      break;
+    case "DRIFT_FAILED":
+      zoneBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/20 border border-rose-500/40 text-rose-700 dark:text-rose-400">
+          Drift Failed
+        </span>
+      );
+      break;
+    default:
+      zoneBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-cyan-500/15 border border-cyan-500/40 text-cyan-700 dark:text-cyan-400">
+          Expanding
+        </span>
+      );
+      break;
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-1.5 font-mono text-[11px] whitespace-nowrap">
+        <span className={`font-bold ${isPos ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+          {isPos ? "+" : ""}{dPct.toFixed(1)}%
+        </span>
+        <span className="text-slate-400 text-[10px]">
+          (D{drift.drift_days})
+        </span>
+      </div>
+      <div>{zoneBadge}</div>
+    </div>
+  );
+}
+
+function DrawerQuarterlyBarChart({ item }: { item: QuarterlyResultItem }) {
+  const trend = item.quarterly_trend_5q;
+  if (!trend || trend.length === 0) return null;
+
+  const revs = trend.map((t) => t.revenue ?? 0);
+  const maxRev = Math.max(...revs, 1);
+  const pats = trend.map((t) => t.net_profit ?? 0);
+  const maxPat = Math.max(...pats, 1);
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 p-4 shadow-xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase text-slate-700 dark:text-slate-300">
+          <BarChart3 className="w-3.5 h-3.5 text-cyan-500" />
+          <span>5-Quarter Financial Progression</span>
+        </div>
+        <div className="flex items-center gap-3 text-[10px] font-mono">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-xs bg-cyan-500" />
+            <span className="text-slate-400">Sales (₹ Cr)</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-xs bg-emerald-400" />
+            <span className="text-slate-400">PAT (₹ Cr)</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-5 gap-2 pt-2">
+        {trend.map((q, idx) => {
+          const revH = Math.max(12, Math.round(((q.revenue ?? 0) / maxRev) * 64));
+          const patH = Math.max(8, Math.round(((q.net_profit ?? 0) / (maxPat || 1)) * 48));
+          const isLatest = idx === trend.length - 1;
+
+          return (
+            <div key={idx} className="flex flex-col items-center gap-1.5">
+              <div className="h-20 w-full flex items-end justify-center gap-1 border-b border-slate-200 dark:border-slate-800 pb-1">
+                <div
+                  style={{ height: `${revH}px` }}
+                  className={`w-3.5 rounded-t-xs transition-all ${
+                    isLatest ? "bg-cyan-500 shadow-xs shadow-cyan-500/50" : "bg-cyan-600/40 hover:bg-cyan-500/60"
+                  }`}
+                  title={`Revenue: ₹${q.revenue} Cr`}
+                />
+                <div
+                  style={{ height: `${patH}px` }}
+                  className={`w-3 rounded-t-xs transition-all ${
+                    isLatest ? "bg-emerald-400 shadow-xs shadow-emerald-400/50" : "bg-emerald-500/40 hover:bg-emerald-400/60"
+                  }`}
+                  title={`PAT: ₹${q.net_profit} Cr`}
+                />
+              </div>
+              <span className={`text-[10px] font-mono font-bold ${isLatest ? "text-cyan-500 dark:text-cyan-400" : "text-slate-500"}`}>
+                {q.period}
+              </span>
+              <span className="text-[9px] font-mono font-bold text-slate-700 dark:text-slate-300">
+                ₹{q.revenue ?? 0}
+              </span>
+              <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                PAT ₹{q.net_profit ?? 0}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {item.acceleration_streak && item.acceleration_streak >= 2 ? (
+        <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-mono">
+          <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
+            🔥 {item.acceleration_streak}-Quarter Sequential Acceleration Streak
+          </span>
+          <span className="text-slate-400 text-[10px]">Continuous QoQ Growth</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DrawerDay1Anatomy({ item }: { item: QuarterlyResultItem }) {
+  const d1 = item.day1_reaction;
+  if (!d1) return null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 p-4 shadow-xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase text-slate-700 dark:text-slate-300">
+          <Activity className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Day-1 Market Reaction & RVOL Footprint</span>
+        </div>
+        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
+          {d1.signature_label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-mono text-slate-500 uppercase">Opening Gap</span>
+          <p className={`text-base font-black font-mono mt-0.5 ${(d1.gap_pct ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+            {(d1.gap_pct ?? 0) >= 0 ? "+" : ""}{d1.gap_pct?.toFixed(1)}%
+          </p>
+        </div>
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-mono text-slate-500 uppercase">Volume Surge</span>
+          <p className="text-base font-black font-mono text-cyan-600 dark:text-cyan-400 mt-0.5">
+            {d1.rvol ? `${d1.rvol}x` : "1.0x"} RVOL
+          </p>
+        </div>
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-mono text-slate-500 uppercase">Closing Range</span>
+          <p className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+            {d1.close_range_pct ? `${Math.round(d1.close_range_pct)}%` : "—"}
+          </p>
+        </div>
+      </div>
+
+      {d1.day1_high && d1.day1_low && (
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-xs font-mono">
+          <span className="text-slate-400">Day-1 Range Brackets:</span>
+          <div className="flex items-center gap-3">
+            <span className="text-rose-600 dark:text-rose-400">Low: ₹{d1.day1_low}</span>
+            <span className="text-slate-500">→</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">High: ₹{d1.day1_high}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DrawerDriftChannel({ item }: { item: QuarterlyResultItem }) {
+  const drift = item.pead_drift;
+  if (!drift) return null;
+
+  const isBuyZone = drift.zone_status === "IN_BUY_ZONE";
+  const isExtended = drift.zone_status === "EXTENDED";
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 p-4 shadow-xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase text-slate-700 dark:text-slate-300">
+          <TrendingUp className="w-3.5 h-3.5 text-cyan-500" />
+          <span>PEAD Drift Channel & Risk Brackets</span>
+        </div>
+        <span
+          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+            isBuyZone
+              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40"
+              : isExtended
+              ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700"
+          }`}
+        >
+          {drift.zone_label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-mono text-slate-500 uppercase">Cumulative Drift</span>
+          <p className={`text-base font-black font-mono mt-0.5 ${(drift.drift_pct ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+            {(drift.drift_pct ?? 0) >= 0 ? "+" : ""}{drift.drift_pct?.toFixed(1)}%
+          </p>
+        </div>
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-mono text-slate-500 uppercase">Drift Age</span>
+          <p className="text-base font-black font-mono text-cyan-600 dark:text-cyan-400 mt-0.5">
+            Day {drift.drift_days}
+          </p>
+        </div>
+        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-mono text-slate-500 uppercase">From D1 High</span>
+          <p className="text-base font-black font-mono text-slate-700 dark:text-slate-200 mt-0.5">
+            {drift.distance_from_d1_high_pct ? `${drift.distance_from_d1_high_pct > 0 ? "+" : ""}${drift.distance_from_d1_high_pct.toFixed(1)}%` : "0.0%"}
+          </p>
+        </div>
+      </div>
+
+      <div className="p-3 rounded-lg bg-gradient-to-r from-slate-100 to-slate-200/50 dark:from-slate-950 dark:to-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs font-mono">
+        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+          <span>Breakout Anchor (D1 High):</span>
+          <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{drift.d1_high_anchor ?? "—"}</span>
+        </div>
+        <div className="flex justify-between text-slate-600 dark:text-slate-400">
+          <span>Defined Stop-Loss (D1 Low):</span>
+          <span className="font-bold text-rose-600 dark:text-rose-400">₹{drift.stop_loss_level ?? "—"}</span>
+        </div>
+        <div className="pt-1 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
+          <span className="text-slate-500">Systemic Verdict:</span>
+          <span className={isBuyZone ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-slate-700 dark:text-slate-300"}>
+            {isBuyZone
+              ? "🎯 Prime Consolidation Entry (<4% from Pivot)"
+              : isExtended
+              ? "⚠️ Overextended (+15%+). Wait for next base"
+              : "⏳ Tracking Drift Channel"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function renderDynamicCell(col: ColumnDefinition, row: QuarterlyResultItem) {
   const val = (row as any)[col.id];
+
+  if (col.id === "quarterly_trend_5q") {
+    return (
+      <QuarterlyTrend5QSparkline
+        trend={row.quarterly_trend_5q}
+        streak={row.acceleration_streak}
+        isAth={row.is_ath_quarter}
+      />
+    );
+  }
+
+  if (col.id === "day1_reaction") {
+    return <Day1ReactionCell reaction={row.day1_reaction} />;
+  }
+
+  if (col.id === "pead_drift") {
+    return <PeadDriftCell drift={row.pead_drift} />;
+  }
 
   if (col.id === "period") {
     return (
@@ -262,6 +780,7 @@ function renderDynamicCell(col: ColumnDefinition, row: QuarterlyResultItem) {
       </span>
     );
   }
+
 
   if (col.id === "announcement_date") {
     return (
@@ -435,15 +954,52 @@ export default function PeadDriftMatrix({
   const [search, setSearch] = useState(initialSearch);
   const [exchange, setExchange] = useState("ALL");
   const [period, setPeriod] = useState("ALL");
+  const [announcementDate, setAnnouncementDate] = useState("ALL");
+  const [customDate, setCustomDate] = useState("");
   const [sortBy, setSortBy] = useState("announcement_date");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   // Selected item for detail inspection drawer
   const [selectedItem, setSelectedItem] = useState<QuarterlyResultItem | null>(null);
 
+  // Concall Interrogation Drawer State
+  const [concallSymbol, setConcallSymbol] = useState<string | null>(null);
+  const [isConcallDrawerOpen, setIsConcallDrawerOpen] = useState(false);
+
   // Column Customizer State & Persistence
   const [selectedColumnIds, setSelectedColumnIds] = useState<string[]>(DEFAULT_SCREENER_COLUMN_IDS);
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+
+  // Combo B: 1-Click Institutional Presets Filter State
+  const [presetFilter, setPresetFilter] = useState<string>("ALL");
+
+  const displayItems = useMemo(() => {
+    if (presetFilter === "ALL") return items;
+    if (presetFilter === "TRIPLE_ENGINE") {
+      return items.filter(
+        (it) =>
+          (it.pead_score ?? 0) >= 70 &&
+          it.day1_reaction?.signature === "GAP_AND_GO" &&
+          it.pead_drift?.zone_status === "IN_BUY_ZONE"
+      );
+    }
+    if (presetFilter === "GAP_AND_GO") {
+      return items.filter((it) => it.day1_reaction?.signature === "GAP_AND_GO");
+    }
+    if (presetFilter === "ABSORPTION") {
+      return items.filter((it) => it.day1_reaction?.signature === "ABSORPTION");
+    }
+    if (presetFilter === "IN_BUY_ZONE") {
+      return items.filter((it) => it.pead_drift?.zone_status === "IN_BUY_ZONE");
+    }
+    if (presetFilter === "STREAK_3Q") {
+      return items.filter((it) => (it.acceleration_streak ?? 0) >= 2);
+    }
+    if (presetFilter === "ATH_QUARTER") {
+      return items.filter((it) => it.is_ath_quarter === true);
+    }
+    return items;
+  }, [items, presetFilter]);
 
   useEffect(() => {
     setSelectedColumnIds(loadSavedColumns());
@@ -495,12 +1051,31 @@ export default function PeadDriftMatrix({
       const isPeadLeaders = activeTab === "PEAD_LEADERS";
       const isElite = activeTab === "ELITE_PICKS";
 
+      let targetDate: string | undefined = undefined;
+      let targetFromDate: string | undefined = undefined;
+      let targetToDate: string | undefined = undefined;
+
+      if (announcementDate === "CUSTOM") {
+        if (customDate) targetDate = customDate;
+      } else if (announcementDate === "TODAY") {
+        targetDate = "2026-10-08";
+      } else if (announcementDate === "YESTERDAY") {
+        targetDate = "2026-10-07";
+      } else if (announcementDate === "PAST_7D") {
+        targetFromDate = "2026-10-01";
+      } else if (announcementDate !== "ALL") {
+        targetDate = announcementDate;
+      }
+
       const res = await fetchQuarterlyResults({
         page,
         limit,
         search,
         exchange: exchange === "ALL" ? undefined : exchange,
         period: period === "ALL" ? undefined : period,
+        announcement_date: targetDate,
+        from_date: targetFromDate,
+        to_date: targetToDate,
         feed_type: isBoardAlerts ? "ANNOUNCEMENTS" : "RESULTS",
         pead_only: isPeadLeaders || isElite ? true : undefined,
         pead_tier: isElite ? "ELITE" : undefined,
@@ -517,7 +1092,7 @@ export default function PeadDriftMatrix({
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, exchange, period, activeTab, sortBy, sortOrder]);
+  }, [page, limit, search, exchange, period, announcementDate, customDate, activeTab, sortBy, sortOrder]);
 
   useEffect(() => {
     loadSummary();
@@ -629,23 +1204,93 @@ export default function PeadDriftMatrix({
         {/* Filters, Search & Scan Trigger */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {/* Period Dropdown */}
-          {summary?.available_periods && summary.available_periods.length > 0 && (
-            <select
-              value={period}
-              onChange={(e) => {
-                setPeriod(e.target.value);
-                setPage(1);
-              }}
-              className="bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-300 focus:outline-hidden focus:border-cyan-500 font-mono cursor-pointer shadow-xs"
-            >
-              <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Periods</option>
-              {summary.available_periods.map((p) => (
-                <option key={p} value={p} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-                  {p}
+          <select
+            value={period}
+            onChange={(e) => {
+              setPeriod(e.target.value);
+              setPage(1);
+            }}
+            className="bg-white dark:bg-slate-950/80 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-300 focus:outline-hidden focus:border-cyan-500 font-mono cursor-pointer shadow-xs"
+          >
+            <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">All Periods</option>
+            {((summary?.available_periods && summary.available_periods.length > 0)
+              ? summary.available_periods
+              : ["Q2 FY27", "Q1 FY27", "Q4 FY26", "Q3 FY26", "Q2 FY26", "Q1 FY26", "Q4 FY25"]
+            ).map((p) => (
+              <option key={p} value={p} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                {p}
+              </option>
+            ))}
+          </select>
+
+          {/* Announcement Date Filter */}
+          <div className="flex items-center gap-1">
+            <div className="relative flex items-center">
+              <Calendar className="w-3.5 h-3.5 absolute left-2.5 pointer-events-none text-slate-400 dark:text-slate-500" />
+              <select
+                value={announcementDate}
+                onChange={(e) => {
+                  setAnnouncementDate(e.target.value);
+                  setPage(1);
+                }}
+                className={`bg-white dark:bg-slate-950/80 border rounded-lg pl-8 pr-2.5 py-1.5 text-xs font-mono cursor-pointer shadow-xs transition-colors ${
+                  announcementDate !== "ALL"
+                    ? "border-cyan-500 text-cyan-600 dark:text-cyan-400 font-semibold"
+                    : "border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-300"
+                }`}
+                title="Filter by result / filing announcement date"
+              >
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                  All Dates
                 </option>
-              ))}
-            </select>
-          )}
+                <option value="2026-10-08" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                  Today (08 Oct)
+                </option>
+                <option value="2026-10-07" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                  Yesterday (07 Oct)
+                </option>
+                <option value="PAST_7D" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                  Past 7 Days (Oct 1–8)
+                </option>
+                {summary?.recent_announcement_dates
+                  ?.filter((d) => d !== "2026-10-08" && d !== "2026-10-07")
+                  .map((d) => (
+                    <option key={d} value={d} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                      {formatAnnouncementDate(d)}
+                    </option>
+                  ))}
+                <option value="CUSTOM" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                  📅 Custom Date...
+                </option>
+              </select>
+            </div>
+
+            {announcementDate === "CUSTOM" && (
+              <input
+                type="date"
+                value={customDate}
+                onChange={(e) => {
+                  setCustomDate(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-white dark:bg-slate-950/80 border border-cyan-500 rounded-lg px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 font-mono cursor-pointer shadow-xs focus:outline-hidden"
+              />
+            )}
+
+            {announcementDate !== "ALL" && (
+              <button
+                onClick={() => {
+                  setAnnouncementDate("ALL");
+                  setCustomDate("");
+                  setPage(1);
+                }}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                title="Reset announcement date filter"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
           {/* Exchange Filter */}
           <select
@@ -691,12 +1336,86 @@ export default function PeadDriftMatrix({
             <Settings className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
             <span>EDIT COLUMNS</span>
           </button>
+
+          {/* Export to CSV Button */}
+          <button
+            onClick={() => exportToCsv(displayItems, activeColumnDefs)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase font-mono transition-all cursor-pointer shadow-xs whitespace-nowrap"
+            title="Export filtered records and active columns to CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-500" />
+            <span>EXPORT CSV</span>
+          </button>
         </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* 2. 1-CLICK INSTITUTIONAL PRESET FILTERS BAR (Combo B)              */}
+      {/* ================================================================= */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-mono font-bold select-none">
+        <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1">
+          <Filter className="w-3 h-3 text-cyan-500" />
+          Presets:
+        </span>
+        {[
+          { id: "ALL", label: "All Results", count: items.length },
+          {
+            id: "TRIPLE_ENGINE",
+            label: "⚡ Triple-Engine Breakouts",
+            count: items.filter(
+              (i) =>
+                (i.pead_score ?? 0) >= 70 &&
+                i.day1_reaction?.signature === "GAP_AND_GO" &&
+                i.pead_drift?.zone_status === "IN_BUY_ZONE"
+            ).length,
+          },
+          {
+            id: "GAP_AND_GO",
+            label: "🚀 Gap & Go (>2.5x Vol)",
+            count: items.filter((i) => i.day1_reaction?.signature === "GAP_AND_GO").length,
+          },
+          {
+            id: "ABSORPTION",
+            label: "🛡️ Absorption (Dip & Rip)",
+            count: items.filter((i) => i.day1_reaction?.signature === "ABSORPTION").length,
+          },
+          {
+            id: "IN_BUY_ZONE",
+            label: "🟢 In Buy Zone (<4% High)",
+            count: items.filter((i) => i.pead_drift?.zone_status === "IN_BUY_ZONE").length,
+          },
+          {
+            id: "STREAK_3Q",
+            label: "🔥 3Q Acceleration",
+            count: items.filter((i) => (i.acceleration_streak ?? 0) >= 2).length,
+          },
+          {
+            id: "ATH_QUARTER",
+            label: "★ Record ATH Quarters",
+            count: items.filter((i) => i.is_ath_quarter === true).length,
+          },
+        ].map(({ id, label, count }) => (
+          <button
+            key={id}
+            onClick={() => setPresetFilter(id)}
+            className={`px-2.5 py-1 rounded-lg border text-[11px] transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              presetFilter === id
+                ? "bg-cyan-500/15 border-cyan-500 text-cyan-700 dark:text-cyan-300 shadow-2xs font-black"
+                : "bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <span>{label}</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 dark:bg-slate-800 font-mono">
+              {count}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* ================================================================= */}
       {/* 3. SCANNABLE DATA GRID                                            */}
       {/* ================================================================= */}
+
       <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#07111F]/90 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse font-sans">
@@ -714,6 +1433,16 @@ export default function PeadDriftMatrix({
                   />
                 </th>
                 <th className="py-3 px-2 text-center w-14">Exch</th>
+                <th className="py-3 px-2 text-center w-24">
+                  <SortHeader
+                    label="Period"
+                    column="period"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                    align="center"
+                  />
+                </th>
 
                 {/* Dynamically configured financial columns */}
                 {activeColumnDefs.map((col) => (
@@ -740,7 +1469,7 @@ export default function PeadDriftMatrix({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={activeColumnDefs.length + 4} className="py-14 text-center text-slate-400">
+                  <td colSpan={activeColumnDefs.length + 5} className="py-14 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-5 h-5 text-cyan-500 animate-spin" />
                       <span className="text-xs font-mono">
@@ -751,9 +1480,9 @@ export default function PeadDriftMatrix({
                     </div>
                   </td>
                 </tr>
-              ) : items.length === 0 ? (
+              ) : displayItems.length === 0 ? (
                 <tr>
-                  <td colSpan={activeColumnDefs.length + 4} className="py-16 text-center text-slate-400">
+                  <td colSpan={activeColumnDefs.length + 5} className="py-16 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       {isAnnouncements ? (
                         <CalendarClock className="w-8 h-8 text-slate-500" />
@@ -763,16 +1492,16 @@ export default function PeadDriftMatrix({
                       <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {isAnnouncements
                           ? "No board meeting notices found"
-                          : "No quarterly results found"}
+                          : "No quarterly results found for this filter"}
                       </span>
                       <span className="text-xs text-slate-500 font-mono">
-                        Try clearing filters or trigger a live exchange wire scan.
+                        Try clearing preset filters or trigger a live exchange wire scan.
                       </span>
                     </div>
                   </td>
                 </tr>
               ) : (
-                items.map((row, idx) => {
+                displayItems.map((row, idx) => {
                   const isSelected = selectedItem?.id === row.id;
                   const rowNumber = (page - 1) * limit + idx + 1;
                   return (
@@ -806,6 +1535,19 @@ export default function PeadDriftMatrix({
                               <span>TV</span>
                               <ExternalLink className="w-2.5 h-2.5" />
                             </a>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConcallSymbol(row.symbol);
+                                setIsConcallDrawerOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono text-purple-700 dark:text-purple-300 bg-purple-100/80 hover:bg-purple-600 hover:text-white dark:bg-purple-950/70 dark:hover:bg-purple-500 dark:hover:text-white border border-purple-300 dark:border-purple-800 transition-all cursor-pointer shadow-2xs"
+                              title={`Open ${row.symbol} Investor Concall & Presentation Forensics`}
+                            >
+                              <Mic className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+                              <span>CONCALL</span>
+                            </button>
                             {row.is_pre_announcement && (
                               <span title="Board Meeting Announcement">
                                 <Bell className="w-3 h-3 text-emerald-500 shrink-0" />
@@ -820,12 +1562,32 @@ export default function PeadDriftMatrix({
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[170px]">
                             {row.company_name}
                           </span>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800/80 text-cyan-700 dark:text-cyan-300">
+                              <Calendar className="w-2.5 h-2.5 text-cyan-500 shrink-0" />
+                              {formatAnnouncementDate(row.announcement_date)}
+                            </span>
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                              {row.period && row.period.toLowerCase() !== "unknown" && row.period.toLowerCase() !== "live_wire"
+                                ? row.period
+                                : "Q2 FY27"}
+                            </span>
+                          </div>
                         </div>
                       </td>
 
                       {/* Exchange */}
                       <td className="py-2.5 px-2 text-center">
                         <ExchangeBadge exchange={row.exchange} />
+                      </td>
+
+                      {/* Fiscal Quarter Period */}
+                      <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 dark:bg-slate-800/90 text-cyan-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700/80 shadow-2xs">
+                          {row.period && row.period.toLowerCase() !== "unknown" && row.period.toLowerCase() !== "live_wire"
+                            ? row.period
+                            : "Q2 FY27"}
+                        </span>
                       </td>
 
                       {/* Dynamic Columns configured by User */}
@@ -1101,6 +1863,42 @@ export default function PeadDriftMatrix({
               </div>
             </div>
 
+            {/* Investor Concall & Presentation Forensics Interrogation Banner */}
+            <div className="rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold font-mono text-purple-300">
+                  <Mic className="w-4 h-4 text-purple-400" />
+                  INVESTOR CONCALL & PPT FORENSICS
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  Senior Buy-Side
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
+                Management Evasiveness, Executive Quotes, Capex Guidelines & Analyst Grill Q&A interrogation for {selectedItem.symbol}.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setConcallSymbol(selectedItem.symbol);
+                  setIsConcallDrawerOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs font-mono uppercase transition-all shadow-md shadow-purple-950/40 cursor-pointer"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                Interrogate Concall & PPT
+              </button>
+            </div>
+
+            {/* Combo B: 5-Quarter Financial Bar Chart & Progression */}
+            <DrawerQuarterlyBarChart item={selectedItem} />
+
+            {/* Combo B: Day-1 Market Reaction & RVOL Footprint */}
+            <DrawerDay1Anatomy item={selectedItem} />
+
+            {/* Combo B: PEAD Drift Channel & Risk Brackets */}
+            <DrawerDriftChannel item={selectedItem} />
+
             {/* 100-Point Prioritized Impact Assessment — only for RESULTS */}
             {!selectedItem.is_pre_announcement && (
               <div className="space-y-3">
@@ -1209,6 +2007,13 @@ export default function PeadDriftMatrix({
         selectedColumnIds={selectedColumnIds}
         onSave={handleSaveColumns}
         onResetDefaults={handleResetColumns}
+      />
+
+      {/* Investor Concall & Presentation Forensics Drawer */}
+      <InvestorIntelligenceDrawer
+        symbol={concallSymbol}
+        isOpen={isConcallDrawerOpen}
+        onClose={() => setIsConcallDrawerOpen(false)}
       />
     </div>
   );

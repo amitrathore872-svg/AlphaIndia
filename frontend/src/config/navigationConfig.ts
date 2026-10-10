@@ -27,6 +27,7 @@ import {
   Trophy,
   Activity,
   Rocket,
+  FlaskConical,
   LucideIcon,
 } from "lucide-react";
 
@@ -78,6 +79,15 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         description: "Institutional 18-stage breakout engine: contraction intelligence, base patterns, smart money, and automated trade management.",
       },
       {
+        id: "backtest-lab",
+        name: "Backtest Lab",
+        href: "/backtest-lab",
+        icon: FlaskConical,
+        badge: "QUANT LAB",
+        section: "RADARS & ENGINES",
+        description: "Production-grade intraday backtest engine: exact 9-rule VCB breakout, zero look-ahead bias, Indian cost frictions, and MFE/MAE matrices.",
+      },
+      {
         id: "fx-swing-screener",
         name: "FX Swing Screener",
         href: "/portfolio/fx-swing-screener",
@@ -104,9 +114,9 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         description: "12-month performance matrix & monthly green/red heatmap across 40+ listed Indian equity indices (Broad, Sectoral, Thematic).",
       },
       {
-        id: "athena-omega",
-        name: "Athena Omega AI",
-        href: "/athena-omega",
+        id: "pead-drift-screener",
+        name: "PEAD Drift Screener",
+        href: "/pead-drift-screener",
         icon: Zap,
         section: "RADARS & ENGINES",
         description: "AI-driven earnings surprise radar & institutional PEAD drift analyzer.",

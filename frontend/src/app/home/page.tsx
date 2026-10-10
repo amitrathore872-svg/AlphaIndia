@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 // =========================================================================
 // Alpha India — Personalized Daily One-Pager
@@ -338,7 +338,7 @@ export default function HomePage() {
             upsidePct: upside > 0 ? upside : 25,
             stopLoss: stop,
             riskReward: `1 : ${((target - cmp) / Math.max(1, cmp - stop)).toFixed(1)}`,
-            screenerUrl: "/athena-omega",
+            screenerUrl: "/pead-drift-screener",
           });
         }
       }

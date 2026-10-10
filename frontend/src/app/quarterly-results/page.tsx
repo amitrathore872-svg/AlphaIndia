@@ -37,11 +37,11 @@ export default function QuarterlyResultsPage() {
 
           <div className="flex items-center gap-2">
             <Link
-              href="/athena-omega"
+              href="/pead-drift-screener"
               className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono uppercase transition-all shadow-md shadow-cyan-950/40 cursor-pointer"
             >
               <Activity className="w-3.5 h-3.5" />
-              <span>Athena Conviction Terminal</span>
+              <span>PEAD Drift Screener</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>

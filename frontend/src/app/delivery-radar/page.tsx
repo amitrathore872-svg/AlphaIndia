@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -18,6 +18,7 @@ import {
   Activity,
   ArrowRight,
   ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -52,9 +53,11 @@ export default function DeliveryRadarPage() {
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetchDeliveryOpportunities({
         lookback_sessions: lookbackSessions,
@@ -74,6 +77,7 @@ export default function DeliveryRadarPage() {
       setTotalPages(res.total_pages || 1);
     } catch (err) {
       console.error("Failed to load delivery opportunities:", err);
+      setError(err instanceof Error ? err.message : "Failed to load delivery opportunities.");
     } finally {
       setLoading(false);
     }
@@ -121,6 +125,22 @@ export default function DeliveryRadarPage() {
             </button>
           }
         />
+
+        {/* ERROR NOTIFICATION BANNER */}
+        {error && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-300 backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+              <span>{error}</span>
+            </div>
+            <button
+              onClick={() => loadData()}
+              className="rounded-md border border-rose-500/40 bg-rose-500/20 px-3 py-1 font-medium text-rose-200 transition hover:bg-rose-500/30 active:scale-95"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
 
         {/* TELEMETRY RIBBON */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

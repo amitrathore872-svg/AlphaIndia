@@ -76,10 +76,13 @@ export interface MFRadarNavResponse {
 export interface MFRadarSummary {
   total_schemes: number;
   today_dips_count: number;
+  latest_nav_date?: string | null;
+  last_sync_time?: string | null;
   dip_opportunities: MFRadarScheme[];
   momentum_leaders: MFRadarScheme[];
   category_breakdown: Record<string, number>;
 }
+
 
 export interface MFLiveIndexItem {
   name: string;

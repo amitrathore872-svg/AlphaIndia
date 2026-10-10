@@ -49,6 +49,26 @@ export interface FlashDecisionItem {
     valuation_opportunity: number;
     risk_level: string;
   };
+  metrics?: {
+    revenue?: number | null;
+    pat?: number | null;
+    operating_profit?: number | null;
+    ebitda_margin_pct?: number | null;
+    ebitda_margin_change_bps?: number | null;
+    eps?: number | null;
+    eps_growth_yoy?: number | null;
+    other_income?: number | null;
+    interest_expense?: number | null;
+    depreciation?: number | null;
+    effective_tax_rate_pct?: number | null;
+    operating_cash_flow?: number | null;
+    total_debt?: number | null;
+    revenue_growth_yoy?: number | null;
+    pat_growth_yoy?: number | null;
+    revenue_growth_qoq?: number | null;
+    pat_growth_qoq?: number | null;
+    roce?: number | null;
+  } | null;
   pead?: PeadInfo | null;
   current_price?: number;
   estimated_fair_value?: number;
@@ -68,16 +88,66 @@ export interface FilingFeedItem {
   exchange: string;
   fiscal_period: string;
   filing_type: string;
-  priority: "AAA+" | "AAA" | "AA" | "ARCHIVE";
+  priority: "AAA+" | "AAA" | "AA" | "A" | "ARCHIVE" | string;
   status: string;
   processing_time_sec: number;
   sla_met: boolean;
   detected_at?: string;
+  published_at?: string;
   shock_score?: number;
   conviction_score?: number;
   conviction_grade?: string;
   flash_signal?: string;
+  forensic_status?: "CLEAN" | "FLAGGED";
   pdf_url?: string;
+}
+
+export interface FilingAuditCalculation {
+  metric: string;
+  reported_q0: string;
+  baseline_q4: string;
+  calculated_delta: string;
+  formula: string;
+  audit_proof: string;
+  status: "VERIFIED" | "PASSED" | "FLAGGED" | "INFO" | string;
+}
+
+export interface FilingAuditData {
+  fiscal_period: string;
+  source_filing_pdf?: string | null;
+  filing_detected_at?: string | null;
+  processing_time_sec?: number | null;
+  sla_met?: boolean | null;
+  q0_reported: {
+    period: string;
+    revenue?: number | null;
+    pat?: number | null;
+    operating_profit?: number | null;
+    opm?: number | null;
+    eps?: number | null;
+    other_income?: number | null;
+    interest_expense?: number | null;
+    depreciation?: number | null;
+    effective_tax_rate_pct?: number | null;
+    cfo?: number | null;
+    debt?: number | null;
+    roce?: number | null;
+  };
+  q_minus_4_baseline: {
+    period?: string | null;
+    revenue?: number | null;
+    pat?: number | null;
+    opm?: number | null;
+    eps?: number | null;
+  };
+  q_minus_1_baseline: {
+    period?: string | null;
+    revenue?: number | null;
+    pat?: number | null;
+    opm?: number | null;
+    eps?: number | null;
+  };
+  calculation_audit_trail: FilingAuditCalculation[];
 }
 
 export interface GateBreakdown {
@@ -131,6 +201,7 @@ export interface GateBreakdown {
     expected_moves: Record<string, string>;
     ai_investment_summary: string;
   };
+  filing_audit?: FilingAuditData;
   metrics: Record<string, string | number | boolean | null | undefined>;
   pead_analysis?: PeadInfo | null;
 }
@@ -197,18 +268,130 @@ export async function triggerExchangeScan(): Promise<{ status: string; message: 
   return res.json();
 }
 
-export async function fetchShareableBrief(id: number): Promise<{ symbol: string; brief_text: string }> {
-  const res = await fetch(`${BASE_URL}/athena-omega/share/${id}/brief`, {
+export async function fetchShareableBrief(
+  idOrSymbol: number | string,
+  symbol?: string
+): Promise<{ symbol: string; brief_text: string }> {
+  const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : "";
+  const res = await fetch(`${BASE_URL}/athena-omega/share/${idOrSymbol}/brief${query}`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Failed to fetch shareable brief");
   return res.json();
 }
 
-export async function sendTelegramBroadcast(id: number): Promise<{ status: string; symbol: string }> {
-  const res = await fetch(`${BASE_URL}/athena-omega/share/${id}/telegram`, {
+export async function sendTelegramBroadcast(
+  idOrSymbol: number | string,
+  symbol?: string
+): Promise<{ status: string; symbol: string; delivery?: any }> {
+  const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : "";
+  const res = await fetch(`${BASE_URL}/athena-omega/share/${idOrSymbol}/telegram${query}`, {
     method: "POST",
   });
-  if (!res.ok) throw new Error("Failed to broadcast alert to Telegram");
+  if (!res.ok) {
+    const errData = await res.json().catch(() => null);
+    throw new Error(errData?.detail || "Failed to broadcast alert to Telegram");
+  }
   return res.json();
+}
+
+/**
+ * Normalizes any fiscal period representation (e.g. "Jun 2026", "June 2026", "Q1 FY27")
+ * to the institutional month standard (e.g. "Jun 2026", "Sep 2026", "Dec 2026", "Mar 2027").
+ */
+export function formatFiscalPeriod(period?: string | null): string {
+  if (!period || !period.trim()) return "—";
+  const p = period.trim();
+
+  // If already standard month-year: "Jun 2026", "June 2026", "September 2025", "Jun-26", "Sep 26"
+  const mMatch = p.match(/^([A-Za-z]{3,9})[\s-]+(\d{2,4})$/);
+  if (mMatch) {
+    const rawMonth = mMatch[1].slice(0, 3).toLowerCase();
+    const capitalized = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1);
+    let yr = parseInt(mMatch[2], 10);
+    if (yr < 100) yr += 2000;
+    return `${capitalized} ${yr}`;
+  }
+
+  // ISO or date format like "2026-06-30", "2026-09-30", "2026-03-31"
+  const isoMatch = p.match(/^(\d{4})-(\d{2})(?:-\d{2})?/);
+  if (isoMatch) {
+    const yr = isoMatch[1];
+    const monthNum = parseInt(isoMatch[2], 10);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${months[monthNum - 1]} ${yr}`;
+    }
+  }
+
+  // Match quarterly codes: "Q1 FY27", "Q1FY27", "Q1 FY 2027", "Q1 2026-27"
+  const qMatch = p.match(/^Q([1-4])\s*(?:FY\s*)?(\d{2,4})/i);
+  if (qMatch) {
+    const qNum = parseInt(qMatch[1], 10);
+    let fy = parseInt(qMatch[2], 10);
+    if (fy < 100) fy += 2000;
+
+    // In Indian Fiscal Calendar:
+    // Q1 FY27 -> ends June 2026 (FY - 1)
+    // Q2 FY27 -> ends September 2026 (FY - 1)
+    // Q3 FY27 -> ends December 2026 (FY - 1)
+    // Q4 FY27 -> ends March 2027 (FY)
+    const quarterMap: Record<number, { month: string; yrOffset: number }> = {
+      1: { month: "Jun", yrOffset: -1 },
+      2: { month: "Sep", yrOffset: -1 },
+      3: { month: "Dec", yrOffset: -1 },
+      4: { month: "Mar", yrOffset: 0 },
+    };
+
+    const mapping = quarterMap[qNum];
+    if (mapping) {
+      return `${mapping.month} ${fy + mapping.yrOffset}`;
+    }
+  }
+
+  return p;
+}
+
+export function getQuarterCode(period?: string | null): string {
+  if (!period || !period.trim()) return "";
+  const p = period.trim();
+  const qMatch = p.match(/^Q([1-4])\s*(?:FY\s*)?(\d{2,4})/i);
+  if (qMatch) {
+    const yr = qMatch[2].length === 4 ? qMatch[2].slice(-2) : qMatch[2];
+    return `Q${qMatch[1]} FY${yr}`;
+  }
+  return "";
+}
+
+/**
+ * Resolves the direct quarterly results source file / exchange PDF URL,
+ * falling back to the official exchange/screener statement if direct PDF is not yet available.
+ */
+export function getQuarterlyResultFileUrl(item: {
+  symbol?: string;
+  pdf_url?: string | null;
+  exchange?: string | null;
+}): { url: string; isPdf: boolean; label: string } {
+  const sym = (item.symbol || "").trim().toUpperCase();
+  const rawUrl = item.pdf_url?.trim();
+
+  if (rawUrl && (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) && rawUrl !== "-") {
+    const isDirectPdf =
+      rawUrl.toLowerCase().endsWith(".pdf") ||
+      rawUrl.includes("AttachLive") ||
+      rawUrl.includes("nsearchives");
+    return {
+      url: rawUrl,
+      isPdf: isDirectPdf,
+      label: isDirectPdf ? "Filing PDF" : "Exchange Filing",
+    };
+  }
+
+  // Fallback to Screener.in consolidated quarterly statement where official numbers are aggregated
+  const lookupSym = sym === "CPCL" ? "CHENNPETRO" : sym;
+  return {
+    url: `https://www.screener.in/company/${lookupSym}/consolidated/`,
+    isPdf: false,
+    label: "Statement",
+  };
 }

@@ -40,6 +40,7 @@ class AutonomousEngineScheduler:
     INTERVAL_MOMENTUM_UNIVERSE = 3600 # 60 mins — off-market universe sweep (guards itself internally)
     INTERVAL_MOMENTUM_INTRADAY = 60   # 60s — re-scores watchlist during market hours
     INTERVAL_TELEGRAM_ALERTS = 120    # 2 mins — automated opportunity & sovereign telegram alert dispatcher
+    INTERVAL_INVESTOR_INTELLIGENCE = 600 # 10 mins — automated concall & investor presentation forensics
 
     # Execution telemetry state
     _engine_telemetry: Dict[str, Dict[str, Any]] = {
@@ -133,6 +134,16 @@ class AutonomousEngineScheduler:
             "last_records": 0,
             "last_error": None,
         },
+        "investor_intelligence": {
+            "name": "Investor Concall & Presentation Forensics",
+            "interval_sec": 600,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
     }
 
     _disabled_engines: set = set()
@@ -215,6 +226,7 @@ class AutonomousEngineScheduler:
         next_momentum_universe = now + 90 # 90s warmup (off-market only)
         next_momentum_intraday = now + 45 # 45s warmup (market hours only)
         next_telegram_alerts = now + 15   # 15s warmup (auto telegram alerts)
+        next_investor = now + 80          # 80s warmup (investor concall forensics)
 
         while not cls._stop_event.is_set():
             current_time = time.time()
@@ -303,6 +315,16 @@ class AutonomousEngineScheduler:
                 next_telegram_alerts = time.time() + cls.INTERVAL_TELEGRAM_ALERTS
                 cls._update_next_run("telegram_auto_alerts", cls.INTERVAL_TELEGRAM_ALERTS)
 
+            # -------------------------------------------------------------
+            # Cycle 10: Investor Concall & Presentation Forensics
+            # Automatically polls exchange wires for concalls & interrogates pending docs
+            # -------------------------------------------------------------
+            if current_time >= next_investor:
+                if cls.is_engine_enabled("investor_intelligence"):
+                    cls._execute_investor_intelligence_cycle()
+                next_investor = time.time() + cls.INTERVAL_INVESTOR_INTELLIGENCE
+                cls._update_next_run("investor_intelligence", cls.INTERVAL_INVESTOR_INTELLIGENCE)
+
             # Sleep in 2-second increments for responsive teardown
             for _ in range(2):
                 if cls._stop_event.is_set():
@@ -357,6 +379,15 @@ class AutonomousEngineScheduler:
                         logger.info(f"[AutonomousEngineScheduler] BREAKOUT TRIGGERED for: {breakout_res.get('newly_triggered')}")
             except Exception as b_err:
                 logger.debug(f"[AutonomousEngineScheduler] Breakout execution notice: {b_err}")
+
+            # 5. Sovereign Intraday Cockpit Live Feed & Triggers Monitor
+            try:
+                from app.services.sovereign_intraday_service import SovereignIntradayService
+                sov_res = SovereignIntradayService.get_live_radar(db=db)
+                if sov_res:
+                    records_count += sov_res.get("summary_stats", {}).get("total_active_candidates", 0)
+            except Exception as sov_err:
+                logger.debug(f"[AutonomousEngineScheduler] Sovereign intraday cycle notice: {sov_err}")
 
             ControlSystemService.record_service_fetch(
                 service_id="exchange_live_wire",
@@ -446,24 +477,12 @@ class AutonomousEngineScheduler:
             )
             records_count = scan_res.get("candidates_count", 0) if isinstance(scan_res, dict) else 0
 
-            # 2. Pre-warm Intraday Tomorrow Deep Dive cache for instantaneous user loading
+            # 2. Pre-warm Intraday Tomorrow Deep Dive cache safely (non-intrusive cache lookup)
             try:
                 from app.services.intraday_opportunity_service import IntradayOpportunityService
-                IntradayOpportunityService.get_deep_dive_opportunities(db=db, force_refresh=True)
+                IntradayOpportunityService.get_deep_dive_opportunities(db=db, force_refresh=False)
             except Exception as intra_err:
-                logger.warning(f"[AutonomousEngineScheduler] Intraday radar pre-warm failed: {intra_err}")
-
-            # 3. Pre-warm Momentum, Pre-Breakout, and Delivery Radar caches
-            try:
-                from app.services.momentum_screener_service import MomentumScreenerService
-                from app.services.prebreakout_radar_service import PreBreakoutRadarService
-                from app.services.delivery_screener_service import DeliveryScreenerService
-
-                MomentumScreenerService.trigger_background_scan(db=db)
-                PreBreakoutRadarService.trigger_background_scan(db=db)
-                DeliveryScreenerService.trigger_background_scan()
-            except Exception as warm_err:
-                logger.warning(f"[AutonomousEngineScheduler] Radar cache pre-warm notice: {warm_err}")
+                logger.debug(f"[AutonomousEngineScheduler] Intraday radar cache check: {intra_err}")
 
             # 4. Master Autonomous Opportunity Radar Dispatch (VCP, Pre-Breakout, Momentum, Tomorrow Radar)
             try:
@@ -591,6 +610,16 @@ class AutonomousEngineScheduler:
             from app.services.mf_engine_service import MFEngineService
             cycle_res = MFEngineService.run_scheduled_mf_cycle(db)
             records_count = cycle_res.get("holdings_upserted", 0) if isinstance(cycle_res, dict) else 0
+
+            # Also sync AMFI daily NAVs for Mutual Fund Radar
+            try:
+                from app.services.mf_radar.mf_warehouse_service import MFWarehouseService
+                amfi_res = MFWarehouseService.sync_daily_navs_from_amfi(db)
+                if isinstance(amfi_res, dict):
+                    records_count += amfi_res.get("updated_schemes", 0)
+            except Exception as amfi_err:
+                logger.warning(f"[AutonomousEngineScheduler] AMFI NAV sync notice: {amfi_err}")
+
 
             ControlSystemService.record_service_fetch(
                 service_id="mf_radar_engine",
@@ -756,6 +785,62 @@ class AutonomousEngineScheduler:
             logger.error(f"[AutonomousEngineScheduler] Auto Telegram alerts cycle error: {exc}", exc_info=True)
             ControlSystemService.record_service_fetch(
                 service_id="telegram_auto_alerts",
+                records_count=0,
+                status="ERROR",
+                error_msg=error_msg,
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        finally:
+            db.close()
+
+        cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_investor_intelligence_cycle(cls):
+        key = "investor_intelligence"
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        db = SessionLocal()
+        try:
+            from app.services.investor_document_harvester import InvestorDocumentHarvester
+            from app.services.investor_intelligence_service import InvestorIntelligenceService
+            from app.models.investor_intelligence import InvestorDocument
+
+            # 1. Harvest newly filed concalls & presentations from official NSE & BSE wires
+            harvest_res = InvestorDocumentHarvester.harvest_from_exchange_wires(db)
+            discovered = harvest_res.get("discovered", 0) if isinstance(harvest_res, dict) else 0
+            records_count += discovered
+
+            # 2. Pick top 2 most recent PENDING documents to analyze
+            pending_docs = (
+                db.query(InvestorDocument)
+                .filter(InvestorDocument.status == "PENDING", InvestorDocument.pdf_url.isnot(None))
+                .order_by(InvestorDocument.announcement_date.desc().nullslast(), InvestorDocument.id.desc())
+                .limit(2)
+                .all()
+            )
+            for doc in pending_docs:
+                try:
+                    insight = InvestorIntelligenceService.analyze_document(db, doc.id)
+                    if insight:
+                        records_count += 1
+                except Exception as doc_err:
+                    logger.warning(f"[AutonomousEngineScheduler] Failed analyzing doc {doc.id}: {doc_err}")
+
+            ControlSystemService.record_service_fetch(
+                service_id="investor_intelligence",
+                records_count=records_count,
+                status="SUCCESS",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] Investor Intelligence cycle error: {exc}", exc_info=True)
+            ControlSystemService.record_service_fetch(
+                service_id="investor_intelligence",
                 records_count=0,
                 status="ERROR",
                 error_msg=error_msg,

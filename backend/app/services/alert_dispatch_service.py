@@ -372,38 +372,107 @@ class AlertDispatchService:
         buy_trigger: Optional[float] = None,
         target_price: Optional[float] = None,
         stop_loss: Optional[float] = None,
+        fiscal_period: Optional[str] = None,
+        market_cap: Optional[float] = None,
+        pead_score: Optional[float] = None,
+        forensic_status: Optional[str] = "Clean",
+        rev_growth_yoy: Optional[float] = None,
+        pat_growth_qoq: Optional[float] = None,
+        rev_growth_qoq: Optional[float] = None,
+        opm: Optional[float] = None,
+        margin_change_bps: Optional[float] = None,
+        exchange: Optional[str] = "NSE",
+        buy_zone_label: Optional[str] = "In Buy Zone",
+        drift_pct: Optional[float] = None,
+        drift_days: Optional[int] = 7,
+        expected_gap_min: Optional[float] = 0.0,
+        expected_gap_max: Optional[float] = 0.0,
+        expected_1w_min: Optional[float] = 0.0,
+        expected_1w_max: Optional[float] = 0.0,
     ) -> str:
-        cmp_val = cmp or 0.0
-        trigger_val = buy_trigger or cmp_val
-        t_val = target_price or (round(cmp_val * (1 + (upside_pct / 100)), 2) if (cmp_val and upside_pct) else (round(cmp_val * 1.15, 2) if cmp_val else 0.0))
-        sl_val = stop_loss or (round(cmp_val * 0.93, 2) if cmp_val else 0.0)
-        rr = round(abs(t_val - cmp_val) / max(0.01, abs(cmp_val - sl_val)), 1) if cmp_val > 0 else 2.1
+        clean_sym = (symbol or "").strip().upper()
+        for sfx in [".NS", ".BO"]:
+            if clean_sym.endswith(sfx):
+                clean_sym = clean_sym[:-len(sfx)]
 
-        price_block = ""
-        if cmp_val > 0:
-            price_block = (
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"💵 *Live CMP:* ₹{cmp_val:,.2f}\n"
-                f"🎯 *Buy Trigger Price:* ₹{trigger_val:,.2f}\n"
-                f"🚀 *Target Price:* ₹{t_val:,.2f} (+{upside_pct:+.1f}%)\n"
-                f"🛑 *Stop Loss:* ₹{sl_val:,.2f} (-7.0%)\n"
-                f"⚖️ *Risk:Reward:* 1:{rr:.1f}\n"
-            )
+        # Financial metrics
+        mcap_val = None
+        if market_cap is not None:
+            try:
+                mcap_val = float(str(market_cap).replace(",", "").replace("₹", "").replace("Cr", "").strip())
+            except Exception:
+                mcap_val = None
+        mcap_str = f"₹{mcap_val:,.0f} Cr" if (mcap_val and mcap_val > 0) else "—"
+        period_str = fiscal_period or "Latest Quarter"
+        pead_score_val = pead_score if pead_score is not None else float(conviction_score)
+        forensic_val = forensic_status or "Clean"
+        signal_val = signal.upper()
+        cmp_val = cmp or 0.0
+        cmp_str = f"₹{cmp_val:,.2f}" if cmp_val > 0 else "—"
+
+        pat_val = f"₹{pat:,.1f} Cr" if pat is not None else "—"
+        pat_yoy_str = f"{growth_pat:+.1f}% YoY" if growth_pat is not None else "— YoY"
+        pat_qoq_str = f"{pat_growth_qoq:+.1f}% QoQ" if pat_growth_qoq is not None else "— QoQ"
+
+        rev_val = f"₹{revenue:,.1f} Cr" if revenue is not None else "—"
+        rev_yoy_str = f"{rev_growth_yoy:+.1f}% YoY" if rev_growth_yoy is not None else "— YoY"
+        rev_qoq_str = f"{rev_growth_qoq:+.1f}% QoQ" if rev_growth_qoq is not None else "— QoQ"
+
+        opm_val = f"{opm:.1f}%" if opm is not None else "—"
+        if margin_change_bps is not None and abs(margin_change_bps) > 0.01:
+            margin_str = f" ({margin_change_bps:+.0f} bps)"
+        else:
+            margin_str = ""
+
+        # Price & Targets
+        t_val = target_price or (round(cmp_val * (1.0 + (upside_pct / 100.0)), 2) if (cmp_val and upside_pct) else (round(cmp_val * 1.15, 2) if cmp_val else 0.0))
+        if t_val and cmp_val > 0:
+            upside_str = f"+{upside_pct:.1f}%" if upside_pct >= 0 else f"{upside_pct:.1f}%"
+            target_str = f"₹{t_val:,.2f} ({upside_str})"
+        else:
+            target_str = "—"
+
+        zone_str = buy_zone_label or "In Buy Zone"
+        drift_val = drift_pct if drift_pct is not None else 0.0
+        drift_days_val = drift_days or 7
+
+        exp_moves = ""
+        if (expected_gap_max and expected_gap_max > 0) or (expected_1w_max and expected_1w_max > 0):
+            exp_moves = f"• Expected Moves: 1D: +{expected_gap_min:g}–{expected_gap_max:g}% | 1W: +{expected_1w_min:g}–{expected_1w_max:g}%\n"
+
+        safe_thesis = (thesis or "").replace("*", "").replace("_", " ").strip()
+        if len(safe_thesis) > 280:
+            safe_thesis = safe_thesis[:277] + "..."
+        if not safe_thesis:
+            safe_thesis = f"High-conviction post-earnings announcement drift signal for {company_name or clean_sym}."
 
         return (
-            f"⚡ *ALPHA INDIA | ATHENA PEAD FLASH*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🏢 *{company_name or symbol}* (`{symbol}`)\n"
-            f"⭐ *Institutional Score:* {conviction_score}/100 (Grade: {conviction_grade})\n"
-            f"🎯 *Signal:* {signal.upper()}\n"
-            f"📈 *QoQ/YoY Growth:*\n"
-            f"   • PAT: ₹{pat:,.1f} Cr ({growth_pat:+.1f}% YoY)\n"
-            f"   • Revenue: ₹{revenue:,.1f} Cr\n"
-            f"{price_block}"
-            f"💡 *Institutional Thesis:*\n{thesis}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{cls.get_stock_links(symbol)}\n"
-            f"📡 _Dispatched via Alpha India Terminal_"
+            f"⚡ *ALPHA INDIA | PEAD DRIFT RADAR*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or clean_sym}* (`{clean_sym}` | {exchange or 'NSE'})\n"
+            f"📊 *Period:* {period_str} • *Market Cap:* {mcap_str}\n"
+            f"⭐ *PEAD Score:* {round(pead_score_val)}/100 • *Forensics:* {forensic_val}\n"
+            f"🎯 *Setup:* {signal_val} • *Conviction:* {conviction_grade} ({conviction_score}/100)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📈 *Financial Acceleration:*\n"
+            f"• Net Profit: {pat_val} ({pat_yoy_str} | {pat_qoq_str})\n"
+            f"• Revenue: {rev_val} ({rev_yoy_str} | {rev_qoq_str})\n"
+            f"• OPM Margin: {opm_val}{margin_str}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎯 *Price & PEAD Drift:*\n"
+            f"• Live CMP: {cmp_str}\n"
+            f"• Fair Value Target: {target_str}\n"
+            f"• PEAD Buy-Zone: {zone_str}\n"
+            f"• Realized PEAD Drift: {drift_val:+.1f}% ({drift_days_val}d)\n"
+            f"{exp_moves}"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 *Institutional Thesis:*\n"
+            f"{safe_thesis}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔗 *Terminal Research:*\n"
+            f"• 📱 [Alpha India Stock 360](https://ipodesk.shop/stocks/{clean_sym})\n"
+            f"• 🌐 [Screener.in Financials](https://www.screener.in/company/{clean_sym}/consolidated/)\n\n"
+            f"📡 *Live Radar:* https://ipodesk.shop/pead-drift-screener?symbol={clean_sym}"
         )
 
     @classmethod

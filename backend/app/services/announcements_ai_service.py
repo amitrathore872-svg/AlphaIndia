@@ -657,6 +657,7 @@ def run_announcements_ingestion(db: Optional[Session] = None) -> Dict[str, Any]:
                     deal_value_cr=deal_val or enriched_item.get("synergy_rev_addition_cr"),
                     filing_date=enriched_item.get("published_at"),
                     cmp_override=enriched_item.get("current_price"),
+                    pdf_url=enriched_item.get("pdf_url"),
                 )
                 if order_intel.get("order_value_cr"):
                     deal_val = order_intel["order_value_cr"]

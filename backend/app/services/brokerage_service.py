@@ -94,14 +94,34 @@ class BrokerageService:
 
         if symbol:
             query = query.filter(BrokerageReport.symbol == symbol.upper().strip())
-        if brokerage_house:
-            query = query.filter(BrokerageReport.brokerage_house == brokerage_house.strip())
-        if broker_tier:
+        if brokerage_house and brokerage_house.strip().upper() != "ALL":
+            query = query.filter(BrokerageReport.brokerage_house.ilike(brokerage_house.strip()))
+        if broker_tier and broker_tier.strip().upper() != "ALL":
             query = query.filter(BrokerageReport.broker_tier == broker_tier.strip())
-        if action:
-            query = query.filter(BrokerageReport.action == action.strip().upper())
+        if action and action.strip().upper() != "ALL":
+            act = action.strip().upper()
+            if act == "UPGRADE":
+                query = query.filter(BrokerageReport.action.in_(["UPGRADE", "TARGET_UP"]))
+            elif act == "TARGET_UP":
+                query = query.filter(BrokerageReport.action == "TARGET_UP")
+            elif act == "INITIATION":
+                query = query.filter(BrokerageReport.action == "INITIATION")
+            elif act == "MAINTAINED":
+                query = query.filter(BrokerageReport.action == "MAINTAINED")
+            elif act in ("DOWNGRADE", "EXIT"):
+                query = query.filter(BrokerageReport.action.in_(["DOWNGRADE", "EXIT"]))
+            else:
+                query = query.filter(BrokerageReport.action == act)
         if market_cap_category and market_cap_category.upper() != "ALL":
-            query = query.filter(BrokerageReport.market_cap_category == market_cap_category.strip().upper())
+            mc = market_cap_category.strip().upper()
+            if mc in ("LARGE_CAP", "LARGE"):
+                query = query.filter(BrokerageReport.market_cap_category.in_(["LARGE", "LARGE_CAP"]))
+            elif mc in ("MID_CAP", "MID"):
+                query = query.filter(BrokerageReport.market_cap_category.in_(["MID", "MID_CAP"]))
+            elif mc in ("SMALL_CAP", "SMALL", "MICRO", "MICRO_CAP"):
+                query = query.filter(BrokerageReport.market_cap_category.in_(["SMALL", "SMALL_CAP", "MICRO", "MICRO_CAP"]))
+            else:
+                query = query.filter(BrokerageReport.market_cap_category == mc)
         if target_horizon and target_horizon.upper() != "ALL":
             th = target_horizon.strip().upper()
             if th in ("1_MONTH", "1M", "1 MONTH"):
@@ -112,15 +132,15 @@ class BrokerageService:
                 query = query.filter((BrokerageReport.horizon_months == 6) | (BrokerageReport.target_horizon.ilike("%6 Month%")))
             elif th in ("12_MONTHS", "12M", "12 MONTHS", "1 YEAR"):
                 query = query.filter((BrokerageReport.horizon_months == 12) | (BrokerageReport.target_horizon.ilike("%12 Month%")) | (BrokerageReport.target_horizon.ilike("%1 Year%")))
+            elif th in ("LONG", "LONG_TERM", "18_MONTHS", "18-24 MONTHS", "18 MONTHS"):
+                query = query.filter((BrokerageReport.horizon_months >= 18) | (BrokerageReport.target_horizon.ilike("%18%")) | (BrokerageReport.target_horizon.ilike("%24%")))
             elif th in ("SHORT", "TACTICAL"):
                 query = query.filter(BrokerageReport.horizon_months <= 3)
             elif th in ("MEDIUM", "MEDIUM_TERM"):
                 query = query.filter((BrokerageReport.horizon_months > 3) & (BrokerageReport.horizon_months <= 9))
-            elif th in ("LONG", "LONG_TERM"):
-                query = query.filter(BrokerageReport.horizon_months > 12)
             else:
                 query = query.filter(BrokerageReport.target_horizon.ilike(f"%{target_horizon.replace('_', ' ')}%"))
-        if min_conviction is not None:
+        if min_conviction is not None and float(min_conviction) > 0:
             query = query.filter(BrokerageReport.conviction_score >= float(min_conviction))
         if is_hot_pick is not None:
             query = query.filter(BrokerageReport.is_hot_pick == is_hot_pick)
@@ -135,7 +155,16 @@ class BrokerageService:
             )
 
         # Dynamic Sorting
-        sort_col = getattr(BrokerageReport, sort_by, BrokerageReport.report_date)
+        valid_sort_cols = {
+            "report_date": BrokerageReport.report_date,
+            "conviction_score": BrokerageReport.conviction_score,
+            "upside_pct": BrokerageReport.upside_pct,
+            "target_revision_pct": BrokerageReport.target_revision_pct,
+            "target_price": BrokerageReport.target_price,
+            "price_at_reco": BrokerageReport.price_at_reco,
+            "market_cap": BrokerageReport.market_cap,
+        }
+        sort_col = valid_sort_cols.get(sort_by, BrokerageReport.report_date)
         if sort_order.lower() == "asc":
             query = query.order_by(asc(sort_col), desc(BrokerageReport.id))
         else:
@@ -151,12 +180,20 @@ class BrokerageService:
         results = []
         for r in items:
             sc = scorecards.get(r.brokerage_house)
+            cat = (r.market_cap_category or "").upper()
+            if cat in ("LARGE", "LARGE_CAP"):
+                norm_cat = "LARGE_CAP"
+            elif cat in ("MID", "MID_CAP"):
+                norm_cat = "MID_CAP"
+            else:
+                norm_cat = "SMALL_CAP"
+
             results.append({
                 "id": r.id,
                 "symbol": r.symbol,
                 "company_name": r.company_name or r.symbol,
                 "sector": r.sector or "Diversified",
-                "market_cap_category": r.market_cap_category or "MID_CAP",
+                "market_cap_category": norm_cat,
                 "market_cap": r.market_cap,
                 "brokerage_house": r.brokerage_house,
                 "broker_tier": r.broker_tier,
@@ -399,6 +436,196 @@ class BrokerageService:
         }
 
     @classmethod
+    def get_all_stocks_consensus(
+        cls,
+        db: Session,
+        market_cap_category: Optional[str] = None,
+        search: Optional[str] = None,
+        min_brokers: int = 1,
+        sort_by: str = "broker_count",
+        sort_order: str = "desc",
+    ) -> List[Dict[str, Any]]:
+        """
+        Aggregates brokerage recommendations by stock across all covering brokers,
+        providing multi-broker consensus corridors, distinct brokerage rosters, and complete
+        chronological recommendation histories all in one place.
+        """
+        all_reports = (
+            db.query(BrokerageReport)
+            .order_by(desc(BrokerageReport.report_date), desc(BrokerageReport.id))
+            .all()
+        )
+        scorecards = {sc.brokerage_house: sc for sc in db.query(BrokerScorecard).all()}
+
+        # Group by symbol
+        groups: Dict[str, List[BrokerageReport]] = {}
+        for r in all_reports:
+            sym = r.symbol.upper().strip()
+            if sym not in groups:
+                groups[sym] = []
+            groups[sym].append(r)
+
+        result_list = []
+        for sym, reps in groups.items():
+            distinct_brokers = sorted(list(set(r.brokerage_house for r in reps if r.brokerage_house)))
+            broker_count = len(distinct_brokers)
+
+            if broker_count < min_brokers:
+                continue
+
+            first = reps[0]
+            comp_name = first.company_name or sym
+            sector = first.sector or "Diversified"
+            
+            cat = (first.market_cap_category or "").upper()
+            if cat in ("LARGE", "LARGE_CAP"):
+                norm_cat = "LARGE_CAP"
+            elif cat in ("MID", "MID_CAP"):
+                norm_cat = "MID_CAP"
+            else:
+                norm_cat = "SMALL_CAP"
+
+            if market_cap_category and market_cap_category.upper() != "ALL":
+                mc = market_cap_category.strip().upper()
+                if mc in ("LARGE_CAP", "LARGE") and norm_cat != "LARGE_CAP":
+                    continue
+                elif mc in ("MID_CAP", "MID") and norm_cat != "MID_CAP":
+                    continue
+                elif mc in ("SMALL_CAP", "SMALL") and norm_cat != "SMALL_CAP":
+                    continue
+
+            if search:
+                s_lower = search.strip().lower()
+                matches_search = (
+                    s_lower in sym.lower()
+                    or s_lower in comp_name.lower()
+                    or s_lower in sector.lower()
+                    or any(s_lower in b.lower() for b in distinct_brokers)
+                )
+                if not matches_search:
+                    continue
+
+            current_price = first.price_at_reco or 0.0
+
+            targets = [r.target_price for r in reps if r.target_price and r.target_price > 0]
+            targets_sorted = sorted(targets)
+            low_target = targets_sorted[0] if targets_sorted else 0.0
+            high_target = targets_sorted[-1] if targets_sorted else 0.0
+            median_target = targets_sorted[len(targets_sorted) // 2] if targets_sorted else 0.0
+
+            consensus_upside = (
+                round(((median_target - current_price) / current_price) * 100.0, 1)
+                if current_price > 0 and median_target > 0
+                else 0.0
+            )
+
+            ratings_breakdown = {"buy": 0, "accumulate": 0, "hold": 0, "reduce": 0, "sell": 0}
+            for r in reps:
+                rate = (r.current_rating or "").lower()
+                act = (r.action or "").lower()
+                if "buy" in rate or "upgrade" in act or "target_up" in act:
+                    ratings_breakdown["buy"] += 1
+                elif "accum" in rate or "add" in rate:
+                    ratings_breakdown["accumulate"] += 1
+                elif "hold" in rate or "neutral" in rate or "maintained" in act:
+                    ratings_breakdown["hold"] += 1
+                elif "reduce" in rate or "under" in rate:
+                    ratings_breakdown["reduce"] += 1
+                elif "sell" in rate or "downgrade" in act:
+                    ratings_breakdown["sell"] += 1
+                else:
+                    ratings_breakdown["buy"] += 1
+
+            total_bulls = ratings_breakdown["buy"] + ratings_breakdown["accumulate"]
+            total_bears = ratings_breakdown["reduce"] + ratings_breakdown["sell"]
+            if total_bulls > total_bears * 2:
+                consensus_stance = "STRONG_CONSENSUS_BUY"
+            elif total_bulls > total_bears:
+                consensus_stance = "MODERATE_BUY"
+            elif total_bears > total_bulls:
+                consensus_stance = "CAUTIOUS_UNDERWEIGHT"
+            else:
+                consensus_stance = "NEUTRAL_HOLD"
+
+            avg_conviction = round(sum(r.conviction_score for r in reps) / len(reps), 1)
+
+            # Build detailed reports list for comparison
+            rep_items = []
+            for r in reps:
+                sc = scorecards.get(r.brokerage_house)
+                rep_items.append({
+                    "id": r.id,
+                    "symbol": r.symbol,
+                    "company_name": comp_name,
+                    "sector": sector,
+                    "market_cap_category": norm_cat,
+                    "market_cap": r.market_cap,
+                    "brokerage_house": r.brokerage_house,
+                    "broker_tier": r.broker_tier,
+                    "broker_star_rating": sc.star_rating if sc else 4.0,
+                    "broker_hit_rate_pct": sc.hit_rate_pct if sc else 60.0,
+                    "report_date": r.report_date.isoformat() if r.report_date else None,
+                    "report_type": r.report_type,
+                    "action": r.action,
+                    "previous_rating": r.previous_rating,
+                    "current_rating": r.current_rating,
+                    "price_at_reco": r.price_at_reco,
+                    "previous_target_price": r.previous_target_price,
+                    "target_price": r.target_price,
+                    "upside_pct": r.upside_pct,
+                    "target_revision_pct": r.target_revision_pct,
+                    "target_horizon": r.target_horizon or "12 Months",
+                    "horizon_months": r.horizon_months or 12,
+                    "conviction_score": r.conviction_score,
+                    "is_hot_pick": r.is_hot_pick,
+                    "headline": r.headline,
+                    "investment_thesis": r.investment_thesis,
+                    "key_catalysts": r.key_catalysts or [],
+                    "key_risks": r.key_risks or [],
+                })
+
+            result_list.append({
+                "symbol": sym,
+                "company_name": comp_name,
+                "sector": sector,
+                "market_cap_category": norm_cat,
+                "market_cap": first.market_cap,
+                "current_price": current_price,
+                "total_reports": len(reps),
+                "broker_count": broker_count,
+                "brokers": distinct_brokers,
+                "consensus_target": median_target,
+                "consensus_upside_pct": consensus_upside,
+                "target_corridor": {
+                    "low": low_target,
+                    "median": median_target,
+                    "high": high_target,
+                },
+                "ratings_breakdown": ratings_breakdown,
+                "consensus_stance": consensus_stance,
+                "avg_conviction_score": avg_conviction,
+                "latest_report_date": reps[0].report_date.isoformat() if reps[0].report_date else None,
+                "reports": rep_items,
+            })
+
+        # Sorting
+        rev = (sort_order.lower() != "asc")
+        if sort_by == "broker_count":
+            result_list.sort(key=lambda x: (x["broker_count"], x["total_reports"], x["consensus_upside_pct"]), reverse=rev)
+        elif sort_by == "total_reports":
+            result_list.sort(key=lambda x: (x["total_reports"], x["broker_count"]), reverse=rev)
+        elif sort_by == "consensus_upside_pct":
+            result_list.sort(key=lambda x: x["consensus_upside_pct"], reverse=rev)
+        elif sort_by == "avg_conviction_score":
+            result_list.sort(key=lambda x: x["avg_conviction_score"], reverse=rev)
+        elif sort_by == "symbol":
+            result_list.sort(key=lambda x: x["symbol"], reverse=not rev)
+        else:
+            result_list.sort(key=lambda x: (x["broker_count"], x["latest_report_date"] or ""), reverse=rev)
+
+        return result_list
+
+    @classmethod
     def get_scorecards(cls, db: Session) -> List[Dict[str, Any]]:
         """
         Returns league table of tracked brokerage houses ranked by hit rate and star rating.
@@ -440,9 +667,9 @@ class BrokerageService:
 
         best_scorecard = db.query(BrokerScorecard).order_by(desc(BrokerScorecard.hit_rate_pct)).first()
 
-        large_count = db.query(BrokerageReport).filter(BrokerageReport.market_cap_category == "LARGE_CAP").count()
-        mid_count = db.query(BrokerageReport).filter(BrokerageReport.market_cap_category == "MID_CAP").count()
-        small_count = db.query(BrokerageReport).filter(BrokerageReport.market_cap_category == "SMALL_CAP").count()
+        large_count = db.query(BrokerageReport).filter(BrokerageReport.market_cap_category.in_(["LARGE", "LARGE_CAP"])).count()
+        mid_count = db.query(BrokerageReport).filter(BrokerageReport.market_cap_category.in_(["MID", "MID_CAP"])).count()
+        small_count = db.query(BrokerageReport).filter(BrokerageReport.market_cap_category.in_(["SMALL", "SMALL_CAP", "MICRO", "MICRO_CAP"])).count()
 
         return {
             "total_active_calls": total_calls,

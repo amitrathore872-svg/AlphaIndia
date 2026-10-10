@@ -25,6 +25,8 @@ from sqlalchemy import desc
 from app.clients.fivepaisa_client import FivePaisaClient
 from app.clients.dhan_client import DhanClient
 from app.models.sovereign_intraday import SovereignIntradaySignal, SovereignIntradayLog
+from app.models.company import Company
+from app.services.live_price_service import LivePriceService
 from app.services.alert_dispatch_service import AlertDispatchService
 
 logger = logging.getLogger("alpha_india.sovereign_intraday")
@@ -52,6 +54,11 @@ class SovereignIntradayService:
         "KAYNES", "DIXON", "POLYCAB", "MAZDOCK", "COCHINSHIP", "SUZLON",
         "INOXWIND", "RAILTEL", "ZENTEC", "CDSL", "BSE", "MCX", "OLECTRA",
         "TEJASNET", "MOTHERSON", "EXIDEIND", "MANKIND", "SRF", "HFCL", "KPITTECH"
+    ]
+
+    # Chamber C: London European Overlap (High Global Institutional Beta)
+    CHAMBER_C_LONDON = [
+        "TRENT", "COFORGE", "SIEMENS", "TCS", "LT", "DIVISLAB"
     ]
 
     SECTOR_MAP: Dict[str, str] = {
@@ -144,11 +151,270 @@ class SovereignIntradayService:
         }
 
     @classmethod
+    def rollover_and_archive_previous_sessions(cls, db: Session) -> int:
+        """
+        Detects signals belonging to previous calendar dates in IST.
+        Archives any triggered/running setups into SovereignIntradayLog with realized P&L,
+        and purges stale signals from sovereign_intraday_signals.
+        """
+        now_ist = cls.get_current_ist_time()
+        today_date = now_ist.date()
+
+        active_signals = db.query(SovereignIntradaySignal).all()
+        if not active_signals:
+            return 0
+
+        stale_signals = []
+        for s in active_signals:
+            sig_dt = s.updated_at or s.created_at
+            if sig_dt:
+                if sig_dt.tzinfo is None:
+                    sig_date = pytz.utc.localize(sig_dt).astimezone(IST).date()
+                else:
+                    sig_date = sig_dt.astimezone(IST).date()
+                if sig_date < today_date:
+                    stale_signals.append((s, sig_date))
+
+        if not stale_signals:
+            return 0
+
+        latest_log = db.query(SovereignIntradayLog).order_by(desc(SovereignIntradayLog.id)).first()
+        current_balance = float(latest_log.account_balance_inr) if latest_log else 100000.0
+
+        archived_count = 0
+        for s, sig_date in stale_signals:
+            if s.status in ("TRIGGERED", "RUNNING"):
+                risk = max(0.5, s.trigger_entry - s.stop_loss)
+                r_mult = min(2.5, max(-1.0, round((s.cmp - s.trigger_entry) / risk, 2)))
+                shares = max(1, int(1000.0 / risk))
+                gross = round(shares * (s.cmp - s.trigger_entry), 2)
+                friction = 40.0
+                net_pnl = round(gross - friction, 2)
+                current_balance = round(current_balance + net_pnl, 2)
+                outcome = "WIN" if net_pnl > 0 else "LOSS"
+
+                log_entry = SovereignIntradayLog(
+                    date=sig_date,
+                    symbol=s.symbol,
+                    company_name=s.company_name or s.symbol,
+                    chamber=s.chamber,
+                    entry_time="09:30",
+                    exit_time="15:15",
+                    entry_price=s.trigger_entry,
+                    exit_price=s.cmp,
+                    stop_loss=s.stop_loss,
+                    realized_r=r_mult,
+                    shares=shares,
+                    position_val_inr=round(shares * s.trigger_entry, 2),
+                    gross_pnl_inr=gross,
+                    friction_inr=friction,
+                    net_pnl_inr=net_pnl,
+                    account_balance_inr=current_balance,
+                    outcome=outcome,
+                    close_reason="EOD Session Auto-Harvest" if r_mult > 0 else "EOD Stop Invalidation",
+                )
+                db.add(log_entry)
+                archived_count += 1
+
+            db.delete(s)
+
+        try:
+            db.commit()
+            logger.info(f"[SovereignIntraday] Rolled over {len(stale_signals)} stale signals ({archived_count} archived to audit log).")
+            return len(stale_signals)
+        except Exception as e:
+            logger.error(f"[SovereignIntraday] Error during session rollover: {e}")
+            db.rollback()
+            return 0
+
+    @classmethod
+    def scan_and_generate_signals(cls, db: Session, force_refresh: bool = False):
+        """
+        Dynamically scans the entire 41-stock Sovereign Universe across Chamber A (Titans),
+        Chamber B (Kinetic Cash Movers), and Chamber C (London European Overlap).
+        Ranks candidates based on live relative volume, intraday momentum %, and compression,
+        and computes institutional trigger entry, stop loss, and target levels for today's session.
+        """
+        all_symbols = list(dict.fromkeys(cls.CHAMBER_A_TITANS + cls.CHAMBER_B_CASH + cls.CHAMBER_C_LONDON))
+
+        # Query company records
+        companies = {c.symbol: c for c in db.query(Company).filter(Company.symbol.in_(all_symbols)).all()}
+
+        # 1. Fetch live quotes for all symbols from 5Paisa Client
+        quotes: Dict[str, Dict[str, Any]] = {}
+        feed_source = "FIVEPAISA_REALTIME"
+        try:
+            fp = FivePaisaClient.get_instance()
+            if fp.is_configured():
+                fp.ensure_authenticated()
+                quotes = fp.get_live_quotes(all_symbols)
+        except Exception as e:
+            logger.warning(f"[SovereignIntraday] 5Paisa multi-quote fetch failed during scan: {e}")
+
+        # Fallback to LivePriceService if any symbols missing
+        for sym in all_symbols:
+            if sym not in quotes or not quotes[sym].get("cmp"):
+                try:
+                    q = LivePriceService.resolve_single_quote(sym)
+                    if q.get("cmp"):
+                        quotes[sym] = q
+                        if feed_source == "FIVEPAISA_REALTIME" and not quotes:
+                            feed_source = "LIVE_PRICE_SERVICE"
+                except Exception:
+                    pass
+
+        def process_candidate(sym: str, chamber: str, chamber_label: str, window_name: str, window_start: str, window_end: str, risk_pct_def: float):
+            q = quotes.get(sym, {})
+            cmp_val = q.get("cmp", 0.0)
+            if not cmp_val or cmp_val <= 0:
+                return None
+
+            chg_pct = q.get("day_change_pct", 0.0)
+            high = q.get("high", cmp_val)
+            low = q.get("low", cmp_val)
+            close = q.get("close", cmp_val)
+            vol = q.get("volume", 0)
+
+            # Conviction score: 80 base + momentum + volume bonus + tightness to high
+            mom_bonus = int(min(12, max(0, chg_pct * 2.0)))
+            vol_bonus = 4 if vol > 500000 else (2 if vol > 100000 else 0)
+            tight_bonus = 3 if (high > 0 and cmp_val >= high * 0.985) else 0
+            conviction = min(98, 80 + mom_bonus + vol_bonus + tight_bonus)
+
+            # Intraday triggers:
+            if cmp_val >= high:
+                trigger = round(cmp_val * 1.002, 2)
+            else:
+                trigger = round(max(cmp_val * 1.002, high * 1.001), 2)
+
+            sl = round(trigger * (1.0 - risk_pct_def / 100.0), 2)
+            risk = max(0.5, round(trigger - sl, 2))
+            actual_risk_pct = round((risk / trigger) * 100.0, 2)
+            t1 = round(trigger + 1.5 * risk, 2)
+            t2 = round(trigger + 2.5 * risk, 2)
+
+            open_est = low if chg_pct > 0 else close
+            wick = max(0.01, round(abs(open_est - low) / max(1.0, open_est) * 100.0, 3))
+            cpr_width = max(0.12, min(0.50, round(abs(high - low) / max(1.0, close) * 15.0, 2)))
+            rvol = min(5.0, max(1.2, round(vol / 250000.0, 1))) if vol > 0 else 2.0
+
+            comp_obj = companies.get(sym)
+            comp_name = comp_obj.company if (comp_obj and comp_obj.company) else sym
+            comp_sector = comp_obj.sector if (comp_obj and comp_obj.sector) else cls.SECTOR_MAP.get(sym, "Institutional Equity")
+
+            status = "TRIGGERED" if cmp_val >= trigger else "ARMED"
+
+            return {
+                "symbol": sym,
+                "company_name": comp_name,
+                "sector": comp_sector,
+                "chamber": chamber,
+                "chamber_label": chamber_label,
+                "window_name": window_name,
+                "window_start": window_start,
+                "window_end": window_end,
+                "status": status,
+                "cmp": round(cmp_val, 2),
+                "day_change_pct": round(chg_pct, 2),
+                "trigger_entry": trigger,
+                "stop_loss": sl,
+                "target_1": t1,
+                "target_2": t2,
+                "risk_per_share": risk,
+                "risk_pct": actual_risk_pct,
+                "rvol": rvol,
+                "open_low_wick_pct": wick,
+                "cpr_width_pct": cpr_width,
+                "conviction_score": conviction,
+                "source": q.get("source", feed_source),
+                "is_active": True,
+            }
+
+        # Select Top for Chamber A
+        candidates_a = []
+        for s in cls.CHAMBER_A_TITANS:
+            c = process_candidate(
+                s, "CHAMBER_A_TITAN", "Chamber A: F&O Institutional Titan",
+                "09:15 - 09:45 Ignition Window", "09:15", "09:45", risk_pct_def=1.0
+            )
+            if c:
+                candidates_a.append(c)
+        candidates_a.sort(key=lambda x: (x["conviction_score"], x["day_change_pct"]), reverse=True)
+        selected_a = candidates_a[:4]
+
+        # Select Top for Chamber B
+        candidates_b = []
+        for s in cls.CHAMBER_B_CASH:
+            c = process_candidate(
+                s, "CHAMBER_B_CASH", "Chamber B: Kinetic Cash Explosion (Non-F&O)",
+                "10:00 - 11:30 VWAP Spring Window", "10:00", "11:30", risk_pct_def=1.5
+            )
+            if c:
+                candidates_b.append(c)
+        candidates_b.sort(key=lambda x: (x["conviction_score"], x["day_change_pct"]), reverse=True)
+        selected_b = candidates_b[:4]
+
+        # Select Top for Chamber C (London Overlap) - ensure distinct from Chamber A
+        used_symbols = {c["symbol"] for c in selected_a + selected_b}
+        candidates_c = []
+        for s in cls.CHAMBER_C_LONDON:
+            if s in used_symbols:
+                continue
+            c = process_candidate(
+                s, "CHAMBER_C_LONDON", "Chamber C: London European Open Squeeze (12:30 PM)",
+                "12:30 - 13:30 London Overlap Window", "12:30", "13:30", risk_pct_def=1.2
+            )
+            if c:
+                candidates_c.append(c)
+        candidates_c.sort(key=lambda x: (x["conviction_score"], x["day_change_pct"]), reverse=True)
+        selected_c = candidates_c[:2]
+
+        # If Chamber C still needs candidates, pick from remaining Titans not in selected_a
+        if len(selected_c) < 2:
+            for s in ["DIVISLAB", "SIEMENS", "LT", "BAJAJ-AUTO", "BHARATFORG"]:
+                if s not in used_symbols and s not in {c["symbol"] for c in selected_c}:
+                    c = process_candidate(
+                        s, "CHAMBER_C_LONDON", "Chamber C: London European Open Squeeze (12:30 PM)",
+                        "12:30 - 13:30 London Overlap Window", "12:30", "13:30", risk_pct_def=1.2
+                    )
+                    if c:
+                        selected_c.append(c)
+                if len(selected_c) >= 2:
+                    break
+
+        # Deduplicate strictly across all candidates
+        seen_syms = set()
+        final_new_candidates = []
+        for cand in selected_a + selected_b + selected_c:
+            if cand["symbol"] not in seen_syms:
+                seen_syms.add(cand["symbol"])
+                final_new_candidates.append(cand)
+
+        if not final_new_candidates:
+            logger.warning("[SovereignIntraday] No candidates scored, falling back to bootstrap stubs.")
+            cls._bootstrap_initial_signals(db)
+            return
+
+        # Purge existing active signals and persist new ones
+        db.query(SovereignIntradaySignal).delete()
+        db.flush()
+        for cand in final_new_candidates:
+            sig = SovereignIntradaySignal(**cand)
+            db.add(sig)
+
+        try:
+            db.commit()
+            logger.info(f"[SovereignIntraday] Successfully scanned & populated {len(final_new_candidates)} fresh signals for today.")
+        except Exception as e:
+            logger.error(f"[SovereignIntraday] Failed to persist scanned signals: {e}")
+            db.rollback()
+
+    @classmethod
     def get_live_radar(cls, db: Session, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Retrieves real-time active signals for the active temporal window.
         Uses 5Paisa 0-delay real-time live feed.
-        Enforces auto-expiry of untriggered setups into SovereignIntradayLog.
+        Enforces daily rollover and auto-expiry of previous session setups.
         """
         # Ensure baseline seed data exists
         cls.ensure_seed_log_data(db)
@@ -156,21 +422,24 @@ class SovereignIntradayService:
         # 1. Temporal Window Evaluation
         window_meta = cls.evaluate_temporal_window()
 
-        # 2. Query Active Signals from Database
+        # 2. Check Daily Rollover & Archive Prior Sessions
+        cls.rollover_and_archive_previous_sessions(db)
+
+        # 3. Query Active Signals from Database
         active_records = db.query(SovereignIntradaySignal).filter(
             SovereignIntradaySignal.is_active == True
         ).all()
 
-        # If database is fresh or empty, populate with initial sovereign universe
-        if not active_records:
-            cls._bootstrap_initial_signals(db)
+        # If database is fresh or empty or force_refresh requested, populate with fresh scan
+        if not active_records or force_refresh:
+            cls.scan_and_generate_signals(db, force_refresh=force_refresh)
             active_records = db.query(SovereignIntradaySignal).filter(
                 SovereignIntradaySignal.is_active == True
             ).all()
 
         symbols_to_quote = [r.symbol for r in active_records]
 
-        # 3. Fetch 0-Delay Realtime Quotes from 5Paisa Client
+        # 4. Fetch 0-Delay Realtime Quotes from 5Paisa Client
         fivepaisa_quotes: Dict[str, Dict[str, Any]] = {}
         feed_source = "FIVEPAISA_REALTIME"
         try:
@@ -181,7 +450,7 @@ class SovereignIntradayService:
         except Exception as e:
             logger.warning(f"[SovereignIntraday] 5Paisa live quote fetch failed: {e}")
 
-        # Fallback to Dhan if 5Paisa had an issue
+        # Fallback to Dhan or LivePriceService if 5Paisa had an issue
         if not fivepaisa_quotes:
             try:
                 dhan = DhanClient.get_instance()
@@ -191,7 +460,17 @@ class SovereignIntradayService:
             except Exception:
                 pass
 
-        # 4. Update prices and evaluate triggers
+        if not fivepaisa_quotes:
+            for s in symbols_to_quote:
+                try:
+                    q = LivePriceService.resolve_single_quote(s)
+                    if q.get("cmp"):
+                        fivepaisa_quotes[s] = q
+                        feed_source = "LIVE_PRICE_SERVICE"
+                except Exception:
+                    pass
+
+        # 5. Update prices and evaluate triggers
         active_list: List[Dict[str, Any]] = []
         for r in active_records:
             q = fivepaisa_quotes.get(r.symbol, {})

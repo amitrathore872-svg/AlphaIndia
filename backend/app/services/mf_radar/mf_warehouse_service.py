@@ -457,10 +457,17 @@ class MFWarehouseService:
         cats = db.query(MFRadarScheme.category, func.count(MFRadarScheme.id)).group_by(MFRadarScheme.category).all()
         category_breakdown = {c[0]: c[1] for c in cats}
 
+        # Latest NAV Date & Data Freshness
+        max_nav_date = db.query(func.max(MFRadarScheme.nav_date)).scalar()
+        max_updated_at = db.query(func.max(MFRadarScheme.updated_at)).scalar()
+
         return {
             "total_schemes": total_tracked,
             "today_dips_count": len(dip_schemes),
+            "latest_nav_date": max_nav_date.isoformat() if max_nav_date else None,
+            "last_sync_time": max_updated_at.isoformat() if max_updated_at else None,
             "dip_opportunities": [s.to_dict() for s in dip_schemes],
             "momentum_leaders": [s.to_dict() for s in momentum_leaders],
             "category_breakdown": category_breakdown,
         }
+

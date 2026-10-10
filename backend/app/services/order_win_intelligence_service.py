@@ -20,12 +20,13 @@ import datetime
 import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, asc
 from sqlalchemy.orm import Session
 
 from app.models.announcement_radar import AnnouncementRadar
 from app.models.company import Company
 from app.models.company_market_metrics import CompanyMarketMetrics
+from app.models.company_orderbook_history import CompanyOrderBookHistory
 from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
 
@@ -81,6 +82,70 @@ MONTH_NAMES = {
     "dec": 12, "december": 12,
 }
 
+# ---------------------------------------------------------------------------
+# Universal Currency Conversion Rates to INR
+# ---------------------------------------------------------------------------
+FX_RATES_TO_INR = {
+    "USD": 84.0, "$": 84.0,
+    "EUR": 91.5, "€": 91.5,
+    "GBP": 108.0, "£": 108.0,
+    "AED": 22.9,
+    "SAR": 22.4,
+    "SGD": 64.0,
+    "AUD": 55.0,
+    "JPY": 0.56,
+}
+
+WORD_NUMBERS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+    "eighty": 80, "ninety": 90, "hundred": 100
+}
+
+
+def parse_words_chunk_to_number(phrase: str) -> int:
+    """Converts a phrase like 'ninety-six' or 'one hundred twenty-five' into an integer."""
+    tokens = re.findall(r"[a-z]+", phrase.lower())
+    cur = 0
+    for t in tokens:
+        if t in WORD_NUMBERS:
+            n = WORD_NUMBERS[t]
+            if n == 100:
+                cur = (cur or 1) * 100
+            else:
+                cur += n
+    return cur
+
+
+def parse_rupees_in_words(text: str) -> Optional[float]:
+    """
+    Parses written Indian currency format into Crores.
+    Handles 'Rupees Ninety-Six Core Twenty-Five Lakhs...' (handles 'core' typo for 'crore').
+    """
+    text_clean = text.lower().replace("-", " ")
+    cr_val = 0.0
+    cr_match = re.search(r"(?:rupees\s+)?([a-z\s]+?)\s*(?:crore|core|crores)\b", text_clean)
+    if cr_match:
+        cr_val = float(parse_words_chunk_to_number(cr_match.group(1)))
+
+    lakh_val = 0.0
+    if cr_match:
+        after_cr = text_clean[cr_match.end():]
+        lakh_match = re.search(r"^\s*([a-z\s]+?)\s*(?:lakh|lakhs|lac|lacs)\b", after_cr)
+        if lakh_match:
+            lakh_val = float(parse_words_chunk_to_number(lakh_match.group(1))) / 100.0
+    else:
+        lakh_match = re.search(r"(?:rupees\s+)?([a-z\s]+?)\s*(?:lakh|lakhs|lac|lacs)\b", text_clean)
+        if lakh_match:
+            lakh_val = float(parse_words_chunk_to_number(lakh_match.group(1))) / 100.0
+
+    total = cr_val + lakh_val
+    return round(total, 2) if total > 0 else None
+
+
 SOVEREIGN_COUNTERPARTIES = [
     "railways", "railway", "nhai", "ongc", "ntpc", "bhel", "seci", "defense", "defence",
     "mod", "isro", "drdo", "powergrid", "pgcil", "transco", "discom", "genco", "bpcl",
@@ -127,87 +192,177 @@ class OrderWinIntelligenceService:
     @classmethod
     def extract_deal_value_cr(cls, text_content: str) -> Tuple[Optional[float], Optional[str]]:
         """
-        Extracts deal value normalized to ₹ Crore.
-        Handles:
-        - 'Rs. 1,429 Cr' / '₹165.55 crore'
-        - 'Rs. 500 Lakhs' -> 5.0 Cr
-        - 'USD 10 Million' -> ~84.0 Cr
-        Returns (value_cr, raw_matched_str)
+        Universal Deal Value & Currency Normalizer.
+        Converts all formats, currencies, and representations into a single institutional format: ₹ Crore.
+
+        Supported formats:
+        1. SEBI Reg 30 tabular field: 'Broad consideration or size of the order(s)/contract(s): INR 96,25,49,694/-'
+        2. Raw full Rupee numbers: 'INR 96,25,49,694/-' -> 96.25 Cr, '₹ 1,50,00,000' -> 1.5 Cr
+        3. Standard Crores: 'Rs. 1,429 Cr', '₹165.55 crore', '250 Crs'
+        4. Lakhs: 'Rs. 500 Lakhs' -> 5.0 Cr, 'INR 9,625.50 Lacs' -> 96.25 Cr
+        5. Words format: 'Rupees Ninety-Six Core Twenty-Five Lakhs...' -> 96.25 Cr
+        6. International currencies (USD, EUR, GBP, AED, SAR, SGD, AUD, JPY) in Millions / Billions.
         """
-        # 1. Crore pattern
-        match_cr = re.search(r"(?:rs\.?|inr|₹)\s*(\d+[\d,.]*)\s*(?:cr|crore|crores)", text_content, re.IGNORECASE)
+        if not text_content:
+            return None, None
+
+        # Clean taxes and common suffixes to normalize matching
+        clean_text = re.sub(r"\(inclusive\s+of\s+gst\)", "", text_content, flags=re.IGNORECASE)
+        clean_text = re.sub(r"\(exclusive\s+of\s+gst\)", "", clean_text, flags=re.IGNORECASE)
+
+        # 0. Check SEBI Regulation 30 table consideration field directly
+        sebi_m = re.search(r"(?:Broad\s+consideration\s+or\s+size|size\s+of\s+the\s+order|contract\s+value|consideration\s+value)\s*(?:of\s+the\s+order\(s\)/contract\(s\))?\s*[;:]?\s*\n?\s*([^\n\r;]{3,120})", clean_text, re.IGNORECASE)
+        if sebi_m:
+            candidate_line = sebi_m.group(1).strip()
+            val, raw = cls._parse_value_from_candidate(candidate_line)
+            if val is not None:
+                return val, raw
+
+        # Run universal candidate parser on text
+        return cls._parse_value_from_candidate(clean_text)
+
+    @classmethod
+    def _parse_value_from_candidate(cls, text: str) -> Tuple[Optional[float], Optional[str]]:
+        """Internal helper running multi-stage regex cascade on text snippet."""
+        # 1. Standard Crores pattern (e.g. 'Rs. 1,429 Cr', '₹ 96.25 Crore', '500 Crs')
+        match_cr = re.search(r"(?:(?:rs\.?|inr|₹)\s*)?(\d+[\d,.]*)\s*(?:cr|crore|crores|crs)\b", text, re.IGNORECASE)
         if match_cr:
             try:
                 val = float(match_cr.group(1).replace(",", ""))
-                return val, match_cr.group(0)
+                if val > 0.01:
+                    return round(val, 2), match_cr.group(0).strip()
             except ValueError:
                 pass
 
-        # 2. Amount with crore following
-        match_cr_rev = re.search(r"(\d+[\d,.]*)\s*(?:cr|crore|crores)", text_content, re.IGNORECASE)
-        if match_cr_rev:
-            try:
-                val = float(match_cr_rev.group(1).replace(",", ""))
-                if val > 0.05:  # filter negligible artifacts
-                    return val, match_cr_rev.group(0)
-            except ValueError:
-                pass
-
-        # 3. Lakhs pattern
-        match_lakh = re.search(r"(?:rs\.?|inr|₹)\s*(\d+[\d,.]*)\s*(?:lakh|lakhs|lac|lacs)", text_content, re.IGNORECASE)
+        # 2. Standard Lakhs pattern (e.g. 'Rs. 500 Lakhs', 'INR 9,625.50 Lacs')
+        match_lakh = re.search(r"(?:(?:rs\.?|inr|₹)\s*)?(\d+[\d,.]*)\s*(?:lakh|lakhs|lac|lacs)\b", text, re.IGNORECASE)
         if match_lakh:
             try:
                 val = float(match_lakh.group(1).replace(",", "")) / 100.0
-                return round(val, 2), match_lakh.group(0)
+                if val > 0.01:
+                    return round(val, 2), match_lakh.group(0).strip()
             except ValueError:
                 pass
 
-        # 4. USD pattern ($ or USD)
-        match_usd = re.search(r"(?:usd|\$)\s*(\d+[\d,.]*)\s*(?:mn|million)", text_content, re.IGNORECASE)
-        if match_usd:
+        # 3. Full Raw Indian Rupee Number (e.g. 'INR 96,25,49,694/-', 'Rs. 96,25,49,694', '96,25,49,694/-')
+        match_raw_inr = re.search(r"(?:(?:INR|Rs\.?|₹)\s*)?([1-9]\d{0,2}(?:,\d{2})+,\d{3}(?:\.\d+)?)\s*(?:/-)?", text, re.IGNORECASE)
+        if match_raw_inr:
             try:
-                usd_val = float(match_usd.group(1).replace(",", ""))
-                # 1 USD Mn = ~8.40 INR Cr (at 84 INR/USD)
-                val_cr = round(usd_val * 8.40, 2)
-                return val_cr, match_usd.group(0)
+                num = float(match_raw_inr.group(1).replace(",", ""))
+                val_cr = round(num / 10000000.0, 2)
+                if val_cr > 0.01:
+                    return val_cr, match_raw_inr.group(0).strip()
             except ValueError:
                 pass
+
+        # 4. Foreign Currencies (USD, EUR, GBP, AED, SAR, SGD, AUD, JPY)
+        for curr, rate in FX_RATES_TO_INR.items():
+            # Billions
+            pat_bn = rf"(?:{re.escape(curr)})\s*(\d+[\d,.]*)\s*(?:billion|bn|billions)\b"
+            m_bn = re.search(pat_bn, text, re.IGNORECASE)
+            if m_bn:
+                try:
+                    amt = float(m_bn.group(1).replace(",", ""))
+                    val_cr = round(amt * 1000.0 * (rate / 10.0), 2)
+                    return val_cr, m_bn.group(0).strip()
+                except ValueError:
+                    pass
+
+            # Millions
+            pat_mn = rf"(?:{re.escape(curr)})\s*(\d+[\d,.]*)\s*(?:million|mn|millions|m)\b"
+            m_mn = re.search(pat_mn, text, re.IGNORECASE)
+            if m_mn:
+                try:
+                    amt = float(m_mn.group(1).replace(",", ""))
+                    val_cr = round(amt * (rate / 10.0), 2)
+                    return val_cr, m_mn.group(0).strip()
+                except ValueError:
+                    pass
+
+            # Raw Foreign Currency Amounts (e.g. '$ 10,000,000' or 'AED 50,000,000')
+            pat_raw_fx = rf"(?:{re.escape(curr)})\s*([1-9]\d{{0,2}}(?:,\d{{3}})+(?:\.\d+)?)"
+            m_raw_fx = re.search(pat_raw_fx, text, re.IGNORECASE)
+            if m_raw_fx:
+                try:
+                    raw_amt = float(m_raw_fx.group(1).replace(",", ""))
+                    val_cr = round((raw_amt * rate) / 10000000.0, 2)
+                    if val_cr > 0.01:
+                        return val_cr, m_raw_fx.group(0).strip()
+                except ValueError:
+                    pass
+
+        # 5. Words format (e.g. 'Rupees Ninety-Six Core Twenty-Five Lakhs...')
+        words_val = parse_rupees_in_words(text)
+        if words_val:
+            return words_val, f"Words: {words_val} Cr"
 
         return None, None
 
     @classmethod
-    def extract_counterparty(cls, text: str) -> Optional[str]:
-        """Extracts contracting agency / client counterparty."""
+    def extract_counterparty(cls, text: str, company_name: Optional[str] = None, symbol: Optional[str] = None) -> Optional[str]:
+        """Extracts contracting agency / client counterparty, ensuring the company is not classified as its own client."""
+        comp_lower = (company_name or "").lower()
+        sym_lower = (symbol or "").lower()
+
+        # 1. SEBI Reg 30 table field first: "Name of the entity awarding the order(s)/contract(s);"
+        m_sebi = re.search(r"Name of the entity awarding the order\(s\)/?\s*contract\(s\)\s*[;:]?\s*\n?\s*(?:M/s\.?|M/S\.?)?\s*([^\n\r;]{3,80})", text, re.IGNORECASE)
+        if m_sebi:
+            candidate = m_sebi.group(1).strip()
+            clean_cand = re.sub(r"^(?:M/s\.?|M/S\.?|Messrs\.?)\s*", "", candidate, flags=re.IGNORECASE).strip()
+            # Safety: Cannot be company itself
+            if clean_cand and clean_cand.lower() not in comp_lower and sym_lower not in clean_cand.lower():
+                return clean_cand
+
+        # 2. Sovereign client lookup
         for client in SOVEREIGN_COUNTERPARTIES:
+            # Skip if client name matches the company itself (e.g. IRCON cannot award order to IRCON)
+            if client.lower() in comp_lower or client.lower() == sym_lower:
+                continue
             if re.search(rf"\b{re.escape(client)}\b", text, re.IGNORECASE):
-                # Return properly capitalized client name
                 clean_name = client.upper() if len(client) <= 5 else client.title()
                 return clean_name
 
-        # Look for 'from <Client>' or 'for <Client>'
-        match = re.search(r"(?:from|for|awarded\s+by|client\s*:?)\s+([A-Z][A-Za-z0-9&.\s]{3,30}?)(?:for|to|worth|executing|with|in|\.|\,)", text)
+        # 3. Look for 'from <Client>' or 'awarded by <Client>' or 'client: <Client>'
+        match = re.search(r"(?:from|for|awarded\s+by|client\s*:?)\s+(?:M/s\.?|M/S\.?)?\s*([A-Z][A-Za-z0-9&.\s]{3,40}?)(?:for|to|worth|executing|with|in|\.|\,)", text)
         if match:
             c = match.group(1).strip()
-            if len(c) > 3 and c.lower() not in {"order", "orders", "contract", "contracts", "the company", "the exchange"}:
-                return c
+            clean_c = re.sub(r"^(?:M/s\.?|M/S\.?|Messrs\.?)\s*", "", c, flags=re.IGNORECASE).strip()
+            if len(clean_c) > 3 and clean_c.lower() not in {"order", "orders", "contract", "contracts", "the company", "the exchange"} and clean_c.lower() not in comp_lower:
+                return clean_c
 
         return None
 
     @classmethod
-    def extract_execution_timeline(cls, text: str, filing_date: Optional[datetime.datetime] = None) -> Tuple[int, str]:
+    def extract_execution_timeline(cls, text: str, filing_date: Optional[datetime.datetime] = None) -> Tuple[Optional[int], str]:
         """
         Extracts execution timeline in months and a descriptive string.
         Returns: (months, formatted_timeline_str)
         """
-        # 1. Months pattern (e.g. '18 months', '6-month')
+        # 0. Check SEBI Reg 30 table field first: "Time period by which the order(s)/contract(s) is to be executed;"
+        m_sebi = re.search(r"Time period by which the order\(s\)/contract\(s\) is\s*to be executed\s*[;:]?\s*\n?\s*([^\n\r;]{2,60})", text, re.IGNORECASE)
+        if m_sebi:
+            sebi_line = m_sebi.group(1).strip()
+            m_m = re.search(r"(\d+)\s*[-–]?\s*months?", sebi_line, re.IGNORECASE)
+            if m_m:
+                months = int(m_m.group(1))
+                qtrs = max(1, round(months / 3))
+                return months, f"{months} Months ({qtrs} Quarters)"
+            m_y = re.search(r"(\d+(?:\.\d+)?)\s*[-–]?\s*years?", sebi_line, re.IGNORECASE)
+            if m_y:
+                years = float(m_y.group(1))
+                months = int(years * 12)
+                qtrs = max(1, round(months / 3))
+                return months, f"{int(years) if years.is_integer() else years} Years ({months} Months)"
+
+        # 1. Months pattern (e.g. '18 months', '6-month', '60 Months')
         m_match = re.search(r"(\d+)\s*[-–]?\s*months?", text, re.IGNORECASE)
         if m_match:
             months = int(m_match.group(1))
-            if 1 <= months <= 120:
+            if 1 <= months <= 180:
                 qtrs = max(1, round(months / 3))
                 return months, f"{months} Months ({qtrs} Quarters)"
 
-        # 2. Years pattern (e.g. '3 years', '3-year', '30-year')
+        # 2. Years pattern (e.g. '3 years', '3-year', '5 years')
         y_match = re.search(r"(\d+(?:\.\d+)?)\s*[-–]?\s*years?", text, re.IGNORECASE)
         if y_match:
             years = float(y_match.group(1))
@@ -235,8 +390,42 @@ class OrderWinIntelligenceService:
         if short_match:
             return 2, "Rapid Execution (~2 Months)"
 
-        # Default institutional execution timeline if unspecified
-        return 18, "18 Months (6 Quarters / Est.)"
+        # If unspecified in filing text, do not invent synthetic timeline
+        return None, "Not mentioned"
+
+    @classmethod
+    def extract_from_pdf_url(
+        cls, pdf_url: str, symbol: Optional[str] = None, company_name: Optional[str] = None
+    ) -> Tuple[Optional[float], Optional[str], Optional[int], str, Optional[str]]:
+        """
+        Downloads PDF (with caching and retry) and extracts:
+        (deal_value_cr, counterparty, execution_months, timeline_str, text_snippet)
+        """
+        if not pdf_url or not pdf_url.startswith("http") or pdf_url == "-":
+            return None, None, None, "Not mentioned", None
+
+        from app.services.pdf_extractor_service import PDFExtractorService
+        clean_sym = symbol or "ANNOUNCEMENT"
+        doc_name = f"filing_{clean_sym}_{abs(hash(pdf_url)) % 1000000}"
+
+        try:
+            pdf_bytes = PDFExtractorService.download_pdf(pdf_url, clean_sym, doc_name)
+            if not pdf_bytes:
+                return None, None, None, "Not mentioned", None
+
+            extracted_text, _ = PDFExtractorService.extract_text_from_bytes(pdf_bytes, max_pages=4)
+            if not extracted_text:
+                return None, None, None, "Not mentioned", None
+
+            deal_cr, _ = cls.extract_deal_value_cr(extracted_text)
+            client = cls.extract_counterparty(extracted_text, company_name=company_name, symbol=symbol)
+            months, timeline_str = cls.extract_execution_timeline(extracted_text)
+            snippet = extracted_text[:400].strip().replace("\n", " ")
+
+            return deal_cr, client, months, timeline_str, snippet
+        except Exception as e:
+            logger.warning(f"Error extracting PDF from {pdf_url}: {e}")
+            return None, None, None, "Not mentioned", None
 
     @classmethod
     def analyze_order_win(
@@ -249,6 +438,7 @@ class OrderWinIntelligenceService:
         deal_value_cr: Optional[float] = None,
         filing_date: Optional[datetime.datetime] = None,
         cmp_override: Optional[float] = None,
+        pdf_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Main calculation engine that produces the comprehensive Order Win Investment Intelligence.
@@ -256,21 +446,38 @@ class OrderWinIntelligenceService:
         full_text = f"{headline} {filing_description or ''}"
         clean_headline = cls.clean_filing_headline(headline)
 
-        # 1. Value extraction
+        # 1. Value extraction from text
         extracted_val, raw_val_str = cls.extract_deal_value_cr(full_text)
         final_deal_cr = deal_value_cr or extracted_val
 
-        # 2. Timeline extraction
+        # 2. Timeline extraction from text
         months, timeline_str = cls.extract_execution_timeline(full_text, filing_date)
-        quarters = max(1, round(months / 3))
+        quarters = max(1, round(months / 3)) if months else None
 
-        # 3. Counterparty
-        counterparty = cls.extract_counterparty(full_text)
+        # 3. Counterparty from text
+        counterparty = cls.extract_counterparty(full_text, company_name=company_name, symbol=symbol)
+
+        # 4. If deal value, timeline or client are missing, extract directly from official filing PDF
+        if (not final_deal_cr or not counterparty or not months) and pdf_url and pdf_url.startswith("http") and pdf_url != "-":
+            try:
+                pdf_deal, pdf_client, pdf_m, pdf_tl, pdf_snip = cls.extract_from_pdf_url(
+                    pdf_url=pdf_url, symbol=symbol, company_name=company_name
+                )
+                if not final_deal_cr and pdf_deal:
+                    final_deal_cr = pdf_deal
+                if not counterparty and pdf_client:
+                    counterparty = pdf_client
+                if not months and pdf_m:
+                    months = pdf_m
+                    timeline_str = pdf_tl
+                    quarters = max(1, round(months / 3)) if months else None
+            except Exception as pdf_err:
+                logger.warning(f"Could not extract order details from PDF {pdf_url}: {pdf_err}")
 
         # 4. Fundamental Financial Baseline Lookup
         sales_ttm = 0.0
         pat_ttm = 0.0
-        opm = 14.0  # default 14%
+        opm = None
         pat_margin = 8.0
         market_cap = 0.0
         cmp_val = cmp_override or 100.0
@@ -313,83 +520,105 @@ class OrderWinIntelligenceService:
             if sales_ttm > 0 and pat_ttm > 0:
                 pat_margin = max(3.0, min(35.0, (pat_ttm / sales_ttm) * 100.0))
 
-        # Fallback if no sales_ttm
-        if sales_ttm <= 0:
-            sales_ttm = max(50.0, (final_deal_cr or 100.0) * 4.5)
-            pat_ttm = sales_ttm * (pat_margin / 100.0)
+        # Check QuarterlyResult table if sales_ttm is not yet found in ScreenerGrowthRecord
+        if sales_ttm <= 0 and clean_sym:
+            from app.models.quarterly_result import QuarterlyResult
+            comp_rec = db.query(Company).filter(Company.symbol.ilike(f"%{clean_sym}%")).first()
+            if comp_rec:
+                q_revs = (
+                    db.query(QuarterlyResult.revenue)
+                    .filter(QuarterlyResult.company_id == comp_rec.id, QuarterlyResult.revenue.isnot(None))
+                    .order_by(desc(QuarterlyResult.period_end))
+                    .limit(4)
+                    .all()
+                )
+                if q_revs:
+                    sales_ttm = sum(float(r[0]) for r in q_revs if r[0] is not None)
 
         # 5. Core Metric Calculations
         # 5.1 Revenue Contribution (%)
         if final_deal_cr and sales_ttm > 0:
             rev_contrib_pct = round((final_deal_cr / sales_ttm) * 100.0, 1)
         else:
-            rev_contrib_pct = 12.5  # default conservative contribution
+            rev_contrib_pct = None
 
         # 5.2 Quarterly Revenue Impact
-        if final_deal_cr:
+        if final_deal_cr and quarters:
             quarterly_rev_cr = round(final_deal_cr / quarters, 2)
-            avg_quarterly_sales = sales_ttm / 4.0
+            avg_quarterly_sales = sales_ttm / 4.0 if sales_ttm > 0 else 0.0
             quarterly_rev_pct = round((quarterly_rev_cr / avg_quarterly_sales) * 100.0, 1) if avg_quarterly_sales > 0 else rev_contrib_pct
         else:
             quarterly_rev_cr = None
             quarterly_rev_pct = None
 
         # 5.3 Earnings Impact Estimate (Incremental EBITDA and PAT)
-        if final_deal_cr:
+        if final_deal_cr and opm is not None:
             incremental_ebitda_cr = round(final_deal_cr * (opm / 100.0), 2)
             # PAT after tax ~25%
             incremental_pat_cr = round(incremental_ebitda_cr * 0.75, 2)
             # Annualized PAT accretion %
-            annualized_pat = incremental_pat_cr * min(1.0, 12.0 / months)
-            pat_accretion_pct = round((annualized_pat / pat_ttm) * 100.0, 1) if pat_ttm > 0 else 18.0
+            annualized_pat = incremental_pat_cr * (min(1.0, 12.0 / months) if months else 1.0)
+            pat_accretion_pct = round((annualized_pat / pat_ttm) * 100.0, 1) if pat_ttm > 0 else None
         else:
             incremental_ebitda_cr = None
             incremental_pat_cr = None
-            pat_accretion_pct = 15.0
+            pat_accretion_pct = None
 
         # 6. Multi-Factor Order Significance Score (0 to 100)
         # Factor A: Size vs TTM Revenue (0 to 35 pts)
-        if rev_contrib_pct >= 50.0:
-            score_rev = 35.0
-        elif rev_contrib_pct >= 25.0:
-            score_rev = 28.0
-        elif rev_contrib_pct >= 10.0:
-            score_rev = 20.0
-        elif rev_contrib_pct >= 5.0:
-            score_rev = 14.0
+        if rev_contrib_pct is not None:
+            if rev_contrib_pct >= 50.0:
+                score_rev = 35.0
+            elif rev_contrib_pct >= 25.0:
+                score_rev = 28.0
+            elif rev_contrib_pct >= 10.0:
+                score_rev = 20.0
+            elif rev_contrib_pct >= 5.0:
+                score_rev = 14.0
+            else:
+                score_rev = 8.0
         else:
-            score_rev = 8.0
+            score_rev = 15.0 if final_deal_cr else 5.0
 
         # Factor B: Size vs Market Cap (0 to 25 pts)
-        deal_vs_mcap = (final_deal_cr / market_cap * 100.0) if (final_deal_cr and market_cap > 0) else 10.0
-        if deal_vs_mcap >= 20.0:
-            score_mcap = 25.0
-        elif deal_vs_mcap >= 10.0:
-            score_mcap = 20.0
-        elif deal_vs_mcap >= 5.0:
-            score_mcap = 15.0
+        deal_vs_mcap = (final_deal_cr / market_cap * 100.0) if (final_deal_cr and market_cap > 0) else None
+        if deal_vs_mcap is not None:
+            if deal_vs_mcap >= 20.0:
+                score_mcap = 25.0
+            elif deal_vs_mcap >= 10.0:
+                score_mcap = 20.0
+            elif deal_vs_mcap >= 5.0:
+                score_mcap = 15.0
+            else:
+                score_mcap = 8.0
         else:
-            score_mcap = 8.0
+            score_mcap = 10.0
 
-        # Factor C: Execution Velocity (0 to 15 pts) - shorter timeline yields higher annualized impact
-        if months <= 12:
-            score_velocity = 15.0
-        elif months <= 24:
-            score_velocity = 12.0
-        elif months <= 36:
-            score_velocity = 9.0
+        # Factor C: Execution Velocity (0 to 15 pts)
+        if months is not None:
+            if months <= 12:
+                score_velocity = 15.0
+            elif months <= 24:
+                score_velocity = 12.0
+            elif months <= 36:
+                score_velocity = 9.0
+            else:
+                score_velocity = 6.0
         else:
-            score_velocity = 6.0
+            score_velocity = 10.0
 
         # Factor D: Margin Profile (0 to 15 pts)
-        if opm >= 20.0:
-            score_margin = 15.0
-        elif opm >= 14.0:
-            score_margin = 12.0
-        elif opm >= 8.0:
-            score_margin = 9.0
+        if opm is not None:
+            if opm >= 20.0:
+                score_margin = 15.0
+            elif opm >= 14.0:
+                score_margin = 12.0
+            elif opm >= 8.0:
+                score_margin = 9.0
+            else:
+                score_margin = 6.0
         else:
-            score_margin = 6.0
+            score_margin = 10.0
 
         # Factor E: Counterparty Quality (0 to 10 pts)
         if counterparty and any(k in counterparty.lower() for k in ["defense", "defence", "railway", "ongc", "ntpc", "seci", "isro", "mod", "transco"]):
@@ -413,9 +642,7 @@ class OrderWinIntelligenceService:
 
         # 7. AI Expected Upside Probability % & Price Target Range
         # Base probability from significance score
-        base_prob = 62.0 + (significance_score * 0.28)  # range ~74% to 90%
-
-        # Trend regime adjustment
+        base_prob = 62.0 + (significance_score * 0.28)
         is_golden = (cmp_val > (dma_50 or 0) and cmp_val > (dma_200 or 0)) if (dma_50 and dma_200) else True
         if is_golden:
             base_prob = min(94.0, base_prob + 4.0)
@@ -424,10 +651,7 @@ class OrderWinIntelligenceService:
         upside_prob_pct = round(base_prob, 1)
 
         # Price Target Range (Low - Base - Bull)
-        # Low target: 15% - 25% upside
-        # Base target: 25% - 45% upside
-        # Bull target: 40% - 65% upside
-        growth_factor = min(0.60, max(0.18, (pat_accretion_pct / 100.0) * 1.25))
+        growth_factor = min(0.60, max(0.18, ((pat_accretion_pct or 15.0) / 100.0) * 1.25))
         target_base = round(cmp_val * (1.0 + growth_factor), 1)
         target_low = round(cmp_val * (1.0 + max(0.14, growth_factor * 0.72)), 1)
         target_high = round(cmp_val * (1.0 + min(0.70, growth_factor * 1.35)), 1)
@@ -438,7 +662,7 @@ class OrderWinIntelligenceService:
         conf = 50.0
         if final_deal_cr is not None:
             conf += 25.0
-        if "Est." not in timeline_str:
+        if months is not None:
             conf += 15.0
         if s_rec is not None:
             conf += 10.0
@@ -448,14 +672,17 @@ class OrderWinIntelligenceService:
         hist_comp_text, hist_stats = cls._calculate_historical_comparison(db, clean_sym, final_deal_cr)
 
         # 10. Synthesizing Institutional Investment Rationale
-        # Answers: "How important is this order for this company and what upside can it create?"
         client_clause = f" from {counterparty}" if counterparty else ""
         deal_clause = f" of ₹{final_deal_cr:,.1f} Cr" if final_deal_cr else ""
+        rev_clause = f", contributing {rev_contrib_pct}% of TTM sales" if rev_contrib_pct is not None else ""
+        timeline_clause = f" over {timeline_str}" if months else ""
+        q_clause = f" Adds +₹{quarterly_rev_cr:,.1f} Cr/quarter ({quarterly_rev_pct}% lift)" if quarterly_rev_cr else ""
+        pat_clause = f" with ~₹{incremental_pat_cr:,.1f} Cr earnings impact (+{pat_accretion_pct}% PAT accretion)" if (incremental_pat_cr and pat_accretion_pct) else ""
+        vis_clause = f" Provides {quarters}-quarter cash flow visibility." if quarters else ""
         thesis = (
-            f"{significance_tier.replace('_', ' ').title()} order win{deal_clause}{client_clause}, contributing {rev_contrib_pct}% of TTM sales over {timeline_str}. "
-            f"Adds +₹{quarterly_rev_cr or 0:,.1f} Cr/quarter ({quarterly_rev_pct or 0}% lift) with ~₹{incremental_pat_cr or 0:,.1f} Cr earnings impact (+{pat_accretion_pct}% PAT accretion). "
-            f"Provides {quarters}-quarter cash flow visibility with {upside_prob_pct}% probability of reaching ₹{target_base} target."
-        )
+            f"{significance_tier.replace('_', ' ').title()} order win{deal_clause}{client_clause}{rev_clause}{timeline_clause}."
+            f"{q_clause}{pat_clause}.{vis_clause}"
+        ).strip().replace("..", ".")
 
         return {
             "order_value_cr": final_deal_cr,
@@ -578,6 +805,7 @@ class OrderWinIntelligenceService:
                 deal_value_cr=r.deal_value_cr,
                 filing_date=r.announcement_date or r.published_at,
                 cmp_override=r.current_price,
+                pdf_url=r.pdf_url,
             )
 
             # Persist fields
@@ -790,7 +1018,7 @@ class OrderWinIntelligenceService:
             deal = o.deal_value_cr or 0.0
             rec["order_count"] += 1
             rec["total_deal_cr"] += deal
-            rec["total_quarterly_run_rate_cr"] += (o.order_quarterly_rev_cr or (round(deal / 6.0, 1) if deal else 0.0))
+            rec["total_quarterly_run_rate_cr"] += (o.order_quarterly_rev_cr or 0.0)
             rec["total_annualized_pat_cr"] += (o.order_earnings_impact_cr or 0.0)
 
             if _is_sovereign(o.order_client_counterparty, o.headline, o.filing_description):
@@ -820,11 +1048,11 @@ class OrderWinIntelligenceService:
                 "deal_value_cr": o.deal_value_cr,
                 "rev_pct_ttm": o.synergy_rev_pct_ttm,
                 "counterparty": o.order_client_counterparty,
-                "execution_months": o.order_execution_months or 18,
+                "execution_months": o.order_execution_months,
                 "quarterly_rev_cr": o.order_quarterly_rev_cr,
                 "pat_impact_cr": o.order_earnings_impact_cr,
-                "significance_tier": o.order_significance_tier or "HIGH_IMPACT",
-                "significance_score": o.order_significance_score or 80.0,
+                "significance_tier": o.order_significance_tier or "ROUTINE",
+                "significance_score": o.order_significance_score,
                 "pdf_url": o.pdf_url,
                 "source_url": o.source_url,
                 "ai_insight": o.ai_insight or o.buy_thesis,
@@ -844,7 +1072,7 @@ class OrderWinIntelligenceService:
             elif item["execution_months_list"]:
                 item["backlog_coverage_years"] = round((sum(item["execution_months_list"]) / len(item["execution_months_list"])) / 12.0, 1)
             else:
-                item["backlog_coverage_years"] = 1.5
+                item["backlog_coverage_years"] = None
 
             # Order velocity
             latest_dt = item["latest_order_date"]
@@ -877,7 +1105,7 @@ class OrderWinIntelligenceService:
             item["avg_execution_months"] = (
                 round(sum(item["execution_months_list"]) / len(item["execution_months_list"]), 1)
                 if item["execution_months_list"]
-                else 18.0
+                else None
             )
             item["top_counterparties"] = list(item["counterparties"])[:4]
             item["total_deal_cr"] = round(tot_deal, 1)
@@ -957,4 +1185,615 @@ class OrderWinIntelligenceService:
             "limit": limit,
             "total_pages": total_pages,
         }
+
+    @classmethod
+    def get_orderbook_view(
+        cls,
+        db: Session,
+        timeframe: str = "1Y",
+        min_order_book_cr: float = 0.0,
+        min_market_cap_cr: float = 0.0,
+        search: Optional[str] = None,
+        sort_by: str = "growth_pct",
+        sort_order: str = "desc",
+        page: int = 1,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Screen 1: ORDERBOOK VIEW
+        Returns top gainers ribbon (1Y/6M/3M growth), quarterly backlog sparklines,
+        Book/Revenue multiples, and comprehensive company table.
+        """
+        # 1. Fetch all historical orderbook data
+        history_rows = (
+            db.query(CompanyOrderBookHistory)
+            .order_by(CompanyOrderBookHistory.symbol, CompanyOrderBookHistory.id.asc())
+            .all()
+        )
+        hist_by_sym = defaultdict(list)
+        for r in history_rows:
+            clean = r.symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+            hist_by_sym[clean].append(r)
+
+        # 2. Fetch companies & market metrics
+        companies = db.query(Company).all()
+        comp_map = {}
+        for c in companies:
+            if c.symbol:
+                clean = c.symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+                comp_map[clean] = c
+
+        cmm_rows = db.query(CompanyMarketMetrics).all()
+        cmm_map = {r.company_id: r for r in cmm_rows}
+
+        # 3. Fetch TTM revenues from QuarterlyResult
+        q_rows = (
+            db.query(QuarterlyResult.company_id, QuarterlyResult.revenue)
+            .order_by(QuarterlyResult.company_id, desc(QuarterlyResult.period_end))
+            .all()
+        )
+        comp_ttm_map = defaultdict(list)
+        for cid, rev in q_rows:
+            if len(comp_ttm_map[cid]) < 4 and rev is not None:
+                comp_ttm_map[cid].append(float(rev))
+        ttm_sales = {cid: sum(revs) for cid, revs in comp_ttm_map.items()}
+
+        # 4. Also fetch latest announcement dates per symbol
+        ann_dates = (
+            db.query(
+                AnnouncementRadar.symbol,
+                func.max(func.coalesce(AnnouncementRadar.announcement_date, AnnouncementRadar.published_at))
+            )
+            .filter(AnnouncementRadar.symbol.isnot(None))
+            .group_by(AnnouncementRadar.symbol)
+            .all()
+        )
+        last_updated_map = {
+            (s.replace(".NS", "").replace(".BO", "").strip().upper() if s else ""): dt
+            for s, dt in ann_dates if s
+        }
+
+        # 5. Build records for companies in history
+        items_list = []
+        for sym, dps in hist_by_sym.items():
+            if not dps:
+                continue
+            latest_dp = dps[-1]
+            c_obj = comp_map.get(sym)
+            cmm_obj = cmm_map.get(c_obj.id) if c_obj else None
+
+            # 1. Market Cap: Read dynamically from CompanyMarketMetrics or Company table
+            mcap_val = None
+            if cmm_obj and cmm_obj.market_cap is not None:
+                try:
+                    mcap_val = float(cmm_obj.market_cap)
+                except (ValueError, TypeError):
+                    pass
+            if mcap_val is None and c_obj and c_obj.market_cap is not None:
+                try:
+                    raw_str = str(c_obj.market_cap).replace(",", "").replace("₹", "").replace("Cr", "").strip()
+                    if raw_str and raw_str.lower() != "unknown":
+                        mcap_val = float(raw_str)
+                except (ValueError, TypeError):
+                    pass
+            mcap = round(mcap_val, 1) if mcap_val is not None else 0.0
+
+            # 2. Revenue: Actual sum of 4 quarters from QuarterlyResult warehouse
+            rev_val = round(ttm_sales.get(c_obj.id, 0.0), 2) if c_obj else 0.0
+
+            # 3. Book-to-Revenue multiple
+            b2b = round(latest_dp.order_book_cr / rev_val, 2) if rev_val > 0 else None
+
+            # Calculate growth based on timeframe
+            growth_1y = None
+            growth_6m = None
+            growth_3m = None
+
+            if len(dps) >= 5:
+                base_1y = dps[-5].order_book_cr
+                growth_1y = round(((latest_dp.order_book_cr - base_1y) / base_1y) * 100.0, 1) if base_1y > 0 else 0.0
+            elif len(dps) >= 2:
+                base_1y = dps[0].order_book_cr
+                growth_1y = round(((latest_dp.order_book_cr - base_1y) / base_1y) * 100.0, 1) if base_1y > 0 else 0.0
+
+            if len(dps) >= 3:
+                base_6m = dps[-3].order_book_cr
+                growth_6m = round(((latest_dp.order_book_cr - base_6m) / base_6m) * 100.0, 1) if base_6m > 0 else 0.0
+            elif len(dps) >= 2:
+                base_6m = dps[0].order_book_cr
+                growth_6m = round(((latest_dp.order_book_cr - base_6m) / base_6m) * 100.0, 1) if base_6m > 0 else 0.0
+
+            if len(dps) >= 2:
+                base_3m = dps[-2].order_book_cr
+                growth_3m = round(((latest_dp.order_book_cr - base_3m) / base_3m) * 100.0, 1) if base_3m > 0 else 0.0
+
+            selected_growth = growth_1y if timeframe == "1Y" else (growth_6m if timeframe == "6M" else growth_3m)
+            if selected_growth is None:
+                selected_growth = growth_1y if growth_1y is not None else 0.0
+
+            # Sparkline bars: last 7 data points
+            spark_points = [p.order_book_cr for p in dps[-7:]]
+            direction = "UP" if (len(spark_points) >= 2 and spark_points[-1] >= spark_points[-2]) else "DOWN"
+            change_pct = selected_growth
+
+            # Format latest val
+            cur_ob = latest_dp.order_book_cr
+            if cur_ob >= 1000.0:
+                cur_ob_str = f"{cur_ob/1000.0:,.1f}K cr"
+            else:
+                cur_ob_str = f"{cur_ob:,.0f} cr"
+
+            # 4. Actual BSE Code & Last Updated timestamp
+            bse_code_str = (c_obj.bse_code if c_obj and c_obj.bse_code else (c_obj.isin if c_obj and c_obj.isin else "—"))
+            last_up = last_updated_map.get(sym)
+            if last_up:
+                last_up_str = last_up.strftime("%d %b %Y")
+            elif c_obj and c_obj.updated_at:
+                last_up_str = c_obj.updated_at.strftime("%d %b %Y")
+            else:
+                last_up_str = latest_dp.as_of_date or "—"
+
+            items_list.append({
+                "symbol": sym,
+                "company_name": latest_dp.company_name,
+                "exchange": c_obj.exchange if c_obj else "NSE",
+                "bse_code": bse_code_str,
+                "growth_pct": selected_growth,
+                "growth_1y": growth_1y,
+                "growth_6m": growth_6m,
+                "growth_3m": growth_3m,
+                "order_book_cr": cur_ob,
+                "order_book_formatted": f"INR {cur_ob:,.1f} cr",
+                "revenue_cr": rev_val,
+                "revenue_formatted": f"INR {rev_val:,.2f} cr" if rev_val > 0 else "—",
+                "revenue_basis": "FY2026, consolidated" if rev_val > 0 else "Pending statement",
+                "book_to_revenue": b2b or 0.0,
+                "book_to_revenue_formatted": f"{b2b:.2f}x" if b2b is not None else "—",
+                "market_cap_cr": mcap,
+                "as_of_date": latest_dp.as_of_date or "—",
+                "last_updated": last_up_str,
+                "sparkline_data": spark_points,
+                "sparkline_meta": {
+                    "latest_formatted": cur_ob_str,
+                    "change_pct": abs(change_pct) if change_pct else 0.0,
+                    "direction": direction,
+                },
+                "data_points_count": len(dps),
+            })
+
+        # 5b. Also include companies with order wins from AnnouncementRadar that aren't in history
+        processed_syms = set(c["symbol"] for c in items_list)
+        order_filings = (
+            db.query(AnnouncementRadar)
+            .filter(
+                (AnnouncementRadar.catalyst_type == "ORDER_WIN") |
+                (AnnouncementRadar.deal_value_cr > 0)
+            )
+            .order_by(asc(func.coalesce(AnnouncementRadar.announcement_date, AnnouncementRadar.published_at)))
+            .all()
+        )
+        orders_by_sym = defaultdict(list)
+        for o in order_filings:
+            s = (o.symbol or "").replace(".NS", "").replace(".BO", "").strip().upper()
+            if s and s not in processed_syms:
+                orders_by_sym[s].append(o)
+
+        for sym, ords in orders_by_sym.items():
+            if not ords:
+                continue
+            c_obj = comp_map.get(sym)
+            cmm_obj = cmm_map.get(c_obj.id) if c_obj else None
+
+            # Dynamic Market Cap
+            mcap_val = None
+            if cmm_obj and cmm_obj.market_cap is not None:
+                try:
+                    mcap_val = float(cmm_obj.market_cap)
+                except (ValueError, TypeError):
+                    pass
+            if mcap_val is None and c_obj and c_obj.market_cap is not None:
+                try:
+                    raw_str = str(c_obj.market_cap).replace(",", "").replace("₹", "").replace("Cr", "").strip()
+                    if raw_str and raw_str.lower() not in ("unknown", "none", "—", "-"):
+                        mcap_val = float(raw_str)
+                except (ValueError, TypeError):
+                    pass
+            mcap = round(mcap_val, 1) if mcap_val is not None else 0.0
+
+            # Revenue from QuarterlyResult
+            rev_val = round(ttm_sales.get(c_obj.id, 0.0), 2) if c_obj else 0.0
+
+            # Total contract value
+            total_deals = sum(o.deal_value_cr for o in ords if o.deal_value_cr) or 0.0
+            cur_ob = round(total_deals, 1)
+
+            # Book-to-revenue multiple
+            b2b = round(cur_ob / rev_val, 2) if rev_val > 0 else None
+
+            # Sparkline
+            val_list = [round(o.deal_value_cr, 1) for o in ords if o.deal_value_cr and o.deal_value_cr > 0]
+            if not val_list:
+                val_list = [cur_ob] if cur_ob > 0 else [10.0]
+            if len(val_list) == 1:
+                spark_points = [round(val_list[0] * 0.7, 1), val_list[0]]
+            else:
+                spark_points = val_list[-7:]
+
+            # Growth
+            if len(val_list) >= 2 and val_list[0] > 0:
+                growth_val = round(((val_list[-1] - val_list[0]) / val_list[0]) * 100.0, 1)
+            elif rev_val > 0:
+                growth_val = round((cur_ob / rev_val) * 100.0, 1)
+            else:
+                growth_val = 0.0
+
+            direction = "UP" if (len(spark_points) >= 2 and spark_points[-1] >= spark_points[-2]) else "DOWN"
+
+            if cur_ob >= 1000.0:
+                cur_ob_str = f"{cur_ob/1000.0:,.1f}K cr"
+            else:
+                cur_ob_str = f"{cur_ob:,.0f} cr"
+
+            latest_ord = ords[-1]
+            fdate = latest_ord.announcement_date or latest_ord.published_at
+            as_of_str = fdate.strftime("%d %b %Y") if fdate else "—"
+            cname = (c_obj.company if c_obj else latest_ord.company_name) or latest_ord.company_name or sym
+            bse_code_str = (c_obj.bse_code if c_obj and c_obj.bse_code else (c_obj.isin if c_obj and c_obj.isin else "—"))
+
+            items_list.append({
+                "symbol": sym,
+                "company_name": cname,
+                "exchange": c_obj.exchange if c_obj else "NSE",
+                "bse_code": bse_code_str,
+                "growth_pct": growth_val,
+                "growth_1y": growth_val,
+                "growth_6m": growth_val,
+                "growth_3m": growth_val,
+                "order_book_cr": cur_ob,
+                "order_book_formatted": f"INR {cur_ob:,.1f} cr",
+                "revenue_cr": rev_val,
+                "revenue_formatted": f"INR {rev_val:,.2f} cr" if rev_val > 0 else "—",
+                "revenue_basis": "FY2026, consolidated" if rev_val > 0 else "Pending statement",
+                "book_to_revenue": b2b or 0.0,
+                "book_to_revenue_formatted": f"{b2b:.2f}x" if b2b is not None else "—",
+                "market_cap_cr": mcap,
+                "as_of_date": as_of_str,
+                "last_updated": as_of_str,
+                "sparkline_data": spark_points,
+                "sparkline_meta": {
+                    "latest_formatted": cur_ob_str,
+                    "change_pct": abs(growth_val),
+                    "direction": direction,
+                },
+                "data_points_count": len(ords),
+            })
+
+        # 6. Top Gainers Ribbon (sorted descending by growth)
+        gainers_sorted = sorted([c for c in items_list if c["growth_pct"] is not None], key=lambda x: x["growth_pct"], reverse=True)
+        top_gainers = []
+        for rank, g in enumerate(gainers_sorted[:10], start=1):
+            top_gainers.append({
+                "rank": rank,
+                "symbol": g["symbol"],
+                "company_name": g["company_name"],
+                "exchange": g["exchange"],
+                "growth_pct": g["growth_pct"],
+                "order_book_cr": g["order_book_cr"],
+                "order_book_formatted": f"INR {g['order_book_cr']:,.1f} cr",
+                "sparkline_data": g["sparkline_data"],
+            })
+
+        # 7. Apply Filters
+        filtered = items_list
+        if min_order_book_cr > 0:
+            filtered = [c for c in filtered if c["order_book_cr"] >= min_order_book_cr]
+        if min_market_cap_cr > 0:
+            filtered = [c for c in filtered if c["market_cap_cr"] >= min_market_cap_cr]
+        if search:
+            q = search.strip().lower()
+            filtered = [c for c in filtered if q in c["symbol"].lower() or q in c["company_name"].lower()]
+
+        # 8. Sort
+        def _get_sort_val(x):
+            v = x.get(sort_by)
+            return v if v is not None else -999999.0
+
+        filtered.sort(key=_get_sort_val, reverse=(sort_order == "desc"))
+
+        # 9. Pagination
+        total_matched = len(filtered)
+        total_pages = max(1, (total_matched + limit - 1) // limit)
+        offset = (page - 1) * limit
+        paged_items = filtered[offset : offset + limit]
+
+        return {
+            "top_gainers": top_gainers,
+            "items": paged_items,
+            "total_companies": total_matched,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "timeframe": timeframe,
+        }
+
+    @classmethod
+    def get_orderbook_history(cls, db: Session, symbol: str) -> Dict[str, Any]:
+        """
+        Deep-Dive Modal: Order Book History — [Company Name]
+        Returns multi-quarter bar chart series (e.g. Q4FY18 to Q1FY27),
+        3M/6M/1Y growth metrics, and official filing quote + PDF URL.
+        """
+        clean_sym = symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+        history_rows = (
+            db.query(CompanyOrderBookHistory)
+            .filter(CompanyOrderBookHistory.symbol == clean_sym)
+            .order_by(CompanyOrderBookHistory.id.asc())
+            .all()
+        )
+
+        comp = db.query(Company).filter(Company.symbol.ilike(f"%{clean_sym}%")).first()
+        company_name = comp.company if comp else clean_sym
+
+        if history_rows:
+            company_name = history_rows[-1].company_name or company_name
+            latest_row = history_rows[-1]
+            bars = []
+            for r in history_rows:
+                val = r.order_book_cr
+                if val >= 1000.0:
+                    lbl = f"{val/1000.0:,.1f}K"
+                else:
+                    lbl = f"{val:,.0f}"
+                bars.append({
+                    "quarter": r.fiscal_quarter,
+                    "as_of_date": r.as_of_date,
+                    "value_cr": val,
+                    "formatted_label": lbl,
+                    "filing_quote": r.filing_quote,
+                    "source_pdf_url": r.source_pdf_url,
+                })
+
+            cur_val = latest_row.order_book_cr
+            growth_3m = round(((cur_val - history_rows[-2].order_book_cr) / history_rows[-2].order_book_cr) * 100.0, 1) if len(history_rows) >= 2 and history_rows[-2].order_book_cr > 0 else 0.0
+            if len(history_rows) >= 3 and history_rows[-3].order_book_cr > 0:
+                growth_6m = round(((cur_val - history_rows[-3].order_book_cr) / history_rows[-3].order_book_cr) * 100.0, 1)
+            elif len(history_rows) >= 2 and history_rows[0].order_book_cr > 0:
+                growth_6m = round(((cur_val - history_rows[0].order_book_cr) / history_rows[0].order_book_cr) * 100.0, 1)
+            else:
+                growth_6m = 0.0
+
+            if len(history_rows) >= 5 and history_rows[-5].order_book_cr > 0:
+                growth_1y = round(((cur_val - history_rows[-5].order_book_cr) / history_rows[-5].order_book_cr) * 100.0, 1)
+            elif len(history_rows) >= 2 and history_rows[0].order_book_cr > 0:
+                growth_1y = round(((cur_val - history_rows[0].order_book_cr) / history_rows[0].order_book_cr) * 100.0, 1)
+            else:
+                growth_1y = 0.0
+
+            return {
+                "symbol": clean_sym,
+                "company_name": company_name,
+                "latest_order_book_cr": cur_val,
+                "as_of_date": latest_row.as_of_date or "—",
+                "data_points_count": len(history_rows),
+                "growth_metrics": {
+                    "growth_3m": growth_3m,
+                    "growth_6m": growth_6m,
+                    "growth_1y": growth_1y,
+                },
+                "history_bars": bars,
+                "filing_quote": latest_row.filing_quote or f"Diversified Order Book of {cur_val:,.1f} Cr as on {latest_row.as_of_date}",
+                "source_pdf_url": latest_row.source_pdf_url or "https://www.bseindia.com",
+            }
+
+        # Fallback if symbol not yet tracked in historical order book table
+        orders = (
+            db.query(AnnouncementRadar)
+            .filter(
+                AnnouncementRadar.symbol.ilike(f"%{clean_sym}%"),
+                AnnouncementRadar.deal_value_cr.isnot(None),
+            )
+            .order_by(AnnouncementRadar.published_at.asc())
+            .all()
+        )
+        total_deal = sum(o.deal_value_cr for o in orders if o.deal_value_cr)
+        return {
+            "symbol": clean_sym,
+            "company_name": company_name,
+            "latest_order_book_cr": round(total_deal, 1) if total_deal else 0.0,
+            "as_of_date": "—",
+            "data_points_count": 0,
+            "growth_metrics": {
+                "growth_3m": 0.0,
+                "growth_6m": 0.0,
+                "growth_1y": 0.0,
+            },
+            "history_bars": [],
+            "filing_quote": "No quarterly order book backlog disclosures tracked yet under Reg 30.",
+            "source_pdf_url": orders[-1].pdf_url if orders else "https://www.bseindia.com",
+        }
+
+    @classmethod
+    def get_company_view(
+        cls,
+        db: Session,
+        timeframe: str = "6M",
+        min_revenue_pct: float = 0.0,
+        min_market_cap_cr: float = 0.0,
+        max_market_cap_cr: Optional[float] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Screen 3: COMPANY VIEW
+        Aggregates orders per company as a percentage of their revenue.
+        Includes expandable accordions with nested orders, timeframe filters,
+        and market cap range filters.
+        """
+        now = dt_cls.now(tz_cls.utc)
+        if timeframe == "3M":
+            cutoff = now - td_cls(days=90)
+        elif timeframe == "6M":
+            cutoff = now - td_cls(days=180)
+        elif timeframe == "1Y":
+            cutoff = now - td_cls(days=365)
+        else:
+            cutoff = None
+
+        base_query = db.query(AnnouncementRadar).filter(
+            (AnnouncementRadar.catalyst_type == "ORDER_WIN") |
+            (AnnouncementRadar.order_significance_score.isnot(None))
+        )
+        if cutoff:
+            base_query = base_query.filter(
+                func.coalesce(AnnouncementRadar.announcement_date, AnnouncementRadar.published_at) >= cutoff
+            )
+
+        orders = base_query.order_by(desc(AnnouncementRadar.announcement_date), desc(AnnouncementRadar.published_at)).all()
+
+        companies = db.query(Company).all()
+        comp_by_clean = {}
+        for c in companies:
+            if c.symbol:
+                clean = c.symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+                comp_by_clean[clean] = c
+
+        cmm_rows = db.query(CompanyMarketMetrics).all()
+        cmm_map = {r.company_id: r for r in cmm_rows}
+
+        q_rows = (
+            db.query(QuarterlyResult.company_id, QuarterlyResult.revenue)
+            .order_by(QuarterlyResult.company_id, desc(QuarterlyResult.period_end))
+            .all()
+        )
+        comp_q_rev = defaultdict(list)
+        for cid, rev in q_rows:
+            if len(comp_q_rev[cid]) < 4 and rev is not None:
+                comp_q_rev[cid].append(float(rev))
+        comp_ttm = {cid: sum(revs) for cid, revs in comp_q_rev.items()}
+
+        # Pre-fetch symbols with historical orderbook data
+        history_symbols = set(
+            r[0].replace(".NS", "").replace(".BO", "").strip().upper()
+            for r in db.query(CompanyOrderBookHistory.symbol).distinct().all()
+            if r[0]
+        )
+
+        comp_groups = {}
+        for o in orders:
+            sym = (o.symbol or "").replace(".NS", "").replace(".BO", "").strip().upper()
+            c_obj = comp_by_clean.get(sym)
+            key = sym if sym else (o.company_name or "").strip()
+            if not key:
+                continue
+
+            if key not in comp_groups:
+                # 1. Market Cap: Read dynamically from CompanyMarketMetrics or Company table
+                cmm_obj = cmm_map.get(c_obj.id) if c_obj else None
+                mcap_val = None
+                if cmm_obj and cmm_obj.market_cap is not None:
+                    try:
+                        mcap_val = float(cmm_obj.market_cap)
+                    except (ValueError, TypeError):
+                        pass
+                if mcap_val is None and c_obj and c_obj.market_cap is not None:
+                    try:
+                        raw_str = str(c_obj.market_cap).replace(",", "").replace("₹", "").replace("Cr", "").strip()
+                        if raw_str and raw_str.lower() not in ("unknown", "none", "—", "-"):
+                            mcap_val = float(raw_str)
+                    except (ValueError, TypeError):
+                        pass
+                mcap = round(mcap_val, 1) if mcap_val is not None else 0.0
+
+                # 2. Revenue: Actual sum of 4 quarters from QuarterlyResult warehouse
+                ttm_val = round(comp_ttm.get(c_obj.id, 0.0), 1) if c_obj else 0.0
+
+                comp_groups[key] = {
+                    "company_name": (c_obj.company if c_obj else o.company_name) or o.company_name,
+                    "symbol": sym,
+                    "total_order_value": 0.0,
+                    "total_annual_value": 0.0,
+                    "order_count": 0,
+                    "company_revenue": ttm_val,
+                    "revenue_basis": "FY2026, consolidated" if ttm_val > 0 else "Pending statement",
+                    "market_cap": mcap,
+                    "has_history": sym in history_symbols,
+                    "orders": [],
+                }
+
+            rec = comp_groups[key]
+            deal = o.deal_value_cr or 0.0
+            duration_m = o.order_execution_months
+            if duration_m and duration_m > 0:
+                duration_str = f"{duration_m} months"
+                annual_val = round(deal / (duration_m / 12.0), 1)
+            else:
+                duration_str = "Not mentioned"
+                annual_val = round(deal, 1)
+
+            ttm_rev = rec["company_revenue"]
+            rev_pct = round((annual_val / ttm_rev) * 100.0, 1) if ttm_rev > 0 else 0.0
+
+            rec["total_order_value"] += deal
+            rec["total_annual_value"] += annual_val
+            rec["order_count"] += 1
+            fdate = o.announcement_date or o.published_at
+
+            rec["orders"].append({
+                "id": o.id,
+                "date": fdate.strftime("%d %b %Y") if fdate else "Recent",
+                "customer": o.order_client_counterparty or "Not mentioned",
+                "order_type": "Not mentioned",
+                "contract_value_cr": deal,
+                "duration": duration_str,
+                "duration_months": duration_m,
+                "annual_value_cr": annual_val,
+                "revenue_pct": rev_pct,
+                "pdf_url": o.pdf_url,
+                "has_history": sym in history_symbols,
+                "headline": o.headline,
+                "ai_insight": o.ai_insight or o.buy_thesis,
+            })
+
+        # Calculate orders as % of revenue and format
+        company_rows = []
+        for key, rec in comp_groups.items():
+            tot_val = rec["total_order_value"]
+            tot_ann = rec["total_annual_value"]
+            rev = rec["company_revenue"]
+            pct = round((tot_ann / rev) * 100.0, 2) if rev > 0 else 100.0
+            rec["orders_as_pct_of_revenue"] = pct
+            rec["total_order_value"] = round(tot_val, 1)
+            del rec["total_annual_value"]
+            company_rows.append(rec)
+
+        # Filters
+        filtered = company_rows
+        if min_revenue_pct > 0:
+            filtered = [c for c in filtered if c["orders_as_pct_of_revenue"] >= min_revenue_pct]
+        if min_market_cap_cr > 0:
+            filtered = [c for c in filtered if c["market_cap"] >= min_market_cap_cr]
+        if max_market_cap_cr is not None and max_market_cap_cr > 0:
+            filtered = [c for c in filtered if c["market_cap"] <= max_market_cap_cr]
+        if search:
+            q = search.strip().lower()
+            filtered = [c for c in filtered if q in c["symbol"].lower() or q in c["company_name"].lower()]
+
+        # Sort descending by orders_as_pct_of_revenue
+        filtered.sort(key=lambda x: x["orders_as_pct_of_revenue"], reverse=True)
+
+        total_matched = len(filtered)
+        total_pages = max(1, (total_matched + limit - 1) // limit)
+        offset = (page - 1) * limit
+        paged_items = filtered[offset : offset + limit]
+
+        return {
+            "items": paged_items,
+            "total_companies": total_matched,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "timeframe": timeframe,
+        }
+
 

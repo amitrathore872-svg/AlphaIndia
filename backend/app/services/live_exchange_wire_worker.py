@@ -516,6 +516,22 @@ class LiveExchangeWireWorker:
                 discovered_at=now,
             )
             db.add(filing_reg)
+            db.flush()
+
+            if is_financial:
+                try:
+                    from app.services.earnings_calendar_service import EarningsCalendarService
+                    recon_res = EarningsCalendarService.reconcile_incoming_filing(
+                        db=db,
+                        symbol=sym,
+                        filing_type=filing_reg.filing_type,
+                        filing_id=filing_reg.id,
+                        period=period_val,
+                        reported_at=now,
+                    )
+                    logger.info(f"[LiveExchangeWireWorker] Calendar reconciliation for {sym}: {recon_res.get('reconciliation_type')}")
+                except Exception as ex_recon:
+                    logger.warning(f"[LiveExchangeWireWorker] Calendar reconciliation warning for {sym}: {ex_recon}")
 
         logger.info(f"[LiveExchangeWireWorker] 🚀 NEW LIVE CATALYST ({exchange}): {sym} | {cat_type} ({impact_score}/10) | {headline[:80]}")
 

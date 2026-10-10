@@ -47,7 +47,7 @@ export const DEFAULT_ALPHA_INDIA_STREAMS: StreamCard[] = [
     id: "pead-earnings",
     title: "Athena PEAD Earnings Surprises",
     subtitle: "Post-Earnings Announcement Drift Candidates",
-    viewHref: "/athena-omega",
+    viewHref: "/pead-drift-screener",
     viewLabel: "View Surprises",
     items: [
       { primary: "KPL", secondary: "QoQ Surge & Operating Leverage", badge: "Score 94.4", badgeColor: "emerald" },

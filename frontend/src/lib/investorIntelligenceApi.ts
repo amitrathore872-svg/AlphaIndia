@@ -66,6 +66,19 @@ export interface InvestorInsightItem {
   evasiveness_detected: string | null;
   guidance_change: string | null;
 
+  // Phase 2: Forensic Evasiveness, Tension & Discrepancies
+  evasiveness_score?: number | null;
+  analyst_tension_score?: number | null;
+  hot_seat_question?: string | null;
+  management_defense_strategy?: string | null;
+  forensic_discrepancies?: Array<{
+    category: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | string;
+    claim: string;
+    financial_reality: string;
+    impact: string;
+  }> | null;
+
   // Plain English & Direct Quotes
   layman_summary?: string | null;
   direct_quotes?: Array<{ speaker: string; quote: string; theme?: string }> | null;
@@ -163,3 +176,28 @@ export async function triggerAnalyzeLatest(symbol: string): Promise<InvestorInsi
     method: "POST",
   });
 }
+
+export interface InvestorTelemetry {
+  total_documents: number;
+  total_insights: number;
+  pending_documents: number;
+  analyzed_documents: number;
+  strong_growth_count: number;
+  latest_document_created_at: string | null;
+  latest_document_updated_at: string | null;
+  latest_insight_analyzed_at: string | null;
+}
+
+export async function fetchInvestorTelemetry(): Promise<InvestorTelemetry> {
+  return fetchJson<InvestorTelemetry>(`/api/v1/investor-intelligence/telemetry`);
+}
+
+export async function triggerBatchScan(
+  target: "LATEST_RESULTS" | "NIFTY50" | "PENDING_QUEUE" = "LATEST_RESULTS",
+  limit: number = 5
+): Promise<{ status: string; target: string; processed_count: number; results: any[] }> {
+  return fetchJson(`/api/v1/investor-intelligence/batch-scan?target=${target}&limit=${limit}`, {
+    method: "POST",
+  });
+}
+

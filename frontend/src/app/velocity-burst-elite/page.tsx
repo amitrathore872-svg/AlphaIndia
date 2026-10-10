@@ -28,19 +28,28 @@ import {
   Eye,
   Info,
   X,
+  Sparkles,
+  List,
+  LayoutGrid,
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import StageFunnelWaterfall from "@/components/velocity/StageFunnelWaterfall";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import { API_BASE } from "@/lib/apiConfig";
 
 export default function VelocityBurstElitePage() {
   const [activeTab, setActiveTab] = useState<
-    "funnel" | "live" | "sleeping_giants" | "elite" | "btst" | "trades" | "regime" | "analytics" | "backtest"
-  >("funnel");
+    "recommendations" | "live" | "btst"
+  >("recommendations");
+
+  // View modes (table list view vs card grid view, defaulting to high-density list)
+  const [liveViewMode, setLiveViewMode] = useState<"list" | "grid">("list");
+  const [recViewMode, setRecViewMode] = useState<"list" | "grid">("list");
 
   // State caches
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [recSummary, setRecSummary] = useState<any>(null);
+  const [recCategoryFilter, setRecCategoryFilter] = useState<string>("ALL");
   const [status, setStatus] = useState<any>(null);
   const [marketRegime, setMarketRegime] = useState<any>(null);
   const [sleepingGiants, setSleepingGiants] = useState<any[]>([]);
@@ -64,6 +73,17 @@ export default function VelocityBurstElitePage() {
   const [stockDossier, setStockDossier] = useState<any | null>(null);
   const [dossierLoading, setDossierLoading] = useState<boolean>(false);
 
+  // Strict distinct symbol deduplication helper
+  const uniqueBySymbol = useCallback((arr: any[]) => {
+    const seen = new Set<string>();
+    return (arr || []).filter((item) => {
+      const sym = (item?.symbol || "").toUpperCase();
+      if (!sym || seen.has(sym)) return false;
+      seen.add(sym);
+      return true;
+    });
+  }, []);
+
   // Fetch initial data with settled promises and robust error handling
   const fetchData = useCallback(async () => {
     try {
@@ -77,9 +97,10 @@ export default function VelocityBurstElitePage() {
         fetch(`${API_BASE}/api/v4/velocity/trade?limit=50`),
         fetch(`${API_BASE}/api/v4/velocity/sector`),
         fetch(`${API_BASE}/api/v4/velocity/backtest`),
+        fetch(`${API_BASE}/api/v4/velocity/recommendations?limit_per_category=25`),
       ]);
 
-      const [stRes, regRes, sgRes, patRes, liveRes, btstRes, trRes, secRes, btRes] = results;
+      const [stRes, regRes, sgRes, patRes, liveRes, btstRes, trRes, secRes, btRes, recRes] = results;
       let anySuccess = false;
 
       if (stRes.status === "fulfilled" && stRes.value.ok) {
@@ -121,6 +142,12 @@ export default function VelocityBurstElitePage() {
       }
       if (btRes.status === "fulfilled" && btRes.value.ok) {
         setBacktests(await btRes.value.json());
+        anySuccess = true;
+      }
+      if (recRes.status === "fulfilled" && recRes.value.ok) {
+        const j = await recRes.value.json();
+        setRecommendations(j.items || []);
+        setRecSummary(j.summary || null);
         anySuccess = true;
       }
 
@@ -308,22 +335,20 @@ export default function VelocityBurstElitePage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
           <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/60 p-1.5">
             {[
-              { id: "funnel", label: "Stage Funnel Waterfall", count: undefined },
+              { id: "recommendations", label: "Elite Recommendations", count: recommendations.length, isSpecial: true },
               { id: "live", label: "Live Breakouts", count: liveSignals.length },
-              { id: "sleeping_giants", label: "Sleeping Giants (Squeeze)", count: sleepingGiants.length },
-              { id: "elite", label: "Base Patterns & Pivot", count: patterns.length },
               { id: "btst", label: "BTST Continuation", count: btstCandidates.length },
-              { id: "trades", label: "Active Trade Manager", count: trades.length },
-              { id: "regime", label: "Sector Rotation Quadrant", count: sectors.length },
-              { id: "analytics", label: "Historical Learning Ledger", count: undefined },
-              { id: "backtest", label: "5-Yr Backtest Simulator", count: backtests.length },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
                   activeTab === tab.id
-                    ? "bg-gradient-to-r from-cyan-500 to-emerald-500 text-black shadow-md shadow-cyan-500/20 font-bold"
+                    ? tab.isSpecial
+                      ? "bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 text-black shadow-lg shadow-amber-500/25 font-black"
+                      : "bg-gradient-to-r from-cyan-500 to-emerald-500 text-black shadow-md shadow-cyan-500/20 font-bold"
+                    : tab.isSpecial
+                    ? "text-amber-300 hover:bg-slate-800/80 font-bold"
                     : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
                 }`}
               >
@@ -331,7 +356,11 @@ export default function VelocityBurstElitePage() {
                 {tab.count !== undefined && (
                   <span
                     className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
-                      activeTab === tab.id ? "bg-black/30 text-black" : "bg-slate-800 text-cyan-300"
+                      activeTab === tab.id
+                        ? "bg-black/40 text-black font-bold"
+                        : tab.isSpecial
+                        ? "bg-amber-500/20 text-amber-300 font-bold"
+                        : "bg-slate-800 text-cyan-300"
                     }`}
                   >
                     {tab.count}
@@ -357,24 +386,371 @@ export default function VelocityBurstElitePage() {
         </div>
 
         {/* ========================================================= */}
-        {/* Tab 0: Stage Funnel Waterfall (Institutional Attrition) */}
+        {/* Tab 0: Elite Recommendations Master Radar */}
         {/* ========================================================= */}
-        {activeTab === "funnel" && <StageFunnelWaterfall />}
+        {activeTab === "recommendations" && (
+          <div className="space-y-6">
+            {/* Recommendations Header Strip */}
+            <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-[#0F172A] via-[#09101F] to-[#0A1628] p-5 shadow-2xl backdrop-blur-xl">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-rose-500 p-2.5 shadow-lg shadow-amber-950/40 ring-1 ring-amber-400/40">
+                    <Sparkles className="h-full w-full text-white animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                      Elite Actionable Recommendations Radar
+                      <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-500/40">
+                        {recommendations.length} Active Setups
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Consolidated multi-engine trade intelligence: active breakout triggers, ready base pivots, coiled energy squeezes, and BTST continuations.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sub-Category Filter Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-800 bg-black/40 p-1">
+                  {[
+                    { id: "ALL", label: "All Setups", count: recommendations.length },
+                    { id: "LIVE_BREAKOUT", label: "Live Breakouts", count: recSummary?.live_breakouts ?? liveSignals.length },
+                    { id: "READY_PIVOT", label: "Ready Pivots", count: recSummary?.ready_pivots ?? patterns.length },
+                    { id: "COILED_SQUEEZE", label: "Coiled Squeezes", count: recSummary?.coiled_squeezes ?? sleepingGiants.length },
+                    { id: "BTST_RUNNER", label: "BTST Continuations", count: recSummary?.btst_runners ?? btstCandidates.length },
+                  ].map((chip) => (
+                    <button
+                      key={chip.id}
+                      onClick={() => setRecCategoryFilter(chip.id)}
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        recCategoryFilter === chip.id
+                          ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                          : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                      }`}
+                    >
+                      <span>{chip.label}</span>
+                      <span
+                        className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+                          recCategoryFilter === chip.id ? "bg-black/40 text-black" : "bg-slate-800 text-cyan-300"
+                        }`}
+                      >
+                        {chip.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* View Switcher: List vs Grid */}
+                <div className="flex items-center rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+                  <button
+                    onClick={() => setRecViewMode("list")}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      recViewMode === "list"
+                        ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                    }`}
+                    title="Table List View"
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    <span>List</span>
+                  </button>
+                  <button
+                    onClick={() => setRecViewMode("grid")}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      recViewMode === "grid"
+                        ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                    }`}
+                    title="Card Grid View"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span>Grid</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Recommendations Content */}
+            {recommendations.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-12 text-center">
+                <Target className="mx-auto h-12 w-12 text-slate-600 mb-3" />
+                <h4 className="text-base font-bold text-white">No recommendations matching criteria</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                  Click &quot;Run Universe Scan&quot; to execute all 18 screening stages across the market.
+                </p>
+              </div>
+            ) : recViewMode === "list" ? (
+              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-950/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="p-3.5">Symbol / Company</th>
+                      <th className="p-3.5">Setup Category</th>
+                      <th className="p-3.5">Trigger / CMP (₹)</th>
+                      <th className="p-3.5">Stop Loss (₹)</th>
+                      <th className="p-3.5">Target 1 (₹)</th>
+                      <th className="p-3.5">R:R</th>
+                      <th className="p-3.5">Conviction Score</th>
+                      <th className="p-3.5">Key Metrics / Base</th>
+                      <th className="p-3.5">AI Thesis Summary</th>
+                      <th className="p-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {uniqueBySymbol(recommendations)
+                      .filter((item) => recCategoryFilter === "ALL" || item.category === recCategoryFilter)
+                      .filter((item) => !searchTerm || item.symbol.includes(searchTerm.toUpperCase()))
+                      .map((rec) => {
+                        const isBreakout = rec.category === "LIVE_BREAKOUT";
+                        const isPivot = rec.category === "READY_PIVOT";
+                        const isSqueeze = rec.category === "COILED_SQUEEZE";
+                        const isBtst = rec.category === "BTST_RUNNER";
+
+                        let categoryBg = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+                        if (isBreakout) categoryBg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+                        else if (isPivot) categoryBg = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+                        else if (isSqueeze) categoryBg = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                        else if (isBtst) categoryBg = "bg-purple-500/15 text-purple-300 border-purple-500/30";
+
+                        return (
+                          <tr key={`${rec.category}-${rec.id}-${rec.symbol}`} className="transition hover:bg-slate-800/40">
+                            <td className="p-3.5 font-bold text-white">
+                              <div className="flex items-center gap-2">
+                                <AddToWatchlistButton
+                                  symbol={rec.symbol}
+                                  companyName={rec.company_name}
+                                  currentPrice={rec.trigger_price}
+                                  defaultThesis={`${rec.category_label}: ${rec.setup_type} (${rec.confidence_score?.toFixed(0)}% confidence). Trigger: ₹${rec.trigger_price || '—'}, SL: ₹${rec.stop_loss || '—'}`}
+                                  variant="icon"
+                                />
+                                <div>
+                                  <span className="font-mono text-sm text-cyan-300 font-bold">{rec.symbol}</span>
+                                  <p className="text-[10px] text-slate-400 truncate max-w-[130px]">{rec.company_name || "NSE Equity"}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3.5">
+                              <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border ${categoryBg}`}>
+                                {rec.category_label || rec.category}
+                              </span>
+                            </td>
+                            <td className="p-3.5 font-mono text-white font-bold">
+                              {rec.trigger_price ? `₹${rec.trigger_price.toFixed(2)}` : "Market CMP"}
+                            </td>
+                            <td className="p-3.5 font-mono text-rose-400 font-semibold">
+                              {rec.stop_loss ? `₹${rec.stop_loss.toFixed(2)}` : "Trailing"}
+                            </td>
+                            <td className="p-3.5 font-mono text-emerald-400 font-bold">
+                              {rec.target_1 ? `₹${rec.target_1.toFixed(2)}` : "Resistance"}
+                            </td>
+                            <td className="p-3.5 font-mono text-cyan-300 font-bold">
+                              1:{rec.risk_reward || 2.0}
+                            </td>
+                            <td className="p-3.5">
+                              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 border border-slate-700">
+                                {rec.confidence_score?.toFixed(0)}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-xs text-slate-400">
+                              {isBreakout && <span>RVOL: <strong className="text-white">{rec.relative_volume}x</strong>, Candle: <strong className="text-white">{rec.candle_strength}%</strong></span>}
+                              {isPivot && <span>Base: <strong className="text-white">{rec.setup_type}</strong> ({rec.distance_to_pivot_pct?.toFixed(1)}% to pivot)</span>}
+                              {isSqueeze && <span>Squeeze: <strong className="text-white">{rec.squeeze_bars} bars</strong>, <strong className="text-emerald-400">{rec.volume_dry_up ? "DRY VOL" : "NORMAL"}</strong></span>}
+                              {isBtst && <span>Delivery: <strong className="text-white">{rec.delivery_pct}%</strong>, Surge: <strong className="text-amber-300">{rec.volume_surge_multiple}x</strong></span>}
+                            </td>
+                            <td className="p-3.5 text-slate-300 max-w-[260px]">
+                              <p className="text-[11px] truncate leading-tight text-slate-300" title={rec.thesis}>
+                                {rec.thesis}
+                              </p>
+                            </td>
+                            <td className="p-3.5 text-right">
+                              <button
+                                onClick={() => openDossier(rec.symbol)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-cyan-400 hover:text-white hover:bg-slate-700"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Inspect
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {uniqueBySymbol(recommendations)
+                  .filter((item) => recCategoryFilter === "ALL" || item.category === recCategoryFilter)
+                  .filter((item) => !searchTerm || item.symbol.includes(searchTerm.toUpperCase()))
+                  .map((rec) => {
+                    const isBreakout = rec.category === "LIVE_BREAKOUT";
+                    const isPivot = rec.category === "READY_PIVOT";
+                    const isSqueeze = rec.category === "COILED_SQUEEZE";
+                    const isBtst = rec.category === "BTST_RUNNER";
+
+                    let categoryBg = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+                    if (isBreakout) categoryBg = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+                    else if (isPivot) categoryBg = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+                    else if (isSqueeze) categoryBg = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                    else if (isBtst) categoryBg = "bg-purple-500/15 text-purple-300 border-purple-500/30";
+
+                    return (
+                      <div
+                        key={`${rec.category}-${rec.id}-${rec.symbol}`}
+                        className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-[#0C1527] to-[#070D18] p-5 shadow-xl transition-all hover:border-cyan-500/50 hover:shadow-cyan-950/20"
+                      >
+                        {/* Top Card Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-black text-white">{rec.symbol}</span>
+                                <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border ${categoryBg}`}>
+                                  {rec.category_label || rec.category}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 truncate max-w-[170px] mt-0.5">
+                                {rec.company_name || rec.setup_type || "NSE Equity"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <AddToWatchlistButton
+                              symbol={rec.symbol}
+                              companyName={rec.company_name}
+                              currentPrice={rec.trigger_price}
+                              defaultThesis={`${rec.category_label}: ${rec.setup_type} (${rec.confidence_score?.toFixed(0)}% confidence). Trigger: ₹${rec.trigger_price || '—'}, SL: ₹${rec.stop_loss || '—'}`}
+                              variant="icon"
+                            />
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 border border-slate-700">
+                              Score: {rec.confidence_score?.toFixed(0)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Trade Parameters Matrix */}
+                        <div className="mt-3.5 grid grid-cols-3 gap-2 rounded-xl bg-black/50 p-3 border border-slate-800/80">
+                          <div>
+                            <p className="text-[10px] text-slate-400">
+                              {isBreakout ? "Entry Price" : isPivot ? "Pivot Point" : "Trigger CMP"}
+                            </p>
+                            <p className="text-sm font-bold text-white">
+                              {rec.trigger_price ? `₹${rec.trigger_price.toFixed(2)}` : "Market CMP"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400">Stop Loss</p>
+                            <p className="text-sm font-bold text-rose-400">
+                              {rec.stop_loss ? `₹${rec.stop_loss.toFixed(2)}` : "Trailing SL"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400">Target 1</p>
+                            <p className="text-sm font-bold text-emerald-400">
+                              {rec.target_1 ? `₹${rec.target_1.toFixed(2)}` : "Next Resistance"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Secondary Indicators Strip */}
+                        <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                          {isBreakout && (
+                            <>
+                              <span>RVOL: <strong className="text-white">{rec.relative_volume}x</strong></span>
+                              <span>Candle: <strong className="text-white">{rec.candle_strength}%</strong></span>
+                              <span>R:R: <strong className="text-cyan-300">1:{rec.risk_reward}</strong></span>
+                            </>
+                          )}
+                          {isPivot && (
+                            <>
+                              <span>Base: <strong className="text-white">{rec.setup_type}</strong></span>
+                              <span>To Pivot: <strong className="text-emerald-400">{rec.distance_to_pivot_pct?.toFixed(1)}%</strong></span>
+                              <span>R:R: <strong className="text-cyan-300">1:{rec.risk_reward}</strong></span>
+                            </>
+                          )}
+                          {isSqueeze && (
+                            <>
+                              <span>Squeeze: <strong className="text-white">{rec.squeeze_bars} bars</strong></span>
+                              <span>Volume: <strong className="text-emerald-400">{rec.volume_dry_up ? "DRY" : "NORMAL"}</strong></span>
+                              <span>R:R: <strong className="text-cyan-300">1:{rec.risk_reward}</strong></span>
+                            </>
+                          )}
+                          {isBtst && (
+                            <>
+                              <span>Continuation: <strong className="text-emerald-400">{rec.continuation_prob}%</strong></span>
+                              <span>Delivery: <strong className="text-white">{rec.delivery_pct}%</strong></span>
+                              <span>Surge: <strong className="text-amber-300">{rec.volume_surge_multiple}x</strong></span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* AI Thesis Callout */}
+                        <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/60 p-2.5 text-xs text-slate-300 leading-relaxed">
+                          <p className="line-clamp-2">{rec.thesis}</p>
+                        </div>
+
+                        {/* Action Link */}
+                        <button
+                          onClick={() => openDossier(rec.symbol)}
+                          className="mt-3.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 py-2 text-xs font-semibold text-slate-200 transition hover:bg-cyan-500 hover:text-black hover:border-cyan-400"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          Inspect Complete AI Dossier
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ========================================================= */}
         {/* Tab 1: Live Breakouts Terminal */}
         {/* ========================================================= */}
         {activeTab === "live" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Zap className="h-5 w-5 text-amber-400" />
                   Live Breakout Execution Radar (Stage 10 & 11)
+                  <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/40">
+                    {uniqueBySymbol(liveSignals).length} Active Signals
+                  </span>
                 </h3>
                 <p className="text-xs text-slate-400">
                   Real-time high-conviction breakout signals. Strict verification across VWAP defense, RVOL surge, and entry quality gate.
                 </p>
+              </div>
+
+              {/* View Switcher: List vs Grid */}
+              <div className="flex items-center rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+                <button
+                  onClick={() => setLiveViewMode("list")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    liveViewMode === "list"
+                      ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
+                  title="Table List View"
+                >
+                  <List className="h-3.5 w-3.5" />
+                  <span>List</span>
+                </button>
+                <button
+                  onClick={() => setLiveViewMode("grid")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    liveViewMode === "grid"
+                      ? "bg-cyan-500 text-black font-bold shadow-md shadow-cyan-500/20"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
+                  title="Card Grid View"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span>Grid</span>
+                </button>
               </div>
             </div>
 
@@ -392,9 +768,104 @@ export default function VelocityBurstElitePage() {
                   Scan Universe Now
                 </button>
               </div>
+            ) : liveViewMode === "list" ? (
+              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-950/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="p-3.5">Symbol / Company</th>
+                      <th className="p-3.5">AI Verdict</th>
+                      <th className="p-3.5">Entry Trigger (₹)</th>
+                      <th className="p-3.5">Stop Loss (₹)</th>
+                      <th className="p-3.5">Target 1 (₹)</th>
+                      <th className="p-3.5">R:R</th>
+                      <th className="p-3.5">RVOL</th>
+                      <th className="p-3.5">Candle Strength</th>
+                      <th className="p-3.5">Confidence</th>
+                      <th className="p-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {uniqueBySymbol(liveSignals)
+                      .filter((s) => !searchTerm || s.symbol.includes(searchTerm.toUpperCase()))
+                      .map((sig) => (
+                        <tr key={sig.id} className="transition hover:bg-slate-800/40">
+                          <td className="p-3.5 font-bold text-white">
+                            <div className="flex items-center gap-2">
+                              <AddToWatchlistButton
+                                symbol={sig.symbol}
+                                companyName={sig.company_name}
+                                currentPrice={sig.entry_price}
+                                defaultThesis={`Velocity Burst Live Signal: ${sig.ai_verdict} (${sig.confidence_score}% confidence). Entry: ₹${sig.entry_price}, SL: ₹${sig.stop_loss}, Target: ₹${sig.target_1}`}
+                                variant="icon"
+                              />
+                              <div>
+                                <span className="font-mono text-sm text-cyan-300 font-bold">{sig.symbol}</span>
+                                <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{sig.company_name || "NSE Equity"}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                sig.ai_verdict === "ELITE A+"
+                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                  : "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
+                              }`}
+                            >
+                              {sig.ai_verdict}
+                            </span>
+                          </td>
+                          <td className="p-3.5 font-mono text-white font-bold">
+                            ₹{sig.entry_price?.toFixed(2)}
+                          </td>
+                          <td className="p-3.5 font-mono text-rose-400 font-semibold">
+                            ₹{sig.stop_loss?.toFixed(2)}
+                          </td>
+                          <td className="p-3.5 font-mono text-emerald-400 font-bold">
+                            ₹{sig.target_1?.toFixed(2)}
+                          </td>
+                          <td className="p-3.5 font-mono text-cyan-300 font-bold">
+                            1:{sig.risk_reward || 2.0}
+                          </td>
+                          <td className="p-3.5">
+                            <span className={`font-mono font-bold ${(sig.relative_volume || 0) >= 2.0 ? "text-amber-400" : "text-white"}`}>
+                              {sig.relative_volume}x
+                            </span>
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-1.5 w-12 rounded-full bg-slate-800 overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400"
+                                  style={{ width: `${Math.min(100, sig.candle_strength || 70)}%` }}
+                                />
+                              </div>
+                              <span className="font-mono text-slate-300 font-semibold">{sig.candle_strength}%</span>
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-400 border border-slate-700">
+                              {sig.confidence_score}%
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <button
+                              onClick={() => openDossier(sig.symbol)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-cyan-400 hover:text-white hover:bg-slate-700"
+                            >
+                              <Eye className="h-3 w-3" />
+                              Inspect
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {liveSignals
+                {uniqueBySymbol(liveSignals)
                   .filter((s) => !searchTerm || s.symbol.includes(searchTerm.toUpperCase()))
                   .map((sig) => (
                     <div
@@ -467,180 +938,7 @@ export default function VelocityBurstElitePage() {
         )}
 
         {/* ========================================================= */}
-        {/* Tab 2: Sleeping Giants Radar */}
-        {/* ========================================================= */}
-        {activeTab === "sleeping_giants" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Radar className="h-5 w-5 text-amber-400" />
-                  Stage 1: Sleeping Giants (Volatility Contraction Matrix)
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Stocks undergoing intense multi-week energy compression (TTM Squeeze, Keltner, NR5/7/10 clusters, Dry Volume).
-                </p>
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-800 bg-slate-950/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="p-3.5">Symbol / Company</th>
-                    <th className="p-3.5">CMP (₹)</th>
-                    <th className="p-3.5">Compression Score</th>
-                    <th className="p-3.5">TTM Squeeze</th>
-                    <th className="p-3.5">Bandwidth %ile</th>
-                    <th className="p-3.5">Narrow Range</th>
-                    <th className="p-3.5">Volume Dry-Up</th>
-                    <th className="p-3.5">Squeeze Bars</th>
-                    <th className="p-3.5 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {sleepingGiants
-                    .filter((g) => !searchTerm || g.symbol.includes(searchTerm.toUpperCase()))
-                    .map((item) => (
-                      <tr key={item.id} className="transition hover:bg-slate-800/40">
-                        <td className="p-3.5 font-bold text-white">
-                          <div>
-                            <span className="font-mono text-sm text-cyan-300">{item.symbol}</span>
-                            <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{item.company_name}</p>
-                          </div>
-                        </td>
-                        <td className="p-3.5 font-mono text-white">₹{item.current_price?.toFixed(2)}</td>
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-16 rounded-full bg-slate-800 overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-amber-500 to-emerald-400"
-                                style={{ width: `${item.compression_score}%` }}
-                              />
-                            </div>
-                            <span className="font-bold text-white">{item.compression_score?.toFixed(0)}</span>
-                          </div>
-                        </td>
-                        <td className="p-3.5">
-                          {item.ttm_squeeze_active ? (
-                            <span className="rounded-md bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30">
-                              ACTIVE
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">NO</span>
-                          )}
-                        </td>
-                        <td className="p-3.5 font-mono text-slate-300">{item.bollinger_width_percentile?.toFixed(1)}%</td>
-                        <td className="p-3.5 font-mono text-amber-300 font-bold">
-                          {item.is_nr10 ? "NR10" : item.is_nr7 ? "NR7" : `Inside ${item.inside_bar_count}`}
-                        </td>
-                        <td className="p-3.5">
-                          {item.volume_dry_up ? (
-                            <span className="text-emerald-400 font-bold">DRY ({item.volume_dry_up_ratio}x)</span>
-                          ) : (
-                            <span className="text-slate-400">{item.volume_dry_up_ratio}x</span>
-                          )}
-                        </td>
-                        <td className="p-3.5 font-mono text-white">{item.squeeze_duration_bars} bars</td>
-                        <td className="p-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <AddToWatchlistButton
-                              symbol={item.symbol}
-                              companyName={item.company_name}
-                              currentPrice={item.current_price}
-                              defaultThesis={`Velocity Burst Elite (Sleeping Giant): Compression Score ${item.compression_score?.toFixed(0)}/100, Squeeze ${item.squeeze_duration_bars} bars, Dry-Up ${item.volume_dry_up_ratio}x`}
-                              variant="icon"
-                            />
-                            <button
-                              onClick={() => openDossier(item.symbol)}
-                              className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:border-cyan-400 hover:text-white"
-                            >
-                              Inspect
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* Tab 3: Base Patterns & Pivots */}
-        {/* ========================================================= */}
-        {activeTab === "elite" && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Target className="h-5 w-5 text-cyan-400" />
-                Stage 3: Institutional Base Pattern Recognition
-              </h3>
-              <p className="text-xs text-slate-400">
-                Algorithmic identification of VCP, Flat Bases, Cup & Handles, and Tight Flags with verified Pivot levels.
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {patterns
-                .filter((p) => !searchTerm || p.symbol.includes(searchTerm.toUpperCase()))
-                .map((pat) => (
-                  <div key={pat.id} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <AddToWatchlistButton
-                          symbol={pat.symbol}
-                          defaultThesis={`Velocity Base Pattern: ${pat.pattern_type}. Pivot: ₹${pat.pivot_point?.toFixed(1)}, Quality: ${pat.base_quality_score}/100.`}
-                          targetPrice={pat.pivot_point}
-                          variant="icon"
-                        />
-                        <span className="text-base font-black text-white">{pat.symbol}</span>
-                      </div>
-                      <span className="rounded-md bg-cyan-500/20 px-2.5 py-0.5 text-xs font-bold text-cyan-300 border border-cyan-500/30">
-                        {pat.pattern_type}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs rounded-xl bg-black/40 p-3 border border-slate-800/80">
-                      <div>
-                        <p className="text-slate-400 text-[10px]">Pivot Point</p>
-                        <p className="font-bold text-white text-sm">₹{pat.pivot_point?.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-[10px]">Distance to Pivot</p>
-                        <p className="font-bold text-emerald-400 text-sm">
-                          {pat.distance_to_pivot_pct > 0 ? `${pat.distance_to_pivot_pct}%` : "CLEARED"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-[10px]">Base Depth</p>
-                        <p className="font-bold text-white text-xs">{pat.base_depth_pct}%</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-[10px]">Quality Score</p>
-                        <p className="font-bold text-cyan-300 text-xs">{pat.base_quality_score}/100</p>
-                      </div>
-                    </div>
-
-                    <p className="mt-3 text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/50">
-                      {pat.ai_explanation}
-                    </p>
-
-                    <button
-                      onClick={() => openDossier(pat.symbol)}
-                      className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:border-cyan-400"
-                    >
-                      Dossier Breakdown <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* Tab 4: BTST Continuation */}
+        {/* Tab 2: BTST Continuation */}
         {/* ========================================================= */}
         {activeTab === "btst" && (
           <div className="space-y-4">
@@ -668,7 +966,7 @@ export default function VelocityBurstElitePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {btstCandidates.map((b) => (
+                  {uniqueBySymbol(btstCandidates).map((b) => (
                     <tr key={b.id} className="transition hover:bg-slate-800/40">
                       <td className="p-3.5 font-bold font-mono text-cyan-300 text-sm">{b.symbol}</td>
                       <td className="p-3.5 font-bold text-emerald-400">{b.closing_near_high_pct}%</td>
@@ -685,153 +983,6 @@ export default function VelocityBurstElitePage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* Tab 5: Active Trade Manager */}
-        {/* ========================================================= */}
-        {activeTab === "trades" && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-400" />
-                Stage 12: Trade Management Engine
-              </h3>
-              <p className="text-xs text-slate-400">
-                Automated trade lifecycle: ATR dynamic trailing stop, Target 1 breakeven locking, and profit preservation.
-              </p>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-800 bg-slate-950/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="p-3.5">Symbol</th>
-                    <th className="p-3.5">Entry Price</th>
-                    <th className="p-3.5">Current Price</th>
-                    <th className="p-3.5">Trailing Stop</th>
-                    <th className="p-3.5">Target 1 / 2</th>
-                    <th className="p-3.5">Trail Rule</th>
-                    <th className="p-3.5">Status</th>
-                    <th className="p-3.5 text-right">P&L %</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {trades.map((t) => (
-                    <tr key={t.id} className="transition hover:bg-slate-800/40">
-                      <td className="p-3.5 font-bold font-mono text-white">{t.symbol}</td>
-                      <td className="p-3.5 font-mono text-slate-300">₹{t.entry_price?.toFixed(2)}</td>
-                      <td className="p-3.5 font-mono font-bold text-white">₹{t.current_price?.toFixed(2)}</td>
-                      <td className="p-3.5 font-mono text-rose-400 font-bold">₹{t.trailing_stop?.toFixed(2)}</td>
-                      <td className="p-3.5 font-mono text-emerald-400">
-                        ₹{t.target_1?.toFixed(2)} / ₹{t.target_2?.toFixed(2)}
-                      </td>
-                      <td className="p-3.5 font-mono text-cyan-300">{t.trail_type}</td>
-                      <td className="p-3.5">
-                        <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-white border border-slate-700">
-                          {t.trade_status}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-right font-mono font-bold text-emerald-400 text-sm">
-                        +{t.unrealized_pnl_pct}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* Tab 6: Sector Rotation Quadrant */}
-        {/* ========================================================= */}
-        {activeTab === "regime" && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-cyan-400" />
-                Stage 6: Sector Rotation Heatmap & Leadership
-              </h3>
-              <p className="text-xs text-slate-400">
-                Institutional capital flow across all NSE sectors. Trade only leaders in the Leading / Improving quadrants.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {sectors.map((sec) => (
-                <div key={sec.sector} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-white">{sec.sector}</span>
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                        sec.rotation_signal === "LEADING"
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                      }`}
-                    >
-                      {sec.rotation_signal}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-                    <span>Rank: <strong className="text-white">#{sec.rank}</strong></span>
-                    <span>Score: <strong className="text-cyan-300">{sec.score}/100</strong></span>
-                    <span>Breadth: <strong className="text-emerald-400">{sec.breadth}%</strong></span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* Tab 7: Historical Learning & Backtests */}
-        {/* ========================================================= */}
-        {(activeTab === "analytics" || activeTab === "backtest") && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-amber-400" />
-                Stage 17: Backtest Simulator & Continuous Machine Learning
-              </h3>
-              <p className="text-xs text-slate-400">
-                5-year walk-forward simulation metrics. The learning engine recalculates optimal weights monthly based on empirical outcomes.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-                <p className="text-xs text-slate-400">Walk-Forward Win Rate</p>
-                <p className="mt-1 text-2xl font-black text-emerald-400">
-                  {status?.backtest_win_rate != null ? `${status.backtest_win_rate.toFixed(1)}%` : "Evaluating..."}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {status?.backtest_total_trades != null ? `${status.backtest_total_trades.toLocaleString()} total trades evaluated` : "Live walk-forward model"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-                <p className="text-xs text-slate-400">Profit Factor</p>
-                <p className="mt-1 text-2xl font-black text-cyan-300">
-                  {status?.backtest_profit_factor != null ? status.backtest_profit_factor.toFixed(2) : "—"}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">Gross wins / Gross losses</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-                <p className="text-xs text-slate-400">Mathematical Expectancy</p>
-                <p className="mt-1 text-2xl font-black text-amber-400">
-                  {status?.backtest_expectancy_r != null ? `${status.backtest_expectancy_r >= 0 ? "+" : ""}${status.backtest_expectancy_r.toFixed(2)}R` : "—"}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">Per trade risk unit</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-                <p className="text-xs text-slate-400">Max System Drawdown</p>
-                <p className="mt-1 text-2xl font-black text-rose-400">
-                  {status?.backtest_max_drawdown != null ? `${status.backtest_max_drawdown.toFixed(1)}%` : "—"}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">Over 5 full market cycles</p>
-              </div>
             </div>
           </div>
         )}

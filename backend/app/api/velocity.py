@@ -242,10 +242,19 @@ async def get_sleeping_giants(
     query = (
         db.query(VelocitySleepingGiant)
         .filter(VelocitySleepingGiant.compression_score >= min_score)
-        .order_by(desc(VelocitySleepingGiant.compression_score))
+        .order_by(desc(VelocitySleepingGiant.compression_score), desc(VelocitySleepingGiant.id))
     )
-    total = query.count()
-    items = query.offset(offset).limit(limit).all()
+    raw_items = query.all()
+    seen_syms = set()
+    deduped_items = []
+    for r in raw_items:
+        s = r.symbol.upper()
+        if s not in seen_syms:
+            seen_syms.add(s)
+            deduped_items.append(r)
+
+    total = len(deduped_items)
+    items = deduped_items[offset : offset + limit]
 
     return {
         "total": total,
@@ -553,14 +562,23 @@ async def get_live_signals(
     db: Session = Depends(get_db),
 ):
     offset = (page - 1) * limit
-    query = db.query(VelocityLiveSignal).order_by(desc(VelocityLiveSignal.signal_timestamp))
+    query = db.query(VelocityLiveSignal).order_by(desc(VelocityLiveSignal.signal_timestamp), desc(VelocityLiveSignal.id))
     if active_only:
         query = query.filter(VelocityLiveSignal.status == "ACTIVE")
     if verdict:
         query = query.filter(VelocityLiveSignal.ai_verdict == verdict.upper())
 
-    total = query.count()
-    items = query.offset(offset).limit(limit).all()
+    raw_items = query.all()
+    seen_syms = set()
+    deduped_items = []
+    for r in raw_items:
+        s = r.symbol.upper()
+        if s not in seen_syms:
+            seen_syms.add(s)
+            deduped_items.append(r)
+
+    total = len(deduped_items)
+    items = deduped_items[offset : offset + limit]
 
     return {
         "total": total,
@@ -587,6 +605,174 @@ async def get_live_signals(
             }
             for r in items
         ],
+    }
+
+
+@router.get("/recommendations", summary="Consolidated Institutional Trade Recommendations & Prime Setups")
+async def get_all_recommendations(
+    limit_per_category: int = Query(25, ge=5, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Consolidated institutional recommendation radar aggregating all 4 primary setup types:
+    1. Active Live Breakouts (Stage 10: Momentum triggers)
+    2. Ready Base Pivots (Stage 3: VCP, Flat Base, Cup & Handle nearing breakout)
+    3. Coiled Sleeping Giants (Stage 1: Energy compression squeeze)
+    4. BTST Momentum Continuations (Stage 13: Closing near highs with institutional delivery)
+    """
+    # 1. Live Breakout Signals
+    live_q = db.query(VelocityLiveSignal).filter(
+        VelocityLiveSignal.status == "ACTIVE"
+    ).order_by(desc(VelocityLiveSignal.confidence_score), desc(VelocityLiveSignal.id)).all()
+    
+    seen_live = set()
+    live_items = []
+    for r in live_q:
+        s = r.symbol.upper()
+        if s not in seen_live:
+            seen_live.add(s)
+            live_items.append({
+                "id": r.id,
+                "symbol": r.symbol,
+                "category": "LIVE_BREAKOUT",
+                "category_label": "Live Breakout",
+                "confidence_score": r.confidence_score,
+                "ai_verdict": r.ai_verdict,
+                "setup_type": "Breakout Trigger",
+                "trigger_price": r.entry_price,
+                "stop_loss": r.stop_loss,
+                "target_1": r.target_1,
+                "target_2": r.target_2,
+                "risk_reward": r.risk_reward,
+                "relative_volume": r.relative_volume_rvol,
+                "candle_strength": r.breakout_candle_strength,
+                "vwap_confirmed": r.vwap_confirmed,
+                "status": r.status,
+                "timestamp": r.signal_timestamp.isoformat() if r.signal_timestamp else None,
+                "thesis": f"Active institutional breakout trigger at ₹{r.entry_price:.2f} with {r.relative_volume_rvol:.1f}x RVOL and {r.risk_reward}:1 R:R target.",
+            })
+        if len(live_items) >= limit_per_category:
+            break
+
+    # 2. Ready Base Pattern Pivots
+    pattern_q = db.query(VelocityBasePattern).filter(
+        VelocityBasePattern.pattern_status.in_(["READY", "BROKEN_OUT"])
+    ).order_by(desc(VelocityBasePattern.base_quality_score), desc(VelocityBasePattern.id)).all()
+
+    seen_pattern = set()
+    pattern_items = []
+    for p in pattern_q:
+        s = p.symbol.upper()
+        if s not in seen_pattern:
+            seen_pattern.add(s)
+            pattern_items.append({
+                "id": p.id,
+                "symbol": p.symbol,
+                "category": "READY_PIVOT",
+                "category_label": "Pivot Ready",
+                "confidence_score": p.base_quality_score,
+                "ai_verdict": "READY TO BURST" if p.pattern_status == "READY" else "BROKEN OUT",
+                "setup_type": p.pattern_type,
+                "trigger_price": p.pivot_point,
+                "stop_loss": round(p.pivot_point * 0.965, 2) if p.pivot_point else 0.0,
+                "target_1": round(p.pivot_point * 1.08, 2) if p.pivot_point else 0.0,
+                "target_2": round(p.pivot_point * 1.15, 2) if p.pivot_point else 0.0,
+                "risk_reward": 2.5,
+                "distance_to_pivot_pct": p.distance_to_pivot_pct,
+                "base_depth_pct": p.base_depth_pct,
+                "base_length_bars": p.base_length_bars,
+                "status": p.pattern_status,
+                "timestamp": p.updated_at.isoformat() if p.updated_at else None,
+                "thesis": p.ai_explanation or f"{p.pattern_type} base structure with pivot at ₹{p.pivot_point:.2f} ({p.distance_to_pivot_pct:.1f}% away).",
+            })
+        if len(pattern_items) >= limit_per_category:
+            break
+
+    # 3. Coiling Sleeping Giants
+    sg_q = db.query(VelocitySleepingGiant).filter(
+        VelocitySleepingGiant.compression_score >= 60.0
+    ).order_by(desc(VelocitySleepingGiant.compression_score), desc(VelocitySleepingGiant.id)).all()
+
+    seen_sg = set()
+    sg_items = []
+    for g in sg_q:
+        s = g.symbol.upper()
+        if s not in seen_sg:
+            seen_sg.add(s)
+            sg_items.append({
+                "id": g.id,
+                "symbol": g.symbol,
+                "company_name": g.company_name,
+                "category": "COILED_SQUEEZE",
+                "category_label": "Coiled Squeeze",
+                "confidence_score": g.compression_score,
+                "ai_verdict": "SQUEEZE ACTIVE" if g.ttm_squeeze_active else "HIGH COMPRESSION",
+                "setup_type": "TTM Squeeze" if g.ttm_squeeze_active else ("NR10" if g.is_nr10 else "NR7"),
+                "trigger_price": g.current_price,
+                "stop_loss": round(g.current_price * 0.96, 2) if g.current_price else 0.0,
+                "target_1": round(g.current_price * 1.09, 2) if g.current_price else 0.0,
+                "target_2": round(g.current_price * 1.18, 2) if g.current_price else 0.0,
+                "risk_reward": 2.8,
+                "squeeze_bars": g.squeeze_duration_bars,
+                "volume_dry_up": g.volume_dry_up,
+                "volume_dry_up_ratio": g.volume_dry_up_ratio,
+                "status": "COMPRESSED",
+                "timestamp": g.created_at.isoformat() if g.created_at else None,
+                "thesis": f"Coiling energy compression (Score {g.compression_score:.0f}/100). Squeeze duration {g.squeeze_duration_bars} bars with volume dry-up at {g.volume_dry_up_ratio}x.",
+            })
+        if len(sg_items) >= limit_per_category:
+            break
+
+    # 4. BTST Continuations
+    btst_q = db.query(VelocityBTST).filter(
+        VelocityBTST.btst_confidence >= 70.0
+    ).order_by(desc(VelocityBTST.btst_confidence), desc(VelocityBTST.id)).all()
+
+    seen_btst = set()
+    btst_items = []
+    for b in btst_q:
+        s = b.symbol.upper()
+        if s not in seen_btst:
+            seen_btst.add(s)
+            btst_items.append({
+                "id": b.id,
+                "symbol": b.symbol,
+                "category": "BTST_RUNNER",
+                "category_label": "BTST Runner",
+                "confidence_score": b.btst_confidence,
+                "ai_verdict": b.action_recommended or "BTST CANDIDATE",
+                "setup_type": "Late Surge Continuation",
+                "trigger_price": None,
+                "stop_loss": None,
+                "target_1": None,
+                "target_2": None,
+                "risk_reward": 2.0,
+                "continuation_prob": b.continuation_probability,
+                "closing_near_high_pct": b.closing_near_high_pct,
+                "delivery_pct": b.delivery_pct,
+                "volume_surge_multiple": b.volume_surge_multiple,
+                "status": "ACTIVE",
+                "timestamp": b.created_at.isoformat() if b.created_at else None,
+                "thesis": f"Late institutional buying closing {b.closing_near_high_pct}% near day high with {b.delivery_pct}% delivery and {b.volume_surge_multiple}x volume surge.",
+            })
+        if len(btst_items) >= limit_per_category:
+            break
+
+    all_recommendations = live_items + pattern_items + sg_items + btst_items
+
+    return {
+        "summary": {
+            "total_recommendations": len(all_recommendations),
+            "live_breakouts": len(live_items),
+            "ready_pivots": len(pattern_items),
+            "coiled_squeezes": len(sg_items),
+            "btst_runners": len(btst_items),
+        },
+        "items": all_recommendations,
+        "live_breakouts": live_items,
+        "ready_pivots": pattern_items,
+        "coiled_squeezes": sg_items,
+        "btst_runners": btst_items,
     }
 
 
@@ -635,12 +821,21 @@ async def get_trades(
     db: Session = Depends(get_db),
 ):
     offset = (page - 1) * limit
-    query = db.query(VelocityTradeManager).order_by(desc(VelocityTradeManager.entry_time))
+    query = db.query(VelocityTradeManager).order_by(desc(VelocityTradeManager.entry_time), desc(VelocityTradeManager.id))
     if status:
         query = query.filter(VelocityTradeManager.trade_status == status.upper())
 
-    total = query.count()
-    items = query.offset(offset).limit(limit).all()
+    raw_items = query.all()
+    seen_syms = set()
+    deduped_items = []
+    for r in raw_items:
+        s = r.symbol.upper()
+        if s not in seen_syms:
+            seen_syms.add(s)
+            deduped_items.append(r)
+
+    total = len(deduped_items)
+    items = deduped_items[offset : offset + limit]
 
     return {
         "total": total,
@@ -709,9 +904,18 @@ async def get_btst(
     db: Session = Depends(get_db),
 ):
     offset = (page - 1) * limit
-    query = db.query(VelocityBTST).order_by(desc(VelocityBTST.btst_confidence))
-    total = query.count()
-    items = query.offset(offset).limit(limit).all()
+    query = db.query(VelocityBTST).order_by(desc(VelocityBTST.btst_confidence), desc(VelocityBTST.id))
+    raw_items = query.all()
+    seen_syms = set()
+    deduped_items = []
+    for r in raw_items:
+        s = r.symbol.upper()
+        if s not in seen_syms:
+            seen_syms.add(s)
+            deduped_items.append(r)
+
+    total = len(deduped_items)
+    items = deduped_items[offset : offset + limit]
 
     return {
         "total": total,

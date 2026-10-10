@@ -33,7 +33,35 @@ from app.services.athena_valuation_engine import AthenaValuationEngine
 from app.services.athena_conviction_engine import AthenaConvictionEngine
 from app.services.pead_engine import PEADEngine
 
+import re
 logger = logging.getLogger(__name__)
+
+MONTH_MAP = {
+    "JAN": (4, 0), "FEB": (4, 0), "MAR": (4, 0),
+    "APR": (1, 1), "MAY": (1, 1), "JUN": (1, 1),
+    "JUL": (2, 1), "AUG": (2, 1), "SEP": (2, 1),
+    "OCT": (3, 1), "NOV": (3, 1), "DEC": (3, 1),
+}
+
+def normalize_fiscal_period(val: Optional[str]) -> str:
+    if not val or not str(val).strip():
+        return "Q1 FY27"
+    p = str(val).strip()
+    m_q = re.match(r"^Q([1-4])\s*FY\s*(\d{2,4})$", p, re.I)
+    if m_q:
+        q_num, yr = m_q.group(1), m_q.group(2)
+        if len(yr) == 4:
+            yr = yr[-2:]
+        return f"Q{q_num} FY{yr}"
+    m_m = re.match(r"^([A-Za-z]{3,9})\s+(\d{4})$", p)
+    if m_m:
+        month_name = m_m.group(1)[:3].upper()
+        year = int(m_m.group(2))
+        if month_name in MONTH_MAP:
+            q_num, yr_offset = MONTH_MAP[month_name]
+            fy_year = (year + yr_offset) % 100
+            return f"Q{q_num} FY{fy_year:02d}"
+    return p
 
 
 class AthenaOrchestrator:
@@ -50,7 +78,8 @@ class AthenaOrchestrator:
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
         sym = symbol.strip().upper()
-        fiscal_period = fresh_q0.get("quarter", "Q1 FY26")
+        raw_period = fresh_q0.get("quarter") or fresh_q0.get("fiscal_period") or "Q1 FY26"
+        fiscal_period = normalize_fiscal_period(raw_period)
 
         # 1. Register / Retrieve Filing Record in DB
         filing = db.query(AthenaOmegaFiling).filter(
@@ -265,6 +294,34 @@ class AthenaOrchestrator:
         filing.sla_met = elapsed_sec <= 300.0  # < 5 minutes
         filing.published_at = datetime.utcnow()
         db.commit()
+
+        # F. Reconcile with Earnings Calendar
+        try:
+            from app.services.earnings_calendar_service import EarningsCalendarService
+            recon_res = EarningsCalendarService.reconcile_incoming_filing(
+                db=db,
+                symbol=sym,
+                filing_type=filing_type,
+                filing_id=filing.id,
+                period=fiscal_period,
+                reported_at=filing.published_at,
+            )
+            logger.info(f"[ATHENA] Earnings calendar reconciled for {sym}: {recon_res.get('reconciliation_type')}")
+        except Exception as e:
+            logger.warning(f"[ATHENA] Calendar reconciliation notice for {sym}: {e}")
+
+        # G. Instant PEAD Drift Radar Alert Dispatch upon new result announcement
+        try:
+            from app.services.opportunity_alert_service import OpportunityAlertService
+            pead_alert = OpportunityAlertService.dispatch_single_pead_flash(
+                db=db,
+                filing=filing,
+                flash=flash,
+            )
+            if pead_alert:
+                logger.info(f"[ATHENA] Instant PEAD Drift alert dispatched for {sym}: {pead_alert.get('title')}")
+        except Exception as e:
+            logger.warning(f"[ATHENA] Instant PEAD alert notice for {sym}: {e}")
 
         return {
             "filing_id": filing.id,

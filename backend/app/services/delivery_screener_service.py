@@ -34,6 +34,7 @@ DISK_CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "deli
 class DeliveryScreenerService:
     _cached_results: Optional[List[Dict[str, Any]]] = None
     _last_scan_time: float = 0
+    _last_bhavcopy_sync: float = 0
     _scan_metadata: Dict[str, Any] = {}
     _scan_in_progress: bool = False
     _scan_lock = threading.Lock()
@@ -44,7 +45,12 @@ class DeliveryScreenerService:
         try:
             # 1. Try VelocityCacheManager (Redis + In-Memory fallback)
             cached_data = cache.get_json_sync("screener:delivery:universe")
-            if cached_data and isinstance(cached_data, dict) and "opportunities" in cached_data and cached_data["opportunities"]:
+            if (
+                cached_data
+                and isinstance(cached_data, dict)
+                and "opportunities" in cached_data
+                and isinstance(cached_data["opportunities"], list)
+            ):
                 cls._last_scan_time = cached_data.get("timestamp", 0)
                 cls._cached_results = cached_data.get("opportunities", [])
                 cls._scan_metadata = cached_data.get("metadata", {})
@@ -55,7 +61,12 @@ class DeliveryScreenerService:
             if DISK_CACHE_PATH.exists():
                 with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
                     cached = json.load(f)
-                    if cached and isinstance(cached, dict) and "opportunities" in cached and cached["opportunities"]:
+                    if (
+                        cached
+                        and isinstance(cached, dict)
+                        and "opportunities" in cached
+                        and isinstance(cached["opportunities"], list)
+                    ):
                         cls._last_scan_time = cached.get("timestamp", 0)
                         cls._cached_results = cached.get("opportunities", [])
                         cls._scan_metadata = cached.get("metadata", {})
@@ -96,7 +107,13 @@ class DeliveryScreenerService:
         """
         Scans recent trading sessions up to today and downloads any missing official
         security-wise delivery bhavcopies from NSE archives.
+        Avoids hammering NSE if synced within 30 minutes, and skips today before 18:30 IST.
         """
+        now = time.time()
+        if (now - cls._last_bhavcopy_sync) < 1800:
+            return 0
+        cls._last_bhavcopy_sync = now
+
         import datetime
         from curl_cffi import requests
 
@@ -109,10 +126,17 @@ class DeliveryScreenerService:
         }
 
         today = datetime.date.today()
+        # NSE publishes security-wise bhavcopy only after 18:30 IST (UTC + 5:30)
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        ist_time = now_utc + datetime.timedelta(hours=5, minutes=30)
+        market_bhavcopy_ready = ist_time.time() >= datetime.time(18, 30)
+
         downloaded = 0
         for i in range(days_back, -1, -1):
             d = today - datetime.timedelta(days=i)
             if d.weekday() >= 5:
+                continue
+            if d == today and not market_bhavcopy_ready:
                 continue
             d_str = d.strftime("%d%m%Y")
             fpath = target_dir / f"sec_bhavdata_full_{d_str}.csv"
@@ -120,7 +144,7 @@ class DeliveryScreenerService:
                 url = f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d_str}.csv"
                 try:
                     s = requests.Session(impersonate="chrome124")
-                    r = s.get(url, headers=headers, timeout=12)
+                    r = s.get(url, headers=headers, timeout=4)
                     if r.status_code == 200 and len(r.content) > 10000:
                         with open(fpath, "wb") as f:
                             f.write(r.content)
@@ -131,7 +155,7 @@ class DeliveryScreenerService:
         return downloaded
 
     @classmethod
-    def trigger_background_scan(cls, min_spike: float = 1.6, min_deliv_per: float = 55.0, lookback_sessions: int = 1) -> None:
+    def trigger_background_scan(cls, min_spike: float = 1.0, min_deliv_per: float = 40.0, lookback_sessions: int = 10) -> None:
         """Launches non-blocking background scan worker if not already running."""
         with cls._scan_lock:
             if cls._scan_in_progress:
@@ -141,6 +165,7 @@ class DeliveryScreenerService:
         def _worker():
             try:
                 logger.info("[DeliveryScreenerService] Starting non-blocking background delivery scan...")
+                cls.sync_missing_bhavcopies(days_back=10)
                 cls._execute_full_scan(min_spike=min_spike, min_deliv_per=min_deliv_per, lookback_sessions=lookback_sessions)
                 logger.info("[DeliveryScreenerService] Background delivery scan completed.")
             except Exception as e:
@@ -153,23 +178,27 @@ class DeliveryScreenerService:
         thread.start()
 
     @classmethod
-    def scan_opportunities(cls, force_refresh: bool = False, min_spike: float = 1.6, min_deliv_per: float = 55.0, lookback_sessions: int = 1) -> Dict[str, Any]:
+    def scan_opportunities(cls, force_refresh: bool = False, min_spike: float = 1.0, min_deliv_per: float = 40.0, lookback_sessions: int = 10) -> Dict[str, Any]:
         """
         Executes the institutional delivery screener over the latest market data.
-        Returns cached results quickly if available, but synchronously executes fresh scan
-        when force_refresh is requested so user actions receive live data immediately.
+        Returns cached results instantaneously (< 10ms). Uses stale-while-revalidate pattern
+        so the API NEVER times out.
         """
-        # 1. If force_refresh is explicitly requested: execute fresh scan synchronously
-        if force_refresh:
-            return cls._execute_full_scan(min_spike=min_spike, min_deliv_per=min_deliv_per, lookback_sessions=lookback_sessions)
-
-        # 2. Restore from disk on cold start if memory cache is empty
+        # 1. Restore from disk on cold start if memory cache is empty
         if cls._cached_results is None:
             cls._load_disk_cache()
 
         now = time.time()
-        has_cache = cls._cached_results is not None and len(cls._cached_results) > 0
+        has_cache = cls._cached_results is not None and isinstance(cls._cached_results, list)
         is_stale = (now - cls._last_scan_time) >= 300
+
+        # 2. If force_refresh is requested and cache exists: return cached instantly & refresh background
+        if has_cache and force_refresh:
+            cls.trigger_background_scan(min_spike=min_spike, min_deliv_per=min_deliv_per, lookback_sessions=lookback_sessions)
+            return {
+                "metadata": cls._scan_metadata,
+                "opportunities": cls._cached_results,
+            }
 
         # 3. If cached data exists and not stale: return immediately
         if has_cache:
@@ -180,15 +209,21 @@ class DeliveryScreenerService:
                 "opportunities": cls._cached_results,
             }
 
-        # 4. If cold boot with no disk cache: execute synchronously
-        return cls._execute_full_scan(min_spike=min_spike, min_deliv_per=min_deliv_per, lookback_sessions=lookback_sessions)
+        # 4. If cold boot with no disk cache: protect with lock to avoid duplicate parallel scans
+        with cls._scan_lock:
+            if cls._cached_results is not None:
+                return {
+                    "metadata": cls._scan_metadata,
+                    "opportunities": cls._cached_results,
+                }
+            return cls._execute_full_scan(min_spike=min_spike, min_deliv_per=min_deliv_per, lookback_sessions=lookback_sessions)
 
     @classmethod
-    def _execute_full_scan(cls, min_spike: float = 1.6, min_deliv_per: float = 55.0, lookback_sessions: int = 1) -> Dict[str, Any]:
+    def _execute_full_scan(cls, min_spike: float = 1.0, min_deliv_per: float = 40.0, lookback_sessions: int = 10) -> Dict[str, Any]:
         t0 = time.time()
         now = time.time()
 
-        # 1. Sync any missing recent daily bhavcopies from NSE
+        # 1. Sync any missing recent daily bhavcopies from NSE (non-blocking if recently checked)
         try:
             cls.sync_missing_bhavcopies(days_back=10)
         except Exception as sync_err:
@@ -261,10 +296,15 @@ class DeliveryScreenerService:
                     comp_names[sym] = str(r.get("NAME OF COMPANY", sym)).strip()
                     comp_sectors[sym] = str(r.get("SECTOR", "Equity / Diversified")).strip()
 
+        cols_needed = {
+            "SYMBOL", "SERIES", "DATE1", "OPEN_PRICE", "HIGH_PRICE", "LOW_PRICE",
+            "CLOSE_PRICE", "PREV_CLOSE", "AVG_PRICE", "TTL_TRD_QNTY", "TURNOVER_LACS",
+            "NO_OF_TRADES", "DELIV_QTY", "DELIV_PER"
+        }
         records = []
         for f in recent_files:
             try:
-                df = pd.read_csv(f)
+                df = pd.read_csv(f, usecols=lambda c: c.strip() in cols_needed)
                 df.columns = [c.strip() for c in df.columns]
                 if "SERIES" in df.columns:
                     df = df[df["SERIES"].str.strip() == "EQ"].copy()
@@ -370,10 +410,10 @@ class DeliveryScreenerService:
 
         all_df["RSI_14"] = grouped["CLOSE"].transform(calc_rsi)
 
-        # Slice latest sessions based on lookback
+        # Slice latest sessions based on lookback (universe caches full 10-session pool)
         unique_dates = sorted(all_df["DATE"].unique())
         latest_date = unique_dates[-1]
-        lookback = max(1, min(10, lookback_sessions))
+        lookback = max(10, min(10, lookback_sessions))
         target_dates = unique_dates[-lookback:]
         
         latest_df = all_df[all_df["DATE"].isin(target_dates)].copy()
@@ -437,10 +477,10 @@ class DeliveryScreenerService:
         qualifying_mask = is_apex | is_active | is_base
         candidates = latest_df[qualifying_mask].copy()
 
-        # Apply user threshold parameters if more restrictive than base
-        if min_spike > 1.6:
+        # In universe scan, preserve full candidate pool for dynamic in-memory API slice filtering
+        if min_spike > 1.0:
             candidates = candidates[candidates["DELIV_SPIKE_10X"] >= min_spike]
-        if min_deliv_per > 55.0:
+        if min_deliv_per > 30.0:
             candidates = candidates[candidates["DELIV_PER"] >= min_deliv_per]
 
         opportunities = []

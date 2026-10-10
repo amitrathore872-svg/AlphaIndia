@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
@@ -19,7 +19,9 @@ import {
   Star,
   ExternalLink,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
+  X,
   Info,
   Sliders,
   Calendar,
@@ -37,10 +39,13 @@ import {
   fetchHotPicks,
   fetchBrokerScorecards,
   fetchBrokerageMetrics,
+  fetchAllStocksConsensus,
+  triggerBrokerageIngestion,
   type BrokerageReportItem,
   type BrokerScorecardItem,
   type HotPickItem,
   type BrokerageMetricsRibbon,
+  type StockConsensusGroupItem,
 } from "@/lib/brokerageApi";
 
 export default function BrokerageRadarPage() {
@@ -49,8 +54,18 @@ export default function BrokerageRadarPage() {
   const [scorecards, setScorecards] = useState<BrokerScorecardItem[]>([]);
   const [metrics, setMetrics] = useState<BrokerageMetricsRibbon | null>(null);
 
+  // Consensus by Stock State
+  const [consensusStocks, setConsensusStocks] = useState<StockConsensusGroupItem[]>([]);
+  const [minBrokersFilter, setMinBrokersFilter] = useState<number>(1);
+  const [consensusSortBy, setConsensusSortBy] = useState<string>("broker_count");
+  const [consensusSortOrder, setConsensusSortOrder] = useState<"asc" | "desc">("desc");
+  const [expandedStocks, setExpandedStocks] = useState<Set<string>>(new Set());
+  const [selectedConsensusStock, setSelectedConsensusStock] = useState<StockConsensusGroupItem | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestBanner, setIngestBanner] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
 
   // Filters & State
@@ -63,15 +78,27 @@ export default function BrokerageRadarPage() {
   const [sortBy, setSortBy] = useState("report_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const [activeView, setActiveView] = useState<"feed" | "league">("feed");
+  const [activeView, setActiveView] = useState<"feed" | "consensus" | "league">("feed");
 
   // Selected report for side drawer / modal
   const [selectedReport, setSelectedReport] = useState<BrokerageReportItem | null>(null);
 
+  const toggleStockExpanded = (symbol: string) => {
+    setExpandedStocks((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
+      }
+      return next;
+    });
+  };
+
   const loadData = async () => {
     try {
       setIsRefreshing(true);
-      const [feedRes, hotRes, scoreRes, metricsRes] = await Promise.all([
+      const [feedRes, hotRes, scoreRes, metricsRes, consensusRes] = await Promise.all([
         fetchBrokerageFeed({
           page,
           limit: 50,
@@ -87,6 +114,13 @@ export default function BrokerageRadarPage() {
         fetchHotPicks(6),
         fetchBrokerScorecards(),
         fetchBrokerageMetrics(),
+        fetchAllStocksConsensus({
+          market_cap_category: selectedCap !== "ALL" ? selectedCap : undefined,
+          search: searchQuery || undefined,
+          min_brokers: minBrokersFilter,
+          sort_by: consensusSortBy,
+          sort_order: consensusSortOrder,
+        }),
       ]);
 
       setReports(feedRes.items || []);
@@ -94,6 +128,7 @@ export default function BrokerageRadarPage() {
       setHotPicks(hotRes.data || []);
       setScorecards(scoreRes.data || []);
       setMetrics(metricsRes.data || null);
+      setConsensusStocks(consensusRes.data || []);
     } catch (err) {
       console.error("Failed to load brokerage data:", err);
     } finally {
@@ -102,9 +137,38 @@ export default function BrokerageRadarPage() {
     }
   };
 
+  const handleRunLiveScan = async () => {
+    try {
+      setIsIngesting(true);
+      setIngestBanner(null);
+      const res = await triggerBrokerageIngestion(7);
+      setIngestBanner(
+        `Live Scan Completed: ${res.total_discovered} institutional calls discovered (${res.new_reports} new, ${res.updated_reports} updated). Feed is now live up to today!`
+      );
+      await loadData();
+    } catch (err: any) {
+      console.error("Live scan failed:", err);
+      setIngestBanner(`Scan Notice: ${err?.message || "Failed to complete live feed scan"}`);
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
-  }, [page, selectedBroker, selectedAction, selectedCap, selectedHorizon, minConviction, sortBy, sortOrder]);
+  }, [
+    page,
+    selectedBroker,
+    selectedAction,
+    selectedCap,
+    selectedHorizon,
+    minConviction,
+    sortBy,
+    sortOrder,
+    minBrokersFilter,
+    consensusSortBy,
+    consensusSortOrder,
+  ]);
 
   // Debounced search
   useEffect(() => {
@@ -113,6 +177,15 @@ export default function BrokerageRadarPage() {
     }, 350);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Fast symbol lookup map for multi-broker consensus
+  const consensusMap = useMemo(() => {
+    const map = new Map<string, StockConsensusGroupItem>();
+    for (const item of consensusStocks) {
+      map.set(item.symbol, item);
+    }
+    return map;
+  }, [consensusStocks]);
 
   // Unique list of brokerage houses from scorecards
   const brokerList = useMemo(() => {
@@ -147,7 +220,7 @@ export default function BrokerageRadarPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* View Switcher: Feed vs League Table */}
+            {/* View Switcher: Feed vs Consensus vs League Table */}
             <div className="flex rounded-xl bg-slate-900 border border-slate-800 p-1 text-xs font-mono">
               <button
                 onClick={() => setActiveView("feed")}
@@ -158,6 +231,21 @@ export default function BrokerageRadarPage() {
                 }`}
               >
                 Research Feed
+              </button>
+              <button
+                onClick={() => setActiveView("consensus")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                  activeView === "consensus"
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>Consensus by Stock</span>
+                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                  activeView === "consensus" ? "bg-slate-950/40 text-slate-950" : "bg-cyan-950 text-cyan-300"
+                }`}>
+                  {consensusStocks.length}
+                </span>
               </button>
               <button
                 onClick={() => setActiveView("league")}
@@ -172,15 +260,41 @@ export default function BrokerageRadarPage() {
             </div>
 
             <button
+              onClick={handleRunLiveScan}
+              disabled={isIngesting || isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-slate-950 font-bold text-xs font-mono shadow-md shadow-cyan-950/40 transition disabled:opacity-50"
+            >
+              <Sparkles size={14} className={isIngesting ? "animate-spin text-white" : "text-slate-950"} />
+              <span>{isIngesting ? "Scanning..." : "Scan Live Feed"}</span>
+            </button>
+
+            <button
               onClick={loadData}
-              disabled={isRefreshing}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0B1528] border border-cyan-500/30 text-cyan-300 hover:bg-cyan-950/40 text-xs font-mono font-semibold transition"
+              disabled={isRefreshing || isIngesting}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0B1528] border border-cyan-500/30 text-cyan-300 hover:bg-cyan-950/40 text-xs font-mono font-semibold transition disabled:opacity-50"
             >
               <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
               <span>Refresh</span>
             </button>
           </div>
         </div>
+
+        {/* Live Scan Notification Banner */}
+        {ingestBanner && (
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/40 to-[#071325] text-cyan-200 text-xs font-mono shadow-md">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+              <span>{ingestBanner}</span>
+            </div>
+            <button
+              onClick={() => setIngestBanner(null)}
+              className="text-slate-400 hover:text-white text-xs ml-4"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
 
         {/* ===================================================================== */}
         {/* 2. HEADER METRICS RIBBON                                              */}
@@ -448,8 +562,9 @@ export default function BrokerageRadarPage() {
                   className="rounded-xl border border-slate-800 bg-[#081224] px-3 py-2 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
                 >
                   <option value={0}>All Conviction</option>
-                  <option value={80}>Conviction â‰¥ 80 (High)</option>
-                  <option value={90}>Conviction â‰¥ 90 (Elite)</option>
+                  <option value={80}>Conviction ≥ 80 (High)</option>
+                  <option value={85}>Conviction ≥ 85 (Hot Picks)</option>
+                  <option value={90}>Conviction ≥ 90 (Elite)</option>
                 </select>
 
                 {/* Horizon Filter */}
@@ -474,18 +589,18 @@ export default function BrokerageRadarPage() {
               <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
                 <span>Sort:</span>
                 <select
-                  value={`${sortBy}_${sortOrder}`}
+                  value={`${sortBy}:::${sortOrder}`}
                   onChange={(e) => {
-                    const [f, o] = e.target.value.split("_");
+                    const [f, o] = e.target.value.split(":::");
                     setSortBy(f);
                     setSortOrder(o as "asc" | "desc");
                   }}
                   className="rounded-xl border border-slate-800 bg-[#081224] px-3 py-1.5 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
                 >
-                  <option value="report_date_desc">Latest Date (Newest)</option>
-                  <option value="conviction_score_desc">Conviction Score (Highest)</option>
-                  <option value="upside_pct_desc">Implied Upside (Highest)</option>
-                  <option value="target_revision_pct_desc">Target Revision % (Highest)</option>
+                  <option value="report_date:::desc">Latest Date (Newest)</option>
+                  <option value="conviction_score:::desc">Conviction Score (Highest)</option>
+                  <option value="upside_pct:::desc">Implied Upside (Highest)</option>
+                  <option value="target_revision_pct:::desc">Target Revision % (Highest)</option>
                 </select>
               </div>
             </div>
@@ -535,14 +650,34 @@ export default function BrokerageRadarPage() {
                             </td>
 
                             <td className="py-3.5 px-4 whitespace-nowrap">
-                              <Link
-                                href={`/stocks/${r.symbol}?tab=brokerage&from=/brokerage-radar`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="font-bold text-white hover:text-cyan-400 transition flex items-center gap-1.5"
-                              >
-                                <span>{r.symbol}</span>
-                                <ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                              </Link>
+                              <div className="flex items-center gap-2">
+                                <Link
+                                  href={`/stocks/${r.symbol}?tab=brokerage&from=/brokerage-radar`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="font-bold text-white hover:text-cyan-400 transition flex items-center gap-1.5"
+                                >
+                                  <span>{r.symbol}</span>
+                                  <ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                                </Link>
+                                {(() => {
+                                  const c = consensusMap.get(r.symbol);
+                                  if (c && c.broker_count > 1) {
+                                    return (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedConsensusStock(c);
+                                        }}
+                                        className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition flex items-center gap-1 shadow-sm"
+                                        title={`View all ${c.total_reports} recommendations across ${c.broker_count} brokerages`}
+                                      >
+                                        <span>{c.broker_count} Desks</span>
+                                      </button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                               <div className="text-[10px] text-slate-400 font-sans truncate max-w-[140px]">
                                 {r.sector}
                               </div>
@@ -683,7 +818,353 @@ export default function BrokerageRadarPage() {
         )}
 
         {/* ===================================================================== */}
-        {/* 5. ACTIVE VIEW: 60+ BROKER LEAGUE TABLE                               */}
+        {/* 5. ACTIVE VIEW: MULTI-BROKER CONSENSUS BY STOCK                       */}
+        {/* ===================================================================== */}
+        {activeView === "consensus" && (
+          <div className="space-y-4">
+            {/* Consensus Toolbar & Filter Bar */}
+            <div className="rounded-2xl border border-slate-800 bg-[#060D19] p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+              <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by Symbol, Company, Sector, or Broker..."
+                    className="w-full rounded-xl border border-slate-800 bg-[#081224] pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Market Cap Filter */}
+                <div className="flex items-center gap-1 bg-[#081224] p-1 rounded-xl border border-slate-800 font-mono text-xs">
+                  <button
+                    onClick={() => setSelectedCap("ALL")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      selectedCap === "ALL" ? "bg-cyan-500 text-slate-950 font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    All Caps
+                  </button>
+                  <button
+                    onClick={() => setSelectedCap("LARGE_CAP")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      selectedCap === "LARGE_CAP" ? "bg-cyan-500 text-slate-950 font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Large
+                  </button>
+                  <button
+                    onClick={() => setSelectedCap("MID_CAP")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      selectedCap === "MID_CAP" ? "bg-cyan-500 text-slate-950 font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Mid
+                  </button>
+                  <button
+                    onClick={() => setSelectedCap("SMALL_CAP")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      selectedCap === "SMALL_CAP" ? "bg-cyan-500 text-slate-950 font-bold" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Small
+                  </button>
+                </div>
+
+                {/* Min Brokers Coverage Filter */}
+                <select
+                  value={minBrokersFilter}
+                  onChange={(e) => setMinBrokersFilter(Number(e.target.value))}
+                  className="rounded-xl border border-slate-800 bg-[#081224] px-3 py-2 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value={1}>All Covered Stocks ({consensusStocks.length})</option>
+                  <option value={2}>🔥 Multi-Broker Only (2+ Desks)</option>
+                  <option value={3}>⭐ Heavy Coverage (3+ Desks)</option>
+                </select>
+              </div>
+
+              {/* Sort Dropdown */}
+              <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                <span>Sort:</span>
+                <select
+                  value={`${consensusSortBy}:::${consensusSortOrder}`}
+                  onChange={(e) => {
+                    const [f, o] = e.target.value.split(":::");
+                    setConsensusSortBy(f);
+                    setConsensusSortOrder(o as "asc" | "desc");
+                  }}
+                  className="rounded-xl border border-slate-800 bg-[#081224] px-3 py-1.5 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="broker_count:::desc">Most Broker Desks</option>
+                  <option value="consensus_upside_pct:::desc">Consensus Upside % (Highest)</option>
+                  <option value="avg_conviction_score:::desc">Avg Conviction (Highest)</option>
+                  <option value="total_reports:::desc">Total Research Notes</option>
+                  <option value="symbol:::asc">Stock Symbol (A-Z)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Stocks Consensus Table */}
+            <div className="rounded-2xl border border-slate-800 bg-[#060D19] shadow-2xl overflow-hidden">
+              {consensusStocks.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 font-mono text-xs">
+                  No stocks match the consensus filters. Try selecting "All Covered Stocks".
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-800/80">
+                  {consensusStocks.map((stock) => {
+                    const isExpanded = expandedStocks.has(stock.symbol);
+
+                    return (
+                      <div key={stock.symbol} className="p-4 transition hover:bg-slate-900/30 font-mono">
+                        {/* Top Stock Bar */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          {/* Symbol, Name, Market Cap & Stance */}
+                          <div className="flex items-start sm:items-center gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Link
+                                  href={`/stocks/${stock.symbol}?tab=brokerage&from=/brokerage-radar`}
+                                  className="text-base font-black text-white hover:text-cyan-400 transition flex items-center gap-1"
+                                >
+                                  <span>{stock.symbol}</span>
+                                  <ArrowUpRight size={14} className="text-cyan-400" />
+                                </Link>
+
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    stock.market_cap_category === "LARGE_CAP"
+                                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                      : stock.market_cap_category === "MID_CAP"
+                                      ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                                      : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  }`}
+                                >
+                                  {stock.market_cap_category === "LARGE_CAP"
+                                    ? "Large Cap"
+                                    : stock.market_cap_category === "MID_CAP"
+                                    ? "Mid Cap"
+                                    : "Small Cap"}
+                                </span>
+
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    stock.consensus_stance === "STRONG_CONSENSUS_BUY"
+                                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                      : stock.consensus_stance === "MODERATE_BUY"
+                                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                      : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  }`}
+                                >
+                                  {stock.consensus_stance.replace(/_/g, " ")} ({stock.ratings_breakdown.buy} Buy{stock.ratings_breakdown.hold > 0 ? `, ${stock.ratings_breakdown.hold} Hold` : ""}{stock.ratings_breakdown.sell > 0 ? `, ${stock.ratings_breakdown.sell} Sell` : ""})
+                                </span>
+
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  {stock.broker_count} Broker Desks ({stock.total_reports} Calls)
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-400 font-sans mt-0.5">
+                                {stock.company_name} · <span className="text-slate-500">{stock.sector}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* CMP, Target Corridor & Upside */}
+                          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                            <div>
+                              <div className="text-[10px] text-slate-500 uppercase font-mono">Current CMP</div>
+                              <div className="text-sm font-bold text-white mt-0.5">
+                                ₹{stock.current_price.toLocaleString()}
+                              </div>
+                            </div>
+
+                            <div className="hidden sm:block">
+                              <div className="text-[10px] text-slate-500 uppercase font-mono">Target Price Corridor</div>
+                              <div className="text-xs text-cyan-300 font-bold mt-0.5 flex items-center gap-1.5">
+                                <span>₹{stock.target_corridor.low.toLocaleString()}</span>
+                                <span className="text-slate-500">➔</span>
+                                <span className="text-white bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                                  ₹{stock.target_corridor.median.toLocaleString()}
+                                </span>
+                                <span className="text-slate-500">➔</span>
+                                <span>₹{stock.target_corridor.high.toLocaleString()}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] text-slate-500 uppercase font-mono">Consensus Upside</div>
+                              <div className={`text-sm font-black mt-0.5 ${stock.consensus_upside_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                {stock.consensus_upside_pct >= 0 ? "+" : ""}{stock.consensus_upside_pct}%
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] text-slate-500 uppercase font-mono">Avg Conviction</div>
+                              <div className="text-xs font-bold text-amber-300 mt-0.5 flex items-center gap-1">
+                                <Star size={11} className="fill-amber-400 text-amber-400" />
+                                <span>{stock.avg_conviction_score}/100</span>
+                              </div>
+                            </div>
+
+                            {/* Accordion Toggle */}
+                            <button
+                              onClick={() => toggleStockExpanded(stock.symbol)}
+                              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${
+                                isExpanded
+                                  ? "bg-cyan-500 text-slate-950 border-cyan-400"
+                                  : "bg-[#0A1628] hover:bg-cyan-950/40 text-cyan-300 border-slate-700 hover:border-cyan-500/50"
+                              }`}
+                            >
+                              <span>{isExpanded ? "Hide Calls" : `View ${stock.reports.length} Recommendations`}</span>
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Covering Broker Chips Row */}
+                        <div className="mt-3 flex items-center gap-2 flex-wrap text-[11px]">
+                          <span className="text-[10px] text-slate-500 uppercase">Covering Desks:</span>
+                          {stock.reports.map((rep) => (
+                            <button
+                              key={rep.id}
+                              onClick={() => setSelectedReport(rep)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-800 bg-[#081224] hover:border-cyan-500/40 hover:bg-cyan-950/30 transition text-slate-300 group"
+                            >
+                              <span className="font-semibold text-slate-200 group-hover:text-cyan-300">{rep.brokerage_house}</span>
+                              <span className="text-slate-500">·</span>
+                              <span className="font-bold text-cyan-400">₹{rep.target_price.toLocaleString()}</span>
+                              <span className={`text-[10px] font-bold ${rep.upside_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                ({rep.upside_pct >= 0 ? "+" : ""}{rep.upside_pct}%)
+                              </span>
+                              <span className="text-[9px] text-amber-400/80">★ {rep.conviction_score}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Expanded Full Multi-Broker Recommendation Table */}
+                        {isExpanded && (
+                          <div className="mt-4 pt-4 border-t border-slate-800/80 space-y-3 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between text-xs text-slate-400">
+                              <span className="font-bold uppercase tracking-wider text-cyan-300 text-[10px]">
+                                Detailed Chronological Brokerage History for {stock.symbol} ({stock.company_name})
+                              </span>
+                              <Link
+                                href={`/stocks/${stock.symbol}?tab=brokerage&from=/brokerage-radar`}
+                                className="text-cyan-400 hover:underline flex items-center gap-1 text-[11px]"
+                              >
+                                <span>Full Stock Terminal</span>
+                                <ExternalLink size={11} />
+                              </Link>
+                            </div>
+
+                            <div className="rounded-xl border border-slate-800 bg-[#070F1E] overflow-x-auto shadow-inner">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="border-b border-slate-800 bg-[#091526] text-slate-400 font-mono text-[10px] uppercase">
+                                    <th className="py-2.5 px-3">Date</th>
+                                    <th className="py-2.5 px-3">Brokerage Desk</th>
+                                    <th className="py-2.5 px-3">Action</th>
+                                    <th className="py-2.5 px-3">Rating</th>
+                                    <th className="py-2.5 px-3">CMP ➔ Target Price</th>
+                                    <th className="py-2.5 px-3">Target Horizon</th>
+                                    <th className="py-2.5 px-3">Conviction Score</th>
+                                    <th className="py-2.5 px-3">Core Catalyst / Note</th>
+                                    <th className="py-2.5 px-3 text-right">Details</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                                  {stock.reports.map((r) => (
+                                    <tr
+                                      key={r.id}
+                                      className="hover:bg-cyan-950/20 transition cursor-pointer"
+                                      onClick={() => setSelectedReport(r)}
+                                    >
+                                      <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+                                        {r.report_date}
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap">
+                                        <div className="font-semibold text-white">{r.brokerage_house}</div>
+                                        <div className="text-[10px] text-cyan-400 flex items-center gap-1">
+                                          <Star size={10} className="fill-cyan-400 text-cyan-400" />
+                                          <span>{r.broker_star_rating}★</span>
+                                          <span className="text-slate-400">· {r.broker_hit_rate_pct}% Hit Rate</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                          r.action === "UPGRADE" || r.action === "TARGET_UP"
+                                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                            : r.action === "INITIATION"
+                                            ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                                        }`}>
+                                          {r.action}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-3 font-bold text-white whitespace-nowrap">
+                                        {r.current_rating}
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap">
+                                        <div className="text-white font-bold">
+                                          ₹{r.price_at_reco.toLocaleString()} ➔ ₹{r.target_price.toLocaleString()}
+                                        </div>
+                                        <div className={`text-[10px] font-bold ${r.upside_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                          {r.upside_pct >= 0 ? "+" : ""}{r.upside_pct}% Implied Upside
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap">
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-cyan-950/60 border border-cyan-800/40 text-cyan-300">
+                                          <Clock size={10} />
+                                          <span>{r.target_horizon}</span>
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                            <div
+                                              className={`h-full rounded-full ${
+                                                r.conviction_score >= 85 ? "bg-emerald-400" : "bg-cyan-400"
+                                              }`}
+                                              style={{ width: `${r.conviction_score}%` }}
+                                            />
+                                          </div>
+                                          <span className="font-bold text-white text-xs">{r.conviction_score}</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-slate-300 font-sans max-w-xs truncate" title={r.headline || r.investment_thesis || ""}>
+                                        {r.headline || r.investment_thesis || "—"}
+                                      </td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedReport(r);
+                                          }}
+                                          className="px-2 py-0.5 rounded bg-[#091526] hover:bg-cyan-950/40 border border-slate-700 hover:border-cyan-500/50 text-[10px] text-cyan-300 transition"
+                                        >
+                                          View Thesis
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================== */}
+        {/* 6. ACTIVE VIEW: 60+ BROKER LEAGUE TABLE                               */}
         {/* ===================================================================== */}
         {activeView === "league" && (
           <div className="space-y-4">
@@ -798,7 +1279,7 @@ export default function BrokerageRadarPage() {
                   onClick={() => setSelectedReport(null)}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
                 >
-                  âœ•
+                  <X size={18} />
                 </button>
               </div>
 
@@ -862,15 +1343,322 @@ export default function BrokerageRadarPage() {
                 </div>
               </div>
 
+              {/* Other Broker Recommendations on This Stock */}
+              {(() => {
+                const stockConsensus = consensusMap.get(selectedReport.symbol);
+                if (!stockConsensus) return null;
+                const otherCalls = stockConsensus.reports.filter((r) => r.id !== selectedReport.id);
+
+                return (
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2.5 font-mono">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
+                          Consensus Across {stockConsensus.broker_count} Desks ({stockConsensus.total_reports} Calls)
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                          Corridor: ₹{stockConsensus.target_corridor.low.toLocaleString()} ➔ ₹{stockConsensus.target_corridor.median.toLocaleString()} ➔ ₹{stockConsensus.target_corridor.high.toLocaleString()}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedReport(null);
+                          setSelectedConsensusStock(stockConsensus);
+                        }}
+                        className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition underline underline-offset-2 flex items-center gap-1"
+                      >
+                        <span>Compare all {stockConsensus.broker_count} desks</span>
+                        <ArrowUpRight size={11} />
+                      </button>
+                    </div>
+
+                    {otherCalls.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        {otherCalls.slice(0, 4).map((oc) => (
+                          <button
+                            key={oc.id}
+                            onClick={() => setSelectedReport(oc)}
+                            className="text-left p-2.5 rounded-lg bg-[#081224] border border-slate-800/80 hover:border-cyan-500/50 hover:bg-slate-800/50 transition group flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-bold text-white group-hover:text-cyan-300 transition text-[11px]">
+                                {oc.brokerage_house}
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                <span className="text-cyan-400 font-bold">{oc.current_rating}</span>
+                                <span>·</span>
+                                <span>{oc.target_horizon || "12M"}</span>
+                                <span>·</span>
+                                <span>
+                                  {oc.report_date
+                                    ? new Date(oc.report_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                                    : "Recent"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right font-mono">
+                              <div className="font-bold text-cyan-400 text-xs">₹{oc.target_price.toLocaleString()}</div>
+                              <div className={`text-[10px] font-bold ${oc.upside_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                +{oc.upside_pct}%
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400">
+                        This is currently the sole active institutional report tracked for this ticker.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Action Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <Link
-                  href={`/stocks/${selectedReport.symbol}?tab=brokerage&from=/brokerage-radar`}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400 transition"
+              <div className="pt-2 flex items-center justify-between">
+                {(() => {
+                  const stockConsensus = consensusMap.get(selectedReport.symbol);
+                  if (!stockConsensus) return <div />;
+                  return (
+                    <button
+                      onClick={() => {
+                        setSelectedReport(null);
+                        setSelectedConsensusStock(stockConsensus);
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 font-mono font-bold transition"
+                    >
+                      <span>⚡ Open Multi-Broker Workspace</span>
+                    </button>
+                  );
+                })()}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedReport(null)}
+                    className="rounded-xl border border-slate-700 px-3.5 py-2 text-xs font-mono text-slate-300 hover:bg-slate-800 transition"
+                  >
+                    Close
+                  </button>
+                  <Link
+                    href={`/stocks/${selectedReport.symbol}?tab=brokerage&from=/brokerage-radar`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400 transition"
+                  >
+                    <span>Open Full Stock Consensus Page</span>
+                    <ExternalLink size={13} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================== */}
+        {/* 7. DEDICATED MULTI-BROKER CONSENSUS MODAL FOR A STOCK                 */}
+        {/* ===================================================================== */}
+        {selectedConsensusStock && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+            <div className="w-full max-w-4xl rounded-2xl border border-cyan-500/50 bg-[#081224] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-mono font-black px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                      {selectedConsensusStock.symbol}
+                    </span>
+                    <span className="text-sm font-bold text-white">{selectedConsensusStock.company_name}</span>
+                    <span className="text-xs text-slate-400">· {selectedConsensusStock.sector}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        selectedConsensusStock.market_cap_category === "LARGE_CAP"
+                          ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                          : selectedConsensusStock.market_cap_category === "MID_CAP"
+                          ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                          : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                      }`}
+                    >
+                      {selectedConsensusStock.market_cap_category === "LARGE_CAP"
+                        ? "Large Cap"
+                        : selectedConsensusStock.market_cap_category === "MID_CAP"
+                        ? "Mid Cap"
+                        : "Small Cap"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Consolidated institutional view: {selectedConsensusStock.broker_count} broker desks covering this equity across {selectedConsensusStock.total_reports} research notes.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setSelectedConsensusStock(null)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition"
                 >
-                  <span>Open Full Stock Consensus Page</span>
-                  <ExternalLink size={13} />
-                </Link>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Target Corridor & Consensus Metrics Banner */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-900/90 border border-slate-800 font-mono text-center">
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Current CMP</div>
+                  <div className="text-base font-black text-white mt-0.5">
+                    ₹{selectedConsensusStock.current_price.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Consensus Median Target</div>
+                  <div className="text-base font-black text-cyan-400 mt-0.5">
+                    ₹{selectedConsensusStock.consensus_target.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Consensus Upside</div>
+                  <div className={`text-base font-black mt-0.5 ${selectedConsensusStock.consensus_upside_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {selectedConsensusStock.consensus_upside_pct >= 0 ? "+" : ""}{selectedConsensusStock.consensus_upside_pct}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase">Consensus Stance</div>
+                  <div className="text-xs font-bold text-amber-300 mt-1">
+                    {selectedConsensusStock.consensus_stance.replace(/_/g, " ")}
+                  </div>
+                </div>
+              </div>
+
+              {/* Corridor Visualizer */}
+              <div className="p-3.5 rounded-xl bg-[#060D19] border border-cyan-500/20 font-mono text-xs space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="font-bold uppercase tracking-wider text-cyan-300">Street Target Price Corridor</span>
+                  <span className="text-slate-500">
+                    Low ₹{selectedConsensusStock.target_corridor.low.toLocaleString()} to High ₹{selectedConsensusStock.target_corridor.high.toLocaleString()} (₹{(selectedConsensusStock.target_corridor.high - selectedConsensusStock.target_corridor.low).toLocaleString()} Spread)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-left">
+                    <span className="text-[10px] text-slate-500 uppercase block">Street Low</span>
+                    <span className="text-sm font-bold text-slate-300">₹{selectedConsensusStock.target_corridor.low.toLocaleString()}</span>
+                  </div>
+                  <div className="text-center px-4 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-500/40">
+                    <span className="text-[10px] text-cyan-400 uppercase font-bold block">Consensus Median</span>
+                    <span className="text-base font-black text-cyan-300">₹{selectedConsensusStock.target_corridor.median.toLocaleString()}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-500 uppercase block">Street High</span>
+                    <span className="text-sm font-bold text-emerald-400">₹{selectedConsensusStock.target_corridor.high.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Multi-Broker Historical Comparison Table */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="font-bold text-white uppercase tracking-wider">
+                    All Brokerage Recommendations at a Glance ({selectedConsensusStock.reports.length} Reports)
+                  </span>
+                  <span className="text-slate-400 text-[11px]">
+                    Chronological Desk Tracking
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-[#060D19] overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-[#081325] text-slate-400 text-[10px] uppercase">
+                        <th className="py-2.5 px-3">Brokerage House</th>
+                        <th className="py-2.5 px-3">Rating / Action</th>
+                        <th className="py-2.5 px-3">Target Price</th>
+                        <th className="py-2.5 px-3">Horizon</th>
+                        <th className="py-2.5 px-3">Report Date</th>
+                        <th className="py-2.5 px-3">Conviction</th>
+                        <th className="py-2.5 px-3">Core Catalyst / Note</th>
+                        <th className="py-2.5 px-3">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {selectedConsensusStock.reports.map((rep) => (
+                        <tr key={rep.id} className="hover:bg-slate-900/40 transition">
+                          <td className="py-3 px-3 font-bold text-white whitespace-nowrap">
+                            <div>{rep.brokerage_house}</div>
+                            <div className="text-[10px] text-slate-500 font-sans">{rep.broker_tier.replace(/_/g, " ")}</div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                rep.current_rating.includes("BUY") || rep.action === "UPGRADE"
+                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                  : rep.current_rating.includes("ACCUMULATE") || rep.action === "TARGET_UP"
+                                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                  : "bg-slate-800 text-slate-300 border border-slate-700"
+                              }`}
+                            >
+                              {rep.current_rating}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="font-bold text-cyan-400">₹{rep.target_price.toLocaleString()}</span>
+                            <span className={`ml-1 text-[10px] font-bold ${rep.upside_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              ({rep.upside_pct >= 0 ? "+" : ""}{rep.upside_pct}%)
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-300 whitespace-nowrap">
+                            {rep.target_horizon || "12 Months"}
+                          </td>
+                          <td className="py-3 px-3 text-slate-400 whitespace-nowrap">
+                            {rep.report_date ? new Date(rep.report_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="text-amber-400 font-bold">★ {rep.conviction_score}/100</span>
+                          </td>
+                          <td className="py-3 px-3 max-w-xs truncate text-slate-300 font-sans text-[11px]" title={rep.investment_thesis || ""}>
+                            {rep.investment_thesis || rep.headline || "Institutional research note"}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                setSelectedConsensusStock(null);
+                                setSelectedReport(rep);
+                              }}
+                              className="px-2 py-1 rounded bg-slate-800 text-cyan-400 hover:bg-slate-700 text-[10px] font-bold border border-slate-700"
+                            >
+                              View Note
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-2 flex items-center justify-between border-t border-slate-800">
+                <button
+                  onClick={() => {
+                    const sym = selectedConsensusStock.symbol;
+                    setSelectedConsensusStock(null);
+                    setActiveView("consensus");
+                    setSearchQuery(sym);
+                  }}
+                  className="text-xs text-cyan-400 hover:text-cyan-300 font-mono font-bold transition flex items-center gap-1.5"
+                >
+                  <span>Filter by {selectedConsensusStock.symbol} in Main Grid</span>
+                  <ArrowUpRight size={13} />
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedConsensusStock(null)}
+                    className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-mono font-bold text-slate-300 hover:bg-slate-800 transition"
+                  >
+                    Close
+                  </button>
+                  <Link
+                    href={`/stocks/${selectedConsensusStock.symbol}?tab=brokerage&from=/brokerage-radar`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-mono font-bold text-slate-950 hover:bg-cyan-400 transition"
+                  >
+                    <span>Open {selectedConsensusStock.symbol} Stock Radar</span>
+                    <ExternalLink size={13} />
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

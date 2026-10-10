@@ -1,4 +1,4 @@
-import { API_BASE } from "@/lib/apiConfig";
+import { fetchJson } from "@/lib/apiConfig";
 
 export interface IdentifiedPatternData {
   pattern_type: string;
@@ -157,33 +157,19 @@ export async function fetchTechnoFundaScreener(params: {
   if (params.sort_by) query.set("sort_by", params.sort_by);
   if (params.sort_order) query.set("sort_order", params.sort_order);
 
-  const res = await fetch(`${API_BASE}/api/techno-funda/screener?${query.toString()}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch techno-funda screener: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<TechnoFundaScreenerResponse>(
+    `/api/techno-funda/screener?${query.toString()}`
+  );
 }
 
 export async function fetchTechnoFundaStock(symbol: string): Promise<TechnoFundaStockAnalysis> {
-  const res = await fetch(`${API_BASE}/api/techno-funda/stock/${encodeURIComponent(symbol)}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch stock analysis for ${symbol}: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<TechnoFundaStockAnalysis>(
+    `/api/techno-funda/stock/${encodeURIComponent(symbol)}`
+  );
 }
 
 export async function fetchTechnoFundaSummary(): Promise<TechnoFundaSummary> {
-  const res = await fetch(`${API_BASE}/api/techno-funda/summary`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch techno-funda summary: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<TechnoFundaSummary>(`/api/techno-funda/summary`);
 }
 
 export interface CandleData {
@@ -251,16 +237,9 @@ export async function fetchTechnoFundaCandles(
   symbol: string,
   period: string = "6mo"
 ): Promise<TechnoFundaChartResponse> {
-  const res = await fetch(
-    `${API_BASE}/api/techno-funda/chart/${encodeURIComponent(symbol)}?period=${period}`,
-    {
-      cache: "no-store",
-    }
+  return fetchJson<TechnoFundaChartResponse>(
+    `/api/techno-funda/chart/${encodeURIComponent(symbol)}?period=${period}`
   );
-  if (!res.ok) {
-    throw new Error(`Failed to fetch chart candles for ${symbol}: ${res.statusText}`);
-  }
-  return res.json();
 }
 
 export interface TomorrowOpportunity {
@@ -303,13 +282,9 @@ export async function fetchTomorrowMovers(params?: {
   if (params?.direction && params.direction !== "ALL") query.set("direction", params.direction);
   if (params?.force_refresh) query.set("force_refresh", "true");
 
-  const res = await fetch(`${API_BASE}/api/techno-funda/tomorrow-movers?${query.toString()}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch tomorrow movers: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<TomorrowMoversResponse>(
+    `/api/techno-funda/tomorrow-movers?${query.toString()}`
+  );
 }
 
 export interface TomorrowDeepDiveItem extends TomorrowOpportunity {
@@ -375,13 +350,9 @@ export interface TomorrowDeepDiveResponse {
 
 export async function fetchTomorrowDeepDive(force_refresh: boolean = false): Promise<TomorrowDeepDiveResponse> {
   const query = force_refresh ? "?force_refresh=true" : "";
-  const res = await fetch(`${API_BASE}/api/techno-funda/tomorrow-deep-dive${query}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch tomorrow deep dive: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<TomorrowDeepDiveResponse>(
+    `/api/techno-funda/tomorrow-deep-dive${query}`
+  );
 }
 
 export interface BacktestSessionWinner {
@@ -428,13 +399,7 @@ export interface BacktestSummaryResponse {
 }
 
 export async function fetchBacktestSummary(): Promise<BacktestSummaryResponse> {
-  const res = await fetch(`${API_BASE}/api/techno-funda/backtest-summary`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch backtest summary: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<BacktestSummaryResponse>(`/api/techno-funda/backtest-summary`);
 }
 
 

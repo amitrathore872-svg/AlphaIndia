@@ -19,6 +19,7 @@ import {
 import { fetchSprint23Engines } from "@/lib/monitoringApi";
 import type { MissionControlStatus, Sprint23EngineCardItem } from "@/types/monitoring";
 import VelocityBurstCommandCard from "./VelocityBurstCommandCard";
+import BacktestCommandCard from "./BacktestCommandCard";
 import { useMissionTelemetry } from "@/hooks/useMissionTelemetry";
 
 interface EngineGridProps {
@@ -175,6 +176,7 @@ export default function EngineGrid({ status }: EngineGridProps) {
       {/* Flagship Engine Command Deck: Velocity Burst Elite */}
       {/* ========================================================= */}
       <VelocityBurstCommandCard />
+      <BacktestCommandCard />
 
       {/* Section Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-2">

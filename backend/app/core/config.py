@@ -63,6 +63,50 @@ class Settings(BaseSettings):
         description="Use curl_cffi with browser TLS impersonation to avoid Akamai 403 blocks",
     )
 
+    # Master autonomous and flagship velocity engines (active by default)
+    ENABLE_AUTONOMOUS_ENGINE: bool = Field(
+        default=True,
+        description="Master autonomous orchestrator (exchange wire, growth, VCP, alerts)",
+    )
+    ENABLE_VELOCITY_SCHEDULER: bool = Field(
+        default=True,
+        description="Flagship Velocity Burst Elite institutional scanner",
+    )
+
+    # Granular Background Schedulers (default to False for lightweight performance & on-demand execution)
+    ENABLE_CUP_HANDLE_SCHEDULER: bool = Field(
+        default=False,
+        description="Continuous 4000+ stock Cup & Handle universe loop (on-demand recommended)",
+    )
+    ENABLE_PATTERN_SCHEDULER: bool = Field(
+        default=False,
+        description="Continuous 4000+ stock chart pattern universe loop (on-demand recommended)",
+    )
+    ENABLE_EARLY_STAGE_SCHEDULER: bool = Field(
+        default=False,
+        description="Continuous Web/Social/YouTube discovery loop",
+    )
+    ENABLE_SCREENER_SCHEDULER: bool = Field(
+        default=False,
+        description="Continuous Screener.in polling loop",
+    )
+    ENABLE_RAW_FILE_ARCHIVER: bool = Field(
+        default=False,
+        description="Continuous disk traversal file compression service",
+    )
+    ENABLE_MF_DIP_SCHEDULER: bool = Field(
+        default=False,
+        description="High-frequency intraday MF dip scanner",
+    )
+    ENABLE_STANDALONE_VCP_SCHEDULER: bool = Field(
+        default=False,
+        description="Standalone VCP loop (AutonomousEngineScheduler already covers VCP)",
+    )
+    ENABLE_STANDALONE_WIRE_WORKER: bool = Field(
+        default=False,
+        description="Standalone live wire loop (AutonomousEngineScheduler already covers live wire)",
+    )
+
     # DhanHQ Live Market Feed Credentials
     DHAN_CLIENT_ID: Optional[str] = Field(
         default=None,

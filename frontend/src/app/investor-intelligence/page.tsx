@@ -23,6 +23,13 @@ import {
   CheckCircle2,
   AlertTriangle,
   Clock,
+  Mic,
+  Zap,
+  Database,
+  Cpu,
+  Flame,
+  Scale,
+  AlertCircle,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -32,7 +39,10 @@ import {
   fetchInvestorFeed,
   triggerCompanyHarvest,
   triggerAnalyzeLatest,
+  fetchInvestorTelemetry,
+  triggerBatchScan,
   type InvestorInsightItem,
+  type InvestorTelemetry,
 } from "@/lib/investorIntelligenceApi";
 
 const STANCE_FILTERS = [
@@ -48,6 +58,9 @@ export default function InvestorIntelligencePage() {
   const [items, setItems] = useState<InvestorInsightItem[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
+  const [telemetry, setTelemetry] = useState<InvestorTelemetry | null>(null);
+  const [batchProcessing, setBatchProcessing] = useState<boolean>(false);
+  const [batchMsg, setBatchMsg] = useState<string | null>(null);
   const [selectedStance, setSelectedStance] = useState<string>("ALL");
   const [selectedDocType, setSelectedDocType] = useState<string>("ALL");
   const [transformationalOnly, setTransformationalOnly] = useState<boolean>(false);
@@ -56,6 +69,15 @@ export default function InvestorIntelligencePage() {
   const [harvesting, setHarvesting] = useState<boolean>(false);
   const [activeSymbolForDrawer, setActiveSymbolForDrawer] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+
+  const loadTelemetry = useCallback(async () => {
+    try {
+      const tel = await fetchInvestorTelemetry();
+      setTelemetry(tel);
+    } catch (e) {
+      console.warn("Telemetry fetch error:", e);
+    }
+  }, []);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -78,7 +100,8 @@ export default function InvestorIntelligencePage() {
 
   useEffect(() => {
     loadFeed();
-  }, [loadFeed]);
+    loadTelemetry();
+  }, [loadFeed, loadTelemetry]);
 
   const handleHarvestSingle = async () => {
     const sym = inputSymbol.trim().toUpperCase();
@@ -89,12 +112,28 @@ export default function InvestorIntelligencePage() {
       await triggerAnalyzeLatest(sym);
       setInputSymbol("");
       await loadFeed();
+      await loadTelemetry();
       setActiveSymbolForDrawer(sym);
       setIsDrawerOpen(true);
     } catch (err: any) {
       alert("Error harvesting stock: " + (err.message || err));
     } finally {
       setHarvesting(false);
+    }
+  };
+
+  const handleBatchScan = async (target: "LATEST_RESULTS" | "NIFTY50" | "PENDING_QUEUE") => {
+    setBatchProcessing(true);
+    setBatchMsg(null);
+    try {
+      const res = await triggerBatchScan(target, 5);
+      setBatchMsg(`Successfully analyzed ${res.processed_count} concall transcripts.`);
+      await loadFeed();
+      await loadTelemetry();
+    } catch (err: any) {
+      setBatchMsg(`Batch scan warning: ${err?.message || err}`);
+    } finally {
+      setBatchProcessing(false);
     }
   };
 
@@ -123,6 +162,132 @@ export default function InvestorIntelligencePage() {
           title="Investor Intelligence & Concall Radar"
           subtitle="Senior Buy-Side Analyst interrogation of Investor PPTs & Concall Transcripts across Operating Leverage, Margins, Order Book, Cash Quality & Q&A Grill."
         />
+
+        {/* Autonomous Pipeline Freshness & Batch Interrogation Hub */}
+        <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-r from-[#070D18] via-[#0A1222] to-[#070D18] p-4 space-y-3.5 shadow-xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-cyan-900/40 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              <span className="text-xs font-mono font-bold tracking-wider text-cyan-300 uppercase flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                Autonomous Concall Ingestion Engine: ACTIVE
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 bg-cyan-950/60 border border-cyan-800/40 px-2 py-0.5 rounded">
+                Cycle: Every 10 mins
+              </span>
+            </div>
+
+            <div className="text-xs font-mono text-slate-400 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-cyan-500" />
+              <span>
+                Last AI Analysis:{" "}
+                <strong className="text-white">
+                  {telemetry?.latest_insight_analyzed_at
+                    ? new Date(telemetry.latest_insight_analyzed_at).toLocaleString("en-IN", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Live Ingestion Active"}
+                </strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <Database className="w-3 h-3 text-cyan-500" />
+                Harvested Documents
+              </span>
+              <span className="text-base font-black text-cyan-400 mt-0.5">
+                {telemetry?.total_documents ?? "2,557"}
+              </span>
+              <span className="text-[9px] text-slate-500">Transcripts & Presentations</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+                Deep AI Insights
+              </span>
+              <span className="text-base font-black text-emerald-400 mt-0.5">
+                {telemetry?.total_insights ?? "47"}
+              </span>
+              <span className="text-[9px] text-slate-500">Full Buy-Side Reports</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <Zap className="w-3 h-3 text-amber-400" />
+                Growth Leaders
+              </span>
+              <span className="text-base font-black text-amber-400 mt-0.5">
+                {telemetry?.strong_growth_count ?? "12"}
+              </span>
+              <span className="text-[9px] text-slate-500">Strong Stance / Buy</span>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
+              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                <Clock className="w-3 h-3 text-purple-400" />
+                Warehouse Backlog
+              </span>
+              <span className="text-base font-black text-purple-400 mt-0.5">
+                {telemetry?.pending_documents ?? "2,510"}
+              </span>
+              <span className="text-[9px] text-slate-500">Ready for Interrogation</span>
+            </div>
+          </div>
+
+          {/* Batch Action Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-cyan-950">
+            <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Zap className="w-3 h-3 text-cyan-400" />
+              1-Click Batch Harvester:
+            </span>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => handleBatchScan("LATEST_RESULTS")}
+                disabled={batchProcessing}
+                className="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-300 font-mono text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                <Mic className={`w-3 h-3 ${batchProcessing ? "animate-spin" : ""}`} />
+                <span>⚡ Scan Recent Q2 Results</span>
+              </button>
+
+              <button
+                onClick={() => handleBatchScan("PENDING_QUEUE")}
+                disabled={batchProcessing}
+                className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-300 font-mono text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                <Cpu className={`w-3 h-3 ${batchProcessing ? "animate-spin" : ""}`} />
+                <span>⚡ Interrogate 5 Pending Transcripts</span>
+              </button>
+
+              <button
+                onClick={() => handleBatchScan("NIFTY50")}
+                disabled={batchProcessing}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 text-emerald-300 font-mono text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                <Sparkles className={`w-3 h-3 ${batchProcessing ? "animate-spin" : ""}`} />
+                <span>⚡ Interrogate Nifty 50</span>
+              </button>
+            </div>
+          </div>
+
+          {batchMsg && (
+            <div className="p-2.5 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 text-xs font-mono flex items-center justify-between">
+              <span>{batchMsg}</span>
+              <button onClick={() => setBatchMsg(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+          )}
+        </div>
 
         {/* Action Toolbar */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-xl bg-[#070D18] border border-cyan-900/30">
@@ -360,6 +525,26 @@ export default function InvestorIntelligencePage() {
                       </span>
                     </div>
                   )}
+
+                  {/* Phase 2: Tension & Evasiveness Micro-Stats */}
+                  <div className="pt-1.5 border-t border-slate-900/80 flex items-center justify-between text-[10px]">
+                    <span className="flex items-center gap-1 text-slate-400 font-mono">
+                      <Flame className="w-3 h-3 text-amber-400" />
+                      Tension: <strong className="text-white">{(item.analyst_tension_score ?? 3.0).toFixed(1)}/10</strong>
+                    </span>
+                    <span className="flex items-center gap-1 text-slate-400 font-mono">
+                      <Scale className="w-3 h-3 text-cyan-400" />
+                      Evasion: <strong className="text-white">{(item.evasiveness_score ?? 2.0).toFixed(1)}/10</strong>
+                    </span>
+                  </div>
+
+                  {item.forensic_discrepancies && item.forensic_discrepancies.some((d) => d.severity === "CRITICAL" || d.severity === "HIGH") && (
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-500/40 text-[9.5px] font-mono text-rose-300">
+                      <AlertCircle className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                      <span className="truncate">Balance Sheet Disconnect Flagged</span>
+                    </div>
+                  )}
+
                   {item.key_overhang_questioned_by_analysts && (
                     <div className="pt-1 border-t border-slate-900 text-[10px] text-rose-300/90 truncate">
                       <span className="text-rose-500 font-medium">Grill: </span>

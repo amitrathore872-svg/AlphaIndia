@@ -497,6 +497,7 @@ def analyze_single_order_win(announcement_id: int, db: Session = Depends(get_db)
         deal_value_cr=ann.deal_value_cr,
         filing_date=ann.announcement_date or ann.published_at,
         cmp_override=ann.current_price,
+        pdf_url=ann.pdf_url,
     )
 
     if analysis["order_value_cr"]:
@@ -564,6 +565,75 @@ def get_cumulative_order_books(
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/order-wins/orderbook-view")
+def get_orderbook_view(
+    timeframe: str = Query(default="1Y", description="1Y | 6M | 3M"),
+    min_order_book_cr: float = Query(default=0.0, description="Min order book in ₹ Cr"),
+    min_market_cap_cr: float = Query(default=0.0, description="Min market cap in ₹ Cr"),
+    search: Optional[str] = Query(default=None, description="Search company or symbol"),
+    sort_by: str = Query(default="growth_pct", description="growth_pct | order_book_cr | book_to_revenue | market_cap_cr | last_updated"),
+    sort_order: str = Query(default="desc", description="desc | asc"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Screen 1: ORDERBOOK VIEW
+    Returns Top Gainers ribbon with momentum sparklines, and comprehensive company table.
+    """
+    from app.services.order_win_intelligence_service import OrderWinIntelligenceService
+    return OrderWinIntelligenceService.get_orderbook_view(
+        db=db,
+        timeframe=timeframe,
+        min_order_book_cr=min_order_book_cr,
+        min_market_cap_cr=min_market_cap_cr,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/order-wins/orderbook-history/{symbol}")
+def get_orderbook_history(symbol: str, db: Session = Depends(get_db)):
+    """
+    Deep-Dive Modal: Order Book History for a specific company.
+    Returns multi-quarter bar chart data points, 3M/6M/1Y growth metrics,
+    and official filing quote with source PDF URL.
+    """
+    from app.services.order_win_intelligence_service import OrderWinIntelligenceService
+    return OrderWinIntelligenceService.get_orderbook_history(db=db, symbol=symbol)
+
+
+@router.get("/order-wins/company-view")
+def get_company_view(
+    timeframe: str = Query(default="6M", description="6M | 1Y | 3M | ALL"),
+    min_revenue_pct: float = Query(default=0.0, description="Min orders as % of revenue"),
+    min_market_cap_cr: float = Query(default=0.0, description="Min market cap in ₹ Cr"),
+    max_market_cap_cr: Optional[float] = Query(default=None, description="Max market cap in ₹ Cr"),
+    search: Optional[str] = Query(default=None, description="Search company or symbol"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Screen 3: COMPANY VIEW
+    Returns orders as a percentage of revenue, with nested orders per company for expandable accordions.
+    """
+    from app.services.order_win_intelligence_service import OrderWinIntelligenceService
+    return OrderWinIntelligenceService.get_company_view(
+        db=db,
+        timeframe=timeframe,
+        min_revenue_pct=min_revenue_pct,
+        min_market_cap_cr=min_market_cap_cr,
+        max_market_cap_cr=max_market_cap_cr,
+        search=search,
         page=page,
         limit=limit,
     )

@@ -39,6 +39,7 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
   const [stock, setStock] = useState<TechnoFundaStockAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   // Dynamic back navigation — read ?from= param
   const [backHref, setBackHref] = useState("/techno-funda");
@@ -89,7 +90,7 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
     return () => {
       mounted = false;
     };
-  }, [symbol]);
+  }, [symbol, retryKey]);
 
   return (
     <DashboardLayout>
@@ -130,12 +131,20 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
             <AlertTriangle className="h-8 w-8 text-rose-400" />
             <div className="text-base font-bold text-white">Stock Not Available</div>
             <div className="text-xs text-rose-300">{error || "Could not retrieve stock analysis."}</div>
-            <Link
-              href="/techno-funda"
-              className="mt-3 rounded-lg bg-slate-800 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700"
-            >
-              Return to Radar
-            </Link>
+            <div className="mt-3 flex items-center justify-center gap-2.5">
+              <button
+                onClick={() => setRetryKey((k) => k + 1)}
+                className="rounded-lg bg-cyan-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-cyan-500 active:scale-95 shadow-md shadow-cyan-600/20"
+              >
+                Retry Analysis
+              </button>
+              <Link
+                href="/techno-funda"
+                className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+              >
+                Return to Radar
+              </Link>
+            </div>
           </div>
         ) : (
           <>

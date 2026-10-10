@@ -225,6 +225,7 @@ def get_universe_scan_results(
     min_turnover_lakhs: float = Query(default=50.0, ge=0.0, description="Minimum 20d turnover in Rs Lakhs"),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
 ):
     """
     Returns the last full-universe scan results filtered by minimum match count,

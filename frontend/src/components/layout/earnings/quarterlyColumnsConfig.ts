@@ -950,10 +950,49 @@ export const ALL_AVAILABLE_COLUMNS: ColumnDefinition[] = [
     format: "percent",
     sortKey: "consensus_upside_pct",
   },
+  {
+    id: "quarterly_trend_5q",
+    label: "5Q Fundamental Trend",
+    shortLabel: "5Q Trend",
+    category: "alpha_india",
+    subCategory: "RECENT",
+    align: "center",
+    minWidth: "165px",
+    description: "5-quarter sequential Revenue and PAT trajectory with streak indicator",
+    format: "badge",
+    sortKey: "acceleration_streak",
+  },
+  {
+    id: "day1_reaction",
+    label: "Day-1 Market Reaction",
+    shortLabel: "Day-1 Footprint",
+    category: "alpha_india",
+    subCategory: "RECENT",
+    align: "center",
+    minWidth: "155px",
+    description: "Day-1 Gap %, Volume Multiple (RVOL), Closing Range, and Institutional Footprint",
+    format: "badge",
+    sortKey: "day1_gap",
+  },
+  {
+    id: "pead_drift",
+    label: "PEAD Drift Tracker",
+    shortLabel: "PEAD Drift",
+    category: "alpha_india",
+    subCategory: "RECENT",
+    align: "center",
+    minWidth: "145px",
+    description: "Post-announcement cumulative drift % and Buy Zone / Extended status",
+    format: "badge",
+    sortKey: "drift_pct",
+  },
 ];
 
 // Most Used subset for the Screener.in "Most Used" tab
 export const MOST_USED_COLUMN_IDS = [
+  "quarterly_trend_5q",
+  "day1_reaction",
+  "pead_drift",
   "current_price",
   "roce",
   "quarterly_pat_yoy",
@@ -978,20 +1017,20 @@ export const MOST_USED_COLUMN_IDS = [
   "pead_score",
 ];
 
-// Default selected columns matching Screener.in's peer comparison screenshot
+// Default selected columns matching Screener.in's peer comparison screenshot + Combo B
 export const DEFAULT_SCREENER_COLUMN_IDS = [
+  "quarterly_trend_5q",
+  "day1_reaction",
+  "pead_drift",
+  "pead_score",
+  "quarterly_pat_yoy",
+  "latest_quarter_sales",
+  "quarterly_sales_yoy",
   "current_price",
   "roce",
-  "quarterly_pat_yoy",
-  "eps_12m",
-  "profit_growth_ttm",
-  "opm_latest",
-  "latest_quarter_sales",
-  "latest_quarter_net_profit",
-  "quarterly_sales_yoy",
   "stock_pe",
-  "sales_growth_ttm",
 ];
+
 
 // Alternate Presets
 export const COLUMN_PRESETS: { id: string; label: string; columnIds: string[] }[] = [

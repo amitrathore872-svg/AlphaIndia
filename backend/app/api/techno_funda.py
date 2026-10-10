@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.services.techno_funda_service import TechnoFundaService
 
-router = APIRouter(prefix="/api/techno-funda", tags=["Techno-Funda Radar"])
+router = APIRouter(prefix="/techno-funda", tags=["Techno-Funda Radar"])
 
 
 @router.get("/screener", summary="Get Techno-Funda Pre-Breakout Screener Results")

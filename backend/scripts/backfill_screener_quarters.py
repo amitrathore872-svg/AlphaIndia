@@ -44,6 +44,12 @@ def backfill_company_quarters(db: Session, symbol: str) -> int:
         return 0
 
     profile = ScreenerClient.fetch_full_profile(clean_sym)
+    if not profile and company.bse_code:
+        logger.info(f"Retrying Screener profile using bse_code {company.bse_code} for {clean_sym}...")
+        profile = ScreenerClient.fetch_full_profile(company.bse_code.strip())
+        if profile:
+            profile["symbol"] = clean_sym
+
     if not profile:
         logger.warning(f"Failed to fetch Screener profile for {clean_sym}.")
         return 0

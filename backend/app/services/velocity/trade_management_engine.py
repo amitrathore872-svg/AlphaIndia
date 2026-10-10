@@ -39,6 +39,19 @@ class TradeManagementEngine:
         signal_id: Optional[int] = None,
         trail_type: str = "ATR_TRAIL",
     ) -> VelocityTradeManager:
+        # Prevent duplicate active positions for the same stock
+        existing = (
+            db.query(VelocityTradeManager)
+            .filter(
+                VelocityTradeManager.symbol == symbol.upper(),
+                VelocityTradeManager.trade_status.in_(["ACTIVE", "TARGET_1_HIT", "TARGET_2_HIT"]),
+            )
+            .order_by(VelocityTradeManager.id.desc())
+            .first()
+        )
+        if existing:
+            return existing
+
         trade = VelocityTradeManager(
             symbol=symbol.upper(),
             signal_id=signal_id,

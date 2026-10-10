@@ -151,6 +151,13 @@ class InvestorIntelligenceInsight(Base):
     evasiveness_detected = Column(Text, nullable=True)
     guidance_change = Column(String(50), nullable=True)  # UPWARD_REVISION, MAINTAINED, DOWNWARD_REVISION, WITHDRAWN
 
+    # Phase 2: Forensic Evasiveness & Analyst Tension Scoring Engine
+    evasiveness_score = Column(Float, default=0.0)             # 0.0 to 10.0 (0=Candid/Numeric, 10=Max Deflection)
+    analyst_tension_score = Column(Float, default=3.0)         # 1.0 to 10.0 (1=Cordial, 10=Aggressive Grill)
+    hot_seat_question = Column(Text, nullable=True)            # The toughest pushback question
+    management_defense_strategy = Column(String(100), nullable=True) # MACRO_EXTERNAL_BLAME, DATA_DRIVEN_TRANSPARENT, etc.
+    forensic_discrepancies = Column(JSON, nullable=True)       # Cross-verification discrepancies with P&L / Balance Sheet
+
     # -------------------------------------------------------------------------
     # Plain English / Layman & Direct Quote Intelligence
     # -------------------------------------------------------------------------

@@ -111,7 +111,8 @@ class PDFExtractorService:
                 except Exception as page_err:
                     logger.debug(f"Error extracting page {i+1}: {page_err}")
 
-            return "\n\n".join(text_chunks), total_pages
+            extracted_clean = "\n\n".join(text_chunks).replace("\x00", "")
+            return extracted_clean, total_pages
         except Exception as exc:
             logger.error(f"Failed to parse PDF bytes: {exc}")
             return "", 0

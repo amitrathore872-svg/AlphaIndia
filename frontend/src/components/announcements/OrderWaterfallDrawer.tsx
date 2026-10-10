@@ -25,28 +25,32 @@ import type { AnnouncementRadarItem } from "@/lib/announcementsApi";
 interface OrderWaterfallDrawerProps {
   item: AnnouncementRadarItem;
   showNavigationLink?: boolean;
+  onClose?: () => void;
 }
 
 export default function OrderWaterfallDrawer({
   item,
   showNavigationLink = true,
 }: OrderWaterfallDrawerProps) {
-  const dealValue = item.deal_value_cr ?? item.synergy_rev_addition_cr ?? 100;
-  const executionMonths = item.order_execution_months || 18;
-  const quarters = Math.max(1, Math.round(executionMonths / 3));
-  const quarterlyRev = item.order_quarterly_rev_cr ?? Math.round((dealValue / quarters) * 10) / 10;
-  const opm = item.synergy_ebitda_margin_pct || 14.0;
-  const quarterlyEbitda = Math.round(quarterlyRev * (opm / 100.0) * 10) / 10;
-  const quarterlyPat = Math.round(quarterlyEbitda * 0.75 * 10) / 10;
+  const dealValue = item.deal_value_cr ?? item.synergy_rev_addition_cr ?? 0;
+  const executionMonths = item.order_execution_months;
+  const quarters = executionMonths ? Math.max(1, Math.round(executionMonths / 3)) : null;
+  const quarterlyRev = item.order_quarterly_rev_cr ?? (dealValue > 0 && quarters ? Math.round((dealValue / quarters) * 10) / 10 : 0);
+  const opm = item.synergy_ebitda_margin_pct;
+  const quarterlyEbitda = (opm != null && quarterlyRev > 0) ? Math.round(quarterlyRev * (opm / 100.0) * 10) / 10 : 0;
+  const quarterlyPat = quarterlyEbitda > 0 ? Math.round(quarterlyEbitda * 0.75 * 10) / 10 : 0;
 
-  const quarterlySchedule = Array.from({ length: Math.min(quarters, 8) }, (_, i) => ({
+  const displayQuarters = quarters ?? (dealValue > 0 ? 4 : 0);
+  const isEstimatedSchedule = quarters == null && dealValue > 0;
+  const stepRev = quarterlyRev > 0 ? quarterlyRev : (dealValue > 0 ? Math.round((dealValue / 4) * 10) / 10 : 0);
+  const quarterlySchedule = Array.from({ length: Math.min(displayQuarters, 8) }, (_, i) => ({
     quarter: `Q${i + 1}`,
     timeline: `Month ${i * 3 + 1}–${(i + 1) * 3}`,
-    revCr: quarterlyRev,
+    revCr: stepRev,
     ebitdaCr: quarterlyEbitda,
     patCr: quarterlyPat,
-    cumulativeRev: Math.round(quarterlyRev * (i + 1) * 10) / 10,
-    cumulativePct: Math.min(100, Math.round(((i + 1) / quarters) * 100)),
+    cumulativeRev: Math.round(stepRev * (i + 1) * 10) / 10,
+    cumulativePct: Math.min(100, Math.round(((i + 1) / displayQuarters) * 100)),
   }));
 
   const histStats = item.order_intelligence?.order_historical_stats;
@@ -61,7 +65,7 @@ export default function OrderWaterfallDrawer({
             <span>Order Value & Execution Sizing</span>
           </div>
           <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
-            ₹{dealValue.toLocaleString("en-IN")} Cr
+            {dealValue > 0 ? `₹${dealValue.toLocaleString("en-IN")} Cr` : "Value Not Disclosed"}
           </span>
         </div>
 
@@ -69,7 +73,7 @@ export default function OrderWaterfallDrawer({
           <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">Revenue Contribution</span>
             <span className="text-amber-600 dark:text-amber-300 font-bold text-sm mt-0.5 block">
-              +{item.synergy_rev_pct_ttm ? item.synergy_rev_pct_ttm.toFixed(1) : 12}%
+              {item.synergy_rev_pct_ttm != null ? `+${item.synergy_rev_pct_ttm.toFixed(1)}%` : "—"}
             </span>
             <span className="text-[9px] text-slate-500 dark:text-slate-400 font-sans block">of TTM Sales</span>
           </div>
@@ -77,15 +81,15 @@ export default function OrderWaterfallDrawer({
           <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">Execution Runway</span>
             <span className="text-cyan-700 dark:text-cyan-300 font-bold text-sm mt-0.5 block">
-              {executionMonths} Months
+              {executionMonths ? `${executionMonths} Months` : "Not Disclosed"}
             </span>
-            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-sans block">{quarters} Quarters</span>
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 font-sans block">{executionMonths ? `${quarters} Quarters` : "Filing has no timeline"}</span>
           </div>
 
           <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">Run-rate / Quarter</span>
             <span className="text-emerald-700 dark:text-emerald-300 font-bold text-sm mt-0.5 block">
-              +₹{quarterlyRev.toLocaleString("en-IN")} Cr
+              {quarterlyRev > 0 ? `+₹${quarterlyRev.toLocaleString("en-IN")} Cr` : (dealValue > 0 ? "Pending timeline" : "—")}
             </span>
             <span className="text-[9px] text-emerald-600 dark:text-emerald-400/80 font-sans block">Quarterly Accretion</span>
           </div>
@@ -93,9 +97,9 @@ export default function OrderWaterfallDrawer({
           <div className="bg-white dark:bg-slate-950/60 rounded-lg p-2.5 border border-slate-200 dark:border-slate-800 shadow-xs">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans block">EBITDA Margin</span>
             <span className="text-purple-700 dark:text-purple-300 font-bold text-sm mt-0.5 block">
-              {opm}%
+              {opm != null ? `${opm}%` : "Not Disclosed"}
             </span>
-            <span className="text-[9px] text-purple-600 dark:text-purple-400/80 font-sans block">Modeled Operating Margin</span>
+            <span className="text-[9px] text-purple-600 dark:text-purple-400/80 font-sans block">{opm != null ? "Company Operating Margin" : "No margin reported"}</span>
           </div>
         </div>
       </div>
@@ -105,10 +109,10 @@ export default function OrderWaterfallDrawer({
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5 mb-3">
           <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
             <Calendar size={13} />
-            <span>Quarterly Revenue Realization Waterfall ({quarters} Quarters)</span>
+            <span>Quarterly Revenue Realization Waterfall {quarters ? `(${quarters} Quarters)` : "(Illustrative 4Q Cadence)"}</span>
           </div>
           <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-            Linear Execution Cadence
+            {isEstimatedSchedule ? "Timeline Not Disclosed (Illustrative)" : "Linear Execution Cadence"}
           </span>
         </div>
 
@@ -176,9 +180,15 @@ export default function OrderWaterfallDrawer({
             <div className="text-base font-black text-emerald-700 dark:text-emerald-300">
               ₹{item.target_price ? item.target_price.toLocaleString("en-IN") : "—"}
             </div>
-            <div className="text-[10px] text-emerald-600 dark:text-emerald-400/90 font-sans mt-1">
-              +{item.upside_pct || 32}% upside ({item.order_upside_prob_pct || 82}% probability).
-            </div>
+            {item.upside_pct != null ? (
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-400/90 font-sans mt-1">
+                +{item.upside_pct}% upside{item.order_upside_prob_pct != null ? ` (${item.order_upside_prob_pct}% probability)` : ""}.
+              </div>
+            ) : (
+              <div className="text-[10px] text-slate-500 font-sans mt-1">
+                Target modeling based on execution cadence.
+              </div>
+            )}
           </div>
 
           {/* Bull Case */}

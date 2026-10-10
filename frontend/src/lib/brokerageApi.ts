@@ -196,3 +196,99 @@ export async function fetchBrokerScorecards(): Promise<{ status: string; count: 
 export async function fetchBrokerageMetrics(): Promise<{ status: string; data: BrokerageMetricsRibbon }> {
   return fetchJson<{ status: string; data: BrokerageMetricsRibbon }>("/api/v1/brokerage/metrics");
 }
+
+export async function triggerBrokerageIngestion(daysBack: number = 7): Promise<{
+  status: string;
+  total_discovered: number;
+  new_reports: number;
+  updated_reports: number;
+}> {
+  return fetchJson<{
+    status: string;
+    total_discovered: number;
+    new_reports: number;
+    updated_reports: number;
+  }>(`/api/v1/brokerage/ingest?days_back=${daysBack}`, {
+    method: "POST",
+  });
+}
+
+export async function fetchBrokerageIngestionStatus(): Promise<{
+  status: string;
+  data: {
+    total_reports: number;
+    tracked_houses: number;
+    newest_report_date: string | null;
+    oldest_report_date: string | null;
+    reports_last_3_days: number;
+    is_feed_live: boolean;
+    last_ingested_at: string;
+  };
+}> {
+  return fetchJson<{
+    status: string;
+    data: {
+      total_reports: number;
+      tracked_houses: number;
+      newest_report_date: string | null;
+      oldest_report_date: string | null;
+      reports_last_3_days: number;
+      is_feed_live: boolean;
+      last_ingested_at: string;
+    };
+  }>("/api/v1/brokerage/ingestion/status");
+}
+
+export interface StockConsensusGroupItem {
+  symbol: string;
+  company_name: string;
+  sector: string;
+  market_cap_category: "LARGE_CAP" | "MID_CAP" | "SMALL_CAP" | string;
+  market_cap?: number | null;
+  current_price: number;
+  total_reports: number;
+  broker_count: number;
+  brokers: string[];
+  consensus_target: number;
+  consensus_upside_pct: number;
+  target_corridor: {
+    low: number;
+    median: number;
+    high: number;
+  };
+  ratings_breakdown: {
+    buy: number;
+    accumulate: number;
+    hold: number;
+    reduce: number;
+    sell: number;
+  };
+  consensus_stance: string;
+  avg_conviction_score: number;
+  latest_report_date: string | null;
+  reports: BrokerageReportItem[];
+}
+
+export async function fetchAllStocksConsensus(params?: {
+  market_cap_category?: string;
+  min_brokers?: number;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+}): Promise<{ status: string; count: number; data: StockConsensusGroupItem[] }> {
+  const q = new URLSearchParams();
+  if (params?.market_cap_category && params.market_cap_category !== "ALL") {
+    q.set("market_cap_category", params.market_cap_category);
+  }
+  if (params?.min_brokers !== undefined) q.set("min_brokers", String(params.min_brokers));
+  if (params?.search) q.set("search", params.search);
+  if (params?.sort_by) q.set("sort_by", params.sort_by);
+  if (params?.sort_order) q.set("sort_order", params.sort_order);
+
+  const qs = q.toString();
+  return fetchJson<{ status: string; count: number; data: StockConsensusGroupItem[] }>(
+    `/api/v1/brokerage/stocks-consensus${qs ? `?${qs}` : ""}`
+  );
+}
+
+

@@ -409,3 +409,175 @@ export async function fetchAnnouncementById(
   return request<AnnouncementRadarItem>(`/announcements/${announcementId}`);
 }
 
+// -------------------------------------------------------
+// Screen 1: ORDERBOOK VIEW Types & APIs
+// -------------------------------------------------------
+
+export interface OrderbookTopGainer {
+  rank: number;
+  symbol: string;
+  company_name: string;
+  exchange: string;
+  growth_pct: number;
+  order_book_cr: number;
+  order_book_formatted: string;
+  sparkline_data: number[];
+}
+
+export interface OrderbookCompanyItem {
+  symbol: string;
+  company_name: string;
+  exchange: string;
+  bse_code: string;
+  growth_pct: number | null;
+  growth_1y: number | null;
+  growth_6m: number | null;
+  growth_3m: number | null;
+  order_book_cr: number;
+  order_book_formatted: string;
+  revenue_cr: number;
+  revenue_formatted: string;
+  revenue_basis: string;
+  book_to_revenue: number;
+  book_to_revenue_formatted: string;
+  market_cap_cr: number;
+  as_of_date: string;
+  last_updated: string;
+  sparkline_data: number[];
+  sparkline_meta: {
+    latest_formatted: string;
+    change_pct: number;
+    direction: "UP" | "DOWN";
+  };
+  data_points_count: number;
+}
+
+export interface OrderbookViewResponse {
+  top_gainers: OrderbookTopGainer[];
+  items: OrderbookCompanyItem[];
+  total_companies: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  timeframe: string;
+}
+
+export async function fetchOrderbookView(params: {
+  timeframe?: "1Y" | "6M" | "3M" | string;
+  min_order_book_cr?: number;
+  min_market_cap_cr?: number;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}): Promise<OrderbookViewResponse> {
+  const qs = new URLSearchParams();
+  if (params.timeframe) qs.set("timeframe", params.timeframe);
+  if (params.min_order_book_cr !== undefined) qs.set("min_order_book_cr", String(params.min_order_book_cr));
+  if (params.min_market_cap_cr !== undefined) qs.set("min_market_cap_cr", String(params.min_market_cap_cr));
+  if (params.search) qs.set("search", params.search);
+  if (params.sort_by) qs.set("sort_by", params.sort_by);
+  if (params.sort_order) qs.set("sort_order", params.sort_order);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+
+  return request<OrderbookViewResponse>(`/announcements/order-wins/orderbook-view?${qs.toString()}`);
+}
+
+// -------------------------------------------------------
+// Deep-Dive Modal: Order Book History Types & API
+// -------------------------------------------------------
+
+export interface OrderbookHistoryBar {
+  quarter: string;
+  as_of_date: string;
+  value_cr: number;
+  formatted_label: string;
+  filing_quote?: string | null;
+  source_pdf_url?: string | null;
+}
+
+export interface OrderbookHistoryResponse {
+  symbol: string;
+  company_name: string;
+  latest_order_book_cr: number;
+  as_of_date: string;
+  data_points_count: number;
+  growth_metrics: {
+    growth_3m: number;
+    growth_6m: number;
+    growth_1y: number;
+  };
+  history_bars: OrderbookHistoryBar[];
+  filing_quote: string;
+  source_pdf_url: string;
+}
+
+export async function fetchOrderbookHistory(symbol: string): Promise<OrderbookHistoryResponse> {
+  return request<OrderbookHistoryResponse>(`/announcements/order-wins/orderbook-history/${encodeURIComponent(symbol)}`);
+}
+
+// -------------------------------------------------------
+// Screen 3: COMPANY VIEW Types & API
+// -------------------------------------------------------
+
+export interface CompanyViewNestedOrder {
+  id: number;
+  date: string;
+  customer: string;
+  order_type: string;
+  contract_value_cr: number;
+  duration: string;
+  duration_months?: number | null;
+  annual_value_cr: number;
+  revenue_pct: number;
+  pdf_url: string | null;
+  has_history?: boolean;
+  headline?: string;
+  ai_insight?: string | null;
+}
+
+export interface CompanyViewItem {
+  company_name: string;
+  symbol: string;
+  orders_as_pct_of_revenue: number;
+  order_count: number;
+  total_order_value: number;
+  company_revenue: number;
+  revenue_basis: string;
+  market_cap: number;
+  orders: CompanyViewNestedOrder[];
+}
+
+export interface CompanyViewResponse {
+  items: CompanyViewItem[];
+  total_companies: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  timeframe: string;
+}
+
+export async function fetchCompanyView(params: {
+  timeframe?: "6M" | "1Y" | "3M" | "ALL" | string;
+  min_revenue_pct?: number;
+  min_market_cap_cr?: number;
+  max_market_cap_cr?: number;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<CompanyViewResponse> {
+  const qs = new URLSearchParams();
+  if (params.timeframe) qs.set("timeframe", params.timeframe);
+  if (params.min_revenue_pct !== undefined) qs.set("min_revenue_pct", String(params.min_revenue_pct));
+  if (params.min_market_cap_cr !== undefined) qs.set("min_market_cap_cr", String(params.min_market_cap_cr));
+  if (params.max_market_cap_cr !== undefined) qs.set("max_market_cap_cr", String(params.max_market_cap_cr));
+  if (params.search) qs.set("search", params.search);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+
+  return request<CompanyViewResponse>(`/announcements/order-wins/company-view?${qs.toString()}`);
+}
+
+

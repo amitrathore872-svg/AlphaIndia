@@ -264,6 +264,16 @@ export const notificationsApi = {
     });
   },
 
+  async triggerPeadScanAlerts(forceBroadcast: boolean = true, minScore: number = 70): Promise<{
+    status: string;
+    count: number;
+    alerts: Array<{ engine: string; symbol: string; title: string; notif_id: number }>;
+  }> {
+    return fetchJson(`${API_BASE}/alerts/trigger-pead-scan-alerts?force_broadcast=${forceBroadcast}&min_score=${minScore}`, {
+      method: "POST",
+    });
+  },
+
   async triggerStockVCPAlert(symbol: string, autoBroadcast: boolean = true): Promise<{
     status: string;
     symbol: string;

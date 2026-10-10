@@ -29,6 +29,9 @@ import {
   Zap,
   Layers,
   Briefcase,
+  Calendar,
+  DownloadCloud,
+  CheckCircle2,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import PageHeader from "@/components/common/PageHeader";
@@ -59,12 +62,15 @@ export default function MutualFundsPage() {
   const [expandedSchemeCode, setExpandedSchemeCode] = useState<string | null>(null);
   const [modalScheme, setModalScheme] = useState<MFRadarScheme | null>(null);
 
-  // Manual Trigger states
+  // Manual Trigger & Freshness states
   const [scanning, setScanning] = useState<boolean>(false);
+  const [syncingNavs, setSyncingNavs] = useState<boolean>(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // 1. Initial Load
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent: boolean = false) => {
+    if (!silent) setLoading(true);
     try {
       const [schemesRes, summaryRes, indicesRes, alertsRes, heatmapRes, dilutionRes] = await Promise.allSettled([
         mfRadarApi.getSchemes({
@@ -99,20 +105,26 @@ export default function MutualFundsPage() {
       if (dilutionRes.status === "fulfilled") {
         setDilutionAlerts(dilutionRes.value || []);
       }
+      setLastRefreshedAt(new Date());
     } catch (e) {
       console.error("Failed to load MF Radar data:", e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
-    // Auto-poll live indices every 30 seconds
+    // Auto-poll live indices & dip signals every 30 seconds
     const interval = setInterval(async () => {
       try {
-        const ind = await mfRadarApi.getLiveIndices();
-        setLiveIndices(ind);
+        const [ind, alt] = await Promise.allSettled([
+          mfRadarApi.getLiveIndices(),
+          mfRadarApi.getActiveDipAlerts(),
+        ]);
+        if (ind.status === "fulfilled") setLiveIndices(ind.value);
+        if (alt.status === "fulfilled") setActiveAlerts(alt.value.alerts || []);
+        setLastRefreshedAt(new Date());
       } catch {
         // silent
       }
@@ -137,7 +149,26 @@ export default function MutualFundsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Trigger manual dip scan
+  // Trigger full AMFI Daily NAV Sync from official feed
+  const handleSyncAmfiNavs = async () => {
+    setSyncingNavs(true);
+    setSyncMessage("Downloading official AMFI NAVAll feed & recalculating returns...");
+    try {
+      const res = await mfRadarApi.triggerDailySync();
+      const updatedCount = res?.updated_schemes ?? 0;
+      setSyncMessage(`AMFI Sync Success: ${updatedCount} schemes updated with official NAVs.`);
+      await loadData();
+      setTimeout(() => setSyncMessage(null), 5000);
+    } catch (e) {
+      console.error("AMFI sync failed:", e);
+      setSyncMessage("AMFI sync failed. Please check network connection.");
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setSyncingNavs(false);
+    }
+  };
+
+  // Trigger manual intraday dip scan
   const handleScanDipsNow = async () => {
     setScanning(true);
     try {
@@ -149,6 +180,7 @@ export default function MutualFundsPage() {
       setScanning(false);
     }
   };
+
 
   const categoriesList = [
     "All",
@@ -178,6 +210,7 @@ export default function MutualFundsPage() {
           subtitle="Top 100 Pure Equity Screener • Intraday Dip Buying Radar • Dual-Tier NAV Charts"
           actions={
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* Lumpsum Cutoff Window */}
               <div className="flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-100 dark:bg-[#07101E] px-3.5 py-2 text-xs">
                 <Clock size={15} className="text-amber-500 dark:text-amber-400 shrink-0" />
                 <div>
@@ -199,18 +232,82 @@ export default function MutualFundsPage() {
                 </div>
               </div>
 
-              {/* Trigger Scan Button */}
+              {/* Data Freshness & Last Sync Status */}
+              <div className="flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-100 dark:bg-[#07101E] px-3.5 py-2 text-xs">
+                <Calendar size={15} className="text-cyan-500 dark:text-cyan-400 shrink-0" />
+                <div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono font-semibold">
+                    Data Freshness
+                  </div>
+                  <div className="flex items-center gap-2 font-mono font-bold text-slate-900 dark:text-white">
+                    <span>
+                      NAV:{" "}
+                      {summary?.latest_nav_date
+                        ? new Date(summary.latest_nav_date).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "Current"}
+                    </span>
+                    <span className="text-[10px] font-normal text-slate-400">
+                      • Refreshed{" "}
+                      {lastRefreshedAt
+                        ? lastRefreshedAt.toLocaleTimeString("en-IN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })
+                        : "just now"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sync AMFI Daily NAVs Button */}
+              <button
+                onClick={handleSyncAmfiNavs}
+                disabled={syncingNavs}
+                title="Download official AMFI daily NAV feed & recalculate returns"
+                className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white dark:hover:text-slate-950 transition shadow-xs disabled:opacity-50"
+              >
+                <DownloadCloud size={13} className={syncingNavs ? "animate-bounce" : ""} />
+                <span>{syncingNavs ? "Syncing AMFI..." : "Sync AMFI NAVs"}</span>
+              </button>
+
+              {/* Refresh View Button */}
+              <button
+                onClick={() => loadData()}
+                disabled={loading}
+                title="Reload latest screener data"
+                className="flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-100 dark:bg-[#07101E] px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-white hover:bg-slate-800 transition shadow-xs disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+                <span>Refresh View</span>
+              </button>
+
+              {/* Trigger Intraday Dip Scan Button */}
               <button
                 onClick={handleScanDipsNow}
                 disabled={scanning}
+                title="Scan live benchmark indices for intraday dip buy opportunities"
                 className="flex items-center gap-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3.5 py-2 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500 hover:text-white dark:hover:text-slate-950 transition shadow-xs disabled:opacity-50"
               >
-                <RefreshCw size={13} className={scanning ? "animate-spin" : ""} />
-                <span>{scanning ? "Scanning Indices..." : "Scan Dips Now"}</span>
+                <Zap size={13} className={scanning ? "animate-spin" : ""} />
+                <span>{scanning ? "Scanning Indices..." : "Scan Dips"}</span>
               </button>
             </div>
           }
         />
+
+        {/* Sync Status Banner */}
+        {syncMessage && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300 shadow-sm animate-fadeIn">
+            <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+            <span className="font-mono">{syncMessage}</span>
+          </div>
+        )}
+
 
       {/* ── 2. Live Category Benchmark Ticker Strip ── */}
       {liveIndices && liveIndices.indices && (
@@ -541,8 +638,18 @@ export default function MutualFundsPage() {
                         </td>
 
                         {/* Current NAV */}
-                        <td className="py-3 px-3 text-right font-bold text-slate-900 dark:text-white min-w-[100px]">
-                          ₹{s.current_nav ? s.current_nav.toFixed(2) : "N/A"}
+                        <td className="py-3 px-3 text-right min-w-[105px]">
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            ₹{s.current_nav ? s.current_nav.toFixed(2) : "N/A"}
+                          </div>
+                          {s.nav_date && (
+                            <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5">
+                              {new Date(s.nav_date).toLocaleDateString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                              })}
+                            </div>
+                          )}
                         </td>
 
                         {/* Down from Peak (52W High) */}

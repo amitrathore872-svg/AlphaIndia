@@ -124,7 +124,7 @@ export async function fetchDeliveryOpportunities(
 
   return fetchJson<DeliveryOpportunitiesResponse>(
     `/api/v1/delivery-radar/opportunities?${query.toString()}`,
-    { timeoutMs: 35000 }
+    { timeoutMs: 60000 }
   );
 }
 
@@ -138,12 +138,12 @@ export async function triggerDeliveryScan(
 
   return fetchJson(`/api/v1/delivery-radar/scan?${query.toString()}`, {
     method: "POST",
-    timeoutMs: 35000,
+    timeoutMs: 60000,
   });
 }
 
 export async function fetchDeliveryStats(): Promise<DeliveryRadarMetadata> {
   return fetchJson<DeliveryRadarMetadata>("/api/v1/delivery-radar/stats", {
-    timeoutMs: 35000,
+    timeoutMs: 60000,
   });
 }

@@ -3,7 +3,7 @@
 // Sprint 36.4 — Dual-Feed Intelligence Upgrade
 // =======================================================
 
-import { API_BASE } from "@/lib/apiConfig";
+import { fetchJson } from "@/lib/apiConfig";
 
 
 export interface PillarBreakdown {
@@ -159,7 +159,45 @@ export interface QuarterlyResultItem {
   athena_conviction_score?: number | null;
   athena_conviction_grade?: string | null;
   athena_signal?: string | null;
+
+  // Combo B: Earnings Alpha Lifecycle Engine (Sprint 36.6)
+  quarterly_trend_5q?: QuarterlyTrend5QItem[];
+  acceleration_streak?: number;
+  is_ath_quarter?: boolean;
+  day1_reaction?: Day1ReactionInfo;
+  pead_drift?: PeadDriftInfo;
 }
+
+export interface QuarterlyTrend5QItem {
+  period: string;
+  revenue?: number | null;
+  net_profit?: number | null;
+  opm?: number | null;
+  qoq_growth?: number | null;
+}
+
+export interface Day1ReactionInfo {
+  gap_pct?: number | null;
+  rvol?: number | null;
+  close_range_pct?: number | null;
+  signature: "GAP_AND_GO" | "ABSORPTION" | "EXHAUSTION_TRAP" | "IN_LINE" | string;
+  signature_label: string;
+  day1_open?: number | null;
+  day1_high?: number | null;
+  day1_low?: number | null;
+  day1_close?: number | null;
+}
+
+export interface PeadDriftInfo {
+  drift_pct?: number | null;
+  drift_days: number;
+  zone_status: "IN_BUY_ZONE" | "EXTENDED" | "DRIFT_FAILED" | "ACCELERATING" | string;
+  zone_label: string;
+  distance_from_d1_high_pct?: number | null;
+  d1_high_anchor?: number | null;
+  stop_loss_level?: number | null;
+}
+
 
 export interface QuarterlyResultsResponse {
   total: number;
@@ -183,6 +221,7 @@ export interface QuarterlySummaryResponse {
   announcements_filings_count: number;  // Sprint 36.4
   latest_discovered_at: string | null;
   available_periods: string[];
+  recent_announcement_dates?: string[];
   top_pead_pick: {
     symbol: string;
     company: string;
@@ -201,6 +240,9 @@ export interface QuarterlyResultsFilters {
   search?: string;
   exchange?: string;
   period?: string;
+  announcement_date?: string;  // YYYY-MM-DD
+  from_date?: string;          // YYYY-MM-DD
+  to_date?: string;            // YYYY-MM-DD
   feed_type?: "RESULTS" | "ANNOUNCEMENTS" | "ALL";  // Sprint 36.4
   pead_only?: boolean;
   pead_tier?: string;
@@ -220,6 +262,12 @@ export async function fetchQuarterlyResults(
     params.set("exchange", filters.exchange);
   if (filters.period && filters.period !== "ALL")
     params.set("period", filters.period);
+  if (filters.announcement_date && filters.announcement_date !== "ALL")
+    params.set("announcement_date", filters.announcement_date);
+  if (filters.from_date)
+    params.set("from_date", filters.from_date);
+  if (filters.to_date)
+    params.set("to_date", filters.to_date);
   if (filters.feed_type && filters.feed_type !== "ALL")
     params.set("feed_type", filters.feed_type);
   if (filters.pead_only) params.set("pead_only", "true");
@@ -228,34 +276,21 @@ export async function fetchQuarterlyResults(
   if (filters.sort_by) params.set("sort_by", filters.sort_by);
   if (filters.sort_order) params.set("sort_order", filters.sort_order);
 
-  const url = `${API_BASE}/quarterly-results?${params.toString()}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch quarterly results: ${res.statusText}`);
-  }
-  return res.json();
+  const qs = params.toString();
+  return fetchJson<QuarterlyResultsResponse>(`/quarterly-results${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchQuarterlySummary(): Promise<QuarterlySummaryResponse> {
-  const url = `${API_BASE}/quarterly-results/summary`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch quarterly summary: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<QuarterlySummaryResponse>("/quarterly-results/summary");
 }
 
 export async function triggerExchangeScan(
   limit: number = 10
 ): Promise<{ success: boolean; companies_scanned?: number; high_growth_breakouts?: number; [key: string]: unknown }> {
-  const url = `${API_BASE}/quarterly-results/scan-exchange?limit=${limit}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to trigger exchange scan: ${res.statusText}`);
-  }
-  return res.json();
+  return fetchJson<{ success: boolean; companies_scanned?: number; high_growth_breakouts?: number; [key: string]: unknown }>(
+    `/quarterly-results/scan-exchange?limit=${limit}`,
+    {
+      method: "POST",
+    }
+  );
 }

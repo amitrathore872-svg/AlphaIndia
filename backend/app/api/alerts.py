@@ -719,6 +719,31 @@ def trigger_ipo_scan_alerts(
     }
 
 
+@router.post("/trigger-pead-scan-alerts", summary="Trigger Alerts for Top PEAD Drift Radar Setups")
+def trigger_pead_scan_alerts(
+    force_broadcast: bool = Query(True, description="Broadcast to enabled external channels"),
+    min_score: float = Query(70.0, description="Minimum PEAD Score (0-100)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Scans PEAD Drift Radar setups and broadcasts top active flashes
+    to Telegram, WhatsApp, and in-app System Notifications.
+    """
+    rules = OpportunityAlertService.get_opportunity_thresholds(db)
+    rules["athena_pead_enabled"] = True
+    rules["athena_min_shock_score"] = min_score
+    if not force_broadcast:
+        rules["auto_broadcast_telegram"] = False
+        rules["auto_broadcast_whatsapp"] = False
+
+    dispatched = OpportunityAlertService.scan_athena_pead_alerts(db=db, rules=rules, force_top_recent=True)
+    return {
+        "status": "ok",
+        "count": len(dispatched),
+        "alerts": dispatched,
+    }
+
+
 # ==========================================================
 # 6. High-Conviction Opportunity Radar Alerts Engine
 # ==========================================================

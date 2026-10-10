@@ -32,14 +32,31 @@ def get_delivery_opportunities(
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    raw_data = DeliveryScreenerService.scan_opportunities(
-        force_refresh=False,
-        min_spike=min_spike,
-        min_deliv_per=min_deliv_per,
-        lookback_sessions=lookback_sessions,
-    )
-    items = raw_data.get("opportunities", [])
-    metadata = raw_data.get("metadata", {})
+    raw_data = DeliveryScreenerService.scan_opportunities(force_refresh=False)
+    items = list(raw_data.get("opportunities", []))
+    metadata = dict(raw_data.get("metadata", {}))
+
+    # 0. Session Lookback filter (select recent lookback_sessions trading days)
+    all_dates = sorted({x["signal_date"] for x in items if x.get("signal_date")})
+    if all_dates and lookback_sessions < len(all_dates):
+        allowed_dates = set(all_dates[-lookback_sessions:])
+        items = [x for x in items if x.get("signal_date") in allowed_dates]
+
+    # 0.1 Parameter filters (Spike & Delivery %)
+    if min_spike:
+        items = [x for x in items if (x.get("delivery_spike_x") or 0.0) >= min_spike]
+    if min_deliv_per:
+        items = [x for x in items if (x.get("delivery_per") or 0.0) >= min_deliv_per]
+
+    # Synchronize metadata counts to current lookback & threshold pool (prior to search/tier/setup filters)
+    session_pool = items
+    metadata["qualifying_setups_count"] = len(session_pool)
+    metadata["apex_sniper_count"] = sum(1 for o in session_pool if o.get("conviction_tier") == "APEX_SNIPER")
+    metadata["active_swing_count"] = sum(1 for o in session_pool if o.get("conviction_tier") == "ACTIVE_SWING")
+    metadata["base_accumulation_count"] = sum(1 for o in session_pool if o.get("conviction_tier") == "BASE_ACCUMULATION")
+    metadata["confirmed_breakouts_count"] = sum(1 for o in session_pool if o.get("is_50d_breakout"))
+    metadata["ema_pullback_count"] = sum(1 for o in session_pool if o.get("setup_type") == "EMA20_PULLBACK")
+    metadata["near_pivot_count"] = sum(1 for o in session_pool if o.get("setup_type") == "NEAR_PIVOT_BASE")
 
     # 1. Search filter
     if search:

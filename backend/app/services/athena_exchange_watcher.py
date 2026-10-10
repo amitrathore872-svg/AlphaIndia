@@ -74,20 +74,65 @@ class AthenaExchangeWatcher:
 
         processed_results = []
         try:
-            for item in EXCHANGE_FEED_DATASET:
+            from app.models.company import Company
+            from app.models.quarterly_result import QuarterlyResult
+
+            # 1. Query latest quarterly financial disclosures from database
+            recent_qrs = (
+                db.query(QuarterlyResult, Company)
+                .join(Company, Company.id == QuarterlyResult.company_id)
+                .filter(QuarterlyResult.revenue.isnot(None))
+                .order_by(QuarterlyResult.period_end.desc())
+                .limit(20)
+                .all()
+            )
+
+            seen_symbols = set()
+            for qr, comp in recent_qrs:
+                sym = comp.symbol.strip().upper()
+                if sym in seen_symbols:
+                    continue
+                seen_symbols.add(sym)
+
+                opm_pct = (qr.operating_income / qr.revenue * 100.0) if qr.revenue and qr.operating_income else 0.0
+                financial_payload = {
+                    "revenue": qr.revenue or 0.0,
+                    "net_profit": qr.net_profit or 0.0,
+                    "ebitda": qr.operating_income or 0.0,
+                    "eps": qr.eps or 0.0,
+                    "ebitda_margin": round(opm_pct, 2),
+                }
+
+                quarter_str = qr.fiscal_period or qr.quarter or "Q1 FY26"
                 res = cls.process_raw_exchange_disclosure(
                     db=db,
-                    symbol=item["symbol"],
-                    company_name=item["company_name"],
-                    exchange=item["exchange"],
-                    headline=f"{item['company_name']} declared {item['filing_type']}",
-                    financial_payload=item["financials"],
-                    quarter=item.get("quarter", "Q1 FY26"),
-                    pdf_url=item.get("pdf_url"),
-                    filing_type=item.get("filing_type", "Financial Results"),
+                    symbol=sym,
+                    company_name=comp.company or sym,
+                    exchange=comp.exchange or "NSE",
+                    headline=f"{comp.company or sym} Audited Financial Results {quarter_str}",
+                    financial_payload=financial_payload,
+                    quarter=quarter_str,
+                    filing_type="Audited Financial Results",
                 )
                 if res:
                     processed_results.append(res)
+
+            # 2. If no live database quarterly results available yet, fallback to reference dataset
+            if not processed_results:
+                for item in EXCHANGE_FEED_DATASET:
+                    res = cls.process_raw_exchange_disclosure(
+                        db=db,
+                        symbol=item["symbol"],
+                        company_name=item["company_name"],
+                        exchange=item["exchange"],
+                        headline=f"{item['company_name']} declared {item['filing_type']}",
+                        financial_payload=item["financials"],
+                        quarter=item.get("quarter", "Q1 FY26"),
+                        pdf_url=item.get("pdf_url"),
+                        filing_type=item.get("filing_type", "Financial Results"),
+                    )
+                    if res:
+                        processed_results.append(res)
         finally:
             if close_db:
                 db.close()

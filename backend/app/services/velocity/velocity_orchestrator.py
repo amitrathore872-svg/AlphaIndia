@@ -209,14 +209,44 @@ class VelocityBurstOrchestrator:
         SectorRotationEngine.evaluate_all_sectors(db)
 
         # 1. Fetch universe stocks (ScreenerGrowthRecord joined with Company)
+        priority_symbols: List[str] = []
+        try:
+            ready_patterns = db.query(VelocityBasePattern.symbol).filter(
+                VelocityBasePattern.pattern_status.in_(["READY", "BROKEN_OUT"])
+            ).limit(60).all()
+            for (psym,) in ready_patterns:
+                if psym and psym.upper() not in priority_symbols:
+                    priority_symbols.append(psym.upper())
+
+            squeeze_sg = db.query(VelocitySleepingGiant.symbol).filter(
+                VelocitySleepingGiant.ttm_squeeze_active == True
+            ).limit(30).all()
+            for (ssym,) in squeeze_sg:
+                if ssym and ssym.upper() not in priority_symbols:
+                    priority_symbols.append(ssym.upper())
+        except Exception as pe:
+            logger.debug(f"[VelocityOrchestrator] Priority symbols query note: {pe}")
+
         query = db.query(ScreenerGrowthRecord).filter(
             ScreenerGrowthRecord.current_price >= 50.0,
             ScreenerGrowthRecord.market_cap >= 500.0,
         )
         if symbols_override:
             query = query.filter(ScreenerGrowthRecord.symbol.in_([s.upper() for s in symbols_override]))
+            records = query.order_by(desc(ScreenerGrowthRecord.market_cap)).limit(limit_symbols).all()
+        else:
+            # Query priority candidates first so setups nearing breakout are always scanned
+            priority_records = []
+            if priority_symbols:
+                priority_records = query.filter(ScreenerGrowthRecord.symbol.in_(priority_symbols)).all()
+            
+            seen_syms = {r.symbol.upper() for r in priority_records}
+            remaining_limit = max(0, limit_symbols - len(priority_records))
+            top_records = query.filter(~ScreenerGrowthRecord.symbol.in_(seen_syms)).order_by(
+                desc(ScreenerGrowthRecord.market_cap)
+            ).limit(remaining_limit).all()
+            records = priority_records + top_records
 
-        records = query.order_by(desc(ScreenerGrowthRecord.market_cap)).limit(limit_symbols).all()
         if not records:
             # Fallback to companies master
             comp_records = db.query(Company).filter(Company.is_growth_eligible == True).limit(limit_symbols).all()

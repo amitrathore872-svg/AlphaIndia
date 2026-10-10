@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from app.db.database import get_db
 from app.models.investor_intelligence import InvestorDocument, InvestorIntelligenceInsight
@@ -18,6 +18,129 @@ from app.services.investor_intelligence_service import InvestorIntelligenceServi
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/investor-intelligence", tags=["Investor Intelligence & Concalls"])
+
+
+@router.get("/telemetry", response_model=Dict[str, Any])
+def get_investor_intelligence_telemetry(db: Session = Depends(get_db)):
+    """
+    Returns live pipeline telemetry, document repository stats, and sync timestamps.
+    """
+    doc_count = db.query(InvestorDocument).count()
+    insight_count = db.query(InvestorIntelligenceInsight).count()
+    pending_count = db.query(InvestorDocument).filter(InvestorDocument.status == "PENDING").count()
+    analyzed_count = db.query(InvestorDocument).filter(InvestorDocument.status == "ANALYZED").count()
+
+    latest_doc_created = db.query(func.max(InvestorDocument.created_at)).scalar()
+    latest_doc_updated = db.query(func.max(InvestorDocument.updated_at)).scalar()
+    latest_insight_analyzed = db.query(func.max(InvestorIntelligenceInsight.analyzed_at)).scalar()
+
+    strong_growth_count = db.query(InvestorIntelligenceInsight).filter(
+        InvestorIntelligenceInsight.institutional_stance.in_(["STRONG_GROWTH_LEADER", "ACCUMULATE_ON_DIPS"])
+    ).count()
+
+    return {
+        "total_documents": doc_count,
+        "total_insights": insight_count,
+        "pending_documents": pending_count,
+        "analyzed_documents": analyzed_count,
+        "strong_growth_count": strong_growth_count,
+        "latest_document_created_at": latest_doc_created.isoformat() if latest_doc_created else None,
+        "latest_document_updated_at": latest_doc_updated.isoformat() if latest_doc_updated else None,
+        "latest_insight_analyzed_at": latest_insight_analyzed.isoformat() if latest_insight_analyzed else None,
+    }
+
+
+@router.post("/batch-scan", response_model=Dict[str, Any])
+def trigger_batch_scan(
+    target: str = Query("LATEST_RESULTS", description="LATEST_RESULTS, NIFTY50, or PENDING_QUEUE"),
+    limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    """
+    Executes an autonomous batch harvest and interrogation cycle.
+    """
+    analyzed_results = []
+
+    if target == "PENDING_QUEUE":
+        pending_docs = (
+            db.query(InvestorDocument)
+            .filter(InvestorDocument.status == "PENDING", InvestorDocument.pdf_url.isnot(None))
+            .order_by(InvestorDocument.announcement_date.desc().nullslast(), InvestorDocument.id.desc())
+            .limit(limit)
+            .all()
+        )
+        for doc in pending_docs:
+            ins = InvestorIntelligenceService.analyze_document(db, doc.id)
+            if ins:
+                analyzed_results.append({
+                    "symbol": ins.symbol,
+                    "stance": ins.institutional_stance,
+                    "score": ins.growth_conviction_score,
+                    "period": ins.fiscal_period,
+                })
+    elif target == "LATEST_RESULTS":
+        from app.models.filing_registry import FilingRegistry
+        recent_filings = (
+            db.query(FilingRegistry.symbol)
+            .filter(FilingRegistry.filing_type.ilike("%result%"))
+            .order_by(FilingRegistry.announcement_date.desc().nullslast(), FilingRegistry.id.desc())
+            .limit(limit * 3)
+            .all()
+        )
+        symbols = list(dict.fromkeys([f[0] for f in recent_filings if f[0]]))[:limit]
+        for sym in symbols:
+            try:
+                docs_count = db.query(InvestorDocument).filter(InvestorDocument.symbol == sym).count()
+                if docs_count == 0:
+                    InvestorDocumentHarvester.harvest_for_symbol(db, sym)
+                latest_doc = (
+                    db.query(InvestorDocument)
+                    .filter(InvestorDocument.symbol == sym)
+                    .order_by(desc(InvestorDocument.id))
+                    .first()
+                )
+                if latest_doc:
+                    ins = InvestorIntelligenceService.analyze_document(db, latest_doc.id)
+                    if ins:
+                        analyzed_results.append({
+                            "symbol": ins.symbol,
+                            "stance": ins.institutional_stance,
+                            "score": ins.growth_conviction_score,
+                            "period": ins.fiscal_period,
+                        })
+            except Exception as e:
+                logger.warning(f"Batch scan error for {sym}: {e}")
+    else:  # NIFTY50
+        nifty_sample = ["TCS", "INFY", "HDFCBANK", "RELIANCE", "ICICIBANK", "BHARTIARTL", "LT", "SBIN", "KOTAKBANK", "ITC"][:limit]
+        for sym in nifty_sample:
+            try:
+                docs_count = db.query(InvestorDocument).filter(InvestorDocument.symbol == sym).count()
+                if docs_count == 0:
+                    InvestorDocumentHarvester.harvest_for_symbol(db, sym)
+                latest_doc = (
+                    db.query(InvestorDocument)
+                    .filter(InvestorDocument.symbol == sym)
+                    .order_by(desc(InvestorDocument.id))
+                    .first()
+                )
+                if latest_doc:
+                    ins = InvestorIntelligenceService.analyze_document(db, latest_doc.id)
+                    if ins:
+                        analyzed_results.append({
+                            "symbol": ins.symbol,
+                            "stance": ins.institutional_stance,
+                            "score": ins.growth_conviction_score,
+                            "period": ins.fiscal_period,
+                        })
+            except Exception as e:
+                logger.warning(f"Batch scan error for {sym}: {e}")
+
+    return {
+        "status": "SUCCESS",
+        "target": target,
+        "processed_count": len(analyzed_results),
+        "results": analyzed_results,
+    }
 
 
 @router.get("/opportunities", response_model=Dict[str, Any])
@@ -118,6 +241,14 @@ def get_insights_feed(
             "management_direct_answer": ins.management_direct_answer,
             "evasiveness_detected": ins.evasiveness_detected,
             "guidance_change": ins.guidance_change,
+
+            # Phase 2: Forensic Evasiveness, Tension & Discrepancies
+            "evasiveness_score": ins.evasiveness_score,
+            "analyst_tension_score": ins.analyst_tension_score,
+            "hot_seat_question": ins.hot_seat_question,
+            "management_defense_strategy": ins.management_defense_strategy,
+            "forensic_discrepancies": ins.forensic_discrepancies,
+
             "critical_monitorables": ins.critical_monitorables,
             "layman_summary": ins.layman_summary,
             "direct_quotes": ins.direct_quotes,
@@ -210,6 +341,16 @@ def get_company_intelligence(
             "working_capital_days": ins.working_capital_days,
             "key_overhang_questioned_by_analysts": ins.key_overhang_questioned_by_analysts,
             "management_direct_answer": ins.management_direct_answer,
+            "evasiveness_detected": ins.evasiveness_detected,
+            "guidance_change": ins.guidance_change,
+
+            # Phase 2: Forensic Evasiveness, Tension & Discrepancies
+            "evasiveness_score": ins.evasiveness_score,
+            "analyst_tension_score": ins.analyst_tension_score,
+            "hot_seat_question": ins.hot_seat_question,
+            "management_defense_strategy": ins.management_defense_strategy,
+            "forensic_discrepancies": ins.forensic_discrepancies,
+
             "critical_monitorables": ins.critical_monitorables,
             "layman_summary": ins.layman_summary,
             "direct_quotes": ins.direct_quotes,
@@ -322,5 +463,10 @@ def analyze_latest_for_symbol(
         "ebitda_margin_guidance_corridor": insight.ebitda_margin_guidance_corridor,
         "key_overhang_questioned_by_analysts": insight.key_overhang_questioned_by_analysts,
         "management_direct_answer": insight.management_direct_answer,
+        "evasiveness_score": insight.evasiveness_score,
+        "analyst_tension_score": insight.analyst_tension_score,
+        "hot_seat_question": insight.hot_seat_question,
+        "management_defense_strategy": insight.management_defense_strategy,
+        "forensic_discrepancies": insight.forensic_discrepancies,
         "pdf_url": latest_doc.pdf_url,
     }

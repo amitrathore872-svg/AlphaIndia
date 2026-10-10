@@ -44,7 +44,7 @@ const ROUTINE_STEPS: RoutineStep[] = [
     badgeBg: "bg-amber-500/10 text-amber-300 border-amber-500/30",
     objective: "Identify the top 1 to 3 highest-conviction trading opportunities before the market opens at 09:15 AM.",
     toolsToOpen: [
-      { name: "Athena Omega", url: "/athena-omega" },
+      { name: "PEAD Drift Screener", url: "/pead-drift-screener" },
       { name: "Corporate Catalysts Wire", url: "/announcements" },
       { name: "Watchlist Builder", url: "/watchlist" },
     ],

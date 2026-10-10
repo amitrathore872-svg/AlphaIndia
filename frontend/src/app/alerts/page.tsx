@@ -134,6 +134,7 @@ export default function AlertCenterPage() {
   const [oppScanning, setOppScanning] = useState(false);
   const [orderWinScanning, setOrderWinScanning] = useState(false);
   const [ipoScanning, setIpoScanning] = useState(false);
+  const [peadScanning, setPeadScanning] = useState(false);
   const [oppScanResult, setOppScanResult] = useState<OpportunityScanResult | null>(null);
   const [recentOpportunities, setRecentOpportunities] = useState<SystemNotificationItem[]>([]);
 
@@ -550,9 +551,9 @@ export default function AlertCenterPage() {
     } else if (type === "PEAD") {
       setComposerSymbol("TRENT");
       setComposerName("Trent Ltd");
-      setComposerTitle("⚡ ATHENA FLASH: TRENT LTD (Grade AAA+)");
+      setComposerTitle("⚡ PEAD DRIFT RADAR: TRENT LTD (PEAD Score 94/100 • Grade AAA+)");
       setComposerMessage(
-        `⚡ *ALPHA INDIA | ATHENA PEAD FLASH*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Trent Ltd* (\`TRENT\`)\n⭐ *Institutional Score:* 94/100 (GRADE: AAA+ STRONG BUY)\n📈 *QoQ/YoY Growth:*\n   • PAT: ₹412.5 Cr (+142.5% YoY)\n   • Revenue: ₹3,450.0 Cr (+53.8% YoY)\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹7,150.00\n🎯 *Buy Trigger Price:* ₹7,220.00 (PEAD Drift Entry)\n🚀 *Target Price:* ₹8,470.00 (+18.5%)\n🛑 *Stop Loss:* ₹6,650.00 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.6\n💡 *Institutional Thesis:*\nAggressive retail store expansion drives exceptional operating leverage with clean earnings quality.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("TRENT")}\n📡 *Live Radar:* ${getRadarUrl("/athena-omega")}`
+        `⚡ *ALPHA INDIA | PEAD DRIFT RADAR*\n━━━━━━━━━━━━━━━━━━━━━\n🏢 *Trent Ltd* (\`TRENT\`)\n⭐ *PEAD Score:* 94/100 | *Grade:* AAA+ STRONG BUY\n📈 *Earnings Shock (YoY Growth):*\n   • PAT Growth: +142.5% YoY (₹412.5 Cr)\n   • Revenue Growth: +53.8% YoY (₹3,450.0 Cr)\n   • Margin Expansion: +380 bps\n━━━━━━━━━━━━━━━━━━━━━\n💵 *Live CMP:* ₹7,150.00\n🎯 *Buy-Zone Trigger:* ₹7,220.00 (PEAD Drift Entry)\n🚀 *Target Price:* ₹8,470.00 (+18.5%)\n🛑 *Stop Loss:* ₹6,650.00 (-7.0%)\n⚖️ *Risk:Reward:* 1:2.6\n🛡️ *Forensic Quality:* CLEAN (0 Red Flags)\n💡 *Institutional Thesis:*\nAggressive retail store expansion drives exceptional operating leverage with clean earnings quality.\n━━━━━━━━━━━━━━━━━━━━━\n${getStockLinks("TRENT")}\n📡 *Live Radar:* ${getRadarUrl("/pead-drift-screener?symbol=TRENT")}`
       );
     } else if (type === "TECHNO_FUNDA") {
       setComposerSymbol("KAYNES");
@@ -673,6 +674,21 @@ export default function AlertCenterPage() {
     }
   };
 
+  const handleTriggerPeadScanAlerts = async () => {
+    try {
+      setPeadScanning(true);
+      const res = await notificationsApi.triggerPeadScanAlerts(true, oppRules.athena_min_shock_score || 70);
+      showNotification("success", `Processed ${res.count} institutional PEAD Drift alert(s) dispatched to external channels!`);
+      const recent = await notificationsApi.getRecentOpportunities(35);
+      setRecentOpportunities(recent || []);
+      if (activeTab === "logs") loadLogs();
+    } catch (err: unknown) {
+      showNotification("error", `Failed to trigger PEAD scan alerts: ${(err as Error).message}`);
+    } finally {
+      setPeadScanning(false);
+    }
+  };
+
   const handleOpenWhatsAppWeb = () => {
     const cleanPhone = waRecipient ? waRecipient.replace(/[^0-9]/g, "") : "";
     const url = cleanPhone
@@ -698,7 +714,7 @@ export default function AlertCenterPage() {
       case "CATALYST_ORDER":
         return { label: "CORPORATE CATALYST", color: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30", icon: Radio };
       case "ATHENA_PEAD":
-        return { label: "ATHENA PEAD", color: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Sparkles };
+        return { label: "PEAD DRIFT RADAR", color: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Sparkles };
       case "TECHNO_FUNDA":
         return { label: "TECHNO-FUNDA", color: "bg-teal-500/20 text-teal-300 border-teal-500/30", icon: Crosshair };
       case "DELIVERY_BREAKOUT":
@@ -1044,6 +1060,15 @@ export default function AlertCenterPage() {
                 >
                   <RefreshCw size={14} className={oppScanning ? "animate-spin" : ""} />
                   {oppScanning ? "Scanning 14 Engines..." : "Run 14-Engine Opportunity Scan Now"}
+                </button>
+
+                <button
+                  onClick={handleTriggerPeadScanAlerts}
+                  disabled={peadScanning}
+                  className="flex items-center gap-2 rounded-xl border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 px-4 py-2.5 text-xs font-semibold text-blue-300 transition cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles size={14} className={peadScanning ? "animate-spin" : ""} />
+                  {peadScanning ? "Scanning PEAD..." : "Dispatch PEAD Drift"}
                 </button>
 
                 <button
@@ -2020,7 +2045,7 @@ export default function AlertCenterPage() {
               {/* CLUSTER D: FUNDAMENTAL ACCELERATION & EARNINGS SURPRISE */}
               {/* ========================================================= */}
 
-              {/* Engine 12: Athena PEAD Flash */}
+              {/* Engine 12: PEAD Drift Radar */}
               {(clusterFilter === "ALL" || clusterFilter === "FUNDAMENTAL") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -2034,10 +2059,10 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          12. Athena PEAD Flash
-                          <span className="text-[10px] text-blue-400 font-mono font-normal">/athena-omega</span>
+                          12. PEAD Drift Radar
+                          <span className="text-[10px] text-blue-400 font-mono font-normal">/pead-drift-screener</span>
                         </h3>
-                        <p className="text-[11px] text-slate-400">Grade AAA+/AAA post-earnings announcement drift flashes</p>
+                        <p className="text-[11px] text-slate-400">Instant post-earnings announcement drift flashes &amp; buy zones</p>
                       </div>
                     </div>
 
@@ -2056,11 +2081,11 @@ export default function AlertCenterPage() {
 
                   <div className="text-xs text-slate-300 space-y-2">
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Evaluates quarterly filings through the 5-Gate Athena engine. Fires immediately upon result parsing when financial shock and earnings quality exceed threshold.
+                      Evaluates quarterly filings through the 5-Gate PEAD engine. Dispatches instantly to Telegram as soon as fresh quarterly results are announced &amp; parsed.
                     </p>
                     <div>
                       <div className="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
-                        <span>Min Financial Shock Score:</span>
+                        <span>Min PEAD Score:</span>
                         <span className="text-blue-400 font-bold">{oppRules.athena_min_shock_score ?? 75} / 100</span>
                       </div>
                       <input
@@ -2076,14 +2101,21 @@ export default function AlertCenterPage() {
                   </div>
 
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500 font-mono">5-Gate Forensic Quality Gate</span>
+                    <button
+                      onClick={handleTriggerPeadScanAlerts}
+                      disabled={peadScanning}
+                      className="flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-500/30 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      <Sparkles size={12} className={peadScanning ? "animate-spin" : ""} />
+                      {peadScanning ? "Dispatching..." : "Test & Dispatch PEAD Alert"}
+                    </button>
                     <a
-                      href="/athena-omega"
+                      href="/pead-drift-screener"
                       target="_blank"
                       rel="noreferrer"
                       className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-semibold"
                     >
-                      <span>Open Radar</span>
+                      <span>Open Screener</span>
                       <ArrowUpRight size={13} />
                     </a>
                   </div>
@@ -2687,10 +2719,10 @@ export default function AlertCenterPage() {
                       link: "/institutional-radar/fresh-entries",
                     },
                     {
-                      name: "Athena PEAD Flash",
+                      name: "PEAD Drift Radar",
                       key: "athena_pead_enabled",
-                      rule: `Financial Shock Score ≥ ${oppRules.athena_min_shock_score ?? 75}/100 (AAA+/AAA)`,
-                      link: "/athena-omega",
+                      rule: `PEAD Score ≥ ${oppRules.athena_min_shock_score ?? 75}/100 (AAA+/AAA)`,
+                      link: "/pead-drift-screener",
                     },
                     {
                       name: "Growth Screener PRO",
@@ -2798,7 +2830,7 @@ export default function AlertCenterPage() {
                     { id: "TOMORROW", label: "🌅 Tomorrow 5%+ Move", color: "border-rose-500/50 bg-rose-500/15 text-rose-300" },
                     { id: "ORDER_WIN", label: "🏆 Order Win Radar", color: "border-amber-500/50 bg-amber-500/15 text-amber-300" },
                     { id: "CATALYST", label: "📡 Corporate Catalyst", color: "border-yellow-500/50 bg-yellow-500/15 text-yellow-300" },
-                    { id: "PEAD", label: "⚡ Athena PEAD Flash", color: "border-blue-500/50 bg-blue-500/15 text-blue-300" },
+                    { id: "PEAD", label: "⚡ PEAD Drift Radar", color: "border-blue-500/50 bg-blue-500/15 text-blue-300" },
                     { id: "TECHNO_FUNDA", label: "🎯 Techno-Funda Pivot", color: "border-teal-500/50 bg-teal-500/15 text-teal-300" },
                     { id: "DELIVERY", label: "📦 Delivery Surge Breakout", color: "border-indigo-500/50 bg-indigo-500/15 text-indigo-300" },
                     { id: "SMART_MONEY", label: "🏛️ MF Smart Money", color: "border-violet-500/50 bg-violet-500/15 text-violet-300" },
@@ -2824,6 +2856,14 @@ export default function AlertCenterPage() {
                     <span>On-Demand: Fast-trigger institutional radar picks to external desks</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={handleTriggerPeadScanAlerts}
+                      disabled={peadScanning}
+                      className="flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-300 hover:bg-blue-500/30 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      <Sparkles size={12} className={peadScanning ? "animate-spin" : ""} />
+                      {peadScanning ? "Dispatching..." : "Dispatch PEAD"}
+                    </button>
                     <button
                       onClick={handleTriggerVCPScanAlerts}
                       disabled={loading}

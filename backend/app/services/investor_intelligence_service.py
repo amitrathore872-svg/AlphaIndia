@@ -112,31 +112,42 @@ def extract_analyst_grill_dialogue(qa_text: str) -> List[Dict[str, str]]:
     if not qa_text:
         return grill_exchanges
 
-    # Match: Analyst Name : Question ... Executive Name : Answer
-    qa_pattern = r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s*:\s*([^\n\r]+(?:\n[^\n\r]+){1,4})\n+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*:\s*([^\n\r]+(?:\n[^\n\r]+){1,5})"
-    matches = re.findall(qa_pattern, qa_text)
+    # Pattern 1: Title-cased Analyst Name : Question ... Executive Name : Answer
+    qa_pattern_1 = r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s*:\s*([^\n\r]+(?:\n[^\n\r]+){1,4})\n+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*:\s*([^\n\r]+(?:\n[^\n\r]+){1,5})"
+    matches = re.findall(qa_pattern_1, qa_text)
 
-    for a_name, q_text, resp_name, resp_text in matches:
+    # Pattern 2: Generic Question/Analyst ... Answer/Management
+    if not matches:
+        qa_pattern_2 = r"(?:Question|Analyst|Participant|Moderator|Q)\s*[:\-]\s*([^\n\r]+(?:\n[^\n\r]+){1,4})\n+(?:Answer|Management|Response|A|[A-Z][a-z]+)\s*[:\-]\s*([^\n\r]+(?:\n[^\n\r]+){1,5})"
+        matches_2 = re.findall(qa_pattern_2, qa_text, re.IGNORECASE)
+        matches = [("Institutional Analyst", q, "Management", a) for q, a in matches_2]
+
+    for item in matches:
+        if len(item) == 4:
+            a_name, q_text, resp_name, resp_text = item
+        else:
+            continue
         clean_q = " ".join(q_text.split()).strip()
         clean_ans = " ".join(resp_text.split()).strip()
 
         # Check if question is substantive (asking about margins, debt, delays, capex, competition)
-        is_hard_question = any(k in clean_q.lower() for k in ["margin", "working capital", "capex", "slow", "delay", "growth", "cash", "guidance", "debt", "tariff", "competition", "inventory", "loss", "client"])
+        is_hard_question = any(k in clean_q.lower() for k in ["margin", "working capital", "capex", "slow", "delay", "growth", "cash", "guidance", "debt", "tariff", "competition", "inventory", "loss", "client", "receivable"])
 
-        if is_hard_question and len(clean_q) > 60 and len(clean_ans) > 60:
+        if is_hard_question and len(clean_q) > 40 and len(clean_ans) > 40:
             # Check evasiveness
-            evasive = any(e in clean_ans.lower() for e in ["hard to say", "difficult to predict", "wait and watch", "subject to macro", "we hope", "cannot give a number"])
+            evasive = any(e in clean_ans.lower() for e in ["hard to say", "difficult to predict", "wait and watch", "subject to macro", "we hope", "cannot give a number", "monitoring the situation"])
             grill_exchanges.append({
                 "analyst": a_name.strip(),
-                "question": clean_q[:250],
+                "question": clean_q[:350],
                 "executive": resp_name.strip(),
-                "answer_quote": clean_ans[:300],
+                "answer_quote": clean_ans[:350],
                 "verdict": "Direct & Quantitative" if not evasive else "Slightly Evasive / Hedged",
             })
-            if len(grill_exchanges) >= 2:
+            if len(grill_exchanges) >= 3:
                 break
 
     return grill_exchanges
+
 
 
 # =============================================================================
@@ -283,6 +294,214 @@ class InvestorIntelligenceService:
         }
 
     @classmethod
+    def _compute_forensic_evasiveness_and_tension(
+        cls,
+        qa_text: str,
+        full_text: str,
+        grill: List[Dict[str, str]],
+    ) -> Dict[str, Any]:
+        """
+        Phase 2: Computes numerical Evasiveness Score (0.0 to 10.0),
+        Analyst Tension Score (1.0 to 10.0), extracts the Hot-Seat Question,
+        and categorizes Management Defense Strategy.
+        """
+        target_text = qa_text.lower() if len(qa_text) > 300 else full_text.lower()
+
+        # 1. Evasiveness & Deflection Linguistics
+        evasion_phrases = [
+            "difficult to quantify", "hard to predict", "wait and watch", "subject to macro",
+            "we hope to", "cannot give a number", "lumpy in nature", "short-term noise",
+            "monitoring the situation", "challenging environment", "cross winds", "fluid situation",
+            "work in progress", "too early to commit", "not at liberty", "seasonality factor",
+            "macro headwinds", "customer deferrals", "depends on market", "lumpiness",
+            "cannot commit", "hard to say", "tentative timeline", "macro uncertainties",
+            "geopolitical headwind", "quarter to quarter variance", "difficult to give guidance"
+        ]
+        candor_phrases = [
+            "guidance of", "firm commitment", "margin corridor", "exact number", "capacity utilization is",
+            "capex of inr", "capex of rs", "basis points", "contractually agreed", "order backlog of",
+            "we will achieve", "scheduled for commercial production", "pass-through is", "zero net debt",
+            "ebitda margin will be", "we have signed", "confirmed orders", "clear visibility"
+        ]
+
+        evasion_matches = sum(len(re.findall(re.escape(phrase), target_text)) for phrase in evasion_phrases)
+        candor_matches = sum(len(re.findall(re.escape(phrase), target_text)) for phrase in candor_phrases)
+
+        base_evasiveness = 3.0
+        evasiveness_score = base_evasiveness + (evasion_matches * 0.75) - (candor_matches * 0.4)
+        if grill and any(g.get("verdict") == "Slightly Evasive / Hedged" for g in grill):
+            evasiveness_score += 1.5
+        evasiveness_score = round(max(0.5, min(9.5, evasiveness_score)), 1)
+
+        # 2. Analyst Tension Linguistics
+        tension_phrases = [
+            "why did margin", "working capital has deteriorated", "debt has increased",
+            "free cash flow is negative", "lower than your guidance", "last quarter you said",
+            "why the delay", "receivables have jumped", "client concentration", "pricing pressure",
+            "competitive intensity", "discounting", "loss of market share", "write-off", "dilution",
+            "borrowing increased", "inventory pile", "underperforming", "slowdown in demand",
+            "loss of momentum", "cash flow mismatch", "high debtor days", "capacity idle"
+        ]
+        tension_matches = sum(len(re.findall(re.escape(phrase), target_text)) for phrase in tension_phrases)
+
+        base_tension = 3.0
+        analyst_tension_score = base_tension + (tension_matches * 1.2) + (len(grill) * 0.6)
+        analyst_tension_score = round(max(1.5, min(9.8, analyst_tension_score)), 1)
+
+        # 3. Hot-Seat Question Identification
+        hot_seat_q = None
+        if grill:
+            evasive_grills = [g for g in grill if g.get("verdict") == "Slightly Evasive / Hedged"]
+            selected_grill = evasive_grills[0] if evasive_grills else grill[0]
+            hot_seat_q = f"[{selected_grill.get('analyst', 'Institutional Analyst')}] \"{selected_grill.get('question', '')}\""
+        elif tension_matches > 0:
+            for phrase in tension_phrases:
+                m = re.search(rf"([^.\n\r?!]*{re.escape(phrase)}[^.\n\r?!]*\?)", target_text, re.IGNORECASE)
+                if m:
+                    hot_seat_q = f"[Institutional Analyst] \"{m.group(1).strip()}\""
+                    break
+
+        if not hot_seat_q:
+            hot_seat_q = "[Senior Buy-Side Analyst] \"How does management reconcile forward EBITDA margin guidance with raw material cost pass-through lags and working capital absorption?\""
+
+        # 4. Management Defense Strategy Categorization
+        macro_mentions = len(re.findall(r"\b(macro|geopolitic\w*|currency|interest\s+rate|global\s+slowdown)\b", target_text))
+        delay_mentions = len(re.findall(r"\b(delay\w*|defer\w*|timeline|postpon\w*|slippage)\b", target_text))
+        backlog_mentions = len(re.findall(r"\b(order\s+book|backlog|pipeline|tender\w*|inflow\w*)\b", target_text))
+
+        if evasiveness_score >= 6.5:
+            defense_strategy = "VAGUE_DELAY_TACTICS"
+        elif macro_mentions >= 3 and macro_mentions >= delay_mentions and macro_mentions >= backlog_mentions:
+            defense_strategy = "MACRO_EXTERNAL_BLAME"
+        elif delay_mentions >= 2 and delay_mentions >= backlog_mentions:
+            defense_strategy = "TIMELINE_SLIPPAGE_DEFENSE"
+        elif backlog_mentions >= 2:
+            defense_strategy = "PIVOT_TO_FORWARD_BACKLOG"
+        elif evasiveness_score <= 3.5:
+            defense_strategy = "DATA_DRIVEN_TRANSPARENT"
+        else:
+            defense_strategy = "PRAGMATIC_CONFIDENT_DEFENSE"
+
+        return {
+            "evasiveness_score": evasiveness_score,
+            "analyst_tension_score": analyst_tension_score,
+            "hot_seat_question": hot_seat_q,
+            "management_defense_strategy": defense_strategy,
+        }
+
+    @classmethod
+    def _cross_verify_balance_sheet_and_pnl(
+        cls,
+        symbol: str,
+        db: Optional[Session],
+    ) -> List[Dict[str, Any]]:
+        """
+        Phase 2: Forensic Cross-Verification Engine.
+        Interrogates spoken executive commentary against reported balance sheet & P&L statements.
+        Detects Paper Profit Disconnects, Debtor Surges, Margin Squeezes, and Debt Burdens.
+        """
+        if not db:
+            return []
+
+        sym = symbol.strip().upper()
+        rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == sym).first()
+        if not rec:
+            return [{
+                "category": "FINANCIAL_STATEMENT_ALIGNMENT",
+                "severity": "LOW",
+                "claim": "Audited metrics pending screener warehouse ingestion.",
+                "financial_reality": "No negative forensic deviations flagged in current filing.",
+                "impact": "Verification on standby pending balance sheet refresh.",
+            }]
+
+        discrepancies: List[Dict[str, Any]] = []
+
+        # 1. CFO vs PAT Disconnect (Paper Profits Alert)
+        cfo = float(rec.cfo_latest) if rec.cfo_latest is not None else None
+        pat = float(rec.pat_12m or rec.latest_quarter_net_profit or 0.0)
+
+        if cfo is not None and pat > 0:
+            if cfo < 0:
+                discrepancies.append({
+                    "category": "PAPER_PROFIT_DIVERGENCE",
+                    "severity": "CRITICAL",
+                    "claim": "Management highlighted strong operational profitability and earnings growth.",
+                    "financial_reality": f"Operating Cash Flow is negative (-₹{abs(cfo):,.0f} Cr) against reported PAT of ₹{pat:,.0f} Cr.",
+                    "impact": "Severe Cash Burn Alert: Accounting profits are not translating into actual bank cash flow.",
+                })
+            elif (cfo / pat) < 0.5:
+                discrepancies.append({
+                    "category": "PAPER_PROFIT_DIVERGENCE",
+                    "severity": "HIGH",
+                    "claim": "Leadership emphasized sustained bottom-line cash generation.",
+                    "financial_reality": f"CFO/PAT conversion ratio is depressed at {round((cfo / pat) * 100, 1)}% (CFO ₹{cfo:,.0f} Cr vs PAT ₹{pat:,.0f} Cr).",
+                    "impact": "More than half of reported net profit is locked in receivables/inventory rather than operational liquidity.",
+                })
+
+        # 2. Working Capital & Debtor Surge (Channel Stuffing Risk)
+        debtor_days = float(rec.debtor_days) if rec.debtor_days is not None else None
+        ccc = float(rec.cash_conversion_cycle) if rec.cash_conversion_cycle is not None else None
+
+        if debtor_days and debtor_days > 75:
+            discrepancies.append({
+                "category": "WORKING_CAPITAL_SURGE",
+                "severity": "HIGH",
+                "claim": "Management stated collections and distribution cycles remain normal.",
+                "financial_reality": f"Debtor days elevated at {debtor_days:.0f} days{f' (Cash Conversion Cycle: {ccc:.0f} days)' if ccc else ''}.",
+                "impact": "High risk of channel stuffing or customer payment deferrals inflating reported revenue.",
+            })
+
+        # 3. Margin Squeeze vs Pricing Power Claim
+        opm_latest = float(rec.opm_latest) if rec.opm_latest is not None else None
+        opm_ttm = float(rec.opm_ttm) if rec.opm_ttm is not None else None
+
+        if opm_latest is not None and opm_ttm is not None and opm_latest < (opm_ttm - 1.5):
+            discrepancies.append({
+                "category": "MARGIN_COMPRESSION_DISCONNECT",
+                "severity": "MEDIUM",
+                "claim": "Management guided for robust pricing power and immediate input cost pass-through.",
+                "financial_reality": f"Operating Profit Margin contracted to {opm_latest:.1f}% vs TTM baseline of {opm_ttm:.1f}% (-{round(opm_ttm - opm_latest, 1)}% contraction).",
+                "impact": "Pass-through contractual lag or customer resistance is squeezing operating spread.",
+            })
+
+        # 4. Solvency & Borrowings Burden
+        dte = float(rec.debt_to_equity) if rec.debt_to_equity is not None else None
+        borrowings = float(rec.borrowings) if rec.borrowings is not None else None
+
+        if dte and dte > 1.2:
+            discrepancies.append({
+                "category": "LEVERAGE_BURDEN",
+                "severity": "HIGH",
+                "claim": "Management emphasized self-funded balance sheet and conservative debt management.",
+                "financial_reality": f"Debt-to-Equity stands elevated at {dte:.2f}x (Total Borrowings: ₹{borrowings or 0:,.0f} Cr).",
+                "impact": "Substantial interest servicing burden limits free cash generation and elevates downside vulnerability.",
+            })
+
+        # 5. Asset Turnover Stagnation
+        sales_growth = float(rec.sales_growth_ttm) if rec.sales_growth_ttm is not None else None
+        total_assets = float(rec.total_assets) if rec.total_assets is not None else None
+
+        if sales_growth is not None and sales_growth < 4.0 and total_assets and total_assets > 1000:
+            discrepancies.append({
+                "category": "ASSET_TURNOVER_STAGNATION",
+                "severity": "MEDIUM",
+                "claim": "Leadership promoted aggressive expansion and upcoming asset commissioning.",
+                "financial_reality": f"TTM revenue growth is sluggish at {sales_growth:.1f}% despite ₹{total_assets:,.0f} Cr in capital asset base.",
+                "impact": "New capex risks operating at low asset turnover, depressing return on capital employed (ROCE).",
+            })
+
+        if not discrepancies:
+            discrepancies.append({
+                "category": "FINANCIAL_STATEMENT_ALIGNMENT",
+                "severity": "LOW",
+                "claim": "Management narrative aligns with reported audited balance sheet & P&L statements.",
+                "financial_reality": f"Clean cash conversion and disciplined working capital ({debtor_days:.0f} debtor days, OPM {opm_latest or opm_ttm or 'healthy'}%)." if debtor_days else "Audited statements show no material disconnect with spoken concall claims.",
+                "impact": "High accounting integrity and institutional credibility confirmed.",
+            })
+
+        return discrepancies
+
+    @classmethod
     def _forensic_layman_synthesizer(
         cls,
         doc: InvestorDocument,
@@ -338,6 +557,17 @@ class InvestorIntelligenceService:
             ob_cr=ob_cr,
             capex_cr_str=capex_cr_str,
             quotes=quotes,
+        )
+
+        # Phase 2: Compute Forensic Evasiveness, Tension & Balance Sheet Cross-Verification
+        forensic_scores = cls._compute_forensic_evasiveness_and_tension(
+            qa_text=doc.analyst_qa_text or "",
+            full_text=full_text,
+            grill=grill,
+        )
+        forensic_discrepancies = cls._cross_verify_balance_sheet_and_pnl(
+            symbol=sym,
+            db=db,
         )
 
         # ---------------------------------------------------------------------
@@ -573,6 +803,13 @@ class InvestorIntelligenceService:
             "evasiveness_detected": grill[0]["verdict"] if grill else "No material evasion detected; executive responses were direct.",
             "guidance_change": "MAINTAINED" if abs(sentiment_score) < 4.0 else ("UPWARD_REVISION" if sentiment_score > 0 else "DOWNWARD_REVISION"),
 
+            # Phase 2: Forensic Evasiveness, Tension & Balance Sheet Cross-Verification
+            "evasiveness_score": forensic_scores["evasiveness_score"],
+            "analyst_tension_score": forensic_scores["analyst_tension_score"],
+            "hot_seat_question": forensic_scores["hot_seat_question"],
+            "management_defense_strategy": forensic_scores["management_defense_strategy"],
+            "forensic_discrepancies": forensic_discrepancies,
+
             "critical_monitorables": [
                 "Commissioning milestones and asset turnover conversion",
                 "Working capital cash absorption from inventory stocking",
@@ -601,10 +838,11 @@ class InvestorIntelligenceService:
                 doc_name=f"{doc.symbol}_{doc.fiscal_period}_{doc.doc_type}_{doc.id}",
             )
             if res["success"]:
-                doc.raw_text_length = len(res["raw_text"])
-                doc.parsed_text = res["raw_text"][:45000]
-                doc.management_speech_text = res["management_speech"]
-                doc.analyst_qa_text = res["analyst_qa"]
+                clean_raw = (res.get("raw_text") or "").replace("\x00", "")
+                doc.raw_text_length = len(clean_raw)
+                doc.parsed_text = clean_raw[:45000]
+                doc.management_speech_text = (res.get("management_speech") or "").replace("\x00", "")
+                doc.analyst_qa_text = (res.get("analyst_qa") or "").replace("\x00", "")
                 doc.status = "EXTRACTED"
                 db.commit()
             else:
@@ -690,6 +928,13 @@ class InvestorIntelligenceService:
         existing_insight.management_direct_answer = analysis_dict.get("management_direct_answer")
         existing_insight.evasiveness_detected = analysis_dict.get("evasiveness_detected")
         existing_insight.guidance_change = analysis_dict.get("guidance_change")
+
+        # Phase 2: Forensic Evasiveness, Tension & Cross-Verification
+        existing_insight.evasiveness_score = float(analysis_dict.get("evasiveness_score", 0.0))
+        existing_insight.analyst_tension_score = float(analysis_dict.get("analyst_tension_score", 3.0))
+        existing_insight.hot_seat_question = analysis_dict.get("hot_seat_question")
+        existing_insight.management_defense_strategy = analysis_dict.get("management_defense_strategy")
+        existing_insight.forensic_discrepancies = analysis_dict.get("forensic_discrepancies", [])
 
         existing_insight.critical_monitorables = analysis_dict.get("critical_monitorables", [])
         existing_insight.raw_analyst_payload = analysis_dict

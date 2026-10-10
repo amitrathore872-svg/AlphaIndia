@@ -215,17 +215,35 @@ class VCPEngineService:
         # Enforce Rule 1: Minimum 3 contractions, maximum 5
         if len(contractions) < 3:
             # Check if synthetic contraction exists via rolling price range decay
-            r1 = (np.max(highs[-75:-50]) - np.min(lows[-75:-50])) / np.max(highs[-75:-50]) * 100.0
-            r2 = (np.max(highs[-50:-25]) - np.min(lows[-50:-25])) / np.max(highs[-50:-25]) * 100.0
-            r3 = (np.max(highs[-25:]) - np.min(lows[-25:])) / np.max(highs[-25:]) * 100.0
-            if r1 > r2 > r3 and r3 < 9.0:
-                contractions = [round(r1, 1), round(r2, 1), round(r3, 1)]
-                v1 = int(np.mean(volumes[-75:-50]))
-                v2 = int(np.mean(volumes[-50:-25]))
-                v3 = int(np.mean(volumes[-25:]))
-                wave_volumes = [v1, v2, v3]
-                swing_high_prices = [round(float(np.max(highs[-75:-50])), 2), round(float(np.max(highs[-50:-25])), 2), round(float(np.max(highs[-25:])), 2)]
-                swing_low_prices = [round(float(np.min(lows[-75:-50])), 2), round(float(np.min(lows[-50:-25])), 2), round(float(np.min(lows[-25:])), 2)]
+            if len(highs) >= 75:
+                r1 = (np.max(highs[-75:-50]) - np.min(lows[-75:-50])) / max(1e-4, float(np.max(highs[-75:-50]))) * 100.0
+                r2 = (np.max(highs[-50:-25]) - np.min(lows[-50:-25])) / max(1e-4, float(np.max(highs[-50:-25]))) * 100.0
+                r3 = (np.max(highs[-25:]) - np.min(lows[-25:])) / max(1e-4, float(np.max(highs[-25:]))) * 100.0
+                if r1 > r2 > r3 and r3 < 9.0:
+                    contractions = [round(r1, 1), round(r2, 1), round(r3, 1)]
+                    v1 = int(np.mean(volumes[-75:-50]))
+                    v2 = int(np.mean(volumes[-50:-25]))
+                    v3 = int(np.mean(volumes[-25:]))
+                    wave_volumes = [v1, v2, v3]
+                    swing_high_prices = [round(float(np.max(highs[-75:-50])), 2), round(float(np.max(highs[-50:-25])), 2), round(float(np.max(highs[-25:])), 2)]
+                    swing_low_prices = [round(float(np.min(lows[-75:-50])), 2), round(float(np.min(lows[-50:-25])), 2), round(float(np.min(lows[-25:])), 2)]
+                else:
+                    return False, 0.0, {}, f"Only {len(contractions)} contraction waves detected (Minervini requires 3–5 contractions)"
+            elif len(highs) >= 45:
+                s_len = len(highs) // 3
+                h1, l1 = highs[-3*s_len : -2*s_len], lows[-3*s_len : -2*s_len]
+                h2, l2 = highs[-2*s_len : -s_len], lows[-2*s_len : -s_len]
+                h3, l3 = highs[-s_len :], lows[-s_len :]
+                r1 = (np.max(h1) - np.min(l1)) / max(1e-4, float(np.max(h1))) * 100.0
+                r2 = (np.max(h2) - np.min(l2)) / max(1e-4, float(np.max(h2))) * 100.0
+                r3 = (np.max(h3) - np.min(l3)) / max(1e-4, float(np.max(h3))) * 100.0
+                if r1 > r2 > r3 and r3 < 9.0:
+                    contractions = [round(r1, 1), round(r2, 1), round(r3, 1)]
+                    wave_volumes = [int(np.mean(volumes[-3*s_len : -2*s_len])), int(np.mean(volumes[-2*s_len : -s_len])), int(np.mean(volumes[-s_len :]))]
+                    swing_high_prices = [round(float(np.max(h1)), 2), round(float(np.max(h2)), 2), round(float(np.max(h3)), 2)]
+                    swing_low_prices = [round(float(np.min(l1)), 2), round(float(np.min(l2)), 2), round(float(np.min(l3)), 2)]
+                else:
+                    return False, 0.0, {}, f"Only {len(contractions)} contraction waves detected (Minervini requires 3–5 contractions)"
             else:
                 return False, 0.0, {}, f"Only {len(contractions)} contraction waves detected (Minervini requires 3–5 contractions)"
 
@@ -543,7 +561,12 @@ class VCPEngineService:
 
         # Rule 3: Breakout Volume = Biggest volume in 20 days
         hist_vols = hist["Volume"].values
-        vol_20d_max = float(np.max(hist_vols[-21:-1])) if len(hist_vols) >= 21 else float(np.max(hist_vols[:-1]))
+        if len(hist_vols) >= 21:
+            vol_20d_max = float(np.max(hist_vols[-21:-1]))
+        elif len(hist_vols) > 1:
+            vol_20d_max = float(np.max(hist_vols[:-1]))
+        else:
+            vol_20d_max = max(1.0, float(vol))
         is_20d_max_vol = bool(vol >= vol_20d_max * 0.95)
         vol_20d_max_ratio = round(vol / max(1.0, vol_20d_max), 2)
 

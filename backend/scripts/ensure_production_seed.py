@@ -155,6 +155,29 @@ def ensure_production_database():
         else:
             logger.info(f"      Telegram channel active (Bot: {tg_cfg.bot_token[:6]}..., Chat: {tg_cfg.chat_id}).")
 
+        # 7. Verify Institutional Brokerage Radar & Scorecards
+        logger.info("[7/7] Verifying Institutional Brokerage Intelligence & Live Feed...")
+        from app.models.brokerage_intelligence import BrokerScorecard, BrokerageReport
+        from app.services.brokerage_ingestion_service import BrokerageIngestionService
+        from scripts.seed_brokerage_intelligence import seed_brokerage_data
+
+        scorecard_count = db.query(BrokerScorecard).count()
+        reports_count = db.query(BrokerageReport).count()
+        if scorecard_count < 30 or reports_count < 20:
+            logger.info("      Seeding Baseline Institutional Broker Scorecards & Seed Reports...")
+            seed_brokerage_data()
+            scorecard_count = db.query(BrokerScorecard).count()
+            logger.info(f"      Seeded {scorecard_count} broker scorecards.")
+
+        # Trigger live ingestion for the latest calls
+        b_status = BrokerageIngestionService.get_ingestion_status(db)
+        if not b_status.get("is_feed_live"):
+            logger.info("      Running Live Brokerage Radar Ingestion (7-day scan)...")
+            b_ingest_res = BrokerageIngestionService.ingest_live_brokerage_reports(db, days_back=7)
+            logger.info(f"      Brokerage Ingestion completed: {b_ingest_res.get('total_discovered')} discovered.")
+        else:
+            logger.info(f"      Brokerage feed is healthy & live (Newest: {b_status.get('newest_report_date')}, Total: {b_status.get('total_reports')}).")
+
     except Exception as exc:
         logger.error(f"Error during production seed verification: {exc}", exc_info=True)
         raise exc

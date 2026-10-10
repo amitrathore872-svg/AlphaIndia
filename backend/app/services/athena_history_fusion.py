@@ -77,15 +77,15 @@ class AthenaFusedState:
     roce_baseline: float = 15.0
 
     # Valuation Multiples & Market Baselines from Local Warehouse
-    current_price: float = 100.0
-    market_cap: float = 1000.0
-    market_cap_category: str = "SMALL"
-    stock_pe: float = 20.0
-    industry_pe: float = 25.0
-    peg_ratio: float = 1.0
-    high_52w: float = 120.0
-    low_52w: float = 80.0
-    promoter_holding_pct: float = 50.0
+    current_price: float = 0.0
+    market_cap: float = 0.0
+    market_cap_category: str = "UNKNOWN"
+    stock_pe: float = 0.0
+    industry_pe: float = 0.0
+    peg_ratio: float = 0.0
+    high_52w: float = 0.0
+    low_52w: float = 0.0
+    promoter_holding_pct: float = 0.0
 
     # Computed YoY & QoQ Deltas
     revenue_growth_yoy: float = 0.0
@@ -186,7 +186,7 @@ class AthenaHistoryFusion:
             except Exception:
                 pass
 
-        return 100.0
+        return 0.0
 
     @classmethod
     def fuse(
@@ -291,14 +291,14 @@ class AthenaHistoryFusion:
 
         # Pull Balance sheet & Solvency baselines from ScreenerGrowthRecord if available
         total_debt = 0.0
-        total_equity = 100.0
+        total_equity = 0.0
         debt_to_eq = 0.0
-        cfo = rev_q0 * 0.12  # baseline default
-        fcf = cfo * 0.8
-        d_days = 60.0
-        i_days = 60.0
-        ccc = 60.0
-        roce_val = 15.0
+        cfo = 0.0
+        fcf = 0.0
+        d_days = 0.0
+        i_days = 0.0
+        ccc = 0.0
+        roce_val = 0.0
 
         # Multi-Tier Accurate Current Market Price Resolver
         curr_price = cls.resolve_accurate_cmp(
@@ -308,33 +308,33 @@ class AthenaHistoryFusion:
             s_record=s_record,
         )
 
-        mcap = float(fresh_q0.get("market_cap") or (s_record.market_cap if s_record and s_record.market_cap else 2500.0))
-        mcap_cat = s_record.market_cap_category if (s_record and s_record.market_cap_category) else "SMALL"
-        s_pe = float(fresh_q0.get("pe") or (s_record.stock_pe if s_record and s_record.stock_pe else 25.0))
-        ind_pe = s_record.industry_pe if (s_record and s_record.industry_pe) else 25.0
-        peg = s_record.peg_ratio if (s_record and s_record.peg_ratio) else 1.0
-        h_52 = s_record.high_52_week if (s_record and s_record.high_52_week) else round(curr_price * 1.2, 2)
-        l_52 = s_record.low_52_week if (s_record and s_record.low_52_week) else round(curr_price * 0.7, 2)
-        promoter = s_record.promoter_holding if (s_record and s_record.promoter_holding) else 55.0
+        mcap = float(fresh_q0.get("market_cap") or (s_record.market_cap if s_record and s_record.market_cap else 0.0))
+        mcap_cat = s_record.market_cap_category if (s_record and s_record.market_cap_category) else "UNKNOWN"
+        s_pe = float(fresh_q0.get("pe") or (s_record.stock_pe if s_record and s_record.stock_pe else 0.0))
+        ind_pe = float(s_record.industry_pe if s_record and s_record.industry_pe else 0.0)
+        peg = float(s_record.peg_ratio if s_record and s_record.peg_ratio else 0.0)
+        h_52 = float(s_record.high_52_week if (s_record and s_record.high_52_week) else curr_price)
+        l_52 = float(s_record.low_52_week if (s_record and s_record.low_52_week) else curr_price)
+        promoter = float(s_record.promoter_holding if (s_record and s_record.promoter_holding is not None) else 0.0)
 
         if s_record:
-            total_debt = s_record.borrowings or 0.0
-            total_equity = s_record.reserves or 100.0
-            debt_to_eq = s_record.debt_to_equity if s_record.debt_to_equity is not None else 0.0
-            cfo = s_record.cfo_latest if s_record.cfo_latest is not None else (pat_q0 * 4 * 0.9)
-            fcf = s_record.free_cash_flow if s_record.free_cash_flow is not None else cfo
-            d_days = s_record.debtor_days or 60.0
-            i_days = s_record.inventory_days or 60.0
-            ccc = s_record.cash_conversion_cycle or 60.0
-            roce_val = s_record.roce or 15.0
-            mcap = s_record.market_cap or mcap
+            total_debt = float(s_record.borrowings or 0.0)
+            total_equity = float(s_record.reserves or 0.0)
+            debt_to_eq = float(s_record.debt_to_equity) if s_record.debt_to_equity is not None else 0.0
+            cfo = float(s_record.cfo_latest) if s_record.cfo_latest is not None else 0.0
+            fcf = float(s_record.free_cash_flow) if s_record.free_cash_flow is not None else cfo
+            d_days = float(s_record.debtor_days or 0.0)
+            i_days = float(s_record.inventory_days or 0.0)
+            ccc = float(s_record.cash_conversion_cycle or 0.0)
+            roce_val = float(s_record.roce or 0.0)
+            mcap = float(s_record.market_cap or mcap)
             mcap_cat = s_record.market_cap_category or mcap_cat
-            s_pe = s_record.stock_pe or s_pe
-            ind_pe = s_record.industry_pe or ind_pe
-            peg = s_record.peg_ratio or peg
-            h_52 = s_record.high_52_week or h_52
-            l_52 = s_record.low_52_week or l_52
-            promoter = s_record.promoter_holding or promoter
+            s_pe = float(s_record.stock_pe or s_pe)
+            ind_pe = float(s_record.industry_pe or ind_pe)
+            peg = float(s_record.peg_ratio or peg)
+            h_52 = float(s_record.high_52_week or h_52)
+            l_52 = float(s_record.low_52_week or l_52)
+            promoter = float(s_record.promoter_holding if s_record.promoter_holding is not None else promoter)
 
         fused = AthenaFusedState(
             symbol=sym,

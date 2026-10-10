@@ -19,7 +19,9 @@ from app.models.early_stage_temp_cache import EarlyStageTempCache
 from app.models.early_stage_daily import EarlyStageDaily
 from app.models.early_stage_import_log import EarlyStageImportLog
 from app.models.announcement_radar import AnnouncementRadar
+from app.models.company_orderbook_history import CompanyOrderBookHistory
 from app.models.financial_reconciliation_log import FinancialReconciliationLog
+from app.models.earnings_calendar import EarningsCalendar
 from app.models.athena_models import (
     AthenaOmegaFiling,
     AthenaQuarterlyMetrics,
@@ -102,6 +104,16 @@ from app.models.velocity_models import (
     VelocityBacktest,
     VelocityLearning,
 )
+from app.models.backtest_models import (
+    MarketCandle1m,
+    MarketCandle5m,
+    BacktestRun,
+    BacktestSignal,
+    BacktestTrade,
+    BacktestMetric,
+    BacktestEquityCurve,
+)
+
 
 __all__ = [
     "BrokerageReport",
@@ -131,7 +143,9 @@ __all__ = [
     "EarlyStageDaily",
     "EarlyStageImportLog",
     "AnnouncementRadar",
+    "CompanyOrderBookHistory",
     "FinancialReconciliationLog",
+    "EarningsCalendar",
 
     "AthenaOmegaFiling",
     "AthenaQuarterlyMetrics",
@@ -171,4 +185,11 @@ __all__ = [
     "MomentumRadarWatchlist",
     "SovereignIntradaySignal",
     "SovereignIntradayLog",
+    "MarketCandle1m",
+    "MarketCandle5m",
+    "BacktestRun",
+    "BacktestSignal",
+    "BacktestTrade",
+    "BacktestMetric",
+    "BacktestEquityCurve",
 ]

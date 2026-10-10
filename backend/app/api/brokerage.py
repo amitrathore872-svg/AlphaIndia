@@ -107,6 +107,39 @@ def get_stock_brokerage_consensus(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/brokerage/stocks-consensus")
+@router.get("/api/v1/brokerage/stocks-consensus")
+def get_all_stocks_consensus(
+    market_cap_category: Optional[str] = Query(None, description="LARGE_CAP, MID_CAP, SMALL_CAP, or ALL"),
+    min_brokers: int = Query(1, ge=1, le=20, description="Minimum distinct brokerage houses covering stock"),
+    search: Optional[str] = Query(None),
+    sort_by: str = Query("broker_count", description="broker_count, consensus_upside_pct, avg_conviction_score, total_reports, symbol"),
+    sort_order: str = Query("desc"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns multi-broker consensus corridors, distinct brokerage rosters, and complete
+    recommendation histories grouped by stock, enabling unified multi-broker analysis.
+    """
+    try:
+        data = BrokerageService.get_all_stocks_consensus(
+            db=db,
+            market_cap_category=market_cap_category,
+            search=search,
+            min_brokers=min_brokers,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        return {
+            "status": "success",
+            "count": len(data),
+            "data": data,
+        }
+    except Exception as e:
+        logger.error(f"[BrokerageAPI] Error fetching stocks consensus: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/brokerage/scorecards")
 @router.get("/api/v1/brokerage/scorecards")
 def get_broker_scorecards(
@@ -144,3 +177,42 @@ def get_brokerage_metrics(
     except Exception as e:
         logger.error(f"[BrokerageAPI] Error fetching metrics ribbon: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/brokerage/ingest")
+@router.post("/api/v1/brokerage/ingest")
+def trigger_brokerage_ingestion(
+    days_back: int = Query(7, ge=1, le=30, description="Number of days to scan for fresh calls"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Triggers automated ingestion across institutional brokerage research feeds and media registries.
+    Extracts new calls, normalizes targets, computes conviction scores, and updates the database.
+    """
+    from app.services.brokerage_ingestion_service import BrokerageIngestionService
+    try:
+        result = BrokerageIngestionService.ingest_live_brokerage_reports(db=db, days_back=days_back)
+        return result
+    except Exception as e:
+        logger.error(f"[BrokerageAPI] Error running brokerage ingestion: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/brokerage/ingestion/status")
+@router.get("/api/v1/brokerage/ingestion/status")
+def get_brokerage_ingestion_status(
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns telemetry status on the Brokerage Radar ingestion engine.
+    """
+    from app.services.brokerage_ingestion_service import BrokerageIngestionService
+    try:
+        return {
+            "status": "success",
+            "data": BrokerageIngestionService.get_ingestion_status(db=db),
+        }
+    except Exception as e:
+        logger.error(f"[BrokerageAPI] Error fetching ingestion status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+

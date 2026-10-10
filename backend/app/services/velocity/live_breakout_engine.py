@@ -51,8 +51,13 @@ class LiveBreakoutEngine:
         cmp = ind["cmp"]
         pivot = pivot_price or float(highs.iloc[-min(30, len(highs)):-1].max())
 
-        # Check breakout condition
-        is_breakout = bool(cmp >= pivot and cmp > float(opens.iloc[-1]))
+        # Check breakout condition (close cleared pivot or intraday high pierced pivot holding within 1% of level)
+        today_high = float(highs.iloc[-1])
+        today_open = float(opens.iloc[-1])
+        is_breakout = bool(
+            (cmp >= pivot and cmp > today_open) or
+            (today_high >= pivot and cmp >= (pivot * 0.99) and cmp > today_open)
+        )
         if not is_breakout:
             return None
 
@@ -198,31 +203,63 @@ class LiveBreakoutEngine:
         )
         db.execute(stmt_eq)
 
-        # 2. Insert Live Signal
-        row = VelocityLiveSignal(
-            symbol=signal_data["symbol"],
-            signal_timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
-            signal_type=signal_data["signal_type"],
-            confidence_score=signal_data["confidence_score"],
-            ai_verdict=signal_data["ai_verdict"],
-            entry_price=signal_data["entry_price"],
-            stop_loss=signal_data["stop_loss"],
-            target_1=signal_data["target_1"],
-            target_2=signal_data["target_2"],
-            target_3=signal_data["target_3"],
-            risk_reward=signal_data["risk_reward"],
-            breakout_candle_strength=signal_data["breakout_candle_strength"],
-            relative_volume_rvol=signal_data["relative_volume_rvol"],
-            vwap_confirmed=signal_data["vwap_confirmed"],
-            rsi_momentum=signal_data["rsi_momentum"],
-            macd_histogram_positive=signal_data["macd_histogram_positive"],
-            adx_rising=signal_data["adx_rising"],
-            opening_range_break=signal_data["opening_range_break"],
-            retest_success=signal_data["retest_success"],
-            gap_filter_passed=signal_data["gap_filter_passed"],
-            status="ACTIVE",
+        # 2. Upsert Live Signal (prevent duplicate active signals for the same stock)
+        existing = (
+            db.query(VelocityLiveSignal)
+            .filter(
+                VelocityLiveSignal.symbol == signal_data["symbol"].upper(),
+                VelocityLiveSignal.status == "ACTIVE",
+            )
+            .order_by(VelocityLiveSignal.id.desc())
+            .first()
         )
-        db.add(row)
+
+        if existing:
+            row = existing
+            row.signal_timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
+            row.confidence_score = signal_data["confidence_score"]
+            row.ai_verdict = signal_data["ai_verdict"]
+            row.entry_price = signal_data["entry_price"]
+            row.stop_loss = signal_data["stop_loss"]
+            row.target_1 = signal_data["target_1"]
+            row.target_2 = signal_data["target_2"]
+            row.target_3 = signal_data["target_3"]
+            row.risk_reward = signal_data["risk_reward"]
+            row.breakout_candle_strength = signal_data["breakout_candle_strength"]
+            row.relative_volume_rvol = signal_data["relative_volume_rvol"]
+            row.vwap_confirmed = signal_data["vwap_confirmed"]
+            row.rsi_momentum = signal_data["rsi_momentum"]
+            row.macd_histogram_positive = signal_data["macd_histogram_positive"]
+            row.adx_rising = signal_data["adx_rising"]
+            row.opening_range_break = signal_data["opening_range_break"]
+            row.retest_success = signal_data["retest_success"]
+            row.gap_filter_passed = signal_data["gap_filter_passed"]
+        else:
+            row = VelocityLiveSignal(
+                symbol=signal_data["symbol"].upper(),
+                signal_timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                signal_type=signal_data["signal_type"],
+                confidence_score=signal_data["confidence_score"],
+                ai_verdict=signal_data["ai_verdict"],
+                entry_price=signal_data["entry_price"],
+                stop_loss=signal_data["stop_loss"],
+                target_1=signal_data["target_1"],
+                target_2=signal_data["target_2"],
+                target_3=signal_data["target_3"],
+                risk_reward=signal_data["risk_reward"],
+                breakout_candle_strength=signal_data["breakout_candle_strength"],
+                relative_volume_rvol=signal_data["relative_volume_rvol"],
+                vwap_confirmed=signal_data["vwap_confirmed"],
+                rsi_momentum=signal_data["rsi_momentum"],
+                macd_histogram_positive=signal_data["macd_histogram_positive"],
+                adx_rising=signal_data["adx_rising"],
+                opening_range_break=signal_data["opening_range_break"],
+                retest_success=signal_data["retest_success"],
+                gap_filter_passed=signal_data["gap_filter_passed"],
+                status="ACTIVE",
+            )
+            db.add(row)
+
         db.commit()
 
         # 3. Stream over WebSocket to channel 'velocity_stream'

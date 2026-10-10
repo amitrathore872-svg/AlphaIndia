@@ -137,14 +137,30 @@ class NSEClient:
         )
         return res if isinstance(res, list) else []
 
-    def global_announcements(self) -> List[Dict[str, Any]]:
+    def global_announcements(
+        self,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        days_back: int = 8,
+    ) -> List[Dict[str, Any]]:
         """
-        Fetches the latest real-time corporate announcements across all listed equities.
+        Fetches corporate announcements across all listed equities.
+        Defaults to the past `days_back` days (format: DD-MM-YYYY) to ensure
+        all recent results are captured without truncation.
         """
+        import datetime
+        now = datetime.datetime.now()
+        if not to_date:
+            to_date = now.strftime("%d-%m-%Y")
+        if not from_date:
+            from_date = (now - datetime.timedelta(days=days_back)).strftime("%d-%m-%Y")
+
         res = self.get_json(
             "/api/corporate-announcements",
             params={
                 "index": "equities",
+                "from_date": from_date,
+                "to_date": to_date,
             },
         )
         return res if isinstance(res, list) else []

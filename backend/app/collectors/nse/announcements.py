@@ -143,11 +143,11 @@ class NSEAnnouncementCollector:
 
         return filings
 
-    def fetch_global_announcements(self):
+    def fetch_global_announcements(self, from_date: Optional[str] = None, to_date: Optional[str] = None):
         """
         Fetches live market-wide announcements across all listed equities.
         """
-        data = self.client.global_announcements()
+        data = self.client.global_announcements(from_date=from_date, to_date=to_date)
         filings = []
 
         for item in data:
@@ -161,18 +161,48 @@ class NSEAnnouncementCollector:
                 else datetime.utcnow().date()
             )
 
+            desc = item.get("desc") or "Corporate Announcement"
+            attch = item.get("attchmntText") or ""
+            comb = f"{desc} {attch}".lower()
+
+            # Detect genuine financial results filings
+            filing_type = desc
+            is_fin = self._is_financial(item)
+            if (
+                "submitted to the exchange, the financial results" in comb
+                or "integrated filing- financial" in desc.lower()
+                or "integrated filing (financial" in desc.lower()
+                or "financial results for the period ended" in comb
+                or "financial results for the quarter ended" in comb
+                or "un-audited financial results for the quarter" in comb
+            ):
+                if not any(ex in comb for ex in ["statement of deviation", "deviation", "litigation", "press release", "investor presentation", "audio recording", "earnings call", "newspaper"]):
+                    filing_type = "Financial Results"
+                    is_fin = True
+
+            period = self._extract_period(item, ann_date)
+            if period == "Unknown":
+                if "jun" in comb:
+                    period = f"Q1 FY{str(ann_date.year + 1)[-2:]}"
+                elif "sep" in comb:
+                    period = f"Q2 FY{str(ann_date.year + 1)[-2:]}"
+                elif "dec" in comb:
+                    period = f"Q3 FY{str(ann_date.year + 1)[-2:]}"
+                elif "mar" in comb:
+                    period = f"Q4 FY{str(ann_date.year)[-2:]}"
+
             filings.append(
                 {
                     "symbol": sym,
                     "company_name": item.get("sm_name", ""),
                     "exchange": "NSE",
-                    "period": self._extract_period(item, ann_date),
-                    "filing_type": item.get("desc") or "Corporate Announcement",
+                    "period": period,
+                    "filing_type": filing_type,
                     "announcement_date": ann_date,
                     "pdf_url": item.get("attchmntFile"),
                     "title": item.get("attchmntText") or item.get("desc"),
                     "xbrl": item.get("hasXbrl", False),
-                    "is_financial": self._is_financial(item),
+                    "is_financial": is_fin,
                 }
             )
 
