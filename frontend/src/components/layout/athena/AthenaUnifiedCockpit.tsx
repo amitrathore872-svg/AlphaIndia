@@ -105,6 +105,8 @@ export interface UnifiedMasterItem {
 
   // Athena Forensics & Shock
   shock_score?: number;
+  pead_score?: number | null;
+  pead_tier?: string | null;
   conviction_score?: number;
   conviction_grade?: "AAA+" | "AAA" | "AA" | "A" | "BELOW_A" | string;
   forensic_status?: "CLEAN" | "FLAGGED" | "PENDING";
@@ -459,7 +461,7 @@ function exportMasterToCsv(items: UnifiedMasterItem[]) {
       r.published_at || r.detected_at || "",
       revQoQ != null ? revQoQ : "",
       patQoQ != null ? patQoQ : "",
-      r.shock_score ?? "",
+      r.shock_score ?? r.pead_score ?? "",
       r.conviction_score ?? "",
       r.conviction_grade ?? "",
       r.flash_signal ?? "",
@@ -859,6 +861,7 @@ export default function AthenaUnifiedCockpit() {
         detected_at: f.detected_at,
         published_at: f.published_at,
         shock_score: f.shock_score,
+        pead_score: f.shock_score,
         conviction_score: f.conviction_score,
         conviction_grade: f.conviction_grade,
         flash_signal: f.flash_signal,
@@ -875,6 +878,8 @@ export default function AthenaUnifiedCockpit() {
         existing.conviction_score = d.athena_conviction_score;
         existing.conviction_grade = d.conviction_grade;
         existing.flash_signal = d.flash_signal;
+        existing.shock_score = existing.shock_score ?? d.decision_drivers?.financial_shock ?? undefined;
+        existing.pead_score = existing.pead_score ?? d.pead?.score ?? d.pead?.pead_score ?? d.decision_drivers?.financial_shock ?? undefined;
         existing.current_price = d.current_price || existing.current_price;
         existing.estimated_fair_value = d.estimated_fair_value;
         existing.upside_potential_pct = d.upside_potential_pct;
@@ -913,6 +918,8 @@ export default function AthenaUnifiedCockpit() {
           conviction_score: d.athena_conviction_score,
           conviction_grade: d.conviction_grade,
           flash_signal: d.flash_signal,
+          shock_score: d.decision_drivers?.financial_shock ?? undefined,
+          pead_score: d.pead?.score ?? d.pead?.pead_score ?? d.decision_drivers?.financial_shock ?? undefined,
           current_price: d.current_price,
           estimated_fair_value: d.estimated_fair_value,
           upside_potential_pct: d.upside_potential_pct,
@@ -977,6 +984,9 @@ export default function AthenaUnifiedCockpit() {
         existing.is_ath_quarter = qr.is_ath_quarter;
         existing.day1_reaction = qr.day1_reaction;
         existing.pead_drift = qr.pead_drift;
+        existing.shock_score = existing.shock_score ?? qr.shock_score ?? qr.pead_score ?? undefined;
+        existing.pead_score = qr.pead_score ?? existing.pead_score ?? qr.shock_score ?? undefined;
+        existing.pead_tier = qr.pead_tier ?? existing.pead_tier ?? undefined;
       } else if (universeMode === "active_season" || universeMode === "all_universe") {
         // Exclude purely blank intimations without any financial data or quarterly trend
         const hasFinancialData =
@@ -1022,6 +1032,9 @@ export default function AthenaUnifiedCockpit() {
           is_ath_quarter: qr.is_ath_quarter,
           day1_reaction: qr.day1_reaction,
           pead_drift: qr.pead_drift,
+          shock_score: qr.shock_score ?? qr.pead_score ?? undefined,
+          pead_score: qr.pead_score ?? qr.shock_score ?? undefined,
+          pead_tier: qr.pead_tier ?? undefined,
           conviction_score: qr.athena_conviction_score || qr.pead_score,
           conviction_grade: (qr.athena_conviction_grade as any) || (qr.pead_tier === "ELITE_PEAD" ? "AAA" : "AA"),
           flash_signal: (qr.athena_signal as any) || (qr.pead_score >= 80 ? "BUY IMMEDIATELY" : qr.pead_score >= 65 ? "ACCUMULATE" : "WATCHLIST"),
@@ -1238,8 +1251,8 @@ export default function AthenaUnifiedCockpit() {
           break;
         }
         case "shock": {
-          const sA = a.shock_score || a.decision_drivers?.financial_shock || 0;
-          const sB = b.shock_score || b.decision_drivers?.financial_shock || 0;
+          const sA = a.shock_score ?? a.pead_score ?? a.decision_drivers?.financial_shock ?? 0;
+          const sB = b.shock_score ?? b.pead_score ?? b.decision_drivers?.financial_shock ?? 0;
           cmp = sA - sB;
           break;
         }
@@ -1616,7 +1629,7 @@ export default function AthenaUnifiedCockpit() {
                                 symbol={item.symbol}
                                 companyName={item.company_name}
                                 defaultConviction={convictionVal >= 90 ? 5 : convictionVal >= 75 ? 4 : convictionVal >= 60 ? 3 : 2}
-                                defaultThesis={`${item.flash_signal || "WATCHLIST"}: Shock ${item.shock_score ? `${item.shock_score.toFixed(0)}/100` : "—"}`}
+                                defaultThesis={`${item.flash_signal || "WATCHLIST"}: PEAD ${(item.shock_score ?? item.pead_score) != null ? `${(item.shock_score ?? item.pead_score)!.toFixed(0)}/100` : "—"}`}
                                 variant="icon"
                                 size="sm"
                               />
@@ -1715,20 +1728,20 @@ export default function AthenaUnifiedCockpit() {
                           {/* 7. PEAD Score */}
                           <td className="p-3 whitespace-nowrap font-mono">
                             {(() => {
-                              const shockVal = item.shock_score ?? item.decision_drivers?.financial_shock ?? null;
+                              const scoreVal = item.shock_score ?? item.pead_score ?? item.decision_drivers?.financial_shock ?? null;
                               const isForensicClean = item.forensic_status !== "FLAGGED";
-                              if (shockVal === null) return <span className="text-slate-600 text-xs">—</span>;
+                              if (scoreVal === null || scoreVal === undefined) return <span className="text-slate-600 text-xs">—</span>;
 
                               return (
                                 <span
                                   className={`text-xs font-bold ${
                                     isForensicClean ? "text-emerald-400" : "text-rose-400"
                                   }`}
-                                  title={`PEAD Score: ${shockVal.toFixed(0)}/100 • Forensics: ${
+                                  title={`PEAD Score: ${scoreVal.toFixed(0)}/100 • Forensics: ${
                                     isForensicClean ? "Clean" : "Flagged Concerns"
                                   }`}
                                 >
-                                  {shockVal.toFixed(0)}
+                                  {scoreVal.toFixed(0)}
                                 </span>
                               );
                             })()}
@@ -2110,9 +2123,9 @@ export default function AthenaUnifiedCockpit() {
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-slate-200">PEAD Score Magnitude (Earnings Shock &amp; Quality)</span>
                           <span className="font-black text-cyan-400">
-                            {selectedDrawerItem.shock_score
-                              ? `${selectedDrawerItem.shock_score.toFixed(1)} / 100`
-                              : selectedDrawerItem.decision_drivers?.financial_shock
+                            {(selectedDrawerItem.shock_score ?? selectedDrawerItem.pead_score) != null
+                              ? `${(selectedDrawerItem.shock_score ?? selectedDrawerItem.pead_score)!.toFixed(1)} / 100`
+                              : selectedDrawerItem.decision_drivers?.financial_shock != null
                               ? `${selectedDrawerItem.decision_drivers.financial_shock.toFixed(1)} / 100`
                               : "—"}
                           </span>

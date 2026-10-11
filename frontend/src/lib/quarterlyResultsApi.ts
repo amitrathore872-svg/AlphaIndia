@@ -130,6 +130,7 @@ export interface QuarterlyResultItem {
 
   // Post-results PEAD Intelligence
   pead_score: number;
+  shock_score?: number | null;
   pead_tier: string;
   pead_tier_label: string;
   pead_color: string;

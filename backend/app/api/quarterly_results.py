@@ -49,6 +49,14 @@ _RESULT_KEYWORDS = [
     "integrated filing- financial",
     "integrated filing - financial",
     "integrated filing (financial",
+    "outcome of board meeting",
+    "outcome of the board meeting",
+    "board meeting outcome",
+    "outcome without intimation",
+    "revision of outcome",
+    "publish audited results",
+    "audited quarterly results",
+    "audited financial results",
 ]
 
 _RESULT_EXCLUDE_KEYWORDS = [
@@ -71,6 +79,12 @@ _RESULT_EXCLUDE_KEYWORDS = [
     "postal ballot",
     "loss of share",
     "demat",
+    "shareholders meeting",
+    "annual general meeting",
+    "agm",
+    "court convened",
+    "esop",
+    "buyback",
 ]
 
 _ANNOUNCEMENT_KEYWORDS = [

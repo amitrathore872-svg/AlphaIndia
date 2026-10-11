@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.3.5] - 2026-10-11
+
+### Fixed & Enhanced
+- **Filing Classification & Outcome of Board Meeting Extraction**:
+  - Added `"outcome of board meeting"`, `"outcome without intimation"`, `"revision of outcome"`, and related exchange titles to `_RESULT_KEYWORDS` in `quarterly_results.py`.
+  - Resolved bug where actual quarterly earnings declarations (e.g., DMART, Infosys, etc.) were misclassified as pre-meeting intimations, restoring over 780+ quarterly result filings into the active results feed with full PEAD drift scores.
+  - Excluded non-result board events (AGMs, postal ballots, court convened meetings, ESOPs) from results queries.
+- **Athena Unified Cockpit PEAD Score Fusion**:
+  - Fused `qr.pead_score` into `AthenaUnifiedCockpit.tsx` so that stocks with quarterly results PEAD calculations (like `GRAVITA`) display their authentic PEAD score instead of falling back to dashes when no Athena flash shock score was generated.
+
 ## [2.3.4] - 2026-09-25
 
 ### Added & Upgraded

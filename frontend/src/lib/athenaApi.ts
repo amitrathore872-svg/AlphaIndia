@@ -8,6 +8,7 @@ import { API_BASE as BASE_URL } from "@/lib/apiConfig";
 
 export interface PeadInfo {
   score: number;
+  pead_score?: number;
   tier: string;
   tier_label: string;
   color: string;
