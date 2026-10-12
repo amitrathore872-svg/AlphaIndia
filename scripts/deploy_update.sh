@@ -20,8 +20,8 @@ df -h /
 
 # Prune unused build cache and untagged images before doing any builds or fetches
 echo "Pruning Docker build cache and dangling containers/images..."
-docker builder prune -af --filter "until=1h" 2>/dev/null || docker builder prune -af 2>/dev/null || true
-docker image prune -af --filter "until=24h" 2>/dev/null || true
+docker builder prune -f --filter "until=24h" 2>/dev/null || docker builder prune -f 2>/dev/null || true
+docker image prune -f --filter "until=24h" 2>/dev/null || true
 docker container prune -f 2>/dev/null || true
 
 # Truncate oversized container logs (>25MB)

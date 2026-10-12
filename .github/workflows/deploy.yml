@@ -67,8 +67,8 @@ jobs:
             df -h / || true
 
             # Emergency reclaim of disk space in case previous builds filled root volume
-            docker builder prune -af 2>/dev/null || true
-            docker image prune -af --filter "until=24h" 2>/dev/null || true
+            docker builder prune -f --filter "until=24h" 2>/dev/null || docker builder prune -f 2>/dev/null || true
+            docker image prune -f --filter "until=24h" 2>/dev/null || true
             sudo journalctl --vacuum-size=50M 2>/dev/null || true
             sudo find /var/lib/docker/containers/ -name "*-json.log" -size +25M -exec truncate -s 5M {} + 2>/dev/null || true
             sudo rm -rf /tmp/* 2>/dev/null || true

@@ -9,14 +9,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
-# Install system dependencies required for compiling C extensions (curl_cffi, lxml, psycopg2)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    libpq-dev \
-    libffi-dev \
-    libxml2-dev \
-    libxslt1-dev \
+# Configure apt for resilient package installation on cloud/EC2 instances (force IPv4, retries, timeouts)
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 && \
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/99retries && \
+    echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/99retries && \
+    echo 'Acquire::https::Timeout "30";' >> /etc/apt/apt.conf.d/99retries && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        build-essential \
+        libpq-dev \
+        libffi-dev \
+        libxml2-dev \
+        libxslt1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python requirements and spaCy NLP model
