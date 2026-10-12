@@ -2,11 +2,11 @@
 
 // =======================================================
 // Alpha India — Investor Intelligence & Concall Radar Terminal
-// Senior Buy-Side Equity Analyst Interrogation of Earnings PPTs & Concall Transcripts
-// Bloomberg Dark Aesthetic · Cyan / Emerald / Amber Accents
+// Quarterly AI Analysis, Latest-First Feed & Management Commitment Ledger
+// Bloomberg Dark Institutional Aesthetic · #050B14 · Cyan/Emerald/Amber
 // =======================================================
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useId } from "react";
 import {
   FileText,
   Search,
@@ -30,556 +30,1455 @@ import {
   Flame,
   Scale,
   AlertCircle,
+  Calendar,
+  Filter,
+  Check,
+  XCircle,
+  HelpCircle,
+  ArrowUpRight,
+  ChevronDown,
+  Building2,
+  PieChart,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { PageHeader, ActionButton, LoadingSpinner, EmptyState } from "@/components/common";
+import { PageHeader, LoadingSpinner, EmptyState } from "@/components/common";
 import InvestorIntelligenceDrawer from "@/components/investor-intelligence/InvestorIntelligenceDrawer";
 import {
   fetchInvestorFeed,
+  fetchQuarterlyCoverage,
+  fetchCommitmentsLedger,
+  fetchCommitmentsSummary,
+  reprocessDocument,
+  triggerBackfill,
   triggerCompanyHarvest,
   triggerAnalyzeLatest,
-  fetchInvestorTelemetry,
-  triggerBatchScan,
+  formatGuidanceChanges,
   type InvestorInsightItem,
-  type InvestorTelemetry,
+  type QuarterlyCoverageResponse,
+  type CommitmentItem,
+  type CommitmentSummaryResponse,
 } from "@/lib/investorIntelligenceApi";
 
 const STANCE_FILTERS = [
   { id: "ALL", label: "All Stances" },
-  { id: "STRONG_GROWTH_LEADER", label: "Strong Growth Leaders", color: "text-emerald-400" },
+  { id: "STRONG_GROWTH_LEADER", label: "Growth Leaders", color: "text-emerald-400" },
   { id: "ACCUMULATE_ON_DIPS", label: "Accumulate on Dips", color: "text-cyan-400" },
   { id: "STEADY_COMPOUNDER", label: "Steady Compounders", color: "text-blue-400" },
   { id: "TURNAROUND_CANDIDATE", label: "Turnarounds", color: "text-amber-400" },
-  { id: "AVOID_OR_HEADWINDS", label: "Headwinds / Cautious", color: "text-rose-400" },
+  { id: "AVOID_OR_HEADWINDS", label: "Headwinds / Caution", color: "text-rose-400" },
+];
+
+const THESIS_FILTERS = [
+  { id: "ALL", label: "All Thesis Impacts" },
+  { id: "STRENGTHENING", label: "Strengthening Thesis", color: "text-emerald-400" },
+  { id: "NEUTRAL", label: "Neutral Thesis", color: "text-slate-300" },
+  { id: "WEAKENING", label: "Weakening Thesis", color: "text-rose-400" },
+];
+
+const STATUS_FILTERS = [
+  { id: "ALL", label: "All Analysis Statuses" },
+  { id: "ANALYZED", label: "Analyzed by AI", color: "text-emerald-400" },
+  { id: "PENDING", label: "Pending Analysis", color: "text-amber-400" },
+  { id: "FAILED", label: "Processing Failed", color: "text-rose-400" },
 ];
 
 export default function InvestorIntelligencePage() {
-  const [items, setItems] = useState<InvestorInsightItem[]>([]);
-  const [total, setTotal] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [telemetry, setTelemetry] = useState<InvestorTelemetry | null>(null);
-  const [batchProcessing, setBatchProcessing] = useState<boolean>(false);
-  const [batchMsg, setBatchMsg] = useState<string | null>(null);
-  const [selectedStance, setSelectedStance] = useState<string>("ALL");
-  const [selectedDocType, setSelectedDocType] = useState<string>("ALL");
-  const [transformationalOnly, setTransformationalOnly] = useState<boolean>(false);
+  // Navigation tabs
+  const [activeTab, setActiveTab] = useState<"FEED" | "COVERAGE" | "COMMITMENTS">("FEED");
+
+  // Global Quarter Selection
+  const [coverageData, setCoverageData] = useState<QuarterlyCoverageResponse | null>(null);
+  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  const [coverageLoading, setCoverageLoading] = useState<boolean>(false);
+
+  // Latest Intelligence Feed State
+  const [feedItems, setFeedItems] = useState<InvestorInsightItem[]>([]);
+  const [feedTotal, setFeedTotal] = useState<number>(0);
+  const [feedLoading, setFeedLoading] = useState<boolean>(true);
+  const [feedPage, setFeedPage] = useState<number>(1);
+  const feedLimit = 15;
+
+  // Filters
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [inputSymbol, setInputSymbol] = useState<string>("");
-  const [harvesting, setHarvesting] = useState<boolean>(false);
+  const [selectedStance, setSelectedStance] = useState<string>("ALL");
+  const [selectedThesis, setSelectedThesis] = useState<string>("ALL");
+  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+  const [selectedDocType, setSelectedDocType] = useState<string>("ALL");
+
+  // Commitments Ledger State
+  const [commitments, setCommitments] = useState<CommitmentItem[]>([]);
+  const [commitmentsTotal, setCommitmentsTotal] = useState<number>(0);
+  const [commitmentsLoading, setCommitmentsLoading] = useState<boolean>(false);
+  const [commitmentsPage, setCommitmentsPage] = useState<number>(1);
+  const [commitmentStatusFilter, setCommitmentStatusFilter] = useState<string>("ALL");
+  const [commitmentCategoryFilter, setCommitmentCategoryFilter] = useState<string>("ALL");
+  const [commitmentTypeFilter, setCommitmentTypeFilter] = useState<string>("ALL");
+  const [overallSummary, setOverallSummary] = useState<CommitmentSummaryResponse | null>(null);
+
+  // Drilldown Modal
+  const [drilldownCategory, setDrilldownCategory] = useState<string | null>(null);
+  const [drilldownTitle, setDrilldownTitle] = useState<string>("");
+  const [drilldownItems, setDrilldownItems] = useState<any[]>([]);
+  const [isDrilldownOpen, setIsDrilldownOpen] = useState<boolean>(false);
+
+  // Drawer details
   const [activeSymbolForDrawer, setActiveSymbolForDrawer] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
-  const loadTelemetry = useCallback(async () => {
+  // Manual actions
+  const [inputSymbol, setInputSymbol] = useState<string>("");
+  const [actionInProgress, setActionInProgress] = useState<boolean>(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  // 1. Load Quarterly Coverage Dashboard Data
+  const loadCoverage = useCallback(async (quarter?: string) => {
+    setCoverageLoading(true);
     try {
-      const tel = await fetchInvestorTelemetry();
-      setTelemetry(tel);
-    } catch (e) {
-      console.warn("Telemetry fetch error:", e);
+      const qParam = quarter && quarter !== "ALL" ? quarter : undefined;
+      const data = await fetchQuarterlyCoverage(qParam);
+      setCoverageData(data);
+      if (!quarter && data.selected_quarter) {
+        setSelectedQuarter(data.selected_quarter);
+      }
+    } catch (err) {
+      console.error("Error fetching quarterly coverage:", err);
+    } finally {
+      setCoverageLoading(false);
     }
   }, []);
 
+  // 2. Load Feed (Sorted primarily by announcement_date desc)
   const loadFeed = useCallback(async () => {
-    setLoading(true);
+    setFeedLoading(true);
     try {
       const res = await fetchInvestorFeed({
+        quarter: selectedQuarter === "ALL" ? undefined : selectedQuarter,
         stance: selectedStance === "ALL" ? undefined : selectedStance,
+        thesis_impact: selectedThesis === "ALL" ? undefined : selectedThesis,
+        analysis_status: selectedStatus === "ALL" ? undefined : selectedStatus,
         doc_type: selectedDocType === "ALL" ? undefined : selectedDocType,
         symbol: searchQuery ? searchQuery.trim().toUpperCase() : undefined,
-        transformational_only: transformationalOnly ? true : undefined,
-        limit: 50,
+        page: feedPage,
+        limit: feedLimit,
       });
-      setItems(res.items);
-      setTotal(res.total);
+      setFeedItems(res.items);
+      setFeedTotal(res.total);
     } catch (err) {
-      console.error("Error loading investor feed:", err);
+      console.error("Error fetching investor feed:", err);
     } finally {
-      setLoading(false);
+      setFeedLoading(false);
     }
-  }, [selectedStance, selectedDocType, searchQuery, transformationalOnly]);
+  }, [selectedQuarter, selectedStance, selectedThesis, selectedStatus, selectedDocType, searchQuery, feedPage]);
+
+  // 3. Load Commitments Ledger
+  const loadCommitments = useCallback(async () => {
+    setCommitmentsLoading(true);
+    try {
+      const [ledger, summary] = await Promise.all([
+        fetchCommitmentsLedger({
+          quarter: selectedQuarter === "ALL" ? undefined : selectedQuarter,
+          status: commitmentStatusFilter === "ALL" ? undefined : commitmentStatusFilter,
+          category: commitmentCategoryFilter === "ALL" ? undefined : commitmentCategoryFilter,
+          is_financial_target:
+            commitmentTypeFilter === "FINANCIAL"
+              ? true
+              : commitmentTypeFilter === "QUALITATIVE"
+              ? false
+              : undefined,
+          page: commitmentsPage,
+          limit: 25,
+        }),
+        fetchCommitmentsSummary(),
+      ]);
+      setCommitments(ledger.items);
+      setCommitmentsTotal(ledger.total);
+      setOverallSummary(summary);
+    } catch (err) {
+      console.error("Error fetching commitments ledger:", err);
+    } finally {
+      setCommitmentsLoading(false);
+    }
+  }, [selectedQuarter, commitmentStatusFilter, commitmentCategoryFilter, commitmentTypeFilter, commitmentsPage]);
+
+  useEffect(() => {
+    loadCoverage(selectedQuarter);
+  }, [loadCoverage, selectedQuarter]);
 
   useEffect(() => {
     loadFeed();
-    loadTelemetry();
-  }, [loadFeed, loadTelemetry]);
+  }, [loadFeed]);
 
+  useEffect(() => {
+    if (activeTab === "COMMITMENTS") {
+      loadCommitments();
+    }
+  }, [activeTab, loadCommitments]);
+
+  // Reprocess single failed/pending document
+  const handleReprocess = async (docId: number) => {
+    setActionInProgress(true);
+    setActionMessage(null);
+    try {
+      const res = await reprocessDocument(docId);
+      setActionMessage(`Document #${docId} reprocessed: ${res.status}`);
+      await loadFeed();
+      await loadCoverage(selectedQuarter);
+    } catch (e: any) {
+      setActionMessage(`Reprocess error: ${e.message}`);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  // Backfill next pending documents
+  const handleTriggerBackfill = async () => {
+    setActionInProgress(true);
+    setActionMessage(null);
+    try {
+      const res = await triggerBackfill(10);
+      setActionMessage(`Backfill initiated: ${res.processed} documents analyzed, ${res.total_commitments_extracted} commitments recorded.`);
+      await loadFeed();
+      await loadCoverage(selectedQuarter);
+      if (activeTab === "COMMITMENTS") await loadCommitments();
+    } catch (e: any) {
+      setActionMessage(`Backfill error: ${e.message}`);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  // Single stock on-demand harvest
   const handleHarvestSingle = async () => {
     const sym = inputSymbol.trim().toUpperCase();
     if (!sym) return;
-    setHarvesting(true);
+    setActionInProgress(true);
+    setActionMessage(null);
     try {
       await triggerCompanyHarvest(sym);
       await triggerAnalyzeLatest(sym);
       setInputSymbol("");
+      setActionMessage(`Discovered & analyzed presentations for ${sym}`);
       await loadFeed();
-      await loadTelemetry();
+      await loadCoverage(selectedQuarter);
       setActiveSymbolForDrawer(sym);
       setIsDrawerOpen(true);
-    } catch (err: any) {
-      alert("Error harvesting stock: " + (err.message || err));
+    } catch (e: any) {
+      setActionMessage(`Harvest error: ${e.message}`);
     } finally {
-      setHarvesting(false);
+      setActionInProgress(false);
     }
   };
 
-  const handleBatchScan = async (target: "LATEST_RESULTS" | "NIFTY50" | "PENDING_QUEUE") => {
-    setBatchProcessing(true);
-    setBatchMsg(null);
-    try {
-      const res = await triggerBatchScan(target, 5);
-      setBatchMsg(`Successfully analyzed ${res.processed_count} concall transcripts.`);
-      await loadFeed();
-      await loadTelemetry();
-    } catch (err: any) {
-      setBatchMsg(`Batch scan warning: ${err?.message || err}`);
-    } finally {
-      setBatchProcessing(false);
-    }
+  // Drilldown Modal Handler
+  const openDrilldown = (cat: string, title: string, items: any[]) => {
+    setDrilldownCategory(cat);
+    setDrilldownTitle(title);
+    setDrilldownItems(items);
+    setIsDrilldownOpen(true);
   };
 
-  const getStanceBadge = (stance: string) => {
-    switch (stance) {
-      case "STRONG_GROWTH_LEADER":
-        return "bg-emerald-950/70 text-emerald-400 border-emerald-500/40";
-      case "ACCUMULATE_ON_DIPS":
-        return "bg-cyan-950/70 text-cyan-400 border-cyan-500/40";
-      case "STEADY_COMPOUNDER":
-        return "bg-blue-950/70 text-blue-400 border-blue-500/40";
-      case "TURNAROUND_CANDIDATE":
-        return "bg-amber-950/70 text-amber-400 border-amber-500/40";
-      case "AVOID_OR_HEADWINDS":
-        return "bg-rose-950/70 text-rose-400 border-rose-500/40";
+  const getThesisBadge = (thesis: string) => {
+    switch (thesis) {
+      case "STRENGTHENING":
+        return {
+          bg: "bg-emerald-950/70 text-emerald-400 border-emerald-500/50",
+          icon: <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />,
+          label: "Strengthening Thesis",
+        };
+      case "WEAKENING":
+        return {
+          bg: "bg-rose-950/70 text-rose-400 border-rose-500/50",
+          icon: <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />,
+          label: "Weakening Thesis",
+        };
       default:
-        return "bg-slate-800 text-slate-300 border-slate-700";
+        return {
+          bg: "bg-slate-900/80 text-slate-300 border-slate-700/60",
+          icon: <Scale className="w-3.5 h-3.5 text-slate-400" />,
+          label: "Neutral Thesis",
+        };
+    }
+  };
+
+  const getCommitmentStatusBadge = (status: string) => {
+    switch (status) {
+      case "MET":
+        return "bg-emerald-950/80 text-emerald-400 border-emerald-500/60";
+      case "PARTIALLY_MET":
+        return "bg-cyan-950/80 text-cyan-400 border-cyan-500/60";
+      case "MISSED":
+        return "bg-rose-950/80 text-rose-400 border-rose-500/60";
+      case "ON_TRACK":
+        return "bg-blue-950/80 text-blue-400 border-blue-500/60";
+      case "DELAYED":
+        return "bg-amber-950/80 text-amber-400 border-amber-500/60";
+      case "REVISED":
+        return "bg-purple-950/80 text-purple-400 border-purple-500/60";
+      case "NOT_YET_DUE":
+        return "bg-slate-900/80 text-slate-400 border-slate-700";
+      default:
+        return "bg-slate-900 text-slate-400 border-slate-800";
     }
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 pb-12">
-        {/* Terminal Header */}
-        <PageHeader
-          title="Investor Intelligence & Concall Radar"
-          subtitle="Senior Buy-Side Analyst interrogation of Investor PPTs & Concall Transcripts across Operating Leverage, Margins, Order Book, Cash Quality & Q&A Grill."
-        />
-
-        {/* Autonomous Pipeline Freshness & Batch Interrogation Hub */}
-        <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-r from-[#070D18] via-[#0A1222] to-[#070D18] p-4 space-y-3.5 shadow-xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-cyan-900/40 pb-3">
+      <div className="space-y-6 pb-16">
+        {/* =======================================================
+            1. PAGE HEADER & GLOBAL QUARTER SELECTOR
+           ======================================================= */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-cyan-900/40 pb-5">
+          <div>
             <div className="flex items-center gap-2.5">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </span>
-              <span className="text-xs font-mono font-bold tracking-wider text-cyan-300 uppercase flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                Autonomous Concall Ingestion Engine: ACTIVE
-              </span>
-              <span className="text-[10px] font-mono text-slate-400 bg-cyan-950/60 border border-cyan-800/40 px-2 py-0.5 rounded">
-                Cycle: Every 10 mins
-              </span>
-            </div>
-
-            <div className="text-xs font-mono text-slate-400 flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-cyan-500" />
-              <span>
-                Last AI Analysis:{" "}
-                <strong className="text-white">
-                  {telemetry?.latest_insight_analyzed_at
-                    ? new Date(telemetry.latest_insight_analyzed_at).toLocaleString("en-IN", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "Live Ingestion Active"}
-                </strong>
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
-              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
-                <Database className="w-3 h-3 text-cyan-500" />
-                Harvested Documents
-              </span>
-              <span className="text-base font-black text-cyan-400 mt-0.5">
-                {telemetry?.total_documents ?? "2,557"}
-              </span>
-              <span className="text-[9px] text-slate-500">Transcripts & Presentations</span>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
-              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-emerald-400" />
-                Deep AI Insights
-              </span>
-              <span className="text-base font-black text-emerald-400 mt-0.5">
-                {telemetry?.total_insights ?? "47"}
-              </span>
-              <span className="text-[9px] text-slate-500">Full Buy-Side Reports</span>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
-              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
-                <Zap className="w-3 h-3 text-amber-400" />
-                Growth Leaders
-              </span>
-              <span className="text-base font-black text-amber-400 mt-0.5">
-                {telemetry?.strong_growth_count ?? "12"}
-              </span>
-              <span className="text-[9px] text-slate-500">Strong Stance / Buy</span>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-[#050A14] border border-cyan-950 flex flex-col">
-              <span className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
-                <Clock className="w-3 h-3 text-purple-400" />
-                Warehouse Backlog
-              </span>
-              <span className="text-base font-black text-purple-400 mt-0.5">
-                {telemetry?.pending_documents ?? "2,510"}
-              </span>
-              <span className="text-[9px] text-slate-500">Ready for Interrogation</span>
-            </div>
-          </div>
-
-          {/* Batch Action Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-cyan-950">
-            <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Zap className="w-3 h-3 text-cyan-400" />
-              1-Click Batch Harvester:
-            </span>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => handleBatchScan("LATEST_RESULTS")}
-                disabled={batchProcessing}
-                className="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-300 font-mono text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-              >
-                <Mic className={`w-3 h-3 ${batchProcessing ? "animate-spin" : ""}`} />
-                <span>⚡ Scan Recent Q2 Results</span>
-              </button>
-
-              <button
-                onClick={() => handleBatchScan("PENDING_QUEUE")}
-                disabled={batchProcessing}
-                className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-300 font-mono text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-              >
-                <Cpu className={`w-3 h-3 ${batchProcessing ? "animate-spin" : ""}`} />
-                <span>⚡ Interrogate 5 Pending Transcripts</span>
-              </button>
-
-              <button
-                onClick={() => handleBatchScan("NIFTY50")}
-                disabled={batchProcessing}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 text-emerald-300 font-mono text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-              >
-                <Sparkles className={`w-3 h-3 ${batchProcessing ? "animate-spin" : ""}`} />
-                <span>⚡ Interrogate Nifty 50</span>
-              </button>
-            </div>
-          </div>
-
-          {batchMsg && (
-            <div className="p-2.5 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 text-xs font-mono flex items-center justify-between">
-              <span>{batchMsg}</span>
-              <button onClick={() => setBatchMsg(null)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-          )}
-        </div>
-
-        {/* Action Toolbar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-xl bg-[#070D18] border border-cyan-900/30">
-          {/* Quick Harvest & Interrogate */}
-          <div className="flex items-center gap-2 max-w-md w-full">
-            <input
-              type="text"
-              placeholder="Enter Stock Symbol (e.g. DIXON, KEC, TATAPOWER)..."
-              value={inputSymbol}
-              onChange={(e) => setInputSymbol(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === "Enter" && handleHarvestSingle()}
-              className="flex-1 px-3.5 py-2 text-xs rounded-lg bg-[#0A1222] border border-cyan-900/40 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
-            />
-            <button
-              onClick={handleHarvestSingle}
-              disabled={harvesting || !inputSymbol.trim()}
-              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white transition flex items-center gap-1.5 whitespace-nowrap shadow-sm shadow-cyan-600/30"
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${harvesting ? "animate-spin" : ""}`} />
-              {harvesting ? "Interrogating..." : "Interrogate"}
-            </button>
-          </div>
-
-          {/* Search Filter */}
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter loaded results..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[#0A1222] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-44 font-mono"
-              />
-            </div>
-
-            <button
-              onClick={loadFeed}
-              disabled={loading}
-              className="p-2 rounded-lg bg-[#0A1222] border border-slate-800 text-slate-300 hover:text-cyan-400 transition"
-              title="Refresh Feed"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-cyan-400" : ""}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Badges */}
-        <div className="flex flex-wrap items-center gap-2">
-          {STANCE_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setSelectedStance(f.id)}
-              className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition ${
-                selectedStance === f.id
-                  ? "bg-cyan-950 border-cyan-500 text-cyan-300 shadow-sm"
-                  : "bg-[#070D18] border-slate-800 text-slate-400 hover:border-slate-700"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-
-          <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
-
-          {/* Transformational 10x Catalyst Filter Button */}
-          <button
-            onClick={() => setTransformationalOnly(!transformationalOnly)}
-            className={`px-3 py-1.5 text-xs rounded-lg border font-semibold transition flex items-center gap-1.5 ${
-              transformationalOnly
-                ? "bg-amber-950/90 border-amber-400 text-amber-300 shadow-md shadow-amber-500/20 ring-1 ring-amber-400/50"
-                : "bg-[#0A1222] border-amber-900/60 text-amber-400 hover:border-amber-500 hover:text-amber-300"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            🚀 Exponential Catalysts (Buy Now)
-          </button>
-
-          <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
-
-          {["ALL", "CONCALL_TRANSCRIPT", "INVESTOR_PRESENTATION"].map((dtype) => (
-            <button
-              key={dtype}
-              onClick={() => setSelectedDocType(dtype)}
-              className={`px-2.5 py-1 text-xs rounded-lg border font-mono transition ${
-                selectedDocType === dtype
-                  ? "bg-slate-800 border-slate-600 text-white"
-                  : "bg-transparent border-slate-800 text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              {dtype === "ALL" ? "All Types" : dtype.replace(/_/g, " ")}
-            </button>
-          ))}
-        </div>
-
-        {/* Results Grid */}
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-400">
-            <LoadingSpinner />
-            <p className="text-xs font-mono">Scanning senior analyst intelligence database...</p>
-          </div>
-        ) : items.length === 0 ? (
-          <EmptyState
-            title="No Analyzed Filings Matched"
-            description="Try typing a stock symbol like DIXON, KEC, or TATAPOWER above to automatically harvest and analyze its latest earnings call."
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => {
-                  setActiveSymbolForDrawer(item.symbol);
-                  setIsDrawerOpen(true);
-                }}
-                className="group cursor-pointer p-5 rounded-xl bg-[#070D18] border border-cyan-900/30 hover:border-cyan-500/50 hover:bg-[#0A1324] transition-all duration-200 flex flex-col justify-between space-y-4 shadow-lg"
-              >
-                {/* Card Header */}
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-bold text-white group-hover:text-cyan-300 transition">
-                          {item.symbol}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 font-mono">
-                          {item.fiscal_period}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 truncate max-w-[200px] mt-0.5">
-                        {item.company_name || item.symbol}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold tracking-wider font-mono uppercase whitespace-nowrap ${getStanceBadge(
-                        item.institutional_stance
-                      )}`}
-                    >
-                      {item.institutional_stance.replace(/_/g, " ")}
-                    </span>
-                  </div>
-
-                  {/* Transformational Catalyst Highlight Banner */}
-                  {item.is_transformational_catalyst && (
-                    <div className="mt-2.5 p-2.5 rounded-lg bg-gradient-to-r from-amber-950/80 via-emerald-950/50 to-cyan-950/80 border border-amber-500/50 shadow-md shadow-amber-950/30 space-y-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-amber-300 flex items-center gap-1 truncate">
-                          <Sparkles className="w-3 h-3 text-amber-400 animate-pulse shrink-0" />
-                          EXPONENTIAL TRIGGER ({item.transformational_category?.replace(/_/g, " ")})
-                        </span>
-                        {item.exponential_growth_multiple && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200 font-mono font-bold shrink-0">
-                            {item.exponential_growth_multiple}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-semibold text-white leading-tight">
-                        {item.catalyst_headline}
-                      </p>
-                      {item.immediate_reaction_rationale && (
-                        <p className="text-[10.5px] text-amber-200/90 leading-snug line-clamp-2 pt-0.5 font-sans">
-                          <strong className="text-emerald-300">Why Buy Now: </strong>
-                          {item.immediate_reaction_rationale}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Actionable Gameplan Pill */}
-                  {item.actionable_gameplan?.verdict && (
-                    <div className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-700/40 text-[11px] text-cyan-200">
-                      <Target className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span className="font-mono font-bold tracking-wide">{item.actionable_gameplan.verdict}</span>
-                    </div>
-                  )}
-
-                  {/* Conviction & Tone Bar */}
-                  <div className="flex items-center gap-3 mt-2.5 pt-2 border-t border-slate-800/80 text-[11px]">
-                    <div>
-                      <span className="text-slate-500">Conviction: </span>
-                      <span className="font-mono font-bold text-white">
-                        {item.growth_conviction_score}/100
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Tone: </span>
-                      <span className="font-mono font-medium text-cyan-300">
-                        {item.management_tone.replace(/_/g, " ")}
-                      </span>
-                    </div>
-                    <span className="ml-auto text-[10px] text-slate-500 font-mono uppercase">
-                      {item.doc_type === "CONCALL_TRANSCRIPT" ? "Concall" : "PPT"}
-                    </span>
-                  </div>
-
-                  {/* Direct Quote Preview */}
-                  {item.direct_quotes && item.direct_quotes.length > 0 ? (
-                    <div className="mt-3 p-2.5 rounded-lg bg-black/40 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
-                      <span className="text-cyan-400 font-semibold block text-[10px] uppercase font-mono mb-0.5">
-                        Direct Quote ({item.direct_quotes[0].speaker}):
-                      </span>
-                      <p className="italic line-clamp-2">&ldquo;{item.direct_quotes[0].quote}&rdquo;</p>
-                    </div>
-                  ) : item.executive_thesis ? (
-                    <p className="text-xs text-slate-300 mt-3 line-clamp-2 leading-relaxed">
-                      {item.executive_thesis}
-                    </p>
-                  ) : null}
-                </div>
-
-                {/* Key Operating Metrics Box */}
-                <div className="p-2.5 rounded-lg bg-[#050B14] border border-slate-800/90 space-y-1.5 text-[11px]">
-                  {item.capacity_utilization_pct && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Capacity Util</span>
-                      <span className="font-mono text-white font-medium">
-                        {item.capacity_utilization_pct}%
-                      </span>
-                    </div>
-                  )}
-                  {item.ebitda_margin_guidance_corridor && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">EBITDA Margin</span>
-                      <span className="font-mono text-emerald-300 font-medium">
-                        {item.ebitda_margin_guidance_corridor}
-                      </span>
-                    </div>
-                  )}
-                  {item.executable_order_book_cr && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Order Backlog</span>
-                      <span className="font-mono text-amber-300 font-medium">
-                        ₹{item.executable_order_book_cr.toLocaleString("en-IN")} Cr
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Phase 2: Tension & Evasiveness Micro-Stats */}
-                  <div className="pt-1.5 border-t border-slate-900/80 flex items-center justify-between text-[10px]">
-                    <span className="flex items-center gap-1 text-slate-400 font-mono">
-                      <Flame className="w-3 h-3 text-amber-400" />
-                      Tension: <strong className="text-white">{(item.analyst_tension_score ?? 3.0).toFixed(1)}/10</strong>
-                    </span>
-                    <span className="flex items-center gap-1 text-slate-400 font-mono">
-                      <Scale className="w-3 h-3 text-cyan-400" />
-                      Evasion: <strong className="text-white">{(item.evasiveness_score ?? 2.0).toFixed(1)}/10</strong>
-                    </span>
-                  </div>
-
-                  {item.forensic_discrepancies && item.forensic_discrepancies.some((d) => d.severity === "CRITICAL" || d.severity === "HIGH") && (
-                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-500/40 text-[9.5px] font-mono text-rose-300">
-                      <AlertCircle className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                      <span className="truncate">Balance Sheet Disconnect Flagged</span>
-                    </div>
-                  )}
-
-                  {item.key_overhang_questioned_by_analysts && (
-                    <div className="pt-1 border-t border-slate-900 text-[10px] text-rose-300/90 truncate">
-                      <span className="text-rose-500 font-medium">Grill: </span>
-                      {item.key_overhang_questioned_by_analysts}
-                    </div>
-                  )}
-                </div>
-
-                {/* Card Footer */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                  {item.pdf_url ? (
-                    <a
-                      href={item.pdf_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1 text-[11px]"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      View Filing PDF
-                    </a>
-                  ) : (
-                    <span className="text-[11px] text-slate-500">Filing Stored</span>
-                  )}
-
-                  <span className="text-cyan-400 group-hover:translate-x-1 transition flex items-center gap-0.5 text-[11px] font-medium">
-                    Drilldown <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
+              <div className="h-8 w-8 rounded-lg bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                <Cpu className="w-4 h-4" />
               </div>
-            ))}
+              <h1 className="text-2xl font-bold tracking-tight text-white">
+                Investor Intelligence & Management Radar
+              </h1>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 uppercase tracking-wider">
+                Quarterly Engine v2.3
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+              Tracks official investor presentations, analyzes quarterly commentary with AI, extracts management commitments, and rigorously evaluates historical delivery across quarters.
+            </p>
+          </div>
+
+          {/* Quarter Selector & Action Bar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-[#0A1222] border border-cyan-900/60 rounded-xl px-3 py-1.5 shadow-inner">
+              <Calendar className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-mono text-slate-400">Quarter:</span>
+              <select
+                aria-label="Quarter Selector"
+                value={selectedQuarter || (coverageData?.selected_quarter ?? "")}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedQuarter(val);
+                  loadCoverage(val);
+                  setFeedPage(1);
+                  setCommitmentsPage(1);
+                }}
+                className="bg-transparent text-sm font-mono font-bold text-cyan-300 focus:outline-hidden cursor-pointer"
+              >
+                {coverageData?.available_quarters?.map((q) => (
+                  <option key={q.fiscal_period} value={q.fiscal_period} className="bg-[#070D18] text-slate-200">
+                    {q.fiscal_period} ({q.count})
+                  </option>
+                ))}
+                <option value="ALL" className="bg-[#070D18] text-slate-200">
+                  ALL Quarters
+                </option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => {
+                loadCoverage(selectedQuarter);
+                loadFeed();
+                if (activeTab === "COMMITMENTS") loadCommitments();
+              }}
+              className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-400 transition cursor-pointer"
+              title="Refresh Current View"
+            >
+              <RefreshCw className={`w-4 h-4 ${feedLoading || coverageLoading ? "animate-spin text-cyan-400" : ""}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Global Action & Notification Bar */}
+        {actionMessage && (
+          <div className="p-3 rounded-xl bg-cyan-950/60 border border-cyan-500/50 text-xs font-mono text-cyan-300 flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-cyan-400" />
+              <span>{actionMessage}</span>
+            </div>
+            <button
+              onClick={() => setActionMessage(null)}
+              className="text-slate-400 hover:text-white text-xs font-mono"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
-        {/* Drawer Component */}
+        {/* =======================================================
+            TOP INTERACTIVE NAVIGATION TABS
+           ======================================================= */}
+        <div className="flex items-center justify-between border-b border-cyan-950 pb-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab("FEED")}
+              className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeTab === "FEED"
+                  ? "bg-cyan-600/20 text-cyan-300 border border-cyan-500/50 shadow-md"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              Latest Intelligence Feed ({feedTotal})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("COVERAGE")}
+              className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeTab === "COVERAGE"
+                  ? "bg-emerald-600/20 text-emerald-300 border border-emerald-500/50 shadow-md"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+              }`}
+            >
+              <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />
+              Coverage & Processing Health ({selectedQuarter})
+            </button>
+
+            <button
+              onClick={() => setActiveTab("COMMITMENTS")}
+              className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeTab === "COMMITMENTS"
+                  ? "bg-amber-600/20 text-amber-300 border border-amber-500/50 shadow-md"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+              }`}
+            >
+              <Target className="w-3.5 h-3.5 text-amber-400" />
+              Management Commitment Ledger ({commitmentsTotal})
+            </button>
+          </div>
+
+          {/* Quick On-Demand Harvester */}
+          <div className="hidden md:flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Symbol (e.g. TATAELXSI)"
+              value={inputSymbol}
+              onChange={(e) => setInputSymbol(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleHarvestSingle()}
+              className="px-2.5 py-1 text-xs font-mono bg-[#0A1222] border border-cyan-950 rounded-lg text-white placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 w-36 uppercase"
+            />
+            <button
+              onClick={handleHarvestSingle}
+              disabled={actionInProgress || !inputSymbol.trim()}
+              className="px-3 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-700/60 text-cyan-300 text-xs font-mono font-medium disabled:opacity-40 transition cursor-pointer"
+            >
+              Harvest PPT
+            </button>
+          </div>
+        </div>
+
+        {/* =======================================================
+            TAB 1: LATEST INVESTOR INTELLIGENCE FEED (Newest First)
+           ======================================================= */}
+        {activeTab === "FEED" && (
+          <div className="space-y-5">
+            {/* Filter & Search Bar */}
+            <div className="p-3.5 rounded-xl bg-[#080E1A] border border-cyan-950 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search by stock symbol or company name..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setFeedPage(1);
+                    }}
+                    className="w-full bg-[#050B14] border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {/* Status Filter */}
+                  <select
+                    aria-label="Filter by Analysis Status"
+                    value={selectedStatus}
+                    onChange={(e) => {
+                      setSelectedStatus(e.target.value);
+                      setFeedPage(1);
+                    }}
+                    className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-hidden focus:border-cyan-500"
+                  >
+                    {STATUS_FILTERS.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Thesis Filter */}
+                  <select
+                    aria-label="Filter by Thesis Impact"
+                    value={selectedThesis}
+                    onChange={(e) => {
+                      setSelectedThesis(e.target.value);
+                      setFeedPage(1);
+                    }}
+                    className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-hidden focus:border-cyan-500"
+                  >
+                    {THESIS_FILTERS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Stance Filter */}
+                  <select
+                    aria-label="Filter by Institutional Stance"
+                    value={selectedStance}
+                    onChange={(e) => {
+                      setSelectedStance(e.target.value);
+                      setFeedPage(1);
+                    }}
+                    className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-hidden focus:border-cyan-500"
+                  >
+                    {STANCE_FILTERS.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Doc Type Filter */}
+                  <select
+                    aria-label="Filter by Document Type"
+                    value={selectedDocType}
+                    onChange={(e) => {
+                      setSelectedDocType(e.target.value);
+                      setFeedPage(1);
+                    }}
+                    className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-hidden focus:border-cyan-500"
+                  >
+                    <option value="ALL">All Documents</option>
+                    <option value="INVESTOR_PRESENTATION">Investor Presentations</option>
+                    <option value="CONCALL_TRANSCRIPT">Concall Transcripts</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Feed Sorting Notification */}
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 border-t border-slate-900 pt-2">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  Primary Ordering: <strong>Actual Publication Date (Newest First)</strong>
+                </span>
+                <span>
+                  Showing {feedItems.length} of {feedTotal} presentations
+                </span>
+              </div>
+            </div>
+
+            {/* Presentation Cards List */}
+            {feedLoading ? (
+              <div className="py-20 flex flex-col items-center justify-center space-y-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
+                <span className="text-xs font-mono text-slate-400">Loading latest quarterly intelligence feed...</span>
+              </div>
+            ) : feedItems.length === 0 ? (
+              <EmptyState
+                title="No Presentations Found"
+                description={`No presentations match the current quarter (${selectedQuarter}) or active filters.`}
+              />
+            ) : (
+              <div className="space-y-4">
+                {feedItems.map((item) => {
+                  const isAnalyzed = item.ai_analysis_status === "ANALYZED";
+                  const isPending = item.ai_analysis_status === "PENDING";
+                  const isFailed = item.ai_analysis_status === "FAILED";
+                  const thesisStyle = getThesisBadge(item.thesis_impact);
+
+                  return (
+                    <div
+                      key={`feed-doc-${item.document_id}`}
+                      className="rounded-xl border border-cyan-950 hover:border-cyan-800/60 bg-gradient-to-r from-[#070D18] to-[#0A1222] p-5 transition shadow-lg space-y-4"
+                    >
+                      {/* Top Header Row */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-cyan-950 pb-3">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              setActiveSymbolForDrawer(item.symbol);
+                              setIsDrawerOpen(true);
+                            }}
+                            className="text-lg font-black font-mono text-white hover:text-cyan-300 transition flex items-center gap-1.5"
+                          >
+                            {item.symbol}
+                            <ArrowUpRight className="w-4 h-4 text-cyan-400 opacity-60" />
+                          </button>
+                          <span className="text-xs text-slate-300 font-medium">
+                            {item.company_name}
+                          </span>
+                          {item.sector && (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                              {item.sector}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Badges & Date */}
+                        <div className="flex items-center gap-2 flex-wrap text-xs font-mono">
+                          {/* Announcement Date */}
+                          <div className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5 text-[11px]">
+                            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>
+                              {item.announcement_date
+                                ? new Date(item.announcement_date).toLocaleDateString("en-IN", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  })
+                                : "Publication Date Pending"}
+                            </span>
+                          </div>
+
+                          {/* Fiscal Quarter */}
+                          <span className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-300 font-bold">
+                            {item.fiscal_period || "Current"}
+                          </span>
+
+                          {/* Status Badge */}
+                          {isAnalyzed ? (
+                            <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              ANALYZED
+                            </span>
+                          ) : isPending ? (
+                            <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 font-bold flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400 animate-spin" />
+                              PENDING AI ANALYSIS
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 font-bold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 text-rose-400" />
+                              PROCESSING FAILED
+                            </span>
+                          )}
+
+                          {/* Thesis Impact Badge */}
+                          {isAnalyzed && (
+                            <span className={`px-2 py-0.5 rounded border text-[11px] font-bold flex items-center gap-1.5 ${thesisStyle.bg}`}>
+                              {thesisStyle.icon}
+                              {thesisStyle.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content Body */}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* Column 1: Executive Summary & Thesis */}
+                        <div className="lg:col-span-2 space-y-3">
+                          <div>
+                            <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 block mb-1">
+                              Quarterly Presentation Synthesis
+                            </span>
+                            <p className="text-xs text-slate-200 leading-relaxed font-sans">
+                              {item.executive_thesis}
+                            </p>
+                          </div>
+
+                          {/* Positive vs Negative Developments */}
+                          {isAnalyzed && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                              {/* Major Positives */}
+                              {item.positive_developments && item.positive_developments.length > 0 && (
+                                <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/50 space-y-1">
+                                  <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-1 uppercase">
+                                    <TrendingUp className="w-3 h-3" />
+                                    Positive Developments:
+                                  </span>
+                                  <ul className="space-y-1 text-[11px] text-slate-300">
+                                    {item.positive_developments.slice(0, 3).map((p, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5">
+                                        <span className="text-emerald-400 shrink-0">•</span>
+                                        <span>{p}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {/* Major Negatives / Risks */}
+                              {item.negative_developments && item.negative_developments.length > 0 && (
+                                <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-900/50 space-y-1">
+                                  <span className="text-[10px] font-mono font-bold text-rose-400 flex items-center gap-1 uppercase">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    Headwinds & Margin Risks:
+                                  </span>
+                                  <ul className="space-y-1 text-[11px] text-slate-300">
+                                    {item.negative_developments.slice(0, 3).map((n, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5">
+                                        <span className="text-rose-400 shrink-0">•</span>
+                                        <span>{n}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Guidance Changes */}
+                          {item.guidance_changes && formatGuidanceChanges(item.guidance_changes) && (
+                            <div className="text-[11px] font-mono p-2 rounded bg-cyan-950/40 border border-cyan-900/60 text-cyan-200">
+                              <span className="font-bold text-cyan-300">Guidance Revision: </span>
+                              {formatGuidanceChanges(item.guidance_changes)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Column 2: Key Metrics & Commitment Summary */}
+                        <div className="rounded-xl bg-[#050A14] border border-cyan-950 p-3 space-y-3 flex flex-col justify-between">
+                          <div className="space-y-2.5 text-xs font-mono">
+                            <span className="text-[10px] uppercase text-slate-500 font-bold tracking-wider block">
+                              Execution Conviction
+                            </span>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400">Growth Conviction:</span>
+                              <span className="font-bold text-white">
+                                {isAnalyzed && item.growth_conviction_score !== null && item.growth_conviction_score !== undefined
+                                  ? `${item.growth_conviction_score}/100`
+                                  : "—"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400">Management Tone:</span>
+                              <span className="font-bold text-cyan-300">
+                                {isAnalyzed && item.management_tone ? item.management_tone : "PENDING"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400">Extracted Commitments:</span>
+                              <span className="font-bold text-amber-400 flex items-center gap-1">
+                                <Target className="w-3 h-3 text-amber-400" />
+                                {item.commitments_count || 0} Commitments
+                              </span>
+                            </div>
+
+                            {item.processing_error && (
+                              <div className="p-2 rounded bg-rose-950/60 border border-rose-800 text-[10px] text-rose-300">
+                                <strong>Error: </strong> {item.processing_error}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="pt-2 border-t border-slate-900 flex items-center gap-2 flex-wrap">
+                            {item.pdf_url && (
+                              <a
+                                href={item.pdf_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-400 hover:text-cyan-300 text-xs font-mono transition flex items-center gap-1"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                Source Filing
+                              </a>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                setActiveSymbolForDrawer(item.symbol);
+                                setIsDrawerOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-600/40 text-cyan-300 text-xs font-mono font-medium transition flex items-center gap-1 cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              Full Deep Dive
+                            </button>
+
+                            {(!isAnalyzed || isFailed) && (
+                              <button
+                                onClick={() => handleReprocess(item.document_id)}
+                                disabled={actionInProgress}
+                                className="px-2 py-1 rounded-lg bg-amber-950/80 hover:bg-amber-900/80 border border-amber-600/40 text-amber-300 text-xs font-mono transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Reprocess
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between border-t border-cyan-950 pt-4 text-xs font-mono">
+                  <span className="text-slate-400">
+                    Page {feedPage} of {Math.max(1, Math.ceil(feedTotal / feedLimit))}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+                      disabled={feedPage <= 1}
+                      className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-40 transition cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setFeedPage((p) => p + 1)}
+                      disabled={feedPage * feedLimit >= feedTotal}
+                      className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-40 transition cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =======================================================
+            TAB 2: QUARTERLY COVERAGE & PROCESSING HEALTH DASHBOARD
+           ======================================================= */}
+        {activeTab === "COVERAGE" && coverageData && (
+          <div className="space-y-6">
+            {/* Live Metrics Grid (Requirements 1 - 8) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+              {/* Metric 1: Total Presentations Discovered */}
+              <div
+                onClick={() =>
+                  openDrilldown(
+                    "discovered",
+                    `Discovered Presentations (${selectedQuarter})`,
+                    [
+                      ...(coverageData.drilldown_records.ANALYZED || []),
+                      ...(coverageData.drilldown_records.EXTRACTED_NOT_ANALYZED || []),
+                      ...(coverageData.drilldown_records.DOWNLOADED_NOT_EXTRACTED || []),
+                      ...(coverageData.drilldown_records.DISCOVERED_NOT_DOWNLOADED || []),
+                      ...(coverageData.drilldown_records.FAILED || []),
+                    ]
+                  )
+                }
+                className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 hover:border-cyan-600/50 transition cursor-pointer flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>1. Discovered PPTs</span>
+                  <Database className="w-3.5 h-3.5 text-cyan-500" />
+                </div>
+                <div className="text-2xl font-black text-cyan-400 mt-1">
+                  {coverageData.total_discovered}
+                </div>
+                <span className="text-[10px] text-slate-500">Official Filings</span>
+              </div>
+
+              {/* Metric 2: Successfully Analyzed by AI */}
+              <div
+                onClick={() =>
+                  openDrilldown(
+                    "analyzed",
+                    `AI Analyzed Presentations (${selectedQuarter})`,
+                    coverageData.drilldown_records.ANALYZED || []
+                  )
+                }
+                className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 hover:border-emerald-600/50 transition cursor-pointer flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>2. Analyzed by AI</span>
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-emerald-400 mt-1">
+                  {coverageData.analyzed_count}{" "}
+                  <span className="text-xs font-normal text-emerald-300 font-mono">
+                    ({coverageData.analyzed_percentage}%)
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500">Synthesized Reports</span>
+              </div>
+
+              {/* Metric 3: Pending Analyses */}
+              <div
+                onClick={() =>
+                  openDrilldown(
+                    "pending",
+                    `Pending AI Analysis Queue (${selectedQuarter})`,
+                    [
+                      ...(coverageData.drilldown_records.EXTRACTED_NOT_ANALYZED || []),
+                      ...(coverageData.drilldown_records.DOWNLOADED_NOT_EXTRACTED || []),
+                      ...(coverageData.drilldown_records.DISCOVERED_NOT_DOWNLOADED || []),
+                    ]
+                  )
+                }
+                className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 hover:border-amber-600/50 transition cursor-pointer flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>3. Pending Queue</span>
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-amber-400 mt-1">
+                  {coverageData.pending_count}
+                </div>
+                <span className="text-[10px] text-slate-500">Awaiting LLM Pass</span>
+              </div>
+
+              {/* Metric 4: Failed Downloads/Analyses */}
+              <div
+                onClick={() =>
+                  openDrilldown(
+                    "failed",
+                    `Failed Processing Records (${selectedQuarter})`,
+                    coverageData.drilldown_records.FAILED || []
+                  )
+                }
+                className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 hover:border-rose-600/50 transition cursor-pointer flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>4. Failed / Errored</span>
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                </div>
+                <div className="text-2xl font-black text-rose-400 mt-1">
+                  {coverageData.failed_count}
+                </div>
+                <span className="text-[10px] text-slate-500">Eligible for Reprocess</span>
+              </div>
+
+              {/* Metric 5: Companies Covered */}
+              <div className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>5. Equities Covered</span>
+                  <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1">
+                  {coverageData.companies_covered}
+                </div>
+                <span className="text-[10px] text-slate-500">Unique Symbols</span>
+              </div>
+
+              {/* Metric 6: Commitments Extracted */}
+              <div className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>6. Extracted Commitments</span>
+                  <Target className="w-3.5 h-3.5 text-purple-400" />
+                </div>
+                <div className="text-2xl font-black text-purple-400 mt-1">
+                  {coverageData.commitments_extracted}
+                </div>
+                <span className="text-[10px] text-slate-500">In Active Ledger</span>
+              </div>
+
+              {/* Metric 7: Commitments Due for Evaluation */}
+              <div className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>7. Commitments Due</span>
+                  <Activity className="w-3.5 h-3.5 text-amber-300" />
+                </div>
+                <div className="text-2xl font-black text-amber-300 mt-1">
+                  {coverageData.commitments_due}
+                </div>
+                <span className="text-[10px] text-slate-500">Evaluation Horizon Reached</span>
+              </div>
+
+              {/* Metric 8: Assessed Delivery Rate */}
+              <div className="p-3.5 rounded-xl bg-[#070D18] border border-cyan-950 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-500 uppercase text-[10px]">
+                  <span>8. Delivery Scorecard</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-emerald-400 mt-1">
+                  {(() => {
+                    const assessable = (coverageData.commitments_met || 0) + (coverageData.commitments_partially_met || 0) + (coverageData.commitments_missed || 0);
+                    return assessable > 0 ? `${Math.round(((coverageData.commitments_met || 0) / assessable) * 100)}%` : "N/A";
+                  })()}
+                </div>
+                <span className="text-[10px] text-slate-400">
+                  {coverageData.commitments_met} Met / {coverageData.commitments_missed} Missed
+                </span>
+              </div>
+            </div>
+
+            {/* Ingestion & Processing Pipeline Health Breakdown (Distinguishing 5 stages) */}
+            <div className="p-4 rounded-xl border border-cyan-950 bg-[#080E1A] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  Presentation Processing Pipeline Health Stages
+                </span>
+                <button
+                  onClick={handleTriggerBackfill}
+                  disabled={actionInProgress}
+                  className="px-3 py-1 rounded-lg bg-cyan-950 border border-cyan-700/60 text-cyan-300 text-xs font-mono font-medium hover:bg-cyan-900 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${actionInProgress ? "animate-spin" : ""}`} />
+                  Backfill Pending Queue
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
+                <div
+                  onClick={() =>
+                    openDrilldown(
+                      "not_downloaded",
+                      "Stage 1: Discovered, Not Yet Downloaded",
+                      coverageData.drilldown_records.DISCOVERED_NOT_DOWNLOADED || []
+                    )
+                  }
+                  className="p-3 rounded-lg bg-[#050B14] border border-slate-800 hover:border-slate-600 transition cursor-pointer"
+                >
+                  <span className="text-[10px] text-slate-500 uppercase block">1. Not Downloaded</span>
+                  <span className="text-lg font-bold text-slate-300 mt-1 block">
+                    {coverageData.drilldown_records.DISCOVERED_NOT_DOWNLOADED?.length || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-500">URL Indexed</span>
+                </div>
+
+                <div
+                  onClick={() =>
+                    openDrilldown(
+                      "downloaded_not_extracted",
+                      "Stage 2: Downloaded, Not Extracted",
+                      coverageData.drilldown_records.DOWNLOADED_NOT_EXTRACTED || []
+                    )
+                  }
+                  className="p-3 rounded-lg bg-[#050B14] border border-slate-800 hover:border-slate-600 transition cursor-pointer"
+                >
+                  <span className="text-[10px] text-slate-500 uppercase block">2. Not Extracted</span>
+                  <span className="text-lg font-bold text-slate-300 mt-1 block">
+                    {coverageData.drilldown_records.DOWNLOADED_NOT_EXTRACTED?.length || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-500">PDF Cached</span>
+                </div>
+
+                <div
+                  onClick={() =>
+                    openDrilldown(
+                      "extracted_not_analyzed",
+                      "Stage 3: Extracted, Pending AI Pass",
+                      coverageData.drilldown_records.EXTRACTED_NOT_ANALYZED || []
+                    )
+                  }
+                  className="p-3 rounded-lg bg-[#050B14] border border-slate-800 hover:border-amber-600 transition cursor-pointer"
+                >
+                  <span className="text-[10px] text-amber-500 uppercase block">3. Pending AI</span>
+                  <span className="text-lg font-bold text-amber-400 mt-1 block">
+                    {coverageData.drilldown_records.EXTRACTED_NOT_ANALYZED?.length || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-500">In Prompt Queue</span>
+                </div>
+
+                <div
+                  onClick={() =>
+                    openDrilldown(
+                      "analyzed",
+                      "Stage 4: Analysis Fully Completed",
+                      coverageData.drilldown_records.ANALYZED || []
+                    )
+                  }
+                  className="p-3 rounded-lg bg-[#050B14] border border-slate-800 hover:border-emerald-600 transition cursor-pointer"
+                >
+                  <span className="text-[10px] text-emerald-500 uppercase block">4. Completed</span>
+                  <span className="text-lg font-bold text-emerald-400 mt-1 block">
+                    {coverageData.drilldown_records.ANALYZED?.length || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-500">Persisted & Indexed</span>
+                </div>
+
+                <div
+                  onClick={() =>
+                    openDrilldown(
+                      "failed",
+                      "Stage 5: Processing Errored / Failed",
+                      coverageData.drilldown_records.FAILED || []
+                    )
+                  }
+                  className="p-3 rounded-lg bg-[#050B14] border border-slate-800 hover:border-rose-600 transition cursor-pointer"
+                >
+                  <span className="text-[10px] text-rose-500 uppercase block">5. Processing Failed</span>
+                  <span className="text-lg font-bold text-rose-400 mt-1 block">
+                    {coverageData.drilldown_records.FAILED?.length || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-500">Retry Available</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Historical Quarter-over-Quarter Trend Table */}
+            <div className="p-4 rounded-xl border border-cyan-950 bg-[#080E1A] space-y-3">
+              <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <BarChart2 className="w-4 h-4 text-cyan-400" />
+                Quarter-over-Quarter Ingestion & Commitment Comparison
+              </span>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-cyan-950 text-slate-500 uppercase text-[10px]">
+                      <th className="py-2 px-3">Reporting Quarter</th>
+                      <th className="py-2 px-3">Discovered PPTs</th>
+                      <th className="py-2 px-3">AI Analyzed</th>
+                      <th className="py-2 px-3">Completion Rate</th>
+                      <th className="py-2 px-3">Companies Covered</th>
+                      <th className="py-2 px-3">Extracted Commitments</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-900">
+                    {coverageData.available_quarters?.map((q) => (
+                      <tr key={q.fiscal_period} className="hover:bg-slate-900/50">
+                        <td className="py-2 px-3 font-bold text-cyan-300">{q.fiscal_period}</td>
+                        <td className="py-2 px-3 text-slate-200">{q.count}</td>
+                        <td className="py-2 px-3 text-emerald-400">
+                          {q.fiscal_period === selectedQuarter ? coverageData.analyzed_count : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-slate-300">
+                          {q.fiscal_period === selectedQuarter ? `${coverageData.analyzed_percentage}%` : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-white">
+                          {q.fiscal_period === selectedQuarter ? coverageData.companies_covered : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-amber-400">
+                          {q.fiscal_period === selectedQuarter ? coverageData.commitments_extracted : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =======================================================
+            TAB 3: MANAGEMENT COMMITMENT LEDGER (Quarter-by-Quarter)
+           ======================================================= */}
+        {activeTab === "COMMITMENTS" && (
+          <div className="space-y-6">
+            {/* Delivery Scorecard Banner */}
+            {overallSummary && (
+              <div className="p-4 rounded-xl border border-cyan-900/60 bg-gradient-to-r from-[#070D18] via-[#0A1222] to-[#070D18] space-y-4 shadow-xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-cyan-950 pb-3">
+                  <div>
+                    <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Target className="w-4 h-4 text-cyan-400" />
+                      Executive Delivery Scorecard (All Universe)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Delivery Rate Formula:{" "}
+                      <code className="text-cyan-300 bg-black/40 px-1 py-0.5 rounded">
+                        Met / (Met + Partially Met + Missed) × 100%
+                      </code>
+                      . Excludes pending upcoming targets.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs font-mono">
+                    <div className="p-2 rounded bg-slate-950 border border-cyan-950">
+                      <span className="text-[10px] text-slate-500 uppercase block">Delivery Rate:</span>
+                      <span className="text-xl font-black text-emerald-400">
+                        {overallSummary.delivery_rate_pct !== null ? `${overallSummary.delivery_rate_pct}%` : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 text-xs font-mono">
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-900">
+                    <span className="text-[10px] text-slate-500 uppercase block">Total Recorded</span>
+                    <span className="text-base font-bold text-white mt-0.5 block">
+                      {overallSummary.total_recorded}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-900">
+                    <span className="text-[10px] text-emerald-500 uppercase block">Commitments Met</span>
+                    <span className="text-base font-bold text-emerald-400 mt-0.5 block">
+                      {overallSummary.commitments_met}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-900">
+                    <span className="text-[10px] text-cyan-500 uppercase block">Partially Met</span>
+                    <span className="text-base font-bold text-cyan-400 mt-0.5 block">
+                      {overallSummary.commitments_partially_met}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-900">
+                    <span className="text-[10px] text-rose-500 uppercase block">Missed Targets</span>
+                    <span className="text-base font-bold text-rose-400 mt-0.5 block">
+                      {overallSummary.commitments_missed}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-900">
+                    <span className="text-[10px] text-amber-500 uppercase block">Delayed / Revised</span>
+                    <span className="text-base font-bold text-amber-400 mt-0.5 block">
+                      {overallSummary.commitments_delayed + overallSummary.commitments_revised}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-900">
+                    <span className="text-[10px] text-slate-500 uppercase block">Not Yet Due</span>
+                    <span className="text-base font-bold text-slate-400 mt-0.5 block">
+                      {overallSummary.not_yet_due}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Commitments Ledger Filter Bar */}
+            <div className="p-3.5 rounded-xl bg-[#080E1A] border border-cyan-950 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-slate-400 uppercase text-[10px]">Filter Status:</span>
+                <select
+                  aria-label="Filter Commitment Status"
+                  value={commitmentStatusFilter}
+                  onChange={(e) => {
+                    setCommitmentStatusFilter(e.target.value);
+                    setCommitmentsPage(1);
+                  }}
+                  className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1 text-slate-300"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="MET">Met</option>
+                  <option value="PARTIALLY_MET">Partially Met</option>
+                  <option value="MISSED">Missed</option>
+                  <option value="ON_TRACK">On Track</option>
+                  <option value="DELAYED">Delayed</option>
+                  <option value="REVISED">Revised</option>
+                  <option value="NOT_YET_DUE">Not Yet Due</option>
+                  <option value="UNABLE_TO_VERIFY">Unable to Verify</option>
+                </select>
+
+                <span className="text-slate-400 uppercase text-[10px] ml-2">Type:</span>
+                <select
+                  aria-label="Filter Commitment Type"
+                  value={commitmentTypeFilter}
+                  onChange={(e) => {
+                    setCommitmentTypeFilter(e.target.value);
+                    setCommitmentsPage(1);
+                  }}
+                  className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1 text-slate-300"
+                >
+                  <option value="ALL">Financial & Qualitative</option>
+                  <option value="FINANCIAL">Financial Numerical Targets Only</option>
+                  <option value="QUALITATIVE">Qualitative Milestones Only</option>
+                </select>
+
+                <span className="text-slate-400 uppercase text-[10px] ml-2">Category:</span>
+                <select
+                  aria-label="Filter Commitment Category"
+                  value={commitmentCategoryFilter}
+                  onChange={(e) => {
+                    setCommitmentCategoryFilter(e.target.value);
+                    setCommitmentsPage(1);
+                  }}
+                  className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1 text-slate-300"
+                >
+                  <option value="ALL">All Categories</option>
+                  <option value="FINANCIAL_TARGET">Financial Target</option>
+                  <option value="CAPEX_EXPANSION">Capex & Capacity Expansion</option>
+                  <option value="OPERATIONAL_METRIC">Operational KPI</option>
+                  <option value="PRODUCT_LAUNCH">Product / Geography Launch</option>
+                  <option value="DEBT_REDUCTION">Debt Reduction</option>
+                </select>
+              </div>
+
+              <div className="text-[11px] text-slate-400">
+                Total: <strong>{commitmentsTotal}</strong> commitments recorded
+              </div>
+            </div>
+
+            {/* Commitments Chronological Timeline List */}
+            {commitmentsLoading ? (
+              <div className="py-20 flex flex-col items-center justify-center space-y-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
+                <span className="text-xs font-mono text-slate-400">Loading management commitments ledger...</span>
+              </div>
+            ) : commitments.length === 0 ? (
+              <EmptyState
+                title="No Commitments Found"
+                description="No commitments match your selected filters or quarter."
+              />
+            ) : (
+              <div className="space-y-3.5">
+                {commitments.map((c) => {
+                  const statusBadge = getCommitmentStatusBadge(c.status);
+
+                  return (
+                    <div
+                      key={c.commitment_id}
+                      className="p-4 rounded-xl border border-cyan-950 bg-[#070D18] hover:border-cyan-800/60 transition space-y-3 shadow-md"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-950 pb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            onClick={() => {
+                              setActiveSymbolForDrawer(c.symbol);
+                              setIsDrawerOpen(true);
+                            }}
+                            className="text-sm font-bold font-mono text-white hover:text-cyan-300 transition"
+                          >
+                            {c.symbol}
+                          </button>
+                          <span className="text-xs text-slate-400">{c.company_name}</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                            {c.category.replace(/_/g, " ")}
+                          </span>
+                          {c.is_financial_target ? (
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+                              NUMERICAL TARGET
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">
+                              QUALITATIVE MILESTONE
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-slate-400">Target Deadline:</span>
+                          <span className="text-xs font-mono font-bold text-cyan-300">
+                            {c.target_period || "Open"}
+                          </span>
+                          <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${statusBadge}`}>
+                            {c.status.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Management Exact Statement */}
+                      <div className="text-xs text-slate-200">
+                        <p className="font-semibold text-slate-100 mb-1">{c.statement}</p>
+                        {c.exact_quote && (
+                          <p className="italic text-slate-400 text-[11px] bg-black/40 p-2 rounded border border-slate-900">
+                            &ldquo;{c.exact_quote}&rdquo;
+                            {c.page_or_slide && (
+                              <span className="text-slate-500 font-mono not-italic ml-2">
+                                [Source: {c.page_or_slide}]
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Target & Delivery Evaluation Ground Reality */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
+                        <div className="p-2.5 rounded bg-[#050A14] border border-cyan-950 space-y-1">
+                          <span className="text-[10px] font-mono text-slate-400 uppercase block">
+                            Target Guideline:
+                          </span>
+                          <span className="text-white font-mono font-bold">
+                            {c.target_value || "Operational Milestone"}
+                          </span>
+                          {c.metric && <span className="text-slate-400 text-[11px] block">Metric: {c.metric}</span>}
+                        </div>
+
+                        <div className="p-2.5 rounded bg-[#050A14] border border-cyan-950 space-y-1">
+                          <span className="text-[10px] font-mono text-emerald-400 uppercase block">
+                            Audited Delivery Outcome:
+                          </span>
+                          <span className="text-white font-mono font-bold">
+                            {c.actual_result || "Awaiting subsequent financial quarter verification"}
+                          </span>
+                          {c.assessment_rationale && (
+                            <span className="text-slate-400 text-[11px] block">
+                              Rationale: {c.assessment_rationale}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Evidence Citations */}
+                      {c.evidence_quote && (
+                        <div className="text-[11px] font-mono text-slate-400 pt-1 flex items-start gap-1">
+                          <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Subsequent Disclosure Citation: </strong> {c.evidence_quote}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =======================================================
+            DRILL-DOWN MODAL FOR PROCESSING STAGES & METRICS
+           ======================================================= */}
+        {isDrilldownOpen && (
+          <div className="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-[#070D18] border border-cyan-900/60 rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl">
+              <div className="p-4 border-b border-cyan-950 flex items-center justify-between bg-[#0A1222]">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-mono font-bold text-white">{drilldownTitle}</h3>
+                  <span className="text-xs font-mono text-cyan-300 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+                    {drilldownItems.length} records
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsDrilldownOpen(false)}
+                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                {drilldownItems.length === 0 ? (
+                  <div className="text-center py-10 text-xs font-mono text-slate-400">
+                    No presentation records in this stage.
+                  </div>
+                ) : (
+                  drilldownItems.map((doc, idx) => (
+                    <div
+                      key={doc.id || idx}
+                      className="p-3 rounded-lg bg-[#050A14] border border-slate-800/80 flex items-center justify-between text-xs font-mono hover:border-cyan-800/60 transition"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{doc.symbol}</span>
+                          <span className="text-slate-400">{doc.company_name}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Publication: {doc.announcement_date || "Unknown"}
+                          {doc.error && <span className="text-rose-400 ml-2">Error: {doc.error}</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {doc.pdf_url && (
+                          <a
+                            href={doc.pdf_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 text-[11px] flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            PDF
+                          </a>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            if (doc.id) handleReprocess(doc.id);
+                          }}
+                          className="px-2 py-0.5 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 text-[10px] cursor-pointer"
+                        >
+                          Reprocess
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =======================================================
+            DEEP-DIVE SLIDEOUT DRAWER
+           ======================================================= */}
         <InvestorIntelligenceDrawer
           symbol={activeSymbolForDrawer}
           isOpen={isDrawerOpen}

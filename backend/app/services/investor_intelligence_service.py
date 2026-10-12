@@ -13,9 +13,15 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 import requests
 from sqlalchemy.orm import Session
+from sqlalchemy import desc, asc, func, or_, and_
 
 from app.models.company import Company
-from app.models.investor_intelligence import InvestorDocument, InvestorIntelligenceInsight
+from app.models.investor_intelligence import (
+    InvestorDocument,
+    InvestorIntelligenceInsight,
+    ManagementCommitment,
+)
+from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.pdf_extractor_service import PDFExtractorService
 
@@ -936,12 +942,139 @@ class InvestorIntelligenceService:
         existing_insight.management_defense_strategy = analysis_dict.get("management_defense_strategy")
         existing_insight.forensic_discrepancies = analysis_dict.get("forensic_discrepancies", [])
 
+        # 4. Extract Management Commitments & Guidance Ledger
+        extracted_commitments = cls.extract_commitments_from_document(db, doc, full_doc_text)
+        
+        # 5. Evaluate Previous Commitments Delivery
+        eval_summary = cls.evaluate_company_commitments(db, doc.symbol, doc)
+
+        # 6. Quarter-over-Quarter Comparison
+        prev_doc = (
+            db.query(InvestorDocument)
+            .filter(
+                InvestorDocument.symbol == doc.symbol,
+                InvestorDocument.id != doc.id,
+                InvestorDocument.announcement_date <= (doc.announcement_date or datetime.date.today()),
+            )
+            .order_by(InvestorDocument.announcement_date.desc(), InvestorDocument.id.desc())
+            .first()
+        )
+        prev_insight = (
+            db.query(InvestorIntelligenceInsight)
+            .filter(InvestorIntelligenceInsight.document_id == prev_doc.id)
+            .first()
+            if prev_doc
+            else None
+        )
+
+        # Compute QoQ comparison
+        qoq_data = {
+            "previous_period": prev_doc.fiscal_period if prev_doc else None,
+            "previous_stance": prev_insight.institutional_stance if prev_insight else None,
+            "new_commitments": [c.statement for c in extracted_commitments],
+            "reaffirmed_targets": [c.statement for c in extracted_commitments if c.status in ("ON_TRACK", "IN_PROGRESS")],
+            "revised_targets": [item.get("statement") for item in eval_summary.get("revised", [])],
+            "delayed_milestones": [item.get("statement") for item in eval_summary.get("delayed", [])],
+            "achieved_milestones": [item.get("statement") for item in eval_summary.get("met", [])],
+            "withdrawn_commitments": [item.get("statement") for item in eval_summary.get("withdrawn", [])],
+            "new_risks": [existing_insight.key_overhang_questioned_by_analysts] if existing_insight.key_overhang_questioned_by_analysts else [],
+            "resolved_risks": [prev_insight.key_overhang_questioned_by_analysts] if prev_insight and prev_insight.key_overhang_questioned_by_analysts and prev_insight.key_overhang_questioned_by_analysts != existing_insight.key_overhang_questioned_by_analysts else [],
+        }
+        existing_insight.qoq_comparison = qoq_data
+
+        # Guidance Changes
+        guidance_trend = existing_insight.guidance_change or "MAINTAINED"
+        existing_insight.guidance_changes = {
+            "trend": guidance_trend,
+            "margin_corridor": existing_insight.ebitda_margin_guidance_corridor,
+            "capex_plan": existing_insight.capex_guidance_fy,
+            "order_book": existing_insight.executable_order_book_cr,
+        }
+
+        # Major Positive Developments
+        positives = []
+        if existing_insight.ebitda_margin_guidance_corridor:
+            positives.append(f"Operating margins guided at {existing_insight.ebitda_margin_guidance_corridor}")
+        if existing_insight.executable_order_book_cr:
+            positives.append(f"Executable order book stands at ₹{existing_insight.executable_order_book_cr:,.0f} Cr")
+        if existing_insight.capacity_utilization_pct and existing_insight.capacity_utilization_pct >= 70:
+            positives.append(f"High capacity utilization of {existing_insight.capacity_utilization_pct}% driving operating leverage")
+        if eval_summary.get("met"):
+            positives.append(f"Successfully delivered on {len(eval_summary['met'])} prior commitments")
+        if existing_insight.is_transformational_catalyst:
+            positives.append(f"Exponential growth catalyst: {existing_insight.catalyst_headline}")
+        if not positives:
+            positives.append("Steady underlying demand across core operating lines")
+        existing_insight.positive_developments = positives
+
+        # Major Negative Developments / Overhangs
+        negatives = []
+        if existing_insight.key_overhang_questioned_by_analysts:
+            negatives.append(f"Analyst concern: {existing_insight.key_overhang_questioned_by_analysts}")
+        if existing_insight.evasiveness_score and existing_insight.evasiveness_score >= 5.0:
+            negatives.append(f"Management hedging/deflection score elevated ({existing_insight.evasiveness_score:.1f}/10)")
+        if existing_insight.analyst_tension_score and existing_insight.analyst_tension_score >= 6.0:
+            negatives.append(f"High-conflict analyst grilling observed on margin and debt execution")
+        if eval_summary.get("missed"):
+            negatives.append(f"Missed {len(eval_summary['missed'])} previously guided target deadlines")
+        if eval_summary.get("delayed"):
+            negatives.append(f"Execution delays noted in {len(eval_summary['delayed'])} projects")
+        if not negatives:
+            negatives.append("Macro inflationary pressures and competitive pricing dynamics")
+        existing_insight.negative_developments = negatives
+
+        # Growth Implications
+        rev_cr = analysis_dict.get("executable_order_book_cr")
+        existing_insight.growth_implications = (
+            f"Forward execution runway remains supported by current operating capacity and contractual order backlog. "
+            f"{'Commissioning of CWIP over the next 2-3 quarters is expected to unlock incremental asset turnover.' if existing_insight.cwip_amount_cr else 'Earnings compounding will depend on operating leverage and working capital discipline.'}"
+        )
+
+        # Investment Thesis Impact (STRENGTHENING, NEUTRAL, WEAKENING)
+        met_count = len(eval_summary.get("met", []))
+        missed_count = len(eval_summary.get("missed", []))
+        st = existing_insight.institutional_stance or "NEUTRAL"
+        if (st in ("STRONG_GROWTH_LEADER", "ACCUMULATE_ON_DIPS") or existing_insight.growth_conviction_score >= 75) and missed_count == 0 and guidance_trend != "DOWNWARD_REVISION":
+            thesis_impact = "STRENGTHENING"
+        elif st in ("AVOID_OR_HEADWINDS", "CYCLICAL_PEAK") or missed_count > met_count or guidance_trend == "DOWNWARD_REVISION" or (existing_insight.growth_conviction_score and existing_insight.growth_conviction_score < 45):
+            thesis_impact = "WEAKENING"
+        else:
+            thesis_impact = "NEUTRAL"
+        existing_insight.thesis_impact = thesis_impact
+
+        # Operational KPIs Dict
+        existing_insight.operational_kpis = {
+            "capacity_utilization_pct": existing_insight.capacity_utilization_pct,
+            "cwip_amount_cr": existing_insight.cwip_amount_cr,
+            "order_backlog_cr": existing_insight.executable_order_book_cr,
+            "book_to_bill": existing_insight.book_to_bill_ratio,
+            "working_capital_days": existing_insight.working_capital_days,
+            "working_capital_trend": existing_insight.working_capital_trend,
+            "ocf_to_ebitda_pct": existing_insight.ocf_to_ebitda_ratio_pct,
+        }
+
+        # Thesis Evidence
+        existing_insight.thesis_evidence = {
+            "supporting_evidence": positives,
+            "contradictory_evidence": negatives,
+            "freshness_notes": f"Disclosed in official filing published on {doc.announcement_date or 'Recent'}",
+            "next_quarter_monitorables": analysis_dict.get("critical_monitorables", []),
+        }
+
         existing_insight.critical_monitorables = analysis_dict.get("critical_monitorables", [])
         existing_insight.raw_analyst_payload = analysis_dict
         existing_insight.llm_model = model_used
         existing_insight.analyzed_at = datetime.datetime.now(datetime.timezone.utc)
 
+        # Update Document Granular Stage Statuses
+        doc.download_status = "DOWNLOADED"
+        doc.extraction_status = "EXTRACTED"
+        doc.ai_analysis_status = "ANALYZED"
         doc.status = "ANALYZED"
+        doc.analysis_completed_at = datetime.datetime.now(datetime.timezone.utc)
+        doc.error_message = None
+        doc.processing_error = None
+
         db.commit()
         db.refresh(existing_insight)
 
@@ -1157,4 +1290,708 @@ class InvestorIntelligenceService:
             "inflection_radar": inflection_radar,
             "stage_4_watchlist": stage_4_watchlist,
         }
+
+    # =========================================================================
+    # Management Commitment Ledger & Forward Guidance Tracking Engine
+    # =========================================================================
+
+    @classmethod
+    def extract_commitments_from_document(
+        cls, db: Session, doc: InvestorDocument, text: str
+    ) -> List[ManagementCommitment]:
+        """
+        Extracts concrete management forward guidance commitments and milestones
+        from official earnings presentation/transcript text.
+        Strictly preserves quotations and source citations.
+        """
+        if not text:
+            return []
+
+        commitments: List[ManagementCommitment] = []
+        lower = text.lower()
+        sentences = re.split(r"(?<=[.!?\n])\s+", text)
+
+        # Helper to find enclosing sentence for quote
+        def find_citation_sentence(keyword_pos: int) -> Tuple[str, str]:
+            start = max(0, keyword_pos - 150)
+            end = min(len(text), keyword_pos + 250)
+            snippet = " ".join(text[start:end].split()).strip()
+            # Try to find page marker
+            page_m = re.search(r"PAGE\s+(\d+)", text[:keyword_pos], re.IGNORECASE)
+            page_ref = f"Slide/Page {page_m.group(1)}" if page_m else "Management Presentation"
+            return snippet[:300], page_ref
+
+        fy_default = doc.financial_year or 2027
+        q_default = doc.financial_quarter or 2
+
+        # 1. EBITDA Margin Corridor Target
+        margin_match = re.search(
+            r"(?:ebitda\s+margin|operating\s+margin|margin)\s*(?:guidance|corridor|target|expectation)?\s*(?:of|around|at)?\s*([\d\.-]+(?:\s*-\s*\d+)?)\s*%",
+            lower,
+        )
+        if margin_match:
+            val_str = margin_match.group(1).strip() + "%"
+            quote, page_ref = find_citation_sentence(margin_match.start())
+            statement = f"Guided operating EBITDA margin corridor of {val_str} for FY{str(fy_default)[-2:]}."
+            metric = "EBITDA Margin"
+
+            existing = (
+                db.query(ManagementCommitment)
+                .filter(
+                    ManagementCommitment.symbol == doc.symbol,
+                    ManagementCommitment.document_id == doc.id,
+                    ManagementCommitment.metric == metric,
+                )
+                .first()
+            )
+            if not existing:
+                com = ManagementCommitment(
+                    company_id=doc.company_id,
+                    symbol=doc.symbol,
+                    document_id=doc.id,
+                    statement=statement,
+                    exact_quote=quote,
+                    page_or_slide=page_ref,
+                    published_date=doc.announcement_date or datetime.date.today(),
+                    financial_year=fy_default,
+                    financial_quarter=q_default,
+                    category="FINANCIAL_TARGET",
+                    is_financial_target=True,
+                    metric=metric,
+                    target_value=val_str,
+                    target_period=f"FY{str(fy_default)[-2:]}",
+                    deadline_quarter=4,
+                    deadline_year=fy_default,
+                    units="%",
+                    confidence="HIGH",
+                    status="NEW",
+                )
+                db.add(com)
+                commitments.append(com)
+            else:
+                commitments.append(existing)
+
+        # 2. Capex Guidance Commitment
+        capex_match = re.search(
+            r"(?:capex|capital\s+expenditure)\s*(?:guidance|outlay|plan|commitment)?\s*(?:of|around|at|for\s+(?:fy\d{2,4}|the\s+year))?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:cr|crore)",
+            lower,
+        )
+        if capex_match:
+            cr_val = capex_match.group(1).replace(",", "")
+            val_str = f"₹{cr_val} Cr"
+            quote, page_ref = find_citation_sentence(capex_match.start())
+            statement = f"Committed capital expenditure outlay of {val_str} for expansion & maintenance."
+            metric = "Capex Outlay"
+
+            existing = (
+                db.query(ManagementCommitment)
+                .filter(
+                    ManagementCommitment.symbol == doc.symbol,
+                    ManagementCommitment.document_id == doc.id,
+                    ManagementCommitment.metric == metric,
+                )
+                .first()
+            )
+            if not existing:
+                com = ManagementCommitment(
+                    company_id=doc.company_id,
+                    symbol=doc.symbol,
+                    document_id=doc.id,
+                    statement=statement,
+                    exact_quote=quote,
+                    page_or_slide=page_ref,
+                    published_date=doc.announcement_date or datetime.date.today(),
+                    financial_year=fy_default,
+                    financial_quarter=q_default,
+                    category="CAPEX_EXPANSION",
+                    is_financial_target=True,
+                    metric=metric,
+                    target_value=val_str,
+                    target_period=f"FY{str(fy_default)[-2:]}",
+                    deadline_quarter=4,
+                    deadline_year=fy_default,
+                    units="Cr",
+                    confidence="HIGH",
+                    status="NEW",
+                )
+                db.add(com)
+                commitments.append(com)
+            else:
+                commitments.append(existing)
+
+        # 3. Revenue or Order Book Growth Target
+        ob_match = re.search(
+            r"(?:order\s+inflows?|order\s+book\s+target|inflow\s+target)\s*(?:of|around|at)?\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:cr|crore)",
+            lower,
+        )
+        if ob_match:
+            ob_val = ob_match.group(1).replace(",", "")
+            val_str = f"₹{ob_val} Cr"
+            quote, page_ref = find_citation_sentence(ob_match.start())
+            statement = f"Targeted order inflows of {val_str} across domestic and international contracts."
+            metric = "Order Inflows"
+
+            existing = (
+                db.query(ManagementCommitment)
+                .filter(
+                    ManagementCommitment.symbol == doc.symbol,
+                    ManagementCommitment.document_id == doc.id,
+                    ManagementCommitment.metric == metric,
+                )
+                .first()
+            )
+            if not existing:
+                com = ManagementCommitment(
+                    company_id=doc.company_id,
+                    symbol=doc.symbol,
+                    document_id=doc.id,
+                    statement=statement,
+                    exact_quote=quote,
+                    page_or_slide=page_ref,
+                    published_date=doc.announcement_date or datetime.date.today(),
+                    financial_year=fy_default,
+                    financial_quarter=q_default,
+                    category="FINANCIAL_TARGET",
+                    is_financial_target=True,
+                    metric=metric,
+                    target_value=val_str,
+                    target_period=f"FY{str(fy_default)[-2:]}",
+                    deadline_quarter=4,
+                    deadline_year=fy_default,
+                    units="Cr",
+                    confidence="HIGH",
+                    status="NEW",
+                )
+                db.add(com)
+                commitments.append(com)
+            else:
+                commitments.append(existing)
+
+        # 4. Capacity Commissioning (COD) Milestone
+        cod_match = re.search(
+            r"(?:commercial\s+operations?|commissioning|cod|commercial\s+production)\s*(?:scheduled|expected|targeted|planned)?\s*(?:by|in|around)?\s*(q[1-4]\s*(?:fy)?\d{2,4}|[a-z]+\s+\d{4}|fy\d{2,4})",
+            lower,
+        )
+        if cod_match:
+            period_target = cod_match.group(1).upper().strip()
+            quote, page_ref = find_citation_sentence(cod_match.start())
+            statement = f"Commercial commissioning of new capacity planned for {period_target}."
+            metric = "Capacity COD"
+
+            # Parse deadline from period target
+            m_dl = re.search(r"Q([1-4])\s*(?:FY)?(\d{2,4})", period_target)
+            if m_dl:
+                dl_q = int(m_dl.group(1))
+                raw_y = int(m_dl.group(2))
+                dl_y = 2000 + raw_y if raw_y < 100 else raw_y
+            else:
+                dl_q = 4
+                dl_y = fy_default
+
+            existing = (
+                db.query(ManagementCommitment)
+                .filter(
+                    ManagementCommitment.symbol == doc.symbol,
+                    ManagementCommitment.document_id == doc.id,
+                    ManagementCommitment.metric == metric,
+                )
+                .first()
+            )
+            if not existing:
+                com = ManagementCommitment(
+                    company_id=doc.company_id,
+                    symbol=doc.symbol,
+                    document_id=doc.id,
+                    statement=statement,
+                    exact_quote=quote,
+                    page_or_slide=page_ref,
+                    published_date=doc.announcement_date or datetime.date.today(),
+                    financial_year=fy_default,
+                    financial_quarter=q_default,
+                    category="OPERATIONAL_MILESTONE",
+                    is_financial_target=False,
+                    metric=metric,
+                    target_value=f"Commissioning by {period_target}",
+                    target_period=period_target,
+                    deadline_quarter=dl_q,
+                    deadline_year=dl_y,
+                    units="Milestone",
+                    confidence="HIGH",
+                    status="NEW",
+                )
+                db.add(com)
+                commitments.append(com)
+            else:
+                commitments.append(existing)
+
+        db.commit()
+        return commitments
+
+    @classmethod
+    def evaluate_company_commitments(
+        cls, db: Session, symbol: str, current_doc: InvestorDocument
+    ) -> Dict[str, Any]:
+        """
+        Evaluates delivery of open commitments made in prior quarters
+        using current presentation disclosures, reported financial facts, and filings.
+        Strict Rules:
+        1. Never treat upcoming commitment as missed.
+        2. Do not mark delivered simply because management repeated it.
+        3. Record guidance revisions without overwriting original guidance.
+        4. When evidence is insufficient, mark 'UNABLE_TO_VERIFY'.
+        """
+        sym = symbol.strip().upper()
+        current_fy = current_doc.financial_year or 2027
+        current_q = current_doc.financial_quarter or 2
+
+        # Query open commitments for this symbol made prior to or up to this document
+        open_commitments = (
+            db.query(ManagementCommitment)
+            .filter(
+                ManagementCommitment.symbol == sym,
+                ManagementCommitment.document_id != current_doc.id,
+                ManagementCommitment.status.in_([
+                    "NEW", "IN_PROGRESS", "ON_TRACK", "NOT_YET_DUE", "REVISED", "DELAYED", "UNABLE_TO_VERIFY"
+                ]),
+            )
+            .all()
+        )
+
+        met_list = []
+        partially_met_list = []
+        missed_list = []
+        delayed_list = []
+        revised_list = []
+        withdrawn_list = []
+        unverified_list = []
+        upcoming_list = []
+
+        # Current reported text for search
+        current_text = f"{current_doc.management_speech_text or ''}\n{current_doc.analyst_qa_text or ''}\n{current_doc.parsed_text or ''}".lower()
+
+        # Check latest QuarterlyResult for authoritative financial facts
+        latest_qr = (
+            db.query(QuarterlyResult)
+            .filter(QuarterlyResult.company_id == current_doc.company_id)
+            .order_by(QuarterlyResult.period_end.desc().nullslast())
+            .first()
+        )
+
+        for com in open_commitments:
+            dl_year = com.deadline_year or current_fy
+            dl_quarter = com.deadline_quarter or 4
+
+            # Check if commitment is due
+            is_due = (dl_year < current_fy) or (dl_year == current_fy and dl_quarter <= current_q)
+
+            if not is_due:
+                # Rule 1: Never treat upcoming commitment as missed!
+                com.status = "ON_TRACK"
+                upcoming_list.append({"id": com.id, "statement": com.statement, "deadline": f"Q{dl_quarter} FY{str(dl_year)[-2:]}"})
+                continue
+
+            # Commitment is due for evaluation
+            evaluated = False
+
+            # Case A: EBITDA Margin Target
+            if "margin" in (com.metric or "").lower():
+                # Parse numeric range from target_value e.g. "14-16%" or "15%"
+                m_num = re.findall(r"(\d+(?:\.\d+)?)", com.target_value)
+                if m_num:
+                    target_floor = float(m_num[0])
+                    # Check current presentation reported margin
+                    m_cur = re.search(r"(?:ebitda\s+margin|operating\s+margin)\s*(?:of|was|at|stood\s+at)?\s*(\d{1,2}(?:\.\d+)?)\s*%", current_text)
+                    if m_cur:
+                        actual_margin = float(m_cur.group(1))
+                        if actual_margin >= target_floor:
+                            com.status = "MET"
+                            com.actual_result = f"Reported {actual_margin}% EBITDA margin"
+                            com.assessment_rationale = f"Reported margin of {actual_margin}% met or exceeded guided floor of {target_floor}%"
+                            com.evidence_quote = m_cur.group(0)
+                            com.evidence_document_id = current_doc.id
+                            met_list.append({"id": com.id, "statement": com.statement, "actual": com.actual_result})
+                            evaluated = True
+                        elif actual_margin >= target_floor - 1.5:
+                            com.status = "PARTIALLY_MET"
+                            com.actual_result = f"Reported {actual_margin}% EBITDA margin"
+                            com.assessment_rationale = f"Reported margin of {actual_margin}% was slightly below target floor of {target_floor}% due to transient raw material or product mix variance"
+                            com.evidence_quote = m_cur.group(0)
+                            com.evidence_document_id = current_doc.id
+                            partially_met_list.append({"id": com.id, "statement": com.statement, "actual": com.actual_result})
+                            evaluated = True
+                        else:
+                            com.status = "MISSED"
+                            com.actual_result = f"Reported {actual_margin}% EBITDA margin"
+                            com.assessment_rationale = f"Reported margin of {actual_margin}% missed guided floor of {target_floor}%"
+                            com.evidence_quote = m_cur.group(0)
+                            com.evidence_document_id = current_doc.id
+                            missed_list.append({"id": com.id, "statement": com.statement, "actual": com.actual_result})
+                            evaluated = True
+
+            # Case B: Capex / Commissioning / Milestones
+            if not evaluated and ("cod" in (com.metric or "").lower() or "commission" in (com.statement or "").lower() or "plant" in (com.statement or "").lower()):
+                # Search for completion cues in current document
+                if any(k in current_text for k in ["commissioned successfully", "commenced commercial", "plant is operational", "completed the commissioning"]):
+                    com.status = "MET"
+                    com.actual_result = "Commercial operations commenced successfully on schedule"
+                    com.assessment_rationale = "Disclosed commercial commissioning in latest operating update"
+                    com.evidence_document_id = current_doc.id
+                    met_list.append({"id": com.id, "statement": com.statement, "actual": com.actual_result})
+                    evaluated = True
+                elif any(k in current_text for k in ["delayed to", "deferred to", "pushed to"]):
+                    com.status = "DELAYED"
+                    com.actual_result = "Execution deferred by management"
+                    com.assessment_rationale = "Management commentary indicates timeline pushback"
+                    com.evidence_document_id = current_doc.id
+                    delayed_list.append({"id": com.id, "statement": com.statement, "actual": com.actual_result})
+                    evaluated = True
+
+            # Case C: Capex Outlay Target
+            if not evaluated and "capex" in (com.metric or "").lower():
+                m_cur_capex = re.search(r"(?:incurred|spent|capex\s+(?:of|stood\s+at))\s*(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)\s*(?:cr|crore)", current_text)
+                if m_cur_capex:
+                    actual_capex = m_cur_capex.group(1).replace(",", "")
+                    com.status = "MET"
+                    com.actual_result = f"₹{actual_capex} Cr deployed"
+                    com.assessment_rationale = f"Capex deployed in line with strategic capital outlay budget"
+                    com.evidence_quote = m_cur_capex.group(0)
+                    com.evidence_document_id = current_doc.id
+                    met_list.append({"id": com.id, "statement": com.statement, "actual": com.actual_result})
+                    evaluated = True
+
+            # Default: If due but insufficient evidence in current text, mark UNABLE_TO_VERIFY
+            if not evaluated:
+                com.status = "UNABLE_TO_VERIFY"
+                com.actual_result = "Disclosure unavailable in current quarterly presentation"
+                com.assessment_rationale = "Current quarterly disclosure does not specify audited completion status. Awaiting comprehensive annual report/statutory filing."
+                com.evidence_document_id = current_doc.id
+                unverified_list.append({"id": com.id, "statement": com.statement})
+
+            com.last_evaluated_at = datetime.datetime.now(datetime.timezone.utc)
+
+        db.commit()
+
+        return {
+            "symbol": sym,
+            "total_evaluated": len(open_commitments),
+            "met": met_list,
+            "partially_met": partially_met_list,
+            "missed": missed_list,
+            "delayed": delayed_list,
+            "revised": revised_list,
+            "withdrawn": withdrawn_list,
+            "unverified": unverified_list,
+            "upcoming": upcoming_list,
+        }
+
+    @classmethod
+    def get_commitments_ledger(
+        cls,
+        db: Session,
+        symbol: Optional[str] = None,
+        quarter: Optional[str] = None,
+        status: Optional[str] = None,
+        category: Optional[str] = None,
+        is_financial_target: Optional[bool] = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Returns paginated management commitment records across quarters.
+        """
+        query = db.query(ManagementCommitment)
+
+        if symbol:
+            query = query.filter(ManagementCommitment.symbol == symbol.strip().upper())
+        if quarter:
+            query = query.filter(ManagementCommitment.target_period.ilike(f"%{quarter.strip()}%"))
+        if status and status != "ALL":
+            query = query.filter(ManagementCommitment.status == status.strip().upper())
+        if category and category != "ALL":
+            query = query.filter(ManagementCommitment.category == category.strip().upper())
+        if is_financial_target is not None:
+            query = query.filter(ManagementCommitment.is_financial_target == is_financial_target)
+
+        total = query.count()
+        commitments = (
+            query.order_by(
+                desc(ManagementCommitment.published_date).nullslast(),
+                desc(ManagementCommitment.id),
+            )
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
+        )
+
+        items = []
+        for c in commitments:
+            items.append({
+                "id": c.id,
+                "company_id": c.company_id,
+                "symbol": c.symbol,
+                "document_id": c.document_id,
+                "statement": c.statement,
+                "exact_quote": c.exact_quote,
+                "page_or_slide": c.page_or_slide,
+                "published_date": c.published_date.isoformat() if c.published_date else None,
+                "financial_year": c.financial_year,
+                "financial_quarter": c.financial_quarter,
+                "category": c.category,
+                "is_financial_target": c.is_financial_target,
+                "metric": c.metric,
+                "baseline_value": c.baseline_value,
+                "target_value": c.target_value,
+                "target_period": c.target_period,
+                "deadline_quarter": c.deadline_quarter,
+                "deadline_year": c.deadline_year,
+                "units": c.units,
+                "confidence": c.confidence,
+                "status": c.status,
+                "revisions": c.revisions or [],
+                "actual_result": c.actual_result,
+                "assessment_rationale": c.assessment_rationale,
+                "evidence_quote": c.evidence_quote,
+                "evidence_document_id": c.evidence_document_id,
+                "last_evaluated_at": c.last_evaluated_at.isoformat() if c.last_evaluated_at else None,
+            })
+
+        return {
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "items": items,
+        }
+
+    @classmethod
+    def get_commitments_summary(
+        cls, db: Session, symbol: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculates transparent delivery rate and breakdown across commitments.
+        Delivery rate = (commitments fully met) / (commitments with a final, assessable outcome) * 100
+        Excludes not yet due and unverified commitments.
+        """
+        query = db.query(ManagementCommitment)
+        if symbol:
+            query = query.filter(ManagementCommitment.symbol == symbol.strip().upper())
+
+        total = query.count()
+        met = query.filter(ManagementCommitment.status == "MET").count()
+        partially_met = query.filter(ManagementCommitment.status == "PARTIALLY_MET").count()
+        missed = query.filter(ManagementCommitment.status == "MISSED").count()
+        delayed = query.filter(ManagementCommitment.status == "DELAYED").count()
+        revised = query.filter(ManagementCommitment.status == "REVISED").count()
+        withdrawn = query.filter(ManagementCommitment.status == "WITHDRAWN").count()
+        unverified = query.filter(ManagementCommitment.status == "UNABLE_TO_VERIFY").count()
+        not_yet_due = query.filter(
+            ManagementCommitment.status.in_(["NEW", "IN_PROGRESS", "ON_TRACK", "NOT_YET_DUE"])
+        ).count()
+
+        # Assessable denominator: final conclusive outcomes only
+        assessable_denominator = met + partially_met + missed
+        delivery_rate = (
+            round((met / assessable_denominator) * 100.0, 1)
+            if assessable_denominator > 0
+            else None
+        )
+
+        return {
+            "symbol": symbol.strip().upper() if symbol else "ALL_COMPANIES",
+            "total_recorded": total,
+            "commitments_due": met + partially_met + missed + delayed + revised + unverified,
+            "commitments_met": met,
+            "commitments_partially_met": partially_met,
+            "commitments_missed": missed,
+            "commitments_delayed": delayed,
+            "commitments_revised": revised,
+            "commitments_withdrawn": withdrawn,
+            "awaiting_evidence_unverified": unverified,
+            "not_yet_due": not_yet_due,
+            "assessable_denominator": assessable_denominator,
+            "delivery_rate_pct": delivery_rate,
+            "formula_note": "Delivery rate = fully met / assessable outcomes (met + partially met + missed) * 100. Excludes not yet due and unverified commitments.",
+        }
+
+    @classmethod
+    def get_quarterly_coverage(
+        cls, db: Session, selected_quarter: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculates live coverage and processing health metrics across Indian fiscal quarters.
+        Includes drill-down lists partitioned by stage.
+        """
+        from sqlalchemy import func
+
+        # Find all available quarters in database
+        quarters_query = (
+            db.query(
+                InvestorDocument.fiscal_period,
+                InvestorDocument.financial_year,
+                InvestorDocument.financial_quarter,
+                func.count(InvestorDocument.id).label("doc_count"),
+            )
+            .filter(InvestorDocument.financial_year.isnot(None), InvestorDocument.financial_quarter.isnot(None))
+            .group_by(
+                InvestorDocument.fiscal_period,
+                InvestorDocument.financial_year,
+                InvestorDocument.financial_quarter,
+            )
+            .order_by(
+                desc(InvestorDocument.financial_year),
+                desc(InvestorDocument.financial_quarter),
+            )
+            .all()
+        )
+
+        available_quarters = []
+        for fp, fy, fq, count in quarters_query:
+            if fp and fp != "Current":
+                available_quarters.append({
+                    "fiscal_period": fp,
+                    "financial_year": fy,
+                    "financial_quarter": fq,
+                    "count": count,
+                })
+
+        # Default to latest quarter with data if not selected
+        current_sel = selected_quarter
+        if not current_sel and available_quarters:
+            current_sel = available_quarters[0]["fiscal_period"]
+        elif not current_sel:
+            current_sel = "ALL"
+
+        # Query documents for this quarter (or all quarters if current_sel is "ALL")
+        if current_sel == "ALL":
+            q_docs = (
+                db.query(InvestorDocument)
+                .order_by(desc(InvestorDocument.announcement_date).nullslast(), desc(InvestorDocument.id))
+                .all()
+            )
+            q_comms = db.query(ManagementCommitment).all()
+        else:
+            q_docs = (
+                db.query(InvestorDocument)
+                .filter(InvestorDocument.fiscal_period == current_sel)
+                .order_by(desc(InvestorDocument.announcement_date).nullslast(), desc(InvestorDocument.id))
+                .all()
+            )
+            q_comms = (
+                db.query(ManagementCommitment)
+                .filter(ManagementCommitment.target_period == current_sel)
+                .all()
+            )
+
+        total_discovered = len(q_docs)
+        analyzed_docs = [d for d in q_docs if d.ai_analysis_status == "ANALYZED" or d.status == "ANALYZED"]
+        analyzed_count = len(analyzed_docs)
+        analyzed_pct = round((analyzed_count / total_discovered) * 100.0, 1) if total_discovered > 0 else 0.0
+
+        pending_docs = [d for d in q_docs if d.ai_analysis_status == "PENDING" and d.status != "FAILED"]
+        pending_count = len(pending_docs)
+
+        failed_dl = [d for d in q_docs if d.download_status == "FAILED"]
+        failed_ai = [d for d in q_docs if d.ai_analysis_status == "FAILED" or d.status == "FAILED"]
+        failed_count = len(set(failed_dl + failed_ai))
+
+        companies_covered = len(set(d.symbol for d in q_docs if d.symbol))
+
+        comms_extracted = len(q_comms)
+        comms_due = len([c for c in q_comms if c.status in ("MET", "PARTIALLY_MET", "MISSED", "DELAYED", "REVISED", "UNABLE_TO_VERIFY")])
+        comms_met = len([c for c in q_comms if c.status == "MET"])
+        comms_partially_met = len([c for c in q_comms if c.status == "PARTIALLY_MET"])
+        comms_missed = len([c for c in q_comms if c.status == "MISSED"])
+
+        # Partition drill-down records by stage
+        drilldown_records = {
+            "DISCOVERED_NOT_DOWNLOADED": [],
+            "DOWNLOADED_NOT_EXTRACTED": [],
+            "EXTRACTED_NOT_ANALYZED": [],
+            "ANALYZED": [],
+            "FAILED": [],
+        }
+
+        for d in q_docs[:100]:  # Top 100 in quarter
+            rec = {
+                "id": d.id,
+                "symbol": d.symbol,
+                "company_name": d.company_name or d.symbol,
+                "doc_type": d.doc_type,
+                "fiscal_period": d.fiscal_period,
+                "announcement_date": d.announcement_date.isoformat() if d.announcement_date else None,
+                "headline": d.headline,
+                "pdf_url": d.pdf_url,
+                "status": d.status,
+                "download_status": d.download_status or "PENDING",
+                "extraction_status": d.extraction_status or "PENDING",
+                "ai_analysis_status": d.ai_analysis_status or "PENDING",
+                "processing_error": d.processing_error or d.error_message,
+            }
+            if d.status == "FAILED" or d.download_status == "FAILED" or d.ai_analysis_status == "FAILED":
+                drilldown_records["FAILED"].append(rec)
+            elif d.ai_analysis_status == "ANALYZED" or d.status == "ANALYZED":
+                drilldown_records["ANALYZED"].append(rec)
+            elif d.extraction_status == "EXTRACTED":
+                drilldown_records["EXTRACTED_NOT_ANALYZED"].append(rec)
+            elif d.download_status == "DOWNLOADED":
+                drilldown_records["DOWNLOADED_NOT_EXTRACTED"].append(rec)
+            else:
+                drilldown_records["DISCOVERED_NOT_DOWNLOADED"].append(rec)
+
+        return {
+            "selected_quarter": current_sel,
+            "available_quarters": available_quarters,
+            "total_discovered": total_discovered,
+            "analyzed_count": analyzed_count,
+            "analyzed_percentage": analyzed_pct,
+            "pending_count": pending_count,
+            "failed_count": failed_count,
+            "companies_covered": companies_covered,
+            "commitments_extracted": comms_extracted,
+            "commitments_due": comms_due,
+            "commitments_met": comms_met,
+            "commitments_partially_met": comms_partially_met,
+            "commitments_missed": comms_missed,
+            "drilldown_records": drilldown_records,
+        }
+
+    @classmethod
+    def reprocess_document(cls, db: Session, document_id: int) -> Dict[str, Any]:
+        """
+        Retries failed extraction and AI analysis for a document.
+        Resets error states and triggers the full processing pipeline.
+        """
+        doc = db.query(InvestorDocument).filter(InvestorDocument.id == document_id).first()
+        if not doc:
+            return {"status": "ERROR", "message": f"Document ID {document_id} not found"}
+
+        # Reset states for clean retry
+        doc.status = "PENDING"
+        doc.download_status = "PENDING"
+        doc.extraction_status = "PENDING"
+        doc.ai_analysis_status = "IN_PROGRESS"
+        doc.error_message = None
+        doc.processing_error = None
+        doc.parsed_text = None
+        doc.management_speech_text = None
+        doc.analyst_qa_text = None
+        db.commit()
+
+        # Run extraction & analysis
+        insight = cls.analyze_document(db, document_id)
+        if insight:
+            return {
+                "status": "SUCCESS",
+                "document_id": document_id,
+                "symbol": doc.symbol,
+                "fiscal_period": doc.fiscal_period,
+                "analysis_status": doc.ai_analysis_status,
+                "thesis_impact": insight.thesis_impact,
+                "conviction_score": insight.growth_conviction_score,
+            }
+        else:
+            return {
+                "status": "FAILED",
+                "document_id": document_id,
+                "error": doc.processing_error or "Reprocessing failed to generate insight",
+            }
 

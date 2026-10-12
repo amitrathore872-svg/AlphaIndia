@@ -21,14 +21,18 @@ import {
   Flame,
   Scale,
   AlertCircle,
+  Check,
 } from "lucide-react";
 import {
   fetchCompanyInvestorIntelligence,
+  fetchCommitmentsLedger,
   triggerAnalyzeDocument,
   triggerAnalyzeLatest,
+  formatGuidanceChanges,
   type CompanyIntelligenceResponse,
   type InvestorInsightItem,
   type InvestorDocumentItem,
+  type CommitmentItem,
 } from "@/lib/investorIntelligenceApi";
 
 interface Props {
@@ -40,6 +44,7 @@ interface Props {
 export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: Props) {
   const [data, setData] = useState<CompanyIntelligenceResponse | null>(null);
   const [selectedInsight, setSelectedInsight] = useState<InvestorInsightItem | null>(null);
+  const [commitments, setCommitments] = useState<CommitmentItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +58,13 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchCompanyInvestorIntelligence(sym);
+      const [res, commsRes] = await Promise.all([
+        fetchCompanyInvestorIntelligence(sym),
+        fetchCommitmentsLedger({ symbol: sym, limit: 100 }).catch(() => ({ items: [] })),
+      ]);
       setData(res);
       setSelectedInsight(res.latest_insight || (res.insights_history.length > 0 ? res.insights_history[0] : null));
+      setCommitments(commsRes.items || []);
     } catch (err: any) {
       setError(err?.message || "Failed to load investor intelligence");
     } finally {
@@ -95,14 +104,20 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
   };
 
   const getTensionBadge = (score?: number | null) => {
-    const val = score ?? 3.0;
+    if (score === null || score === undefined) {
+      return { label: "Pending Analysis", color: "text-slate-400 bg-slate-900 border-slate-700", bar: "bg-slate-700" };
+    }
+    const val = score;
     if (val >= 7.0) return { label: "High-Conflict Grill", color: "text-rose-400 bg-rose-950/80 border-rose-500/50", bar: "bg-rose-500" };
     if (val >= 4.5) return { label: "Active Interrogation", color: "text-amber-400 bg-amber-950/80 border-amber-500/50", bar: "bg-amber-500" };
     return { label: "Constructive Dialogue", color: "text-emerald-400 bg-emerald-950/80 border-emerald-500/50", bar: "bg-emerald-500" };
   };
 
   const getEvasivenessBadge = (score?: number | null) => {
-    const val = score ?? 2.0;
+    if (score === null || score === undefined) {
+      return { label: "Pending Analysis", color: "text-slate-400 bg-slate-900 border-slate-700", bar: "bg-slate-700" };
+    }
+    const val = score;
     if (val >= 6.5) return { label: "High Obfuscation / Hedging", color: "text-rose-400 bg-rose-950/80 border-rose-500/50", bar: "bg-rose-500" };
     if (val >= 3.5) return { label: "Moderate Hedging", color: "text-amber-400 bg-amber-950/80 border-amber-500/50", bar: "bg-amber-500" };
     return { label: "Candid & Data-Driven", color: "text-emerald-400 bg-emerald-950/80 border-emerald-500/50", bar: "bg-emerald-500" };
@@ -210,16 +225,20 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                     <div>
                       Conviction Score:{" "}
                       <span className="font-bold text-white font-mono">
-                        {selectedInsight.growth_conviction_score}/100
+                        {selectedInsight.growth_conviction_score !== null && selectedInsight.growth_conviction_score !== undefined
+                          ? `${selectedInsight.growth_conviction_score}/100`
+                          : "Pending"}
                       </span>
                     </div>
                     <div>
                       Management Tone:{" "}
                       <span className="font-bold text-cyan-300 font-mono">
-                        {selectedInsight.management_tone.replace(/_/g, " ")}
+                        {selectedInsight.management_tone
+                          ? selectedInsight.management_tone.replace(/_/g, " ")
+                          : "Pending"}
                       </span>
                     </div>
-                    {selectedInsight.management_sentiment_score !== undefined && (
+                    {selectedInsight.management_sentiment_score !== null && selectedInsight.management_sentiment_score !== undefined && (
                       <div>
                         Sentiment:{" "}
                         <span className="font-bold text-emerald-400 font-mono">
@@ -241,6 +260,72 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                     <ExternalLink className="w-3.5 h-3.5" />
                     Official NSE/BSE PDF
                   </a>
+                )}
+              </div>
+
+              {/* Thesis Impact & Quarterly Developments Synthesis */}
+              <div className="p-4 rounded-xl bg-[#08101E] border border-cyan-900/60 shadow-lg space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-950 pb-2.5">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-cyan-400" />
+                    AI Investment Thesis Impact & Evidence
+                  </span>
+                  <span
+                    className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded border ${
+                      selectedInsight.thesis_impact === "STRENGTHENING"
+                        ? "bg-emerald-950 text-emerald-400 border-emerald-500/60"
+                        : selectedInsight.thesis_impact === "WEAKENING"
+                        ? "bg-rose-950 text-rose-400 border-rose-500/60"
+                        : "bg-slate-900 text-slate-300 border-slate-700"
+                    }`}
+                  >
+                    Thesis: {selectedInsight.thesis_impact || "NEUTRAL"}
+                  </span>
+                </div>
+
+                {/* Positive & Negative Developments */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {selectedInsight.positive_developments && selectedInsight.positive_developments.length > 0 && (
+                    <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-900/50 space-y-1.5">
+                      <span className="text-[11px] font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Major Positive Developments:
+                      </span>
+                      <ul className="space-y-1 text-slate-300">
+                        {selectedInsight.positive_developments.map((pos, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <span className="text-emerald-400 font-mono">•</span>
+                            <span>{pos}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {selectedInsight.negative_developments && selectedInsight.negative_developments.length > 0 && (
+                    <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-900/50 space-y-1.5">
+                      <span className="text-[11px] font-mono font-bold text-rose-400 uppercase flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Material Risks & Headwinds:
+                      </span>
+                      <ul className="space-y-1 text-slate-300">
+                        {selectedInsight.negative_developments.map((neg, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <span className="text-rose-400 font-mono">•</span>
+                            <span>{neg}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Guidance Revision & QoQ Comparison */}
+                {selectedInsight.guidance_changes && formatGuidanceChanges(selectedInsight.guidance_changes) && (
+                  <div className="p-2.5 rounded bg-cyan-950/40 border border-cyan-900/60 text-xs font-mono text-cyan-200">
+                    <strong className="text-cyan-300">Guidance Revision vs Prior Quarter: </strong>
+                    {formatGuidanceChanges(selectedInsight.guidance_changes)}
+                  </div>
                 )}
               </div>
 
@@ -755,6 +840,84 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* Management Commitment Ledger & Delivery Verification */}
+              {commitments && commitments.length > 0 && (
+                <div className="p-4 rounded-xl bg-[#09101E] border border-cyan-900/60 shadow-lg space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-950 pb-2">
+                    <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-300 flex items-center gap-1.5">
+                      <Target className="w-4 h-4 text-amber-400" />
+                      Quarterly Management Commitments & Delivery Scorecard ({commitments.length})
+                    </h4>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Cross-Quarter Verification
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {commitments.map((c) => {
+                      const isMet = c.status === "MET";
+                      const isMissed = c.status === "MISSED";
+                      const isPart = c.status === "PARTIALLY_MET";
+                      const statusColor = isMet
+                        ? "text-emerald-400 bg-emerald-950/80 border-emerald-500/50"
+                        : isMissed
+                        ? "text-rose-400 bg-rose-950/80 border-rose-500/50"
+                        : isPart
+                        ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/50"
+                        : "text-amber-400 bg-amber-950/80 border-amber-500/50";
+
+                      return (
+                        <div
+                          key={c.commitment_id}
+                          className="p-3 rounded-lg bg-black/50 border border-slate-800 text-xs space-y-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] font-bold text-white flex items-center gap-1">
+                              <span className="text-cyan-400">[{c.target_period || "Quarter Target"}]</span>
+                              <span>{c.category.replace(/_/g, " ")}</span>
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${statusColor}`}>
+                              {c.status.replace(/_/g, " ")}
+                            </span>
+                          </div>
+
+                          <p className="text-slate-200 text-xs leading-relaxed">{c.statement}</p>
+
+                          {c.exact_quote && (
+                            <p className="text-[11px] italic text-slate-400 bg-slate-950 p-2 rounded border border-slate-900">
+                              &ldquo;{c.exact_quote}&rdquo;
+                              {c.page_or_slide && (
+                                <span className="text-slate-500 font-mono not-italic ml-2">
+                                  [{c.page_or_slide}]
+                                </span>
+                              )}
+                            </p>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-mono pt-1">
+                            <div className="p-2 rounded bg-slate-950 border border-slate-900">
+                              <span className="text-slate-500 block uppercase text-[9px]">Target:</span>
+                              <span className="text-cyan-300 font-bold">{c.target_value || "Milestone Target"}</span>
+                            </div>
+                            <div className="p-2 rounded bg-slate-950 border border-slate-900">
+                              <span className="text-emerald-500 block uppercase text-[9px]">Audited Outcome:</span>
+                              <span className="text-white font-bold">{c.actual_result || "Pending Verification"}</span>
+                            </div>
+                          </div>
+
+                          {c.evidence_quote && (
+                            <p className="text-[10px] font-mono text-slate-400 pt-1 flex items-start gap-1">
+                              <Check className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
+                              <span>{c.evidence_quote}</span>
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

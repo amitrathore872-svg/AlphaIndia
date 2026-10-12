@@ -59,6 +59,16 @@ class InvestorDocument(Base):
     status = Column(String(30), default="PENDING", index=True)  # PENDING, DOWNLOADED, EXTRACTED, ANALYZED, FAILED
     error_message = Column(Text, nullable=True)
 
+    # Detailed Stage Tracking & Content Identity
+    financial_year = Column(Integer, nullable=True, index=True)  # e.g., 2027 for FY27
+    financial_quarter = Column(Integer, nullable=True, index=True)  # 1, 2, 3, 4
+    content_hash = Column(String(64), nullable=True, index=True)
+    download_status = Column(String(30), default="PENDING", index=True)  # PENDING, DOWNLOADED, FAILED
+    extraction_status = Column(String(30), default="PENDING", index=True)  # PENDING, EXTRACTED, FAILED
+    ai_analysis_status = Column(String(30), default="PENDING", index=True)  # PENDING, IN_PROGRESS, ANALYZED, FAILED
+    analysis_completed_at = Column(DateTime(timezone=True), nullable=True)
+    processing_error = Column(Text, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
@@ -75,6 +85,13 @@ class InvestorDocument(Base):
         cascade="all, delete-orphan",
         order_by="desc(InvestorIntelligenceInsight.id)",
     )
+    commitments = relationship(
+        "ManagementCommitment",
+        foreign_keys="ManagementCommitment.document_id",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="desc(ManagementCommitment.id)",
+    )
 
 
 class InvestorIntelligenceInsight(Base):
@@ -83,6 +100,7 @@ class InvestorIntelligenceInsight(Base):
         Index("idx_inv_ins_sym_period", "symbol", "fiscal_period"),
         Index("idx_inv_ins_stance", "institutional_stance"),
         Index("idx_inv_ins_score", "growth_conviction_score"),
+        Index("idx_inv_ins_thesis_impact", "thesis_impact"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -108,6 +126,18 @@ class InvestorIntelligenceInsight(Base):
     management_credibility_rating = Column(String(30), default="MEDIUM") # HIGH, MEDIUM, LOW, PROMOTIONAL
     management_tone = Column(String(50), default="NEUTRAL")              # VERY_BULLISH, PRAGMATIC_BULLISH, NEUTRAL, CAUTIOUS, DEFENSIVE
     executive_thesis = Column(Text, nullable=True)                       # 3-4 sentence institutional buy-side thesis
+
+    # Investment Thesis Impact & Evidence
+    thesis_impact = Column(String(30), default="NEUTRAL", index=True)  # STRENGTHENING, NEUTRAL, WEAKENING
+    positive_developments = Column(JSON, nullable=True)  # List of major positive developments
+    negative_developments = Column(JSON, nullable=True)  # List of major negative developments / headwinds
+    guidance_changes = Column(JSON, nullable=True)  # Guidance changes from previous quarter
+    growth_implications = Column(Text, nullable=True)  # Revenue and earnings growth implications
+    thesis_evidence = Column(JSON, nullable=True)  # Supporting evidence, contradictory evidence, freshness limitations
+
+    # Quarter-over-Quarter Comparison & Operational KPIs
+    qoq_comparison = Column(JSON, nullable=True)  # New, reaffirmed, revised, delayed, withdrawn commitments, resolved risks
+    operational_kpis = Column(JSON, nullable=True)  # Segment performance, volume/utilization, working capital/debt
 
     # -------------------------------------------------------------------------
     # Pillar 1: Operating Leverage & CWIP Commissioning
@@ -180,9 +210,85 @@ class InvestorIntelligenceInsight(Base):
     # -------------------------------------------------------------------------
     critical_monitorables = Column(JSON, nullable=True)  # List of strings
     raw_analyst_payload = Column(JSON, nullable=True)    # Complete structured JSON from LLM
-    llm_model = Column(String(50), default="gemini-1.5-flash")
+    llm_model = Column(String(50), default="alpha-forensic-nlp-engine")
     analyzed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     document = relationship("InvestorDocument", back_populates="insights")
     company = relationship("Company")
+
+
+class ManagementCommitment(Base):
+    """
+    Quarter-by-quarter management commitment and forward guidance tracking ledger.
+    Tracks numerical targets, capex deadlines, capacity additions, and qualitative milestones,
+    evaluating subsequent delivery across quarters.
+    """
+    __tablename__ = "management_commitments"
+    __table_args__ = (
+        Index("idx_mgmt_com_sym_status", "symbol", "status"),
+        Index("idx_mgmt_com_deadline", "deadline_year", "deadline_quarter"),
+        Index("idx_mgmt_com_category", "category"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Identifiers & Linkages
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("investor_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Commitment Content & Provenance
+    statement = Column(Text, nullable=False)  # Description of commitment
+    exact_quote = Column(Text, nullable=True)  # Exact quote from presentation / concall
+    page_or_slide = Column(String(50), nullable=True)  # Citation: e.g. "Slide 12", "Page 5"
+    published_date = Column(Date, nullable=True, index=True)
+    financial_year = Column(Integer, nullable=True)  # Inception FY (e.g. 2027)
+    financial_quarter = Column(Integer, nullable=True)  # Inception quarter (1-4)
+
+    # Classification & Target Spec
+    category = Column(
+        String(50),
+        default="FINANCIAL_TARGET",
+        index=True,
+    )  # FINANCIAL_TARGET, CAPEX_EXPANSION, OPERATIONAL_MILESTONE, PRODUCT_GEOGRAPHY, DELEVERAGING_DEBT, STRATEGIC
+    is_financial_target = Column(Boolean, default=True, index=True)  # False = qualitative milestone
+    metric = Column(String(100), nullable=True)  # e.g. "Revenue", "EBITDA Margin", "Order Inflows", "Capacity COD"
+    baseline_value = Column(String(100), nullable=True)  # Baseline before target
+    target_value = Column(String(150), nullable=False)  # Target value or description
+    target_period = Column(String(50), nullable=True)  # e.g., "Q4 FY27", "FY27", "H2 FY27"
+    deadline_quarter = Column(Integer, nullable=True)  # Due quarter (1-4)
+    deadline_year = Column(Integer, nullable=True)  # Due FY (e.g. 2027)
+    units = Column(String(30), nullable=True)  # Cr, %, MW, bps, MT
+    confidence = Column(String(20), default="HIGH")  # HIGH, MEDIUM, LOW
+
+    # Current Evaluation State
+    status = Column(
+        String(30),
+        default="NEW",
+        index=True,
+    )  # NEW, IN_PROGRESS, ON_TRACK, MET, PARTIALLY_MET, MISSED, DELAYED, REVISED, WITHDRAWN, NOT_YET_DUE, UNABLE_TO_VERIFY
+
+    # Revision History
+    revisions = Column(JSON, nullable=True)  # [{date, doc_id, old_target, new_target, reason, quote}]
+
+    # Evaluation & Delivery Evidence
+    actual_result = Column(Text, nullable=True)  # Reported figure or outcome
+    assessment_rationale = Column(Text, nullable=True)  # Explanation of assessment
+    evidence_quote = Column(Text, nullable=True)  # Cited evidence from subsequent reporting
+    evidence_document_id = Column(Integer, ForeignKey("investor_documents.id", ondelete="SET NULL"), nullable=True)
+    evidence_url = Column(Text, nullable=True)
+    last_evaluated_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    company = relationship("Company")
+    document = relationship("InvestorDocument", foreign_keys=[document_id], back_populates="commitments")
+    evidence_document = relationship("InvestorDocument", foreign_keys=[evidence_document_id])
