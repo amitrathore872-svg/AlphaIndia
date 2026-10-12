@@ -1,4 +1,4 @@
-import { API_BASE } from "@/lib/apiConfig";
+import { fetchJson, API_BASE } from "@/lib/apiConfig";
 
 export interface StockTechnicalOverview {
   symbol: string;
@@ -282,24 +282,30 @@ export function normalizeStockTechnicalOverview(raw: any): StockTechnicalOvervie
 }
 
 export async function fetchStockTechnicalOverview(symbol: string): Promise<StockTechnicalOverview> {
-  const res = await fetch(`${API_BASE}/api/stocks/${encodeURIComponent(symbol)}/technical-overview`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to load technical overview for ${symbol} (HTTP ${res.status})`);
+  const cleanSym = (symbol || "").trim().toUpperCase();
+  if (!cleanSym) {
+    throw new Error("Invalid stock symbol");
   }
-  const raw = await res.json();
-  return normalizeStockTechnicalOverview(raw);
+  try {
+    const raw = await fetchJson<any>(`/api/stocks/${encodeURIComponent(cleanSym)}/technical-overview`);
+    return normalizeStockTechnicalOverview(raw);
+  } catch (err: any) {
+    // Attempt fallback to /stocks/ if /api/ prefix had routing issues
+    try {
+      const rawFallback = await fetchJson<any>(`/stocks/${encodeURIComponent(cleanSym)}/technical-overview`);
+      return normalizeStockTechnicalOverview(rawFallback);
+    } catch {
+      throw new Error(err?.message || `Failed to load technical overview for ${cleanSym}`);
+    }
+  }
 }
 
 export async function searchStocks(query: string = "", limit: number = 10): Promise<StockSearchResult[]> {
   try {
     const cleanQuery = query.trim();
-    const res = await fetch(`${API_BASE}/api/stocks/search?q=${encodeURIComponent(cleanQuery)}&limit=${limit}`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    return await res.json();
+    return await fetchJson<StockSearchResult[]>(
+      `/api/stocks/search?q=${encodeURIComponent(cleanQuery)}&limit=${limit}`
+    );
   } catch (err) {
     // Non-fatal warning when offline or during server reload
     console.warn("Stock search network unavailable:", err);

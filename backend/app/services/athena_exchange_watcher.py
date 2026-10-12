@@ -44,6 +44,24 @@ class AthenaExchangeWatcher:
             logger.info(f"[ATHENA Watcher] Dropped routine compliance filing: {symbol} - {headline}")
             return None
 
+        # Step 1b: Drop Pre-Announcement Board Meeting Notices (Only actual declared results permitted)
+        hl_lower = (headline or "").lower()
+        ft_lower = (filing_type or "").lower()
+        combined_text = f"{hl_lower} {ft_lower}"
+        has_outcome = any(k in combined_text for k in ["outcome", "approved", "submission of financial", "declared", "audited", "results"])
+        is_notice = any(k in combined_text for k in [
+            "notice of board meeting",
+            "board meeting notice",
+            "intimation of board meeting",
+            "board meeting intimation",
+            "prior intimation",
+            "to consider and approve",
+            "to consider financial",
+        ])
+        if is_notice or ("board meeting" in combined_text and not has_outcome):
+            logger.info(f"[ATHENA Watcher] Dropped board meeting notice (pre-announcement): {symbol} - {headline}")
+            return None
+
         # Step 2: Extract or assemble Q0 metrics
         fresh_q0 = dict(financial_payload)
         fresh_q0["company_name"] = company_name

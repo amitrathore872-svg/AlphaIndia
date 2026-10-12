@@ -2,24 +2,27 @@
 // Alpha India Unified API Configuration
 // =======================================================
 
-let rawBase: string =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
-// In browser on production domain (ipodesk.shop), route through same-origin /api reverse-proxy
-if (typeof window !== "undefined") {
-  const host = window.location.hostname;
-  if (host === "ipodesk.shop" || host === "www.ipodesk.shop" || host.endsWith(".ipodesk.shop")) {
-    rawBase = `${window.location.origin}/api`;
+export function resolveApiBase(): string {
+  let base: string = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "ipodesk.shop" || host === "www.ipodesk.shop" || host.endsWith(".ipodesk.shop")) {
+      return `${window.location.origin}/api`;
+    }
+    // In local development, match current window hostname to prevent cross-host PNA blocks
+    if (host === "localhost") {
+      base = base.replace("//127.0.0.1:", "//localhost:");
+    } else if (host === "127.0.0.1") {
+      base = base.replace("//localhost:", "//127.0.0.1:");
+    }
   }
+  return base.replace(/\/$/, "");
 }
 
-// Ensure localhost is normalized to 127.0.0.1 and trailing slash is stripped
-export const API_BASE: string = rawBase
-  .replace("//localhost:", "//127.0.0.1:")
-  .replace(/\/$/, "");
+export const API_BASE: string = resolveApiBase();
 
 export function getBackendUrl(): string {
-  return API_BASE;
+  return resolveApiBase();
 }
 
 export function getWebSocketUrl(path: string): string {
@@ -46,14 +49,14 @@ export async function fetchJson<T>(
   url: string,
   options?: RequestInit & { timeoutMs?: number }
 ): Promise<T> {
-  const normalizedUrl = url.replace("//localhost:", "//127.0.0.1:");
+  const currentBase = resolveApiBase();
   let fullUrl: string;
-  if (normalizedUrl.startsWith("http")) {
-    fullUrl = normalizedUrl;
-  } else if (API_BASE && normalizedUrl.startsWith(API_BASE)) {
-    fullUrl = normalizedUrl;
+  if (url.startsWith("http")) {
+    fullUrl = url;
+  } else if (currentBase && url.startsWith(currentBase)) {
+    fullUrl = url;
   } else {
-    fullUrl = `${API_BASE}${normalizedUrl.startsWith("/") ? "" : "/"}${normalizedUrl}`;
+    fullUrl = `${currentBase}${url.startsWith("/") ? "" : "/"}${url}`;
   }
 
   // Deduplicate any accidental /api/api occurrences
@@ -128,6 +131,31 @@ export async function fetchJson<T>(
         });
       } catch {
         // Fallback also failed, proceed with original error
+      }
+    }
+
+    // If local dev fetch failed (e.g. localhost vs 127.0.0.1 PNA block), attempt alternate loopback address
+    if (!res && typeof window !== "undefined" && (fullUrl.includes("//localhost:") || fullUrl.includes("//127.0.0.1:"))) {
+      try {
+        const altUrl = fullUrl.includes("//localhost:")
+          ? fullUrl.replace("//localhost:", "//127.0.0.1:")
+          : fullUrl.replace("//127.0.0.1:", "//localhost:");
+        const altRes = await fetch(altUrl, {
+          cache: "no-store",
+          ...options,
+          signal: options?.signal || controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+            ...(options?.headers || {}),
+          },
+        });
+        if (altRes && altRes.ok) {
+          res = altRes;
+        }
+      } catch {
+        // Fallback also failed
       }
     }
 

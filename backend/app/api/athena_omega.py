@@ -291,6 +291,13 @@ def get_filings_feed(
 
     items = []
     for f in filings:
+        ft = (f.filing_type or "").lower()
+        if (
+            ft == "board meeting"
+            or ("board meeting" in ft and not any(k in ft for k in ["outcome", "approved", "submission of financial", "declared", "results"]))
+            or any(k in ft for k in ["notice of board meeting", "board meeting notice", "intimation of board meeting", "prior intimation", "to consider financial"])
+        ):
+            continue
         flash = f.flash_decision
         shock = f.shock_analysis
         quality = f.quality_analysis

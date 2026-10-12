@@ -769,7 +769,7 @@ export default function AthenaUnifiedCockpit() {
       const [flashRes, filingsRes, qrRes, calStatsRes] = await Promise.allSettled([
         fetchFlashDecisions(),
         fetchFilingsFeed(),
-        fetchQuarterlyResults({ limit: 500, sort_by: "discovered_at", sort_order: "desc" }),
+        fetchQuarterlyResults({ limit: 500, sort_by: "discovered_at", sort_order: "desc", feed_type: "RESULTS" }),
         fetchCalendarStats(),
       ]);
 
@@ -796,7 +796,7 @@ export default function AthenaUnifiedCockpit() {
     if (q.length < 2) return;
     const timer = setTimeout(async () => {
       try {
-        const res = await fetchQuarterlyResults({ search: q, limit: 50 });
+        const res = await fetchQuarterlyResults({ search: q, limit: 50, feed_type: "RESULTS" });
         if (res.results && res.results.length > 0) {
           setQuarterlyResults((prev) => {
             const existingIds = new Set(prev.map((p) => p.id));
@@ -848,6 +848,21 @@ export default function AthenaUnifiedCockpit() {
 
     // 1. Ingest all filings from Athena Queue
     filings.forEach((f) => {
+      // Strictly exclude board meeting notices / pre-announcements from PEAD screener
+      const ft = (f.filing_type || "").toLowerCase();
+      if (
+        ft === "board meeting" ||
+        ft.includes("board meeting notice") ||
+        ft.includes("notice of board meeting") ||
+        ft.includes("intimation of board meeting") ||
+        ft.includes("board meeting intimation") ||
+        ft.includes("prior intimation") ||
+        ft.includes("to consider financial") ||
+        ft.includes("to consider and approve") ||
+        (ft.includes("board meeting") && !ft.includes("outcome") && !ft.includes("approved"))
+      ) {
+        return;
+      }
       const sym = f.symbol.trim().toUpperCase();
       map.set(sym, {
         id: `filing-${f.id}`,
@@ -951,6 +966,22 @@ export default function AthenaUnifiedCockpit() {
 
     // 3. Enrich with Quarterly Results & PEAD Data (5Q Sparklines, Day-1 reaction, Realized Drift, Screener Ratios)
     quarterlyResults.forEach((qr) => {
+      // Strictly ignore pre-announcement board meeting notices in PEAD Drift Screener
+      if (qr.feed_type === "ANNOUNCEMENT" || qr.is_pre_announcement) return;
+      const ft = (qr.filing_type || "").toLowerCase();
+      if (
+        ft === "board meeting" ||
+        ft.includes("board meeting notice") ||
+        ft.includes("notice of board meeting") ||
+        ft.includes("intimation of board meeting") ||
+        ft.includes("board meeting intimation") ||
+        ft.includes("prior intimation") ||
+        ft.includes("to consider financial") ||
+        ft.includes("to consider and approve") ||
+        (ft.includes("board meeting") && !ft.includes("outcome") && !ft.includes("approved"))
+      ) {
+        return;
+      }
       const sym = qr.symbol.trim().toUpperCase();
       const existing = map.get(sym);
       if (existing) {
@@ -2038,9 +2069,6 @@ export default function AthenaUnifiedCockpit() {
                             <span className="font-bold text-cyan-300 block text-xs">Official Filing Extraction & Arithmetic Audit</span>
                             <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-cyan-900/60 text-cyan-200 border border-cyan-500/30">
                               {auditDetails.actualPeriod || selectedDrawerItem.fiscal_period}
-                              {selectedDrawerItem.fiscal_period && auditDetails.actualPeriod && selectedDrawerItem.fiscal_period !== auditDetails.actualPeriod && (
-                                <span className="text-slate-400 font-sans ml-1 text-[9px]">(Notice: {selectedDrawerItem.fiscal_period})</span>
-                              )}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-400 mt-0.5 font-sans">

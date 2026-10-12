@@ -14,7 +14,7 @@ from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.stock_technical_service import StockTechnicalService
 
-router = APIRouter(prefix="/api/stocks", tags=["Stock Technical Overview"])
+router = APIRouter(prefix="/stocks", tags=["Stock Technical Overview"])
 
 
 @router.get("/{symbol}/technical-overview", summary="Get Complete Institutional Technical Overview for Stock")

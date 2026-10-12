@@ -85,6 +85,19 @@ _RESULT_EXCLUDE_KEYWORDS = [
     "court convened",
     "esop",
     "buyback",
+    "board meeting notice",
+    "notice of board meeting",
+    "intimation of board meeting",
+    "board meeting intimation",
+    "prior intimation",
+    "to consider financial",
+    "to consider and approve",
+    "schedule of meeting",
+    "schedule of board",
+    "date of board meeting",
+    "reasons for delayed",
+    "non-submission",
+    "delayed/non-submission",
 ]
 
 _ANNOUNCEMENT_KEYWORDS = [
@@ -93,22 +106,65 @@ _ANNOUNCEMENT_KEYWORDS = [
 ]
 
 
-def _is_results_filing(filing_type: Optional[str]) -> bool:
+def _is_announcement_filing(filing_type: Optional[str]) -> bool:
+    """
+    Returns True if filing is a pre-announcement notice / intimation of upcoming meeting,
+    and NOT an actual declaration of quarterly financial results.
+    """
     if not filing_type:
+        return False
+    ft = filing_type.lower()
+
+    # 1. Definite outcome / approval indicators (these are actual declared RESULTS, not pre-notices)
+    has_outcome = any(k in ft for k in [
+        "outcome of board meeting",
+        "outcome of the board meeting",
+        "board meeting outcome",
+        "outcome without intimation",
+        "revision of outcome",
+        "results approved",
+    ])
+    if has_outcome:
+        return False
+
+    # 2. Definite pre-announcement notice / intimation indicators
+    if any(k in ft for k in [
+        "notice of board meeting",
+        "board meeting notice",
+        "intimation of board meeting",
+        "board meeting intimation",
+        "prior intimation",
+        "to consider financial",
+        "to consider and approve",
+        "date of meeting",
+        "schedule of meeting",
+        "schedule of board",
+        "board meeting scheduled",
+        "board meeting to be held",
+    ]):
+        return True
+
+    # 3. If it contains "board meeting" but lacks "outcome" / "approved", it is a board meeting notice
+    if "board meeting" in ft:
+        return True
+
+    return any(k in ft for k in _ANNOUNCEMENT_KEYWORDS)
+
+
+def _is_results_filing(filing_type: Optional[str]) -> bool:
+    """
+    Returns True if filing represents actual declared quarterly financial results.
+    Strictly excludes pre-announcement board meeting notices.
+    """
+    if not filing_type:
+        return False
+    # If classified as a meeting notice / pre-announcement, it cannot be a result
+    if _is_announcement_filing(filing_type):
         return False
     ft = filing_type.lower()
     if any(ex in ft for ex in _RESULT_EXCLUDE_KEYWORDS):
         return False
     return any(k in ft for k in _RESULT_KEYWORDS)
-
-
-def _is_announcement_filing(filing_type: Optional[str]) -> bool:
-    if not filing_type:
-        return False
-    ft = filing_type.lower()
-    if _is_results_filing(filing_type):
-        return False
-    return any(k in ft for k in _ANNOUNCEMENT_KEYWORDS)
 
 
 def _filing_feed_type(filing_type: Optional[str]) -> str:
@@ -333,12 +389,32 @@ def _build_filing_query(db: Session, feed_type: str):
         base = base.filter(or_(*include_conds))
         exclude_conds = [FilingRegistry.filing_type.ilike(f"%{ex}%") for ex in _RESULT_EXCLUDE_KEYWORDS]
         base = base.filter(not_(or_(*exclude_conds)))
+        # Strictly exclude board meeting notices that lack outcome
+        base = base.filter(
+            not_(
+                and_(
+                    FilingRegistry.filing_type.ilike("%board meeting%"),
+                    not_(FilingRegistry.filing_type.ilike("%outcome%")),
+                )
+            )
+        )
+        # Strictly exclude notice / intimation keywords (preserve "outcome without intimation")
+        notice_conds = [
+            FilingRegistry.filing_type.ilike(f"%{nk}%")
+            for nk in ["notice", "intimation", "prior intimation", "to consider", "schedule"]
+        ]
+        base = base.filter(
+            or_(
+                FilingRegistry.filing_type.ilike("%outcome without intimation%"),
+                not_(or_(*notice_conds)),
+            )
+        )
 
     elif feed_type == "ANNOUNCEMENTS":
         ann_conditions = [FilingRegistry.filing_type.ilike(f"%{k}%") for k in _ANNOUNCEMENT_KEYWORDS]
         base = base.filter(or_(*ann_conditions))
-        result_conds = [FilingRegistry.filing_type.ilike(f"%{k}%") for k in _RESULT_KEYWORDS]
-        base = base.filter(not_(or_(*result_conds)))
+        # Exclude actual outcomes so announcements feed only has pre-announcements
+        base = base.filter(not_(FilingRegistry.filing_type.ilike("%outcome%")))
 
     else:  # ALL — combined feed
         result_conds = [FilingRegistry.filing_type.ilike(f"%{k}%") for k in _RESULT_KEYWORDS]
@@ -580,6 +656,9 @@ def get_quarterly_results(
       • ALL           — Both combined (default, legacy behaviour)
     """
     feed = (feed_type or "ALL").upper().strip()
+    # PEAD by definition only applies to actual declared results
+    if pead_only and feed == "ALL":
+        feed = "RESULTS"
     if feed not in ("RESULTS", "ANNOUNCEMENTS", "ALL"):
         feed = "ALL"
 
@@ -835,10 +914,10 @@ def get_quarterly_results(
         if pead_res["is_elite_pead"]:
             total_elite_pead += 1
 
-        # Apply PEAD filter (only on RESULTS feed)
-        if pead_only and not is_pre and not pead_res["is_pead_candidate"]:
+        # Apply PEAD filter (only on RESULTS feed; pre-announcement board meeting notices are never PEAD candidates)
+        if pead_only and (is_pre or not pead_res["is_pead_candidate"]):
             continue
-        if pead_tier and pead_tier != "ALL" and not is_pre and pead_res["pead_tier"] != pead_tier:
+        if pead_tier and pead_tier != "ALL" and (is_pre or pead_res["pead_tier"] != pead_tier):
             continue
 
         # Pre-Beat Readiness scoring for ANNOUNCEMENT filings
