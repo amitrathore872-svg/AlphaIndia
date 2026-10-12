@@ -593,15 +593,15 @@ class TechnoFundaService:
             "Accept": "application/json",
         }
 
-        # Try endpoints and suffixes
-        endpoints = ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"]
+        # Prioritize primary exchange suffix (.NS) first across endpoints, fallback to .BO
         suffixes = [".NS", ".BO"]
+        endpoints = ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"]
 
-        for endpoint in endpoints:
-            for suffix in suffixes:
+        for suffix in suffixes:
+            for endpoint in endpoints:
                 try:
                     url = f"{endpoint}/v8/finance/chart/{clean_sym}{suffix}?interval=1d&range={period}"
-                    resp = requests.get(url, headers=headers, timeout=6)
+                    resp = requests.get(url, headers=headers, timeout=4)
                     if resp.status_code == 200:
                         chart_res = resp.json().get("chart", {}).get("result", [])
                         if chart_res and "timestamp" in chart_res[0]:
@@ -628,17 +628,20 @@ class TechnoFundaService:
                             df = df.dropna(subset=["Close"])
                             if not df.empty:
                                 return df
+                    elif resp.status_code == 404:
+                        # Suffix does not exist for this symbol on Yahoo; move to next suffix immediately
+                        break
                 except Exception as e:
-                    logger.debug(f"Direct chart request failed for {clean_sym}{suffix}: {e}")
+                    logger.debug(f"Direct chart request failed for {clean_sym}{suffix} on {endpoint}: {e}")
 
         # Fallback to yfinance if direct requests failed
         try:
             import yfinance as yf
             ticker = yf.Ticker(f"{clean_sym}.NS")
-            hist = ticker.history(period=period)
+            hist = ticker.history(period=period, timeout=4)
             if hist.empty:
                 ticker = yf.Ticker(f"{clean_sym}.BO")
-                hist = ticker.history(period=period)
+                hist = ticker.history(period=period, timeout=4)
             if not hist.empty:
                 hist = hist.dropna(subset=["Close"])
                 return hist
@@ -657,12 +660,12 @@ class TechnoFundaService:
         import time
         clean_sym = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
 
-        # Check in-memory cache (TTL: 90 seconds)
+        # Check in-memory cache (TTL: 300 seconds / 5 minutes)
         cache_key = f"{clean_sym}_{period}"
         now_ts = time.time()
         if cache_key in cls._CANDLE_CACHE:
             cached_time, cached_val = cls._CANDLE_CACHE[cache_key]
-            if now_ts - cached_time < 90:
+            if now_ts - cached_time < 300:
                 return cached_val
 
         try:
@@ -737,10 +740,8 @@ class TechnoFundaService:
 
         # 1. Multi-Pattern Engine (Flat Base, Ascending Triangle, Double Bottom, Bull Flag, HTF)
         try:
-            from app.services.pattern_engine.pattern_orchestrator import _CACHE as PATTERN_CACHE, analyze_all_patterns
+            from app.services.pattern_engine.pattern_orchestrator import _CACHE as PATTERN_CACHE
             cached_patterns = [p for p in PATTERN_CACHE.get("data", []) if p.get("symbol") == clean_sym]
-            if not cached_patterns:
-                cached_patterns = analyze_all_patterns(clean_sym)
 
             for p in cached_patterns:
                 pt = p.get("pattern_type")

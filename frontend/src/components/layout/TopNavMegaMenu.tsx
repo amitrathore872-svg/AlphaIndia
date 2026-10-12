@@ -175,11 +175,9 @@ export default function TopNavMegaMenu() {
               <Icon size={14} className={isActive ? "text-cyan-400" : "text-slate-400"} />
               <span className="hidden md:inline">{cat.title}</span>
               <span className="md:hidden">{cat.shortTitle}</span>
-              {cat.badge && (
-                <span className="hidden lg:inline-flex items-center justify-center px-1.5 py-0.2 text-[9px] font-mono font-bold rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  {cat.badge}
-                </span>
-              )}
+              <span className="hidden lg:inline-flex items-center justify-center px-1.5 py-0.2 text-[9px] font-mono font-bold rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                {cat.badge === "NEW" ? "NEW" : items.length}
+              </span>
               <ChevronDown
                 size={12}
                 className={`transition-transform duration-200 text-slate-400 ${

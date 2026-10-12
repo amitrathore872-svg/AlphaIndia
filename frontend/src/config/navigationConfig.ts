@@ -88,14 +88,6 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         description: "Production-grade intraday backtest engine: exact 9-rule VCB breakout, zero look-ahead bias, Indian cost frictions, and MFE/MAE matrices.",
       },
       {
-        id: "fx-swing-screener",
-        name: "FX Swing Screener",
-        href: "/portfolio/fx-swing-screener",
-        icon: Target,
-        section: "RADARS & ENGINES",
-        description: "12 FX Swing Confluence Screener & empirical Nifty 500 backtest radar.",
-      },
-      {
         id: "home",
         name: "Daily One-Pager",
         href: "/home",

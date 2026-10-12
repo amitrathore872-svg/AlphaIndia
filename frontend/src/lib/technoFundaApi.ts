@@ -238,7 +238,8 @@ export async function fetchTechnoFundaCandles(
   period: string = "6mo"
 ): Promise<TechnoFundaChartResponse> {
   return fetchJson<TechnoFundaChartResponse>(
-    `/api/techno-funda/chart/${encodeURIComponent(symbol)}?period=${period}`
+    `/api/techno-funda/chart/${encodeURIComponent(symbol)}?period=${period}`,
+    { timeoutMs: 35000 }
   );
 }
 

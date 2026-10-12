@@ -1332,12 +1332,16 @@ export default function AthenaUnifiedCockpit() {
     label: string,
     title?: string,
     minWidth: string = "min-w-[120px]",
-    align: "left" | "right" = "left"
+    align: "left" | "right" = "left",
+    isSticky: boolean = false
   ) => {
     const isActive = sortColumn === colKey;
+    const stickyClass = isSticky
+      ? "sticky left-0 z-30 bg-slate-950/95 border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.6)]"
+      : "";
     return (
       <th
-        className={`p-3 ${minWidth} cursor-pointer select-none transition-colors group ${
+        className={`p-3 ${minWidth} cursor-pointer select-none transition-colors group ${stickyClass} ${
           align === "right" ? "text-right" : "text-left"
         } ${isActive ? "text-cyan-300 bg-cyan-950/30" : "hover:text-slate-200 hover:bg-slate-900/40"}`}
         title={title || `Click to sort by ${label}`}
@@ -1386,16 +1390,16 @@ export default function AthenaUnifiedCockpit() {
               </span>
             </button>
 
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-300">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-mono text-slate-300">
               <span className="text-slate-500">SLA:</span>
               <span className="text-cyan-400 font-bold">{slaMetPct}% (&lt; 5m)</span>
-              <span className="text-slate-700">|</span>
+              <span className="text-slate-700 hidden sm:inline">|</span>
               <span className="text-slate-500">Avg Ingestion:</span>
               <span className="text-cyan-400 font-bold">{avgIngestionSec}s</span>
-              <span className="text-slate-700">|</span>
+              <span className="text-slate-700 hidden sm:inline">|</span>
               <span className="text-slate-500">Master Universe:</span>
               <span className="text-white font-bold">{unifiedItems.length} Equities</span>
-              <span className="text-slate-700">|</span>
+              <span className="text-slate-700 hidden sm:inline">|</span>
               <span className="text-slate-500">Elite Setups:</span>
               <span className="text-amber-400 font-bold">{eliteCandidatesCount}</span>
             </div>
@@ -1441,14 +1445,14 @@ export default function AthenaUnifiedCockpit() {
         <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
           <div className="flex flex-wrap items-center gap-2">
             {/* Search */}
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search symbol, company..."
-                className="bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-7 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-44 md:w-56"
+                className="bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-7 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-full sm:w-48 md:w-56"
               />
               {searchQuery && (
                 <button
@@ -1594,7 +1598,7 @@ export default function AthenaUnifiedCockpit() {
                 <table className="w-full text-left text-xs font-mono">
                   <thead className="bg-slate-950/90 text-slate-400 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10 backdrop-blur">
                     <tr>
-                      {renderSortHeader("symbol", "Ticker & Company", "Sort by Symbol / Company", "min-w-[180px]")}
+                      {renderSortHeader("symbol", "Ticker & Company", "Sort by Symbol / Company", "min-w-[180px] sm:min-w-[200px]", "left", true)}
                       {renderSortHeader("recency", "Filing Recency", "Sort by Filing Ingestion Timestamp", "min-w-[130px]")}
                       {renderSortHeader("period", "Period", "Sort by Financial Results Period", "min-w-[95px]")}
                       {renderSortHeader("qoq_rev", "QoQ Revenue", "Sort by Sequential QoQ Revenue Growth", "min-w-[105px]")}
@@ -1622,8 +1626,8 @@ export default function AthenaUnifiedCockpit() {
                           onClick={() => setSelectedDrawerItem(item)}
                           className="hover:bg-slate-900/60 transition-colors cursor-pointer group"
                         >
-                          {/* 1. Ticker & Company */}
-                          <td className="p-3">
+                          {/* 1. Ticker & Company (Sticky Freeze Column on Horizontal Scroll) */}
+                          <td className="sticky left-0 z-20 bg-[#050B14] group-hover:bg-[#081527] border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.5)] p-3">
                             <div className="flex items-start gap-2">
                               <AddToWatchlistButton
                                 symbol={item.symbol}
@@ -1869,7 +1873,7 @@ export default function AthenaUnifiedCockpit() {
           onClick={() => setSelectedDrawerItem(null)}
         >
           <div
-            className="w-full max-w-2xl bg-[#050B14] border-l border-slate-800 h-full overflow-y-auto p-6 shadow-2xl flex flex-col justify-between"
+            className="w-full max-w-2xl bg-[#050B14] border-l border-slate-800 h-full overflow-y-auto p-4 sm:p-6 shadow-2xl flex flex-col justify-between"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Header */}

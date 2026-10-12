@@ -1421,8 +1421,8 @@ export default function PeadDriftMatrix({
           <table className="w-full text-left text-xs border-collapse font-sans">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/90 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono select-none">
-                <th className="py-3 px-2 text-center w-10 text-[11px]">#</th>
-                <th className="py-3 px-3 min-w-[170px]">
+                <th className="sticky left-0 z-20 bg-slate-50 dark:bg-slate-900 py-3 px-2 text-center w-10 text-[11px] border-r border-slate-200/80 dark:border-slate-800/80">#</th>
+                <th className="sticky left-10 z-20 bg-slate-50 dark:bg-slate-900 py-3 px-3 min-w-[170px] border-r border-slate-200/80 dark:border-slate-800/80 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_6px_rgba(0,0,0,0.4)]">
                   <SortHeader
                     label="Company / Equities"
                     column="company"
@@ -1512,13 +1512,13 @@ export default function PeadDriftMatrix({
                         isSelected ? "bg-cyan-50/50 dark:bg-cyan-950/30 border-l-2 border-cyan-500" : ""
                       }`}
                     >
-                      {/* S.No. */}
-                      <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px] font-semibold w-10">
+                      {/* S.No. (Sticky on Horizontal Scroll) */}
+                      <td className="sticky left-0 z-10 bg-white dark:bg-[#07111F] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/70 py-2.5 px-2 text-center text-slate-400 font-mono text-[11px] font-semibold w-10 border-r border-slate-200/80 dark:border-slate-800/80">
                         {rowNumber}.
                       </td>
 
-                      {/* Company & Symbol */}
-                      <td className="py-2.5 px-3">
+                      {/* Company & Symbol (Sticky on Horizontal Scroll) */}
+                      <td className="sticky left-10 z-10 bg-white dark:bg-[#07111F] group-hover:bg-slate-50 dark:group-hover:bg-slate-800/70 py-2.5 px-3 border-r border-slate-200/80 dark:border-slate-800/80 shadow-[2px_0_6px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_6px_rgba(0,0,0,0.4)]">
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-slate-900 dark:text-white hover:text-cyan-600 dark:hover:text-cyan-300 text-[13px] font-mono">
