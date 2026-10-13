@@ -53,8 +53,21 @@ class HoldingUpdateRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class BulkDeleteHoldingsRequest(BaseModel):
+    holding_ids: Optional[List[int]] = None
+    symbols: Optional[List[str]] = None
+
+
+class ExecuteHoldingTradeRequest(BaseModel):
+    action: str  # "BUY" or "SELL"
+    quantity: float
+    price: float
+    notes: Optional[str] = None
+
+
 from app.api.deps import get_optional_current_user
 from app.models.user import User
+from fastapi.responses import Response
 
 # -------------------------------------------------------------
 # PORTFOLIO MANAGEMENT ENDPOINTS
@@ -228,13 +241,103 @@ def update_holding(
     return {"success": True, "holding_id": holding.id}
 
 
+@router.post("/{portfolio_id}/holdings/{holding_id}/execute-trade")
+def execute_holding_trade(
+    portfolio_id: int,
+    holding_id: int,
+    req: ExecuteHoldingTradeRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    """
+    Executes an instant trade action (Tranche Buy or Partial/Full Trim Exit)
+    on a portfolio holding and adjusts weighted cost and cash balances.
+    """
+    if current_user:
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio and portfolio.user_id is not None and portfolio.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+    try:
+        res = PortfolioIntelligenceService.execute_holding_trade(
+            db=db,
+            portfolio_id=portfolio_id,
+            holding_id=holding_id,
+            action=req.action,
+            quantity=req.quantity,
+            price=req.price,
+            notes=req.notes,
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/template/download")
+def download_portfolio_template():
+    """Download standard CSV template for bulk portfolio import."""
+    csv_text = PortfolioIntelligenceService.get_csv_template()
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="alpha_india_portfolio_import_template.csv"'},
+    )
+
+
 @router.delete("/{portfolio_id}/holdings/{holding_id}")
-def delete_holding(portfolio_id: int, holding_id: int, db: Session = Depends(get_db)):
+def delete_holding(
+    portfolio_id: int,
+    holding_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
     """Delete a holding from the portfolio."""
+    if current_user:
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio and portfolio.user_id is not None and portfolio.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
     success = PortfolioIntelligenceService.delete_holding(db, holding_id)
     if not success:
         raise HTTPException(status_code=404, detail="Holding not found")
     return {"success": True}
+
+
+@router.post("/{portfolio_id}/holdings/bulk-delete")
+def bulk_delete_holdings(
+    portfolio_id: int,
+    req: BulkDeleteHoldingsRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    """Bulk delete holdings from a portfolio by ID list or symbol list."""
+    if current_user:
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio and portfolio.user_id is not None and portfolio.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    deleted_count = PortfolioIntelligenceService.bulk_delete_holdings(
+        db=db,
+        portfolio_id=portfolio_id,
+        holding_ids=req.holding_ids,
+        symbols=req.symbols,
+    )
+    return {"success": True, "deleted_count": deleted_count}
+
+
+@router.delete("/{portfolio_id}/holdings/clear-all")
+def clear_all_holdings(
+    portfolio_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    """Delete all holdings from a portfolio."""
+    if current_user:
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio and portfolio.user_id is not None and portfolio.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    deleted_count = PortfolioIntelligenceService.clear_all_holdings(db, portfolio_id)
+    return {"success": True, "deleted_count": deleted_count}
+
 
 
 class CsvTextImportRequest(BaseModel):

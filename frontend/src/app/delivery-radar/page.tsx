@@ -231,9 +231,8 @@ export default function DeliveryRadarPage() {
                   setSelectedTier(t.id);
                   setPage(1);
                 }}
-                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
-                  isActive ? t.activeClass : t.defaultClass
-                }`}
+                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${isActive ? t.activeClass : t.defaultClass
+                  }`}
               >
                 <span>{t.label}</span>
                 <span className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px]">
@@ -277,11 +276,10 @@ export default function DeliveryRadarPage() {
                     setSetupType(t.val);
                     setPage(1);
                   }}
-                  className={`rounded-md px-2.5 py-1 font-medium transition ${
-                    setupType === t.val
+                  className={`rounded-md px-2.5 py-1 font-medium transition ${setupType === t.val
                       ? "bg-white text-slate-900 shadow-sm dark:bg-cyan-600 dark:text-white"
                       : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-                  }`}
+                    }`}
                 >
                   {t.label}
                 </button>
@@ -517,11 +515,10 @@ export default function DeliveryRadarPage() {
                         {/* 4. Day Change % */}
                         <td className="px-3 py-3 text-right">
                           <span
-                            className={`font-semibold ${
-                              item.day_change_pct >= 0
+                            className={`font-semibold ${item.day_change_pct >= 0
                                 ? "text-emerald-500 dark:text-emerald-400"
                                 : "text-rose-500"
-                            }`}
+                              }`}
                           >
                             {item.day_change_pct >= 0 ? "+" : ""}
                             {item.day_change_pct}%
@@ -574,11 +571,10 @@ export default function DeliveryRadarPage() {
                         {/* 7. Institutional Ticket Size Spike */}
                         <td className="px-3 py-3 text-right font-mono">
                           <span
-                            className={`rounded px-1.5 py-0.5 font-bold ${
-                              (item.ticket_spike_x || 1.0) >= 1.25
+                            className={`rounded px-1.5 py-0.5 font-bold ${(item.ticket_spike_x || 1.0) >= 1.25
                                 ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30"
                                 : "text-slate-400"
-                            }`}
+                              }`}
                           >
                             {item.ticket_spike_x ? `${item.ticket_spike_x}x` : "1.0x"}
                           </span>
@@ -589,13 +585,12 @@ export default function DeliveryRadarPage() {
                         <td className="px-3 py-3 text-right">
                           <div className="inline-flex items-center gap-1 font-mono font-bold">
                             <span
-                              className={`rounded px-1.5 py-0.5 text-xs ${
-                                (item.deliv_flow_20d || 1.0) >= 2.0
+                              className={`rounded px-1.5 py-0.5 text-xs ${(item.deliv_flow_20d || 1.0) >= 2.0
                                   ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40"
                                   : (item.deliv_flow_20d || 1.0) >= 1.35
-                                  ? "bg-cyan-500/20 text-cyan-400"
-                                  : "bg-slate-800 text-slate-400"
-                              }`}
+                                    ? "bg-cyan-500/20 text-cyan-400"
+                                    : "bg-slate-800 text-slate-400"
+                                }`}
                             >
                               {item.deliv_flow_20d ? `${item.deliv_flow_20d}x` : "1.0x"}
                             </span>
@@ -608,11 +603,10 @@ export default function DeliveryRadarPage() {
                         {/* 9. Pre-Breakout Base Squeeze */}
                         <td className="px-3 py-3 text-right font-mono">
                           <span
-                            className={`rounded px-1.5 py-0.5 ${
-                              (item.range_contraction_ratio || 1.0) <= 0.88
+                            className={`rounded px-1.5 py-0.5 ${(item.range_contraction_ratio || 1.0) <= 0.88
                                 ? "bg-emerald-500/15 font-bold text-emerald-400"
                                 : "text-slate-400"
-                            }`}
+                              }`}
                           >
                             {item.range_contraction_ratio ? `${item.range_contraction_ratio}x` : "1.0x"}
                           </span>
@@ -622,13 +616,12 @@ export default function DeliveryRadarPage() {
                         {/* 10. Conviction Score */}
                         <td className="px-3 py-3 text-center">
                           <span
-                            className={`inline-flex items-center justify-center rounded-lg px-2 py-1 text-xs font-bold ${
-                              item.conviction_score >= 80
+                            className={`inline-flex items-center justify-center rounded-lg px-2 py-1 text-xs font-bold ${item.conviction_score >= 80
                                 ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40"
                                 : item.conviction_score >= 70
-                                ? "bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/40"
-                                : "bg-slate-800 text-slate-300"
-                            }`}
+                                  ? "bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/40"
+                                  : "bg-slate-800 text-slate-300"
+                              }`}
                           >
                             {item.conviction_score}
                           </span>
@@ -680,13 +673,12 @@ export default function DeliveryRadarPage() {
                       <ExternalLink size={14} className="text-cyan-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                     </a>
                     <span
-                      className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                        selectedBlueprint.conviction_tier === "APEX_SNIPER"
+                      className={`rounded px-2 py-0.5 text-xs font-semibold ${selectedBlueprint.conviction_tier === "APEX_SNIPER"
                           ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30"
                           : selectedBlueprint.conviction_tier === "ACTIVE_SWING"
-                          ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30"
-                          : "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
-                      }`}
+                            ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30"
+                            : "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
+                        }`}
                     >
                       {selectedBlueprint.conviction_tier}
                     </span>
@@ -731,20 +723,19 @@ export default function DeliveryRadarPage() {
                 <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-bold uppercase tracking-wider text-cyan-400">Zone 1: Accumulation Corridor</span>
-                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                      selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
                         ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40"
                         : selectedBlueprint.blueprint.buy_status === "EXTENDED_WAIT_DIP"
-                        ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40"
-                        : "bg-cyan-500/20 text-cyan-300"
-                    }`}>
+                          ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40"
+                          : "bg-cyan-500/20 text-cyan-300"
+                      }`}>
                       {selectedBlueprint.blueprint.buy_status === "IN_BUY_ZONE"
                         ? "Ÿ¢ In Optimal Buy Zone"
                         : selectedBlueprint.blueprint.buy_status === "EXTENDED_WAIT_DIP"
-                        ? "Ÿ¡ Extended: Limit Order on Dip"
-                        : selectedBlueprint.blueprint.buy_status === "RETEST_CONFIRMED"
-                        ? "”µ Retest Support Held"
-                        : "âšª Base Accumulation"}
+                          ? "Ÿ¡ Extended: Limit Order on Dip"
+                          : selectedBlueprint.blueprint.buy_status === "RETEST_CONFIRMED"
+                            ? "”µ Retest Support Held"
+                            : "âšª Base Accumulation"}
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-center">

@@ -8,7 +8,7 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
-import { ALL_PAGES, isRouteProtected, NAVIGATION_CONFIG } from "@/config/navigationConfig";
+import { ALL_PAGES, isRouteProtected, NAVIGATION_CONFIG, DEFAULT_HIDDEN_ROUTES } from "@/config/navigationConfig";
 import { API_BASE } from "@/lib/apiConfig";
 
 const STORAGE_KEY = "alpha_india_hidden_pages_v1";
@@ -70,15 +70,18 @@ export function PageVisibilityProvider({ children }: { children: ReactNode }) {
     [syncToBackend]
   );
 
-  // Initialize: Load from localStorage first, then merge with backend settings
+  // Initialize: Load from localStorage first, then merge with backend settings & defaults
   useEffect(() => {
-    let initial: string[] = [];
+    let initial: string[] = [...DEFAULT_HIDDEN_ROUTES];
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          initial = parsed.filter((href) => !isRouteProtected(href));
+          // Merge stored with DEFAULT_HIDDEN_ROUTES to ensure newly retired pages are hidden
+          initial = Array.from(new Set([...parsed, ...DEFAULT_HIDDEN_ROUTES])).filter(
+            (href) => !isRouteProtected(href)
+          );
         }
       }
     } catch {
@@ -100,11 +103,15 @@ export function PageVisibilityProvider({ children }: { children: ReactNode }) {
             const remoteCleaned = data.hidden_pages.filter(
               (href: string) => !isRouteProtected(href)
             );
-            // If localStorage was empty, use remote
-            if (initial.length === 0 && remoteCleaned.length > 0) {
-              setHiddenPages(remoteCleaned);
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteCleaned));
-            }
+            setHiddenPages((prev) => {
+              const merged = Array.from(new Set([...prev, ...remoteCleaned, ...DEFAULT_HIDDEN_ROUTES]));
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+              } catch {
+                // Ignore storage error
+              }
+              return merged;
+            });
           }
         }
       } catch {

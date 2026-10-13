@@ -63,6 +63,7 @@ from app.api.sovereign import router as sovereign_router
 from app.api.sovereign_intraday import router as sovereign_intraday_router
 from app.api.brokerage import router as brokerage_router
 from app.api.backtest import router as backtest_router
+from app.api.staircase_screener import router as staircase_screener_router
 import time
 from fastapi import Request
 
@@ -224,6 +225,8 @@ app.include_router(pattern_screener_router, prefix="/api/v1")
 app.include_router(candlestick_screener_router)
 app.include_router(candlestick_screener_router, prefix="/api/v1")
 app.include_router(prebreakout_radar_router, prefix="/api/v1")
+app.include_router(staircase_screener_router)
+app.include_router(staircase_screener_router, prefix="/api/v1")
 app.include_router(breakout_execution_router, prefix="/api/v1")
 app.include_router(confluence_router, prefix="/api/v1")
 app.include_router(confluence_router)

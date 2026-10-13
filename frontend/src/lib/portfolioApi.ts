@@ -14,6 +14,8 @@ export interface PortfolioSummary {
   health_status: "EXCELLENT" | "GOOD" | "NEEDS_ATTENTION";
   portfolio_beta: number;
   xirr_estimate: number;
+  total_day_pnl?: number;
+  total_day_pnl_pct?: number;
   quality_meter: {
     financial_strength: number;
     growth_quality: number;
@@ -63,14 +65,32 @@ export interface PortfolioHolding {
   weight_pct: number;
   buy_date?: string;
   notes?: string;
+  // Tranche Targets & Dynamic Stop Loss (Phase 1)
+  target_t1?: number;
+  target_t2?: number;
+  target_stage?: "TARGET_1_PENDING" | "TARGET_1_HIT" | "TARGET_2_HIT";
+  profit_booking?: number;
+  stop_loss?: number;
+  stop_loss_type?: string;
+  distance_to_target_pct?: number;
+  distance_to_sl_pct?: number;
+  // Technical Indicators & Regime (Phase 2)
+  dma_50?: number;
+  dma_200?: number;
+  dist_50_dma_pct?: number;
+  dist_200_dma_pct?: number;
+  is_above_50_dma?: boolean;
+  is_above_200_dma?: boolean;
+  trend_regime?: string;
+  fifty_two_week_high?: number;
+  fifty_two_week_low?: number;
+  // 360 Diagnostics
   verdict: "STRONG_BUY" | "BUY" | "ACCUMULATE" | "HOLD" | "REDUCE" | "EXIT";
   conviction_score: number;
   horizon: string;
   risk_level: string;
   best_buy_zone: string;
   accumulate_zone: string;
-  profit_booking?: number;
-  stop_loss?: number;
   fair_value?: number;
   valuation_status: string;
   expected_result: "GOOD" | "AVERAGE" | "BAD";
@@ -271,6 +291,34 @@ export const portfolioApi = {
     });
   },
 
+  async executeTrade(
+    portfolioId: number,
+    holdingId: number,
+    data: {
+      action: "BUY" | "SELL";
+      quantity: number;
+      price: number;
+      notes?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    closed: boolean;
+    symbol: string;
+    message: string;
+    holding?: {
+      id: number;
+      symbol: string;
+      quantity: number;
+      avg_buy_price: number;
+      notes?: string;
+    };
+  }> {
+    return fetchJson(`/portfolio/${portfolioId}/holdings/${holdingId}/execute-trade`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
   async deleteHolding(
     portfolioId: number,
     holdingId: number
@@ -279,6 +327,47 @@ export const portfolioApi = {
       method: "DELETE",
     });
   },
+
+  async bulkDeleteHoldings(
+    portfolioId: number,
+    holdingIds: number[]
+  ): Promise<{ success: boolean; deleted_count: number }> {
+    return fetchJson(`/portfolio/${portfolioId}/holdings/bulk-delete`, {
+      method: "POST",
+      body: JSON.stringify({ holding_ids: holdingIds }),
+    });
+  },
+
+  async clearAllHoldings(
+    portfolioId: number
+  ): Promise<{ success: boolean; deleted_count: number }> {
+    return fetchJson(`/portfolio/${portfolioId}/holdings/clear-all`, {
+      method: "DELETE",
+    });
+  },
+
+  downloadTemplate(): void {
+    const csvContent =
+      "Instrument,Qty,Avg. cost,Buy Date,Notes\n" +
+      "RELIANCE,10,2950.50,2024-01-15,Core energy & retail holding\n" +
+      "TCS,15,3850.00,2024-02-10,Large-cap IT leader\n" +
+      "INFY,25,1620.75,2024-03-01,Tech allocation\n" +
+      "HDFCBANK,20,1540.20,2024-03-15,Private banking compounder\n" +
+      "TATAMOTORS,50,980.40,2024-04-05,Auto & EV growth\n" +
+      "BHARTIARTL,30,1280.00,2024-04-20,Telecom & data growth\n";
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "alpha_india_portfolio_import_template.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
 
   async importCsv(
     portfolioId: number,

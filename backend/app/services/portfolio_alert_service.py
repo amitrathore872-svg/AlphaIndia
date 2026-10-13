@@ -254,29 +254,26 @@ class PortfolioAlertService:
             ai_thesis = h["ai_thesis"]
             when_to_buy = h["when_to_buy"]
 
-            # Parse zones
-            analysis = db.query(
-                PortfolioIntelligenceService.analyze_stock_360(db, symbol, cmp, force_refresh=False).__class__
-            ).filter_by(symbol=symbol).first()
+            target_t1 = h.get("target_t1") or round(avg_buy * 1.18, 2)
+            target_t2 = h.get("target_t2") or round(avg_buy * 1.38, 2)
+            target_stage = h.get("target_stage") or "TARGET_1_PENDING"
+            stop_loss_type = h.get("stop_loss_type") or "CAPITAL_DEFENSE"
 
-            best_buy_min = analysis.best_buy_min if analysis else round(cmp * 0.90, 2)
-            best_buy_max = analysis.best_buy_max if analysis else round(cmp * 0.95, 2)
-            accumulate_min = analysis.accumulate_min if analysis else round(cmp * 0.95, 2)
-            accumulate_max = analysis.accumulate_max if analysis else round(cmp * 0.99, 2)
+            # Parse zones directly from enriched analysis
+            best_buy_min = h.get("best_buy_min")
+            best_buy_max = h.get("best_buy_max")
+            accumulate_min = h.get("accumulate_min")
+            accumulate_max = h.get("accumulate_max")
 
             # -------------------------------------------------------------
-            # A. SELL SIGNALS EVALUATION
+            # A. SELL & PROFIT LOCK SIGNALS EVALUATION
             # -------------------------------------------------------------
             base_url = "https://ipodesk.shop"
             stock_page_url = f"{base_url}/stocks/{symbol}"
             screener_page_url = f"https://www.screener.in/company/{symbol}/consolidated/"
 
-            # -------------------------------------------------------------
-            # A. SELL SIGNALS EVALUATION
-            # -------------------------------------------------------------
-            # 1. Profit Booking Target Hit
-            if cmp >= profit_booking:
-                upside_gain = round(((profit_booking - avg_buy) / avg_buy) * 100, 1) if avg_buy > 0 else 25.0
+            # 1. Target 2 Expansion Hit (+38% gain tranche)
+            if cmp >= target_t2 and pnl_pct >= 35.0:
                 signals.append({
                     "portfolio_id": portfolio_id,
                     "holding_id": h["id"],
@@ -284,13 +281,13 @@ class PortfolioAlertService:
                     "company_name": company_name,
                     "sector": sector,
                     "signal_type": "SELL",
-                    "trigger_category": "PROFIT_BOOKING_TARGET",
-                    "headline": f"🔴 [PORTFOLIO SELL] {symbol} Reached Profit Booking Target ₹{profit_booking:,.2f}",
+                    "trigger_category": "PROFIT_BOOKING_T2",
+                    "headline": f"🔴 [PORTFOLIO T2 EXPANSION] {symbol} Hit Target 2 (+{pnl_pct:.1f}% at ₹{cmp:,.2f})",
                     "cmp": cmp,
                     "buy_trigger_price": None,
-                    "exit_trigger_price": profit_booking,
+                    "exit_trigger_price": target_t2,
                     "avg_buy_price": avg_buy,
-                    "target_price": profit_booking,
+                    "target_price": target_t2,
                     "stop_loss": stop_loss,
                     "pnl_pct": pnl_pct,
                     "conviction_score": conviction,
@@ -298,16 +295,15 @@ class PortfolioAlertService:
                     "quantity": h["quantity"],
                     "invested_value": h["invested_value"],
                     "current_value": h["current_value"],
-                    "action_guidance": f"Expansion target achieved! Lock in partial gains (trim 30-50%) and raise trailing stop-loss to ₹{round(cmp * 0.95, 2):,.2f}.",
+                    "action_guidance": f"Target 2 expansion (+38% milestone) reached! Lock in an additional 30% profits (60% cumulative booked). Trail remaining 40% runner position.",
                     "urgency": "HIGH",
                     "stock_url": stock_page_url,
                     "screener_url": screener_page_url,
                     "created_at": datetime.utcnow().isoformat(),
                 })
 
-            # 2. Stop Loss Breached
-            elif cmp <= stop_loss:
-                loss_pct = round(((cmp - avg_buy) / avg_buy) * 100, 1) if avg_buy > 0 else -12.0
+            # 2. Target 1 Profit Booking Hit (+18% gain tranche)
+            elif cmp >= target_t1 and pnl_pct >= 15.0 and cmp < target_t2:
                 signals.append({
                     "portfolio_id": portfolio_id,
                     "holding_id": h["id"],
@@ -315,8 +311,38 @@ class PortfolioAlertService:
                     "company_name": company_name,
                     "sector": sector,
                     "signal_type": "SELL",
-                    "trigger_category": "STOP_LOSS_BREACH",
-                    "headline": f"⚠️ [CRITICAL SELL] {symbol} Breached Stop Loss (₹{stop_loss:,.2f})",
+                    "trigger_category": "PROFIT_BOOKING_T1",
+                    "headline": f"🔴 [PORTFOLIO T1 HIT] {symbol} Reached Target 1 (+{pnl_pct:.1f}% at ₹{cmp:,.2f})",
+                    "cmp": cmp,
+                    "buy_trigger_price": None,
+                    "exit_trigger_price": target_t1,
+                    "avg_buy_price": avg_buy,
+                    "target_price": target_t1,
+                    "stop_loss": stop_loss,
+                    "pnl_pct": pnl_pct,
+                    "conviction_score": conviction,
+                    "weight_pct": weight,
+                    "quantity": h["quantity"],
+                    "invested_value": h["invested_value"],
+                    "current_value": h["current_value"],
+                    "action_guidance": f"Tranche 1 (+18% milestone) achieved! Lock in 30-33% partial profits, move stop loss to breakeven (₹{avg_buy:,.2f}) to secure a risk-free trade.",
+                    "urgency": "HIGH",
+                    "stock_url": stock_page_url,
+                    "screener_url": screener_page_url,
+                    "created_at": datetime.utcnow().isoformat(),
+                })
+
+            # 3. Trailing Stop Breached (Position in profit >= 8% but breaking trailing floor)
+            elif pnl_pct >= 8.0 and cmp <= stop_loss:
+                signals.append({
+                    "portfolio_id": portfolio_id,
+                    "holding_id": h["id"],
+                    "symbol": symbol,
+                    "company_name": company_name,
+                    "sector": sector,
+                    "signal_type": "SELL",
+                    "trigger_category": "TRAILING_STOP_BREACH",
+                    "headline": f"⚠️ [TRAILING PROFIT LOCK] {symbol} Breached Trailing Stop (₹{stop_loss:,.2f})",
                     "cmp": cmp,
                     "buy_trigger_price": None,
                     "exit_trigger_price": stop_loss,
@@ -329,14 +355,45 @@ class PortfolioAlertService:
                     "quantity": h["quantity"],
                     "invested_value": h["invested_value"],
                     "current_value": h["current_value"],
-                    "action_guidance": f"Capital preservation alert! CMP fell below institutional defense level (₹{stop_loss:,.2f}). Immediate exit or strict downside cut recommended.",
+                    "action_guidance": f"Trailing floor triggered! Protect remaining gain (+{pnl_pct:.1f}% locked) before further retracement.",
+                    "urgency": "HIGH",
+                    "stock_url": stock_page_url,
+                    "screener_url": screener_page_url,
+                    "created_at": datetime.utcnow().isoformat(),
+                })
+
+            # 4. Capital Defense Stop Loss Breached (Loss position below -8%)
+            elif pnl_pct < 0 and cmp <= stop_loss:
+                loss_pct = round(((cmp - avg_buy) / avg_buy) * 100, 1) if avg_buy > 0 else -8.0
+                signals.append({
+                    "portfolio_id": portfolio_id,
+                    "holding_id": h["id"],
+                    "symbol": symbol,
+                    "company_name": company_name,
+                    "sector": sector,
+                    "signal_type": "SELL",
+                    "trigger_category": "STOP_LOSS_BREACH",
+                    "headline": f"🚨 [CRITICAL STOP LOSS] {symbol} Breached Defense Level (₹{stop_loss:,.2f})",
+                    "cmp": cmp,
+                    "buy_trigger_price": None,
+                    "exit_trigger_price": stop_loss,
+                    "avg_buy_price": avg_buy,
+                    "target_price": profit_booking,
+                    "stop_loss": stop_loss,
+                    "pnl_pct": pnl_pct,
+                    "conviction_score": conviction,
+                    "weight_pct": weight,
+                    "quantity": h["quantity"],
+                    "invested_value": h["invested_value"],
+                    "current_value": h["current_value"],
+                    "action_guidance": f"Strict capital preservation alert! Position down {abs(pnl_pct):.1f}% from buy price (₹{avg_buy:,.2f}). Cut position to protect portfolio drawdowns.",
                     "urgency": "CRITICAL",
                     "stock_url": stock_page_url,
                     "screener_url": screener_page_url,
                     "created_at": datetime.utcnow().isoformat(),
                 })
 
-            # 3. Rating Downgraded to REDUCE or EXIT
+            # 5. Rating Downgraded to REDUCE or EXIT
             elif verdict in ["REDUCE", "EXIT"]:
                 signals.append({
                     "portfolio_id": portfolio_id,
@@ -366,7 +423,7 @@ class PortfolioAlertService:
                     "created_at": datetime.utcnow().isoformat(),
                 })
 
-            # 4. Overconcentration Rebalance Trim (>25% weight)
+            # 6. Overconcentration Rebalance Trim (>25% weight)
             elif weight > 25.0:
                 signals.append({
                     "portfolio_id": portfolio_id,
@@ -396,11 +453,43 @@ class PortfolioAlertService:
                     "created_at": datetime.utcnow().isoformat(),
                 })
 
+            # 7. 200 DMA Structural Breakdown
+            elif h.get("dma_200") and h.get("dist_200_dma_pct") is not None and h.get("dist_200_dma_pct") < -2.0:
+                dma_200_val = h.get("dma_200")
+                dist_val = abs(h.get("dist_200_dma_pct"))
+                signals.append({
+                    "portfolio_id": portfolio_id,
+                    "holding_id": h["id"],
+                    "symbol": symbol,
+                    "company_name": company_name,
+                    "sector": sector,
+                    "signal_type": "SELL",
+                    "trigger_category": "DMA_200_BREAKDOWN",
+                    "headline": f"⚠️ [200 DMA BREAKDOWN] {symbol} Lost 200 DMA Support (₹{dma_200_val:,.2f})",
+                    "cmp": cmp,
+                    "buy_trigger_price": None,
+                    "exit_trigger_price": dma_200_val,
+                    "avg_buy_price": avg_buy,
+                    "target_price": profit_booking,
+                    "stop_loss": stop_loss,
+                    "pnl_pct": pnl_pct,
+                    "conviction_score": conviction,
+                    "weight_pct": weight,
+                    "quantity": h["quantity"],
+                    "invested_value": h["invested_value"],
+                    "current_value": h["current_value"],
+                    "action_guidance": f"Long-term trend breakdown alert! Price fell {dist_val:.1f}% below 200 DMA (₹{dma_200_val:,.2f}). Trim or cut risk to avoid extended entrapment.",
+                    "urgency": "HIGH",
+                    "stock_url": stock_page_url,
+                    "screener_url": screener_page_url,
+                    "created_at": datetime.utcnow().isoformat(),
+                })
+
             # -------------------------------------------------------------
             # B. BUY SIGNALS EVALUATION
             # -------------------------------------------------------------
-            # 1. Best Buy Support Zone Entry
-            if best_buy_min <= cmp <= best_buy_max:
+            # 1. Best Buy Support Zone Entry (without falling knife risk)
+            if best_buy_min is not None and best_buy_max is not None and best_buy_min <= cmp <= best_buy_max and pnl_pct >= -8.0:
                 signals.append({
                     "portfolio_id": portfolio_id,
                     "holding_id": h["id"],
@@ -430,7 +519,7 @@ class PortfolioAlertService:
                 })
 
             # 2. Pullback Accumulate Zone
-            elif accumulate_min <= cmp <= accumulate_max:
+            elif accumulate_min is not None and accumulate_max is not None and accumulate_min <= cmp <= accumulate_max and pnl_pct >= -8.0:
                 signals.append({
                     "portfolio_id": portfolio_id,
                     "holding_id": h["id"],
@@ -459,8 +548,8 @@ class PortfolioAlertService:
                     "created_at": datetime.utcnow().isoformat(),
                 })
 
-            # 3. High Conviction Strong Buy Upgrade
-            elif verdict == "STRONG_BUY" and conviction >= min_conviction and pnl_pct < 5.0:
+            # 3. High Conviction Pyramiding / Strong Buy in Green (0 to 12% gain)
+            elif verdict in ["STRONG_BUY", "ACCUMULATE"] and conviction >= min_conviction and 0.0 <= pnl_pct <= 12.0:
                 signals.append({
                     "portfolio_id": portfolio_id,
                     "holding_id": h["id"],
@@ -469,7 +558,7 @@ class PortfolioAlertService:
                     "sector": sector,
                     "signal_type": "BUY",
                     "trigger_category": "STRONG_BUY_RATING",
-                    "headline": f"🟢 [STRONG BUY UPGRADE] {symbol} Flagged with High Conviction ({conviction}%)",
+                    "headline": f"🟢 [PYRAMIDING ADD] {symbol} High Conviction ({conviction}%) in Uptrend (+{pnl_pct:.1f}%)",
                     "cmp": cmp,
                     "buy_trigger_price": cmp,
                     "exit_trigger_price": None,
@@ -482,8 +571,8 @@ class PortfolioAlertService:
                     "quantity": h["quantity"],
                     "invested_value": h["invested_value"],
                     "current_value": h["current_value"],
-                    "action_guidance": f"Core business durability exceptional with strong capital efficiency. High upside potential to target ₹{profit_booking:,.2f}.",
-                    "urgency": "HIGH",
+                    "action_guidance": f"Winning compounder with healthy upside cushion. Favorable window to pyramid or top-up allocation.",
+                    "urgency": "MEDIUM",
                     "stock_url": stock_page_url,
                     "screener_url": screener_page_url,
                     "created_at": datetime.utcnow().isoformat(),
@@ -513,6 +602,37 @@ class PortfolioAlertService:
                     "invested_value": h["invested_value"],
                     "current_value": h["current_value"],
                     "action_guidance": f"Stock is currently {abs(pnl_pct):.1f}% below your average buy price with below-target weight ({weight:.1f}%). High conviction dip opportunity.",
+                    "urgency": "MEDIUM",
+                    "stock_url": stock_page_url,
+                    "screener_url": screener_page_url,
+                    "created_at": datetime.utcnow().isoformat(),
+                })
+
+            # 5. 50 DMA Pullback Bounce Opportunity (Price testing 50 DMA within +/- 2.5%)
+            elif h.get("dma_50") and h.get("dist_50_dma_pct") is not None and -2.5 <= h.get("dist_50_dma_pct") <= 2.5 and pnl_pct >= -5.0:
+                dma_50_val = h.get("dma_50")
+                signals.append({
+                    "portfolio_id": portfolio_id,
+                    "holding_id": h["id"],
+                    "symbol": symbol,
+                    "company_name": company_name,
+                    "sector": sector,
+                    "signal_type": "BUY",
+                    "trigger_category": "DMA_50_BOUNCE",
+                    "headline": f"📈 [50 DMA BOUNCE] {symbol} Testing 50 DMA Support (₹{dma_50_val:,.2f})",
+                    "cmp": cmp,
+                    "buy_trigger_price": dma_50_val,
+                    "exit_trigger_price": None,
+                    "avg_buy_price": avg_buy,
+                    "target_price": profit_booking,
+                    "stop_loss": stop_loss,
+                    "pnl_pct": pnl_pct,
+                    "conviction_score": conviction,
+                    "weight_pct": weight,
+                    "quantity": h["quantity"],
+                    "invested_value": h["invested_value"],
+                    "current_value": h["current_value"],
+                    "action_guidance": f"Price is hovering right at the institutional 50-day moving average (₹{dma_50_val:,.2f}). Low-risk pullback entry or top-up zone.",
                     "urgency": "MEDIUM",
                     "stock_url": stock_page_url,
                     "screener_url": screener_page_url,

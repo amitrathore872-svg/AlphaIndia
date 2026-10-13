@@ -56,6 +56,23 @@ class YahooClient:
         except Exception:
             pass
 
+        # Fallback: strip Indian exchange trade-to-trade / series suffixes (-T, -Z, -BE, -BZ, -SM, -EQ)
+        import re
+        base_symbol = re.sub(r"-(T|Z|BE|BZ|SM|EQ|E1|BL)$", "", clean_symbol)
+        if base_symbol != clean_symbol:
+            try:
+                ticker_base = yf.Ticker(f"{base_symbol}.NS")
+                if ticker_base.fast_info.get("lastPrice") is not None:
+                    return ticker_base
+            except Exception:
+                pass
+            try:
+                ticker_base_bo = yf.Ticker(f"{base_symbol}.BO")
+                if ticker_base_bo.fast_info.get("lastPrice") is not None:
+                    return ticker_base_bo
+            except Exception:
+                pass
+
         return ticker
 
     @classmethod

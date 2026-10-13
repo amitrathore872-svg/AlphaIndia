@@ -250,6 +250,88 @@ class PortfolioIntelligenceService:
         return holding
 
     @classmethod
+    def execute_holding_trade(
+        cls,
+        db: Session,
+        portfolio_id: int,
+        holding_id: int,
+        action: str,  # "BUY" or "SELL"
+        quantity: float,
+        price: float,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Executes an instant trade action on a holding (Tranche Buy or Partial Trim/Exit).
+        Adjusts holding quantity, recalculates weighted average price on Buy,
+        and credits/debits cash balance.
+        """
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        holding = db.query(PortfolioHolding).filter(
+            PortfolioHolding.id == holding_id,
+            PortfolioHolding.portfolio_id == portfolio_id,
+        ).first()
+
+        if not portfolio or not holding:
+            raise ValueError("Portfolio or holding not found")
+
+        action_clean = action.strip().upper()
+        trade_val = round(quantity * price, 2)
+
+        if action_clean == "BUY":
+            # Add shares, calculate new weighted average buy price
+            new_qty = round(holding.quantity + quantity, 4)
+            if new_qty > 0:
+                holding.avg_buy_price = round(
+                    ((holding.quantity * holding.avg_buy_price) + (quantity * price)) / new_qty, 2
+                )
+            holding.quantity = new_qty
+            if notes:
+                holding.notes = f"{holding.notes or ''} | Added {quantity} @ ₹{price}: {notes}".strip(" |")
+            # Deduct cash if available
+            if portfolio.cash_balance is not None:
+                portfolio.cash_balance = max(0.0, round(portfolio.cash_balance - trade_val, 2))
+            msg = f"Successfully added {quantity} shares of {holding.symbol} @ ₹{price:.2f}. New avg price: ₹{holding.avg_buy_price:.2f}."
+            closed = False
+        elif action_clean == "SELL":
+            # Trim or Exit shares
+            if quantity >= holding.quantity:
+                # Full Exit
+                sym = holding.symbol
+                db.delete(holding)
+                if portfolio.cash_balance is not None:
+                    portfolio.cash_balance = round(portfolio.cash_balance + trade_val, 2)
+                db.commit()
+                return {
+                    "success": True,
+                    "closed": True,
+                    "symbol": sym,
+                    "message": f"Closed entire position in {sym} (Sold {quantity} shares @ ₹{price:.2f}). Credited ₹{trade_val:,.2f} to cash.",
+                }
+            else:
+                # Partial Trim
+                holding.quantity = round(holding.quantity - quantity, 4)
+                if notes:
+                    holding.notes = f"{holding.notes or ''} | Trimmed {quantity} @ ₹{price}: {notes}".strip(" |")
+                if portfolio.cash_balance is not None:
+                    portfolio.cash_balance = round(portfolio.cash_balance + trade_val, 2)
+                msg = f"Successfully trimmed {quantity} shares of {holding.symbol} @ ₹{price:.2f}. Remaining: {holding.quantity} shares."
+                closed = False
+        else:
+            raise ValueError(f"Invalid trade action: {action}")
+
+        db.commit()
+        db.refresh(holding)
+        return {
+            "success": True,
+            "closed": closed,
+            "holding_id": holding.id,
+            "symbol": holding.symbol,
+            "new_quantity": holding.quantity,
+            "new_avg_price": holding.avg_buy_price,
+            "message": msg,
+        }
+
+    @classmethod
     def delete_holding(cls, db: Session, holding_id: int) -> bool:
         holding = db.query(PortfolioHolding).filter(PortfolioHolding.id == holding_id).first()
         if not holding:
@@ -257,6 +339,58 @@ class PortfolioIntelligenceService:
         db.delete(holding)
         db.commit()
         return True
+
+    @classmethod
+    def bulk_delete_holdings(
+        cls,
+        db: Session,
+        portfolio_id: int,
+        holding_ids: Optional[List[int]] = None,
+        symbols: Optional[List[str]] = None,
+    ) -> int:
+        """
+        Bulk delete specific holdings by ID or symbol from a portfolio.
+        Returns the number of deleted records.
+        """
+        query = db.query(PortfolioHolding).filter(PortfolioHolding.portfolio_id == portfolio_id)
+        if holding_ids:
+            query = query.filter(PortfolioHolding.id.in_(holding_ids))
+        elif symbols:
+            upper_syms = [s.strip().upper() for s in symbols if s.strip()]
+            query = query.filter(PortfolioHolding.symbol.in_(upper_syms))
+        else:
+            return 0
+
+        count = query.delete(synchronize_session=False)
+        db.commit()
+        return count
+
+    @classmethod
+    def clear_all_holdings(cls, db: Session, portfolio_id: int) -> int:
+        """
+        Delete ALL holdings from a portfolio.
+        Returns the count of deleted records.
+        """
+        query = db.query(PortfolioHolding).filter(PortfolioHolding.portfolio_id == portfolio_id)
+        count = query.delete(synchronize_session=False)
+        db.commit()
+        return count
+
+    @classmethod
+    def get_csv_template(cls) -> str:
+        """
+        Generates standard CSV template content for portfolio bulk imports.
+        """
+        return (
+            "Instrument,Qty,Avg. cost,Buy Date,Notes\n"
+            "RELIANCE,10,2950.50,2024-01-15,Core energy & retail holding\n"
+            "TCS,15,3850.00,2024-02-10,Large-cap IT leader\n"
+            "INFY,25,1620.75,2024-03-01,Tech allocation\n"
+            "HDFCBANK,20,1540.20,2024-03-15,Private banking compounder\n"
+            "TATAMOTORS,50,980.40,2024-04-05,Auto & EV growth\n"
+            "BHARTIARTL,30,1280.00,2024-04-20,Telecom & data growth\n"
+        )
+
 
     @classmethod
     def import_holdings_file(
@@ -506,6 +640,12 @@ class PortfolioIntelligenceService:
         if not cmp or cmp <= 0:
             base_seed = abs(hash(sym)) % 1000 + 150
             cmp = float(base_seed)
+            if db:
+                try:
+                    LivePriceService._persist_quote(db, sym, {"cmp": cmp, "source": "FALLBACK_SEED"})
+                    db.commit()
+                except Exception:
+                    db.rollback()
 
         return {
             "cmp": round(cmp, 2),
@@ -689,9 +829,34 @@ class PortfolioIntelligenceService:
         total_portfolio_value = 0.0
         holding_data_list = []
 
+        # Pre-resolve live prices in parallel batch to avoid slow sequential queries
+        symbols = [h.symbol for h in holdings if h.symbol]
+        if symbols:
+            try:
+                LivePriceService.get_batch_live_prices(
+                    symbols=symbols,
+                    exchange="NSE",
+                    force_refresh=force_refresh,
+                    db=db,
+                    max_workers=8,
+                )
+            except Exception as b_err:
+                logger.debug(f"[PortfolioIntelligenceService] Batch live price prefetch error: {b_err}")
+
+        # Batch load ScreenerGrowthRecord and CompanyMarketMetrics for Phase 2 Technical DMA & 52W levels
+        clean_symbols = [s.strip().upper() for s in symbols]
+        growth_rec_map = {
+            r.symbol: r
+            for r in db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol.in_(clean_symbols)).all()
+        } if clean_symbols else {}
+        market_metrics_map = {
+            m.symbol: m
+            for m in db.query(CompanyMarketMetrics).filter(CompanyMarketMetrics.symbol.in_(clean_symbols)).all()
+        } if clean_symbols else {}
+
         # First pass: calculate values
         for h in holdings:
-            price_info = cls.get_live_price_data(db, h.symbol, force_refresh=force_refresh)
+            price_info = cls.get_live_price_data(db, h.symbol, force_refresh=False)
             cmp = price_info["cmp"]
             invested = round(h.quantity * h.avg_buy_price, 2)
             cur_val = round(h.quantity * cmp, 2)
@@ -700,8 +865,111 @@ class PortfolioIntelligenceService:
 
             total_portfolio_value += cur_val
 
-            # Get 360 analysis
+            # Phase 2 Technical Moving Averages & Regimes
+            rec = growth_rec_map.get(h.symbol)
+            m_metrics = market_metrics_map.get(h.symbol)
+            dma_50 = round(float(rec.dma_50), 2) if (rec and rec.dma_50 and rec.dma_50 > 0) else None
+            dma_200 = round(float(rec.dma_200), 2) if (rec and rec.dma_200 and rec.dma_200 > 0) else None
+            fifty_two_week_high = round(float(m_metrics.fifty_two_week_high), 2) if (m_metrics and m_metrics.fifty_two_week_high) else None
+            fifty_two_week_low = round(float(m_metrics.fifty_two_week_low), 2) if (m_metrics and m_metrics.fifty_two_week_low) else None
+
+            dist_50_dma_pct = round(((cmp - dma_50) / dma_50) * 100, 1) if dma_50 else None
+            dist_200_dma_pct = round(((cmp - dma_200) / dma_200) * 100, 1) if dma_200 else None
+            is_above_50_dma = bool(cmp >= dma_50) if dma_50 else True
+            is_above_200_dma = bool(cmp >= dma_200) if dma_200 else True
+
+            # Institutional Trend Regime Classification
+            if dma_50 and dma_200:
+                if cmp >= dma_50 and dma_50 >= dma_200:
+                    trend_regime = "STRONG_BULLISH"
+                elif cmp < dma_50 and cmp >= dma_200:
+                    trend_regime = "PULLBACK_50DMA"
+                elif cmp < dma_200:
+                    trend_regime = "BEARISH_BREAKDOWN"
+                else:
+                    trend_regime = "CONSOLIDATION"
+            else:
+                trend_regime = "BULLISH_UPTREND" if pnl_pct >= 0 else "CONSOLIDATION"
+
+            # 360 Fundamental Analysis
             analysis = cls.analyze_stock_360(db, h.symbol, cmp, force_refresh=force_refresh)
+
+            # -------------------------------------------------------------
+            # PHASE 1: ANCHORED TRANCHE TARGETS & DYNAMIC TRAILING STOP LOSS
+            # -------------------------------------------------------------
+            avg_buy = float(h.avg_buy_price) if h.avg_buy_price and h.avg_buy_price > 0 else cmp
+
+            # Multi-Tranche Profit Booking Targets anchored to avg buy price
+            target_t1 = round(avg_buy * 1.18, 2)  # Target 1 (+18% initial profit tranche)
+            target_t2 = round(avg_buy * 1.38, 2)  # Target 2 (+38% expansion profit tranche)
+            fair_val = float(analysis.fair_value) if analysis.fair_value else round(cmp * 1.15, 2)
+
+            # Determine Target Stage & Active Milestone
+            if cmp >= target_t2:
+                target_stage = "TARGET_2_HIT"
+                profit_booking = round(max(fair_val, cmp * 1.20), 2)  # Long-term runner target
+            elif cmp >= target_t1:
+                target_stage = "TARGET_1_HIT"
+                profit_booking = target_t2  # Next active milestone is T2
+            else:
+                target_stage = "TARGET_1_PENDING"
+                profit_booking = target_t1  # Next active milestone is T1
+
+            # Dynamic Stop Loss Engine
+            # 1. Capital Defense (-8% max risk cutoff when in loss)
+            # 2. Trailing to Breakeven (+0% to +12% gain)
+            # 3. Trailing Profit Lock (> +12% gain: lock in at least (pnl_pct - 10)% or 8% below CMP)
+            if pnl_pct <= 0:
+                stop_loss = round(avg_buy * 0.92, 2)
+                stop_loss_type = "CAPITAL_DEFENSE"
+            elif 0 < pnl_pct < 12.0:
+                sl_factor = 0.92 + (pnl_pct / 12.0) * 0.08  # moves smoothly from 0.92 to 1.00
+                stop_loss = round(avg_buy * sl_factor, 2)
+                stop_loss_type = "TRAILING_BREAKEVEN"
+            else:
+                profit_floor = avg_buy * (1 + (pnl_pct - 10.0) / 100)
+                cmp_trailing = cmp * 0.92
+                stop_loss = round(max(profit_floor, cmp_trailing), 2)
+                locked_gain = max(0.0, round(((stop_loss - avg_buy) / avg_buy) * 100, 1))
+                stop_loss_type = f"TRAILING_PROFIT_LOCK (+{locked_gain}%)"
+
+            # Distance metrics
+            distance_to_target_pct = round(((profit_booking - cmp) / cmp) * 100, 1) if cmp > 0 else 0.0
+            distance_to_sl_pct = round(((cmp - stop_loss) / cmp) * 100, 1) if cmp > 0 else 0.0
+
+            # Realistic Accumulation & Entry Zones (Anchored to 50 DMA when available)
+            if pnl_pct < -8.0 or not is_above_200_dma:
+                # Capital defense triggered or below 200 DMA - Falling knife protection!
+                best_buy_min = None
+                best_buy_max = None
+                accumulate_min = None
+                accumulate_max = None
+                best_buy_zone = "AWAIT 200 DMA RECLAIM" if not is_above_200_dma else "AWAIT BASE REVERSAL"
+                accumulate_zone = "DO NOT AVERAGE DOWN"
+            elif dma_50 and cmp >= dma_50:
+                # Institutional 50 DMA Pullback Cushion
+                best_buy_min = round(dma_50 * 0.98, 2)
+                best_buy_max = round(dma_50 * 1.02, 2)
+                accumulate_min = round(cmp * 0.96, 2)
+                accumulate_max = round(cmp * 1.01, 2)
+                best_buy_zone = f"50 DMA (₹{dma_50:,.0f})"
+                accumulate_zone = f"₹{accumulate_min:,.0f} - ₹{accumulate_max:,.0f}"
+            elif pnl_pct >= 0:
+                # Winning compounder - Healthy pullback & pyramiding zone
+                accumulate_min = round(cmp * 0.96, 2)
+                accumulate_max = round(cmp * 1.01, 2)
+                best_buy_min = round(cmp * 0.92, 2)
+                best_buy_max = round(cmp * 0.96, 2)
+                best_buy_zone = f"₹{best_buy_min:,.0f} - ₹{best_buy_max:,.0f}"
+                accumulate_zone = f"₹{accumulate_min:,.0f} - ₹{accumulate_max:,.0f}"
+            else:
+                # Mild drawdown within -8% tolerance
+                accumulate_min = round(avg_buy * 0.95, 2)
+                accumulate_max = round(avg_buy * 0.99, 2)
+                best_buy_min = round(avg_buy * 0.92, 2)
+                best_buy_max = round(avg_buy * 0.95, 2)
+                best_buy_zone = f"₹{best_buy_min:,.0f} - ₹{best_buy_max:,.0f}"
+                accumulate_zone = f"₹{accumulate_min:,.0f} - ₹{accumulate_max:,.0f}"
 
             holding_data_list.append({
                 "id": h.id,
@@ -721,23 +989,44 @@ class PortfolioIntelligenceService:
                 "pnl_pct": pnl_pct,
                 "buy_date": h.buy_date.strftime("%Y-%m-%d") if h.buy_date else None,
                 "notes": h.notes,
-                # 360 Diagnostics
+                # Phase 2 Technical DMA Indicators
+                "dma_50": dma_50,
+                "dma_200": dma_200,
+                "dist_50_dma_pct": dist_50_dma_pct,
+                "dist_200_dma_pct": dist_200_dma_pct,
+                "is_above_50_dma": is_above_50_dma,
+                "is_above_200_dma": is_above_200_dma,
+                "trend_regime": trend_regime,
+                "fifty_two_week_high": fifty_two_week_high,
+                "fifty_two_week_low": fifty_two_week_low,
+                # Tranche Targets & Stops (Phase 1)
+                "target_t1": target_t1,
+                "target_t2": target_t2,
+                "target_stage": target_stage,
+                "profit_booking": profit_booking,
+                "stop_loss": stop_loss,
+                "stop_loss_type": stop_loss_type,
+                "distance_to_target_pct": distance_to_target_pct,
+                "distance_to_sl_pct": distance_to_sl_pct,
+                # 360 Diagnostics & Zones
                 "verdict": analysis.verdict,
                 "conviction_score": analysis.conviction_score,
                 "horizon": analysis.horizon,
                 "risk_level": analysis.risk_level,
-                "best_buy_zone": f"₹{analysis.best_buy_min:,.0f} - ₹{analysis.best_buy_max:,.0f}",
-                "accumulate_zone": f"₹{analysis.accumulate_min:,.0f} - ₹{analysis.accumulate_max:,.0f}",
-                "profit_booking": analysis.profit_booking,
-                "stop_loss": analysis.stop_loss,
-                "fair_value": analysis.fair_value,
+                "best_buy_min": best_buy_min,
+                "best_buy_max": best_buy_max,
+                "accumulate_min": accumulate_min,
+                "accumulate_max": accumulate_max,
+                "best_buy_zone": best_buy_zone,
+                "accumulate_zone": accumulate_zone,
+                "fair_value": fair_val,
                 "valuation_status": analysis.valuation_status,
                 "expected_result": analysis.expected_result,
                 "beat_probability": analysis.beat_probability,
                 "quality_score": analysis.quality_score,
                 "growth_score": analysis.growth_score,
                 "ai_thesis": analysis.ai_thesis,
-                "when_to_buy": analysis.when_to_buy,
+                "when_to_buy": analysis.when_to_buy if pnl_pct >= -8.0 else "Avoid adding while stop loss is breached.",
                 "when_not_to_buy": analysis.when_not_to_buy,
             })
 
@@ -760,6 +1049,8 @@ class PortfolioIntelligenceService:
                 "current_value": 0.0,
                 "total_pnl": 0.0,
                 "total_pnl_pct": 0.0,
+                "total_day_pnl": 0.0,
+                "total_day_pnl_pct": 0.0,
                 "total_stocks": 0,
                 "health_score": 85,
                 "cash_balance": 0.0,
@@ -771,6 +1062,11 @@ class PortfolioIntelligenceService:
         current_value = sum(h["current_value"] for h in holdings)
         total_pnl = current_value - total_invested
         total_pnl_pct = round((total_pnl / total_invested) * 100, 2) if total_invested > 0 else 0.0
+
+        # Aggregate Day's PnL across all holdings
+        total_day_pnl = round(sum((h.get("day_change") or 0.0) * h["quantity"] for h in holdings), 2)
+        prev_day_value = current_value - total_day_pnl
+        total_day_pnl_pct = round((total_day_pnl / prev_day_value) * 100, 2) if prev_day_value > 0 else 0.0
 
         # Weighted Health Scores & Quality Meter
         if holdings:
@@ -827,6 +1123,8 @@ class PortfolioIntelligenceService:
             "current_value": round(current_value, 2),
             "total_pnl": round(total_pnl, 2),
             "total_pnl_pct": total_pnl_pct,
+            "total_day_pnl": total_day_pnl,
+            "total_day_pnl_pct": total_day_pnl_pct,
             "total_stocks": len(holdings),
             "health_score": health_score,
             "health_status": "EXCELLENT" if health_score >= 85 else ("GOOD" if health_score >= 70 else "NEEDS_ATTENTION"),

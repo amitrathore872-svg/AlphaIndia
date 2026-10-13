@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Plus,
   Upload,
+  Download,
   RefreshCw,
   FolderPlus,
   Trash2,
@@ -34,6 +35,10 @@ import {
   Send,
   Radio,
   Sliders,
+  CheckSquare,
+  Square,
+  Copy,
+  Check,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import PortfolioTelegramModal from "@/components/portfolio/PortfolioTelegramModal";
@@ -141,6 +146,14 @@ export default function PortfolioIntelligencePage() {
   const [isImportCsvOpen, setIsImportCsvOpen] = useState<boolean>(false);
   const [editingHolding, setEditingHolding] = useState<PortfolioHolding | null>(null);
 
+  // Bulk selection and deletion states
+  const [selectedHoldingIds, setSelectedHoldingIds] = useState<number[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState<boolean>(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState<boolean>(false);
+  const [bulkActionNotice, setBulkActionNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+
   // Dedicated Telegram Radar & BUY/SELL Signals state
   const [telegramConfig, setTelegramConfig] = useState<PortfolioTelegramConfig | null>(null);
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState<boolean>(false);
@@ -172,6 +185,30 @@ export default function PortfolioIntelligencePage() {
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0); // 0=Off, 30=30s, 60=60s
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
 
+  // Interactive Trade Action & Position Sizing Modal State
+  const [tradeModal, setTradeModal] = useState<{
+    isOpen: boolean;
+    holding: PortfolioHolding | null;
+    action: "BUY" | "SELL";
+    quantity: number;
+    price: number;
+    notes: string;
+    signalHeadline?: string;
+    signalTriggerCategory?: string;
+    isExecuting: boolean;
+  }>({
+    isOpen: false,
+    holding: null,
+    action: "BUY",
+    quantity: 0,
+    price: 0,
+    notes: "",
+    signalHeadline: undefined,
+    signalTriggerCategory: undefined,
+    isExecuting: false,
+  });
+  const [copiedOrderText, setCopiedOrderText] = useState<boolean>(false);
+
   // Load Portfolios on mount
   useEffect(() => {
     loadPortfolios();
@@ -180,6 +217,7 @@ export default function PortfolioIntelligencePage() {
   // Reload data when portfolio changes
   useEffect(() => {
     if (selectedPortfolioId) {
+      setSelectedHoldingIds([]);
       loadPortfolioData(selectedPortfolioId);
     }
   }, [selectedPortfolioId]);
@@ -216,18 +254,22 @@ export default function PortfolioIntelligencePage() {
   async function loadPortfolioData(portfolioId: number) {
     try {
       setIsLoading(true);
-      const [sumData, holdData, oppData, rebData, sigData] = await Promise.all([
+      const results = await Promise.allSettled([
         portfolioApi.getSummary(portfolioId),
         portfolioApi.getHoldings(portfolioId),
         portfolioApi.getOpportunities(portfolioId, deployAmount),
         portfolioApi.getRebalance(portfolioId),
         portfolioApi.getSignals(portfolioId),
       ]);
-      setSummary(sumData);
-      setHoldings(holdData);
-      setOpportunities(oppData);
-      setRebalanceData(rebData);
-      setSignalsData(sigData);
+
+      const [sumRes, holdRes, oppRes, rebRes, sigRes] = results;
+
+      if (sumRes.status === "fulfilled") setSummary(sumRes.value);
+      if (holdRes.status === "fulfilled") setHoldings(holdRes.value);
+      if (oppRes.status === "fulfilled") setOpportunities(oppRes.value);
+      if (rebRes.status === "fulfilled") setRebalanceData(rebRes.value);
+      if (sigRes.status === "fulfilled") setSignalsData(sigRes.value);
+
       setLastRefreshedAt(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Failed to load portfolio details:", err);
@@ -365,6 +407,188 @@ export default function PortfolioIntelligencePage() {
     }
   }
 
+  async function handleBulkDeleteSelected() {
+    if (!selectedPortfolioId || selectedHoldingIds.length === 0) return;
+    try {
+      setIsBulkDeleting(true);
+      const res = await portfolioApi.bulkDeleteHoldings(selectedPortfolioId, selectedHoldingIds);
+      setIsBulkDeleteModalOpen(false);
+      const count = res.deleted_count ?? selectedHoldingIds.length;
+      setSelectedHoldingIds([]);
+      setBulkActionNotice({
+        type: "success",
+        msg: `Successfully deleted ${count} selected stocks from ${selectedPortfolio?.name || "the portfolio"}.`,
+      });
+      setTimeout(() => setBulkActionNotice(null), 5000);
+      await loadPortfolioData(selectedPortfolioId);
+      await loadPortfolios();
+    } catch (err: any) {
+      alert("Failed to delete selected stocks: " + (err.message || err));
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
+
+  async function handleClearAllHoldings() {
+    if (!selectedPortfolioId) return;
+    try {
+      setIsBulkDeleting(true);
+      const res = await portfolioApi.clearAllHoldings(selectedPortfolioId);
+      setIsClearAllModalOpen(false);
+      setSelectedHoldingIds([]);
+      setBulkActionNotice({
+        type: "success",
+        msg: `Successfully cleared all ${res.deleted_count ?? holdings.length} stocks from portfolio '${selectedPortfolio?.name}'.`,
+      });
+      setTimeout(() => setBulkActionNotice(null), 5000);
+      await loadPortfolioData(selectedPortfolioId);
+      await loadPortfolios();
+    } catch (err: any) {
+      alert("Failed to clear portfolio: " + (err.message || err));
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
+
+  function openTradeModalForHolding(
+    h: PortfolioHolding,
+    defaultAction: "BUY" | "SELL" = "BUY",
+    signal?: PortfolioSignal
+  ) {
+    const cmp = h.cmp || h.avg_buy_price || 0;
+    let initialQty = 1;
+    let initialNotes = "";
+
+    if (defaultAction === "SELL") {
+      if (signal?.trigger_category === "PROFIT_BOOKING_T1") {
+        initialQty = Math.max(1, Math.floor(h.quantity * 0.33));
+        initialNotes = "Profit booking at Target 1 (+18%)";
+      } else if (signal?.trigger_category === "PROFIT_BOOKING_T2") {
+        initialQty = Math.max(1, Math.floor(h.quantity * 0.50));
+        initialNotes = "Profit booking at Target 2 (+38%)";
+      } else if (
+        signal?.trigger_category === "STOP_LOSS_BREACH" ||
+        signal?.trigger_category === "TRAILING_STOP_BREACH" ||
+        signal?.trigger_category === "DMA_200_BREAKDOWN"
+      ) {
+        initialQty = h.quantity;
+        initialNotes = `Risk defense exit triggered: ${signal.trigger_category}`;
+      } else {
+        initialQty = Math.max(1, Math.floor(h.quantity * 0.50));
+      }
+    } else {
+      // BUY
+      if (signal?.trigger_category === "DMA_50_BOUNCE") {
+        initialNotes = "50 DMA support pullback bounce entry";
+      } else if (signal?.trigger_category === "STRONG_BUY_RATING") {
+        initialNotes = "Pyramiding add on high conviction uptrend";
+      } else if (signal?.trigger_category === "BEST_BUY_ZONE") {
+        initialNotes = "Value accumulation at primary support zone";
+      }
+      initialQty = h.quantity < 5 ? 5 : Math.max(1, Math.round(h.quantity * 0.25));
+    }
+
+    setTradeModal({
+      isOpen: true,
+      holding: h,
+      action: defaultAction,
+      quantity: initialQty,
+      price: cmp,
+      notes: initialNotes,
+      signalHeadline: signal?.headline,
+      signalTriggerCategory: signal?.trigger_category,
+      isExecuting: false,
+    });
+    setCopiedOrderText(false);
+  }
+
+  function openTradeModalForSignal(sig: PortfolioSignal) {
+    const matchedHolding = holdings.find(
+      (h) => (sig.holding_id && h.id === sig.holding_id) || h.symbol.toUpperCase() === sig.symbol.toUpperCase()
+    );
+    if (matchedHolding) {
+      openTradeModalForHolding(matchedHolding, sig.signal_type, sig);
+    } else {
+      alert(`Holding for ${sig.symbol} not found in active portfolio.`);
+    }
+  }
+
+  async function handleExecuteTrade() {
+    if (!selectedPortfolioId || !tradeModal.holding) return;
+    if (tradeModal.quantity <= 0 || tradeModal.price <= 0) {
+      alert("Please enter a valid quantity and execution price greater than zero.");
+      return;
+    }
+    if (tradeModal.action === "SELL" && tradeModal.quantity > tradeModal.holding.quantity) {
+      alert(`Cannot sell ${tradeModal.quantity} shares. You currently hold ${tradeModal.holding.quantity} shares.`);
+      return;
+    }
+
+    try {
+      setTradeModal((prev) => ({ ...prev, isExecuting: true }));
+      const res = await portfolioApi.executeTrade(
+        selectedPortfolioId,
+        tradeModal.holding.id,
+        {
+          action: tradeModal.action,
+          quantity: tradeModal.quantity,
+          price: tradeModal.price,
+          notes: tradeModal.notes.trim() || undefined,
+        }
+      );
+
+      setAlertDispatchNotice({
+        type: "success",
+        msg: res.message || `Successfully executed ${tradeModal.action} order for ${tradeModal.holding.symbol}.`,
+      });
+
+      setTradeModal({
+        isOpen: false,
+        holding: null,
+        action: "BUY",
+        quantity: 0,
+        price: 0,
+        notes: "",
+        signalHeadline: undefined,
+        signalTriggerCategory: undefined,
+        isExecuting: false,
+      });
+
+      await loadPortfolioData(selectedPortfolioId);
+      await loadPortfolios();
+    } catch (err: any) {
+      alert("Trade execution failed: " + (err.message || err));
+      setTradeModal((prev) => ({ ...prev, isExecuting: false }));
+    }
+  }
+
+  function handleCopyBrokerOrder() {
+    if (!tradeModal.holding) return;
+    const orderStr = `${tradeModal.action} ${tradeModal.holding.symbol} QTY:${tradeModal.quantity} @ ₹${tradeModal.price} CNC LIMIT`;
+    navigator.clipboard.writeText(orderStr).then(() => {
+      setCopiedOrderText(true);
+      setTimeout(() => setCopiedOrderText(false), 2500);
+    }).catch(() => {
+      alert(`Order: ${orderStr}`);
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedHoldingIds.length === sortedHoldings.length) {
+      setSelectedHoldingIds([]);
+    } else {
+      setSelectedHoldingIds(sortedHoldings.map((h) => h.id));
+    }
+  }
+
+  function toggleSelectHolding(id: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelectedHoldingIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }
+
+
   async function handleImportCsv(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPortfolioId) return;
@@ -442,6 +666,11 @@ export default function PortfolioIntelligencePage() {
     return portfolios.find((p) => p.id === selectedPortfolioId) || portfolios[0];
   }, [portfolios, selectedPortfolioId]);
 
+  const selectedHoldingsList = useMemo(() => {
+    return holdings.filter((h) => selectedHoldingIds.includes(h.id));
+  }, [holdings, selectedHoldingIds]);
+
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -508,10 +737,22 @@ export default function PortfolioIntelligencePage() {
           <button
             onClick={() => setIsImportCsvOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-xs"
+            title="Import Zerodha, Groww, Angel One or generic CSV"
           >
             <Upload className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
             <span>Import CSV</span>
           </button>
+
+          {/* Download CSV Template Button */}
+          <button
+            onClick={() => portfolioApi.downloadTemplate()}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-xs"
+            title="Download standard CSV template for portfolio bulk import"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+            <span>Download Template</span>
+          </button>
+
 
           {/* Dedicated Telegram Alerts Button */}
           <button
@@ -639,7 +880,7 @@ export default function PortfolioIntelligencePage() {
           </div>
 
           {/* Core Valuation & Return Metrics */}
-          <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {/* Total Invested */}
             <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total Invested</span>
@@ -662,7 +903,7 @@ export default function PortfolioIntelligencePage() {
 
             {/* Total Return / P&L */}
             <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total Unrealized P&L</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Unrealized P&L</span>
               <div className="my-2 flex items-baseline gap-1.5">
                 <span
                   className={`text-xl font-bold ${
@@ -685,22 +926,52 @@ export default function PortfolioIntelligencePage() {
                 >
                   {summary.total_pnl_pct >= 0 ? `+${summary.total_pnl_pct}%` : `${summary.total_pnl_pct}%`}
                 </span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">total</span>
+              </div>
+            </div>
+
+            {/* Day's P&L (Phase 1) */}
+            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Day&apos;s Gain / Loss</span>
+              <div className="my-2 flex items-baseline gap-1.5">
+                <span
+                  className={`text-xl font-bold ${
+                    (summary.total_day_pnl || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                  }`}
+                >
+                  {(summary.total_day_pnl || 0) >= 0 ? `+${fmtINR(summary.total_day_pnl)}` : fmtINR(summary.total_day_pnl)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px]">
+                {(summary.total_day_pnl_pct || 0) >= 0 ? (
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <TrendingDown className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                )}
+                <span
+                  className={`font-semibold ${
+                    (summary.total_day_pnl_pct || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                  }`}
+                >
+                  {(summary.total_day_pnl_pct || 0) >= 0 ? `+${summary.total_day_pnl_pct}%` : `${summary.total_day_pnl_pct}%`}
+                </span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">today</span>
               </div>
             </div>
 
             {/* Estimated XIRR */}
             <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Annualized Return (XIRR)</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Annualized Return</span>
               <div className="my-2">
                 <span className="text-xl font-bold text-teal-600 dark:text-teal-300">
                   {summary.xirr_estimate > 0 ? `+${summary.xirr_estimate}%` : "0.0%"}
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">Benchmark: {summary.benchmark}</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">XIRR vs {summary.benchmark}</span>
             </div>
 
             {/* AI Summary Banner span */}
-            <div className="col-span-2 md:col-span-4 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="col-span-2 sm:col-span-3 lg:col-span-5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex items-start gap-3">
                 <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
@@ -881,6 +1152,39 @@ export default function PortfolioIntelligencePage() {
                         P&L: {sig.pnl_pct >= 0 ? "+" : ""}{sig.pnl_pct.toFixed(1)}%
                       </span>
                     </div>
+
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-800/60">
+                      <button
+                        onClick={() => openTradeModalForSignal(sig)}
+                        className={`flex-1 py-1.5 px-2.5 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 ${
+                          isBuy
+                            ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-950/30"
+                            : "bg-rose-500 hover:bg-rose-400 text-white shadow-rose-950/30"
+                        }`}
+                      >
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                        <span>Act on Signal</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!selectedPortfolioId) return;
+                          try {
+                            await portfolioApi.dispatchAlerts(selectedPortfolioId, true);
+                            setAlertDispatchNotice({
+                              type: "success",
+                              msg: `Dispatched ${sig.signal_type} alert for ${sig.symbol} to Telegram!`,
+                            });
+                          } catch (err: any) {
+                            alert("Dispatch failed: " + err.message);
+                          }
+                        }}
+                        className="py-1.5 px-2.5 rounded-lg border border-slate-700/80 hover:bg-slate-800 text-slate-300 text-[10px] flex items-center gap-1 transition"
+                        title="Forward Alert to Dedicated Telegram Channel"
+                      >
+                        <Send className="w-3 h-3 text-cyan-400" />
+                        <span>Telegram</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -972,206 +1276,303 @@ export default function PortfolioIntelligencePage() {
       {/* 4. TAB 1: HOLDINGS & 360° DIAGNOSTICS TABLE */}
       {/* ========================================================= */}
       {activeTab === "holdings" && (
-        <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm dark:shadow-2xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 select-none">
-                  {/* Symbol */}
-                  <th
-                    onClick={() => handleSort("symbol")}
-                    className="py-3.5 px-4 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Symbol / Company</span>
-                      {sortField === "symbol" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
+        <div className="space-y-3">
+          {/* Bulk Action Notice Banner */}
+          {bulkActionNotice && (
+            <div
+              className={`p-3 rounded-xl border flex items-center justify-between text-xs font-semibold shadow-xs ${
+                bulkActionNotice.type === "success"
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                  : "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                <span>{bulkActionNotice.msg}</span>
+              </div>
+              <button
+                onClick={() => setBulkActionNotice(null)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
-                  {/* Sector */}
-                  <th
-                    onClick={() => handleSort("sector")}
-                    className="py-3.5 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Sector</span>
-                      {sortField === "sector" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
+          <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm dark:shadow-2xl">
+            {/* Sub-header toolbar for Holdings management */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/40">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Portfolio Universe ({holdings.length} stocks)
+                </span>
+                {selectedHoldingIds.length > 0 && (
+                  <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    {selectedHoldingIds.length} Selected
+                  </span>
+                )}
+              </div>
 
-                  {/* Qty */}
-                  <th
-                    onClick={() => handleSort("quantity")}
-                    className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      <span>Qty</span>
-                      {sortField === "quantity" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Avg Buy */}
-                  <th
-                    onClick={() => handleSort("avg_buy_price")}
-                    className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      <span>Avg Buy (₹)</span>
-                      {sortField === "avg_buy_price" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* CMP */}
-                  <th
-                    onClick={() => handleSort("cmp")}
-                    className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      <span>CMP (₹)</span>
-                      {sortField === "cmp" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Current Value */}
-                  <th
-                    onClick={() => handleSort("current_value")}
-                    className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      <span>Current Value</span>
-                      {sortField === "current_value" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* P&L */}
-                  <th
-                    onClick={() => handleSort("pnl")}
-                    className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      <span>P&L (₹ / %)</span>
-                      {sortField === "pnl" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Weight */}
-                  <th
-                    onClick={() => handleSort("weight_pct")}
-                    className="py-3.5 px-3 text-center cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      <span>Weight</span>
-                      {sortField === "weight_pct" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* AI Verdict */}
-                  <th
-                    onClick={() => handleSort("verdict")}
-                    className="py-3.5 px-3 text-center cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      <span>AI Verdict</span>
-                      {sortField === "verdict" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Horizon */}
-                  <th
-                    onClick={() => handleSort("horizon")}
-                    className="py-3.5 px-3 text-center cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      <span>Horizon</span>
-                      {sortField === "horizon" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Accumulate Zone */}
-                  <th
-                    onClick={() => handleSort("accumulate_zone")}
-                    className="py-3.5 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Accumulate Zone</span>
-                      {sortField === "accumulate_zone" ? (
-                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
-                      )}
-                    </div>
-                  </th>
-
-                  <th className="py-3.5 px-4 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
-                {sortedHoldings.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} className="py-12 text-center text-slate-500 dark:text-slate-400">
-                      <Briefcase className="w-8 h-8 mx-auto mb-2 text-slate-400 dark:text-slate-600" />
-                      No stocks in this portfolio yet.
-                      <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline block mx-auto mt-1"
-                      >
-                        + Add your first stock manually
-                      </button>
-                    </td>
-                  </tr>
-                ) : (
-                  sortedHoldings.map((h) => (
-                    <tr
-                      key={h.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer"
-                      onClick={() => openStock360(h.symbol)}
+              <div className="flex items-center gap-2">
+                {selectedHoldingIds.length > 0 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkDeleteModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md shadow-rose-950/30 active:scale-95"
                     >
-                      {/* Symbol */}
-                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
-                        <span>{h.symbol}</span>
-                        <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 truncate max-w-[120px]">
-                          {h.company_name}
-                        </span>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Selected ({selectedHoldingIds.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHoldingIds([])}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      Deselect All
+                    </button>
+                  </>
+                ) : null}
+
+                {holdings.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsClearAllModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-rose-600 dark:text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 hover:border-rose-600 transition-all shadow-xs"
+                    title="Delete all stocks from this portfolio"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete All Stocks</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 select-none">
+                    {/* Bulk Selection Header Checkbox */}
+                    <th className="py-3.5 px-3 text-center w-10">
+                      <input
+                        type="checkbox"
+                        checked={sortedHoldings.length > 0 && selectedHoldingIds.length === sortedHoldings.length}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-emerald-500 focus:ring-emerald-400 dark:bg-slate-900 cursor-pointer accent-emerald-500"
+                        title={selectedHoldingIds.length === sortedHoldings.length ? "Deselect All" : "Select All"}
+                      />
+                    </th>
+
+                    {/* Symbol */}
+                    <th
+                      onClick={() => handleSort("symbol")}
+                      className="py-3.5 px-4 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Symbol / Company</span>
+                        {sortField === "symbol" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Sector */}
+                    <th
+                      onClick={() => handleSort("sector")}
+                      className="py-3.5 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Sector</span>
+                        {sortField === "sector" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Qty */}
+                    <th
+                      onClick={() => handleSort("quantity")}
+                      className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Qty</span>
+                        {sortField === "quantity" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Avg Buy */}
+                    <th
+                      onClick={() => handleSort("avg_buy_price")}
+                      className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Avg Buy (₹)</span>
+                        {sortField === "avg_buy_price" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* CMP */}
+                    <th
+                      onClick={() => handleSort("cmp")}
+                      className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>CMP (₹)</span>
+                        {sortField === "cmp" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Current Value */}
+                    <th
+                      onClick={() => handleSort("current_value")}
+                      className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Current Value</span>
+                        {sortField === "current_value" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* P&L */}
+                    <th
+                      onClick={() => handleSort("pnl")}
+                      className="py-3.5 px-3 text-right cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>P&L (₹ / %)</span>
+                        {sortField === "pnl" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Weight */}
+                    <th
+                      onClick={() => handleSort("weight_pct")}
+                      className="py-3.5 px-3 text-center cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Weight</span>
+                        {sortField === "weight_pct" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* AI Verdict */}
+                    <th
+                      onClick={() => handleSort("verdict")}
+                      className="py-3.5 px-3 text-center cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>AI Verdict</span>
+                        {sortField === "verdict" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Horizon */}
+                    <th
+                      onClick={() => handleSort("horizon")}
+                      className="py-3.5 px-3 text-center cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Horizon</span>
+                        {sortField === "horizon" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* Accumulate Zone */}
+                    <th
+                      onClick={() => handleSort("accumulate_zone")}
+                      className="py-3.5 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors group/th"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Accumulate Zone</span>
+                        {sortField === "accumulate_zone" ? (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 dark:text-slate-600 group-hover/th:text-slate-600 dark:group-hover/th:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+
+                    <th className="py-3.5 px-4 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
+                  {sortedHoldings.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} className="py-12 text-center text-slate-500 dark:text-slate-400">
+                        <Briefcase className="w-8 h-8 mx-auto mb-2 text-slate-400 dark:text-slate-600" />
+                        No stocks in this portfolio yet.
+                        <button
+                          onClick={() => setIsAddModalOpen(true)}
+                          className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline block mx-auto mt-1"
+                        >
+                          + Add your first stock manually
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedHoldings.map((h) => {
+                      const isSelected = selectedHoldingIds.includes(h.id);
+                      return (
+                      <tr
+                        key={h.id}
+                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer ${
+                          isSelected ? "bg-emerald-500/10 dark:bg-emerald-500/15" : ""
+                        }`}
+                        onClick={() => openStock360(h.symbol)}
+                      >
+                        {/* Row Selection Checkbox */}
+                        <td className="py-3 px-3 text-center w-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => toggleSelectHolding(h.id, e as any)}
+                            className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-emerald-500 focus:ring-emerald-400 dark:bg-slate-900 cursor-pointer accent-emerald-500"
+                          />
+                        </td>
+
+                        {/* Symbol */}
+                        <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+                          <span>{h.symbol}</span>
+                          <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 truncate max-w-[120px]">
+                            {h.company_name}
+                          </span>
+
                         {/* Active BUY / SELL Signal Badge */}
                         {(() => {
                           const sig = signalsData?.all_signals.find((s) => s.symbol === h.symbol);
@@ -1264,9 +1665,37 @@ export default function PortfolioIntelligencePage() {
                         {h.horizon.replace("_", " ")}
                       </td>
 
-                      {/* Accumulate Zone */}
-                      <td className="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
-                        {h.accumulate_zone}
+                      {/* Targets & Accumulate Zone (Phase 1) */}
+                      <td className="py-3 px-3 text-left font-mono text-[11px] space-y-0.5">
+                        {h.target_stage === "TARGET_2_HIT" ? (
+                          <div className="text-emerald-500 font-bold text-[10px] flex items-center gap-1">
+                            <span>T2 HIT 🚀</span>
+                            <span className="text-slate-400 font-normal">Runner Lock</span>
+                          </div>
+                        ) : h.target_stage === "TARGET_1_HIT" ? (
+                          <div className="text-amber-500 font-bold text-[10px] flex items-center gap-1">
+                            <span>T1 HIT ✅</span>
+                            <span className="text-slate-400 font-normal">T2: {fmtINR(h.target_t2)}</span>
+                          </div>
+                        ) : (
+                          <div className="text-slate-700 dark:text-slate-300 font-medium text-[10px] flex items-center gap-1">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">T1:</span>
+                            <span>{fmtINR(h.target_t1)}</span>
+                            <span className="text-[9px] text-slate-400">(+18%)</span>
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <span className={h.stop_loss_type?.includes("PROFIT") ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
+                            SL:
+                          </span>
+                          <span>{fmtINR(h.stop_loss)}</span>
+                          <span className="text-[9px] text-slate-400">
+                            {h.stop_loss_type?.includes("PROFIT") ? "(Lock)" : h.stop_loss_type?.includes("BREAKEVEN") ? "(Cost)" : "(-8%)"}
+                          </span>
+                        </div>
+                        <div className="text-[9px] text-slate-400 truncate max-w-[130px]">
+                          {h.accumulate_zone}
+                        </div>
                       </td>
 
                       {/* Actions */}
@@ -1275,6 +1704,22 @@ export default function PortfolioIntelligencePage() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* 1-Click Interactive Trade Action */}
+                          <button
+                            onClick={() => {
+                              const sig = signalsData?.all_signals.find((s) => s.symbol === h.symbol);
+                              openTradeModalForHolding(h, sig ? sig.signal_type : "BUY", sig);
+                            }}
+                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center ${
+                              signalsData?.all_signals.some((s) => s.symbol === h.symbol)
+                                ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 ring-1 ring-amber-500/50 shadow-xs"
+                                : "text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300"
+                            }`}
+                            title="1-Click Trade / Position Sizing Modal"
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                          </button>
+
                           {(() => {
                             const sig = signalsData?.all_signals.find((s) => s.symbol === h.symbol);
                             if (!sig) return null;
@@ -1326,13 +1771,16 @@ export default function PortfolioIntelligencePage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </div>
+      </div>
       )}
+
 
       {/* ========================================================= */}
       {/* 5. TAB 2: ACCUMULATION & ENTRY ZONES CARDS */}
@@ -1380,7 +1828,7 @@ export default function PortfolioIntelligencePage() {
                 </div>
               </div>
 
-              {/* Price Zones List */}
+              {/* Price Zones & Anchored Targets List */}
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-800/50">
                   <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
@@ -1399,22 +1847,52 @@ export default function PortfolioIntelligencePage() {
                 <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-800/50">
                   <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    Profit Booking
+                    Target 1 (+18% Tranche)
                   </span>
-                  <span className="font-mono font-semibold text-amber-600 dark:text-amber-300">{fmtINR(h.profit_booking)}</span>
+                  <div className="flex items-center gap-1 font-mono">
+                    <span className="font-semibold text-amber-600 dark:text-amber-300">{fmtINR(h.target_t1)}</span>
+                    {h.target_stage === "TARGET_1_HIT" || h.target_stage === "TARGET_2_HIT" ? (
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 rounded font-bold">HIT ✅</span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-800/50">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-500"></span>
+                    Target 2 (+38% Expansion)
+                  </span>
+                  <div className="flex items-center gap-1 font-mono">
+                    <span className="font-semibold text-cyan-600 dark:text-cyan-300">{fmtINR(h.target_t2)}</span>
+                    {h.target_stage === "TARGET_2_HIT" ? (
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 rounded font-bold">HIT 🚀</span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex justify-between items-center py-1">
                   <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    Stop Loss (Support Breakdown)
+                    Stop Loss ({h.stop_loss_type || "Defense"})
                   </span>
                   <span className="font-mono font-semibold text-rose-600 dark:text-rose-400">{fmtINR(h.stop_loss)}</span>
                 </div>
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                <span>{h.when_to_buy}</span>
-                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                <span className="truncate max-w-[170px]">{h.when_to_buy}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const sig = signalsData?.all_signals.find((s) => s.symbol === h.symbol);
+                      openTradeModalForHolding(h, sig ? sig.signal_type : "BUY", sig);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-bold flex items-center gap-1 border border-cyan-500/30 transition active:scale-95 text-[10px]"
+                  >
+                    <Zap className="w-3 h-3 fill-current" />
+                    <span>Trade</span>
+                  </button>
+                  <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                </div>
               </div>
             </div>
           ))}
@@ -2378,8 +2856,19 @@ export default function PortfolioIntelligencePage() {
               </button>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 space-y-1">
-              <p className="font-semibold text-slate-700 dark:text-slate-300">Supported Formats:</p>
+            <div className="bg-slate-50 dark:bg-slate-950/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-slate-700 dark:text-slate-300">Supported Formats:</p>
+                <button
+                  type="button"
+                  onClick={() => portfolioApi.downloadTemplate()}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 transition-colors shadow-2xs"
+                  title="Download CSV Template for Bulk Import"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Template (.csv)</span>
+                </button>
+              </div>
               <p className="font-mono text-[11px] text-cyan-600 dark:text-cyan-300">
                 &quot;Instrument&quot;,&quot;Qty.&quot;,&quot;Avg. cost&quot; / &quot;Symbol&quot;,&quot;Open Quantity&quot;,&quot;Open Value&quot;
               </p>
@@ -2442,6 +2931,614 @@ export default function PortfolioIntelligencePage() {
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* 13. MODAL: BULK DELETE SELECTED HOLDINGS */}
+      {/* ========================================================= */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-rose-500" />
+                Delete Selected Stocks ({selectedHoldingIds.length})
+              </h3>
+              <button
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Are you sure you want to remove the following{" "}
+              <strong className="text-slate-900 dark:text-slate-200">{selectedHoldingIds.length} stocks</strong> from{" "}
+              <strong className="text-cyan-600 dark:text-cyan-400">{selectedPortfolio?.name}</strong>?
+            </p>
+
+            {/* List of selected symbols */}
+            <div className="max-h-40 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-wrap gap-1.5">
+              {selectedHoldingsList.map((h) => (
+                <span
+                  key={h.id}
+                  className="px-2 py-1 text-[11px] font-mono font-bold rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                >
+                  {h.symbol}
+                </span>
+              ))}
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-500/30 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
+              <span>This action cannot be undone. These stocks will be removed from all AI radar and rebalancing metrics.</span>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDeleteSelected}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-lg shadow-md flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isBulkDeleting ? "Deleting..." : `Delete ${selectedHoldingIds.length} Stocks`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 14. MODAL: CLEAR ALL STOCKS FROM PORTFOLIO */}
+      {/* ========================================================= */}
+      {isClearAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-rose-500/40 rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-500" />
+                Clear All Portfolio Stocks
+              </h3>
+              <button
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              <p>
+                You are about to delete <strong className="text-rose-500 font-bold">ALL {holdings.length} stocks</strong> from portfolio{" "}
+                <strong className="text-slate-900 dark:text-slate-100">{selectedPortfolio?.name}</strong>.
+              </p>
+              <p>
+                Total invested value of{" "}
+                <strong className="text-slate-900 dark:text-slate-200">{fmtINR(summary?.total_invested)}</strong> will be wiped from this portfolio.
+              </p>
+            </div>
+
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-700 dark:text-rose-400 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+              <span className="font-medium">
+                Warning: This will completely reset your portfolio holdings so you can start clean or re-import a new broker CSV.
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAllHoldings}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-lg shadow-md flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isBulkDeleting ? "Clearing..." : `Delete All ${holdings.length} Stocks`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ========================================================= */}
+      {/* 15. MODAL: 1-CLICK INTERACTIVE TRADE ACTION & POSITION SIZING */}
+      {/* ========================================================= */}
+      {tradeModal.isOpen && tradeModal.holding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#070E1A] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-5 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-200 dark:border-slate-800/80 pb-4 shrink-0">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
+                    {tradeModal.holding.symbol}
+                  </span>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                    {tradeModal.holding.sector || "Equities"}
+                  </span>
+                  {tradeModal.holding.trend_regime && (
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+                        tradeModal.holding.trend_regime.includes("UPTREND")
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : tradeModal.holding.trend_regime.includes("DOWNTREND")
+                          ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                          : "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                      }`}
+                    >
+                      {tradeModal.holding.trend_regime.replace(/_/g, " ")}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {tradeModal.holding.company_name} • Live CMP:{" "}
+                  <strong className="text-slate-900 dark:text-slate-200 font-mono">
+                    ₹{(tradeModal.holding.cmp || tradeModal.holding.avg_buy_price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </strong>
+                </p>
+              </div>
+
+              <button
+                onClick={() => setTradeModal((prev) => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Signal Context Banner (if opened from an AI Signal) */}
+            {tradeModal.signalHeadline && (
+              <div
+                className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 shrink-0 ${
+                  tradeModal.action === "BUY"
+                    ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-300"
+                    : "bg-rose-950/30 border-rose-500/30 text-rose-300"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 shrink-0 fill-current" />
+                  <span className="font-semibold">{tradeModal.signalHeadline}</span>
+                </div>
+                {tradeModal.signalTriggerCategory && (
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-black/40 border border-white/10 shrink-0">
+                    {tradeModal.signalTriggerCategory}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Scrollable Body */}
+            <div className="space-y-4 overflow-y-auto pr-1">
+              {/* Action Selector: BUY (Tranche Add) vs SELL (Trim/Exit) */}
+              <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 dark:bg-slate-950/80 rounded-2xl border border-slate-200 dark:border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const h = tradeModal.holding!;
+                    setTradeModal((prev) => ({
+                      ...prev,
+                      action: "BUY",
+                      quantity: h.quantity < 5 ? 5 : Math.max(1, Math.round(h.quantity * 0.25)),
+                      notes: prev.signalTriggerCategory ? prev.notes : "Tranche addition to winning position",
+                    }));
+                  }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    tradeModal.action === "BUY"
+                      ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-950/50"
+                      : "text-slate-500 dark:text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span>🟢 BUY (Tranche Add)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const h = tradeModal.holding!;
+                    setTradeModal((prev) => ({
+                      ...prev,
+                      action: "SELL",
+                      quantity: Math.max(1, Math.floor(h.quantity * 0.5)),
+                      notes: prev.signalTriggerCategory ? prev.notes : "Partial profit lock / risk trim",
+                    }));
+                  }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    tradeModal.action === "SELL"
+                      ? "bg-rose-500 text-white shadow-md shadow-rose-950/50"
+                      : "text-slate-500 dark:text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <TrendingDown className="w-4 h-4" />
+                  <span>🔴 SELL (Trim / Exit)</span>
+                </button>
+              </div>
+
+              {/* Current Holding Snapshot Pill */}
+              <div className="grid grid-cols-4 gap-2 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800/80 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Position Held</span>
+                  <strong className="font-mono text-slate-900 dark:text-slate-100">
+                    {tradeModal.holding.quantity} shares
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Avg Cost</span>
+                  <strong className="font-mono text-slate-900 dark:text-slate-100">
+                    ₹{tradeModal.holding.avg_buy_price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Invested Capital</span>
+                  <strong className="font-mono text-slate-900 dark:text-slate-100">
+                    ₹{tradeModal.holding.invested_value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Unrealized P&L</span>
+                  <strong
+                    className={`font-mono ${
+                      tradeModal.holding.pnl_pct >= 0 ? "text-emerald-500" : "text-rose-500"
+                    }`}
+                  >
+                    {tradeModal.holding.pnl_pct >= 0 ? "+" : ""}
+                    {tradeModal.holding.pnl_pct.toFixed(1)}%
+                  </strong>
+                </div>
+              </div>
+
+              {/* Quick Sizing Presets */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Quick Position Sizing Presets
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {tradeModal.action === "BUY" ? (
+                    <>
+                      {[
+                        { label: "+25% Shares", getQty: (h: PortfolioHolding) => Math.max(1, Math.round(h.quantity * 0.25)) },
+                        { label: "+50% Shares", getQty: (h: PortfolioHolding) => Math.max(1, Math.round(h.quantity * 0.50)) },
+                        { label: "Double Position (+100%)", getQty: (h: PortfolioHolding) => Math.max(1, h.quantity) },
+                        { label: "₹25,000 Capital", getQty: () => Math.max(1, Math.floor(25000 / (tradeModal.price || 1))) },
+                        { label: "₹50,000 Capital", getQty: () => Math.max(1, Math.floor(50000 / (tradeModal.price || 1))) },
+                        { label: "₹1,00,000 Capital", getQty: () => Math.max(1, Math.floor(100000 / (tradeModal.price || 1))) },
+                      ].map((preset, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const newQ = preset.getQty(tradeModal.holding!);
+                            setTradeModal((prev) => ({ ...prev, quantity: newQ }));
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 hover:bg-emerald-500/20 hover:text-emerald-300 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 transition"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {[
+                        { label: "Trim 1/3 (33%)", getQty: (h: PortfolioHolding) => Math.max(1, Math.floor(h.quantity * 0.333)) },
+                        { label: "Trim 1/2 (50%)", getQty: (h: PortfolioHolding) => Math.max(1, Math.floor(h.quantity * 0.50)) },
+                        { label: "Trim 2/3 (66%)", getQty: (h: PortfolioHolding) => Math.max(1, Math.floor(h.quantity * 0.666)) },
+                        { label: "100% Full Exit", getQty: (h: PortfolioHolding) => h.quantity },
+                      ].map((preset, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const newQ = preset.getQty(tradeModal.holding!);
+                            setTradeModal((prev) => ({ ...prev, quantity: newQ }));
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                            preset.label.includes("100%")
+                              ? "bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30"
+                              : "bg-slate-100 dark:bg-slate-800/80 hover:bg-rose-500/20 hover:text-rose-300 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Form Inputs: Shares & Execution Price */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Quantity Input */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">
+                      {tradeModal.action === "BUY" ? "Shares to Buy" : "Shares to Sell"}
+                    </label>
+                    <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                      <button
+                        type="button"
+                        onClick={() => setTradeModal((prev) => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      >
+                        -1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTradeModal((prev) => ({ ...prev, quantity: prev.quantity + 1 }))}
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      >
+                        +1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTradeModal((prev) => ({ ...prev, quantity: prev.quantity + 5 }))}
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      >
+                        +5
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max={tradeModal.action === "SELL" ? tradeModal.holding.quantity : 100000}
+                    step="1"
+                    value={tradeModal.quantity || ""}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setTradeModal((prev) => ({ ...prev, quantity: val }));
+                    }}
+                    className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-hidden focus:border-cyan-500"
+                  />
+                  {tradeModal.action === "SELL" && tradeModal.quantity > tradeModal.holding.quantity && (
+                    <span className="text-[11px] text-rose-500 block">
+                      Exceeds held quantity ({tradeModal.holding.quantity} shares)
+                    </span>
+                  )}
+                </div>
+
+                {/* Execution Price Input */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">
+                      Execution Price (₹)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTradeModal((prev) => ({
+                          ...prev,
+                          price: tradeModal.holding?.cmp || tradeModal.holding?.avg_buy_price || 0,
+                        }))
+                      }
+                      className="text-[11px] text-cyan-400 hover:underline"
+                    >
+                      Reset to CMP
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min="0.05"
+                    step="0.05"
+                    value={tradeModal.price || ""}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setTradeModal((prev) => ({ ...prev, price: val }));
+                    }}
+                    className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:outline-hidden focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+
+              {/* Execution Notes Input */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Trade Notes / Strategy Tag
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Target 1 profit book, 50 DMA bounce entry, Pyramid top-up"
+                  value={tradeModal.notes}
+                  onChange={(e) => setTradeModal((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-cyan-500"
+                />
+              </div>
+
+              {/* Live Real-Time Financial Impact Simulation */}
+              {(() => {
+                const h = tradeModal.holding;
+                const qty = Number(tradeModal.quantity) || 0;
+                const price = Number(tradeModal.price) || 0;
+                const tradeVal = qty * price;
+
+                if (tradeModal.action === "BUY") {
+                  const newQty = h.quantity + qty;
+                  const currentInv = h.invested_value || h.quantity * h.avg_buy_price;
+                  const newInv = currentInv + tradeVal;
+                  const newAvg = newQty > 0 ? newInv / newQty : h.avg_buy_price;
+                  const avgDeltaPct = h.avg_buy_price > 0 ? ((newAvg - h.avg_buy_price) / h.avg_buy_price) * 100 : 0;
+                  const newT1 = newAvg * 1.18;
+
+                  return (
+                    <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-emerald-400 font-bold border-b border-emerald-500/20 pb-1.5">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Simulated Tranche Buy Impact
+                        </span>
+                        <span className="font-mono">Capital Deployed: ₹{tradeVal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block">New Total Shares</span>
+                          <strong className="text-white font-mono text-xs">
+                            {newQty} <span className="text-slate-400 text-[10px]">({h.quantity} + {qty})</span>
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">New Weighted Avg Cost</span>
+                          <strong className="text-emerald-300 font-mono text-xs">
+                            ₹{newAvg.toFixed(2)}{" "}
+                            <span className="text-[10px]">({avgDeltaPct >= 0 ? "+" : ""}{avgDeltaPct.toFixed(1)}%)</span>
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">New Target 1 (+18%)</span>
+                          <strong className="text-amber-300 font-mono text-xs">
+                            ₹{newT1.toFixed(2)}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // SELL simulation
+                  const remainingQty = Math.max(0, h.quantity - qty);
+                  const costBasisSold = qty * h.avg_buy_price;
+                  const realizedPnl = tradeVal - costBasisSold;
+                  const realizedPnlPct = h.avg_buy_price > 0 ? ((price - h.avg_buy_price) / h.avg_buy_price) * 100 : 0;
+                  const isFullExit = qty >= h.quantity;
+
+                  return (
+                    <div className="p-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-rose-400 font-bold border-b border-rose-500/20 pb-1.5">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          {isFullExit ? "Simulated Full Exit Impact" : "Simulated Partial Trim Impact"}
+                        </span>
+                        <span className="font-mono">Gross Realized: ₹{tradeVal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block">Realized Profit / Loss</span>
+                          <strong className={`font-mono text-xs ${realizedPnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            {realizedPnl >= 0 ? "+" : ""}₹{realizedPnl.toLocaleString("en-IN", { maximumFractionDigits: 0 })} ({realizedPnlPct >= 0 ? "+" : ""}{realizedPnlPct.toFixed(1)}%)
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Remaining Position</span>
+                          <strong className="text-white font-mono text-xs">
+                            {isFullExit ? "0 Shares (Closed)" : `${remainingQty} Shares`}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Remaining Value</span>
+                          <strong className="text-slate-300 font-mono text-xs">
+                            ₹{(remainingQty * price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
+
+              {/* Technical Indicator Context Pills (50 DMA / 200 DMA) */}
+              {(tradeModal.holding.dma_50 || tradeModal.holding.dma_200) && (
+                <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-slate-900/40 border border-slate-800 text-[10px] text-slate-400">
+                  <span className="font-bold text-slate-300">Technical Lines:</span>
+                  {tradeModal.holding.dma_50 && (
+                    <span className="font-mono">
+                      50 DMA: <strong className="text-cyan-300">₹{tradeModal.holding.dma_50.toLocaleString()}</strong>
+                      {tradeModal.holding.dist_50_dma_pct !== undefined && tradeModal.holding.dist_50_dma_pct !== null && (
+                        <span className={tradeModal.holding.dist_50_dma_pct >= 0 ? " text-emerald-400" : " text-rose-400"}>
+                          {" "}({tradeModal.holding.dist_50_dma_pct >= 0 ? "+" : ""}{tradeModal.holding.dist_50_dma_pct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {tradeModal.holding.dma_200 && (
+                    <span className="font-mono pl-2 border-l border-slate-700">
+                      200 DMA: <strong className="text-indigo-300">₹{tradeModal.holding.dma_200.toLocaleString()}</strong>
+                      {tradeModal.holding.dist_200_dma_pct !== undefined && tradeModal.holding.dist_200_dma_pct !== null && (
+                        <span className={tradeModal.holding.dist_200_dma_pct >= 0 ? " text-emerald-400" : " text-rose-400"}>
+                          {" "}({tradeModal.holding.dist_200_dma_pct >= 0 ? "+" : ""}{tradeModal.holding.dist_200_dma_pct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-3 shrink-0">
+              {/* Copy Broker Order Format Button */}
+              <button
+                type="button"
+                onClick={handleCopyBrokerOrder}
+                className="px-3 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition active:scale-95"
+                title="Copy order command formatted for Zerodha, Groww, or AngelOne"
+              >
+                {copiedOrderText ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400 font-bold">Order Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Copy Broker Order</span>
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTradeModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteTrade}
+                  disabled={
+                    tradeModal.isExecuting ||
+                    tradeModal.quantity <= 0 ||
+                    tradeModal.price <= 0 ||
+                    (tradeModal.action === "SELL" && tradeModal.quantity > tradeModal.holding.quantity)
+                  }
+                  className={`px-5 py-2 text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 ${
+                    tradeModal.action === "BUY"
+                      ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-950/40"
+                      : "bg-rose-500 hover:bg-rose-400 text-white shadow-rose-950/40"
+                  }`}
+                >
+                  <Zap className={`w-3.5 h-3.5 fill-current ${tradeModal.isExecuting ? "animate-spin" : ""}`} />
+                  <span>
+                    {tradeModal.isExecuting
+                      ? "Recording Trade..."
+                      : tradeModal.action === "BUY"
+                      ? `Confirm Buy (${tradeModal.quantity} Shares)`
+                      : tradeModal.quantity >= tradeModal.holding.quantity
+                      ? "Confirm & Close Entire Position"
+                      : `Confirm Trim (${tradeModal.quantity} Shares)`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Dedicated Portfolio & Watchlist Telegram Radar Modal */}
       <PortfolioTelegramModal

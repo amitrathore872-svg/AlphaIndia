@@ -330,41 +330,76 @@ class LivePriceService:
     @classmethod
     def _persist_quote(cls, db: Session, symbol: str, quote: Dict[str, Any]):
         """Helper to sync CompanyMarketMetrics and ScreenerGrowthRecord."""
-        cmp_val = quote.get("cmp")
+        def _to_float(v: Any) -> Optional[float]:
+            if v is None:
+                return None
+            if isinstance(v, (int, float)):
+                return float(v)
+            try:
+                cleaned = str(v).replace(",", "").replace("₹", "").replace("Cr", "").strip()
+                if not cleaned or cleaned.lower() in ("unknown", "n/a", "none", "null", "-", "nan"):
+                    return None
+                return float(cleaned)
+            except (ValueError, TypeError):
+                return None
+
+        cmp_val = _to_float(quote.get("cmp"))
         if not cmp_val or cmp_val <= 0:
             return
 
         comp = db.query(Company).filter(Company.symbol == symbol).first()
+        if not comp:
+            try:
+                comp = Company(
+                    symbol=symbol,
+                    company=symbol,
+                    exchange="NSE",
+                    market_cap="Unknown",
+                )
+                db.add(comp)
+                db.flush()
+            except Exception:
+                return
+
         metrics = db.query(CompanyMarketMetrics).filter(CompanyMarketMetrics.symbol == symbol).first()
         now_utc = datetime.utcnow()
+
+        raw_mcap = quote.get("market_cap")
+        if raw_mcap is None and comp.market_cap:
+            raw_mcap = comp.market_cap
+        mcap_val = _to_float(raw_mcap)
+        year_high = _to_float(quote.get("year_high"))
+        year_low = _to_float(quote.get("year_low"))
+
         if not metrics:
             metrics = CompanyMarketMetrics(
                 symbol=symbol,
-                company_id=comp.id if comp else None,
+                company_id=comp.id,
                 cmp=cmp_val,
-                market_cap=quote.get("market_cap") or (comp.market_cap if comp else None),
-                fifty_two_week_high=quote.get("year_high"),
-                fifty_two_week_low=quote.get("year_low"),
-                sector=comp.sector if comp else "General",
+                market_cap=mcap_val,
+                fifty_two_week_high=year_high,
+                fifty_two_week_low=year_low,
+                sector=comp.sector if comp and comp.sector else "General",
                 last_updated=now_utc,
             )
             db.add(metrics)
         else:
             metrics.cmp = cmp_val
-            if quote.get("market_cap"):
-                metrics.market_cap = quote["market_cap"]
-            if quote.get("year_high"):
-                metrics.fifty_two_week_high = quote["year_high"]
-            if quote.get("year_low"):
-                metrics.fifty_two_week_low = quote["year_low"]
+            if mcap_val is not None:
+                metrics.market_cap = mcap_val
+            if year_high is not None:
+                metrics.fifty_two_week_high = year_high
+            if year_low is not None:
+                metrics.fifty_two_week_low = year_low
             metrics.last_updated = now_utc
 
         # Also update ScreenerGrowthRecord if it exists
         screener_rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == symbol).first()
         if screener_rec:
             screener_rec.current_price = cmp_val
-            if quote.get("day_change_pct") is not None:
-                screener_rec.daily_return = quote["day_change_pct"]
+            day_chg = _to_float(quote.get("day_change_pct"))
+            if day_chg is not None:
+                screener_rec.daily_return = day_chg
             screener_rec.updated_at = now_utc
 
     @classmethod
