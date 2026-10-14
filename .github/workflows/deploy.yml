@@ -96,6 +96,9 @@ jobs:
 
             echo "Target Directory: $DEPLOY_PATH"
             cd "$DEPLOY_PATH"
+            echo "=== Syncing repository to latest origin/main ==="
+            git fetch origin main
+            git reset --hard origin/main
             chmod +x scripts/*.sh
             ./scripts/deploy_update.sh
           '
@@ -127,7 +130,13 @@ jobs:
           mkdir -p ~/.ssh && echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
           ssh -i ~/.ssh/deploy_key -p "$CLEAN_PORT" -o StrictHostKeyChecking=accept-new "$CLEAN_USER@$CLEAN_HOST" '
             cd "$HOME/AlphaIndia" || cd "/home/ec2-user/AlphaIndia" || cd "/home/ubuntu/AlphaIndia"
-            echo "=== DOCKER PS ===" > /tmp/deploy_diag.txt
+            echo "=== DISK STATUS ===" > /tmp/deploy_diag.txt
+            df -h / >> /tmp/deploy_diag.txt 2>&1
+            echo "=== DOCKER DISK USAGE ===" >> /tmp/deploy_diag.txt
+            docker system df >> /tmp/deploy_diag.txt 2>&1
+            echo "=== GIT STATUS ===" >> /tmp/deploy_diag.txt
+            git log -n 3 --oneline >> /tmp/deploy_diag.txt 2>&1
+            echo "=== DOCKER PS ===" >> /tmp/deploy_diag.txt
             docker compose ps >> /tmp/deploy_diag.txt 2>&1
             echo "=== DOCKER COMPOSE LOGS (BACKEND) ===" >> /tmp/deploy_diag.txt
             docker compose logs --tail=120 backend >> /tmp/deploy_diag.txt 2>&1
