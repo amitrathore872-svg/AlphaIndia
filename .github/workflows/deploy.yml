@@ -67,11 +67,17 @@ jobs:
             df -h / || true
 
             # Emergency reclaim of disk space in case previous builds filled root volume
-            docker builder prune -f --filter "until=24h" 2>/dev/null || docker builder prune -f 2>/dev/null || true
-            docker image prune -f --filter "until=24h" 2>/dev/null || true
-            sudo journalctl --vacuum-size=50M 2>/dev/null || true
-            sudo find /var/lib/docker/containers/ -name "*-json.log" -size +25M -exec truncate -s 5M {} + 2>/dev/null || true
-            sudo rm -rf /tmp/* 2>/dev/null || true
+            docker builder prune -a -f 2>/dev/null || true
+            docker image prune -f 2>/dev/null || true
+            docker container prune -f 2>/dev/null || true
+            sudo journalctl --vacuum-time=1d 2>/dev/null || sudo journalctl --vacuum-size=20M 2>/dev/null || true
+            sudo find /var/lib/docker/containers/ -name "*-json.log" -size +10M -exec truncate -s 2M {} + 2>/dev/null || true
+            sudo apt-get clean 2>/dev/null || sudo yum clean all 2>/dev/null || true
+            sudo rm -rf /var/cache/apt/archives/* /tmp/* /var/tmp/* 2>/dev/null || true
+
+            # Auto-grow filesystem in case EBS volume was modified in AWS Console
+            sudo growpart /dev/nvme0n1 1 2>/dev/null || sudo growpart /dev/xvda 1 2>/dev/null || true
+            sudo resize2fs /dev/nvme0n1p1 2>/dev/null || sudo resize2fs /dev/xvda1 2>/dev/null || sudo xfs_growfs / 2>/dev/null || true
 
             echo "=== Disk Space After Pre-flight Cleanup ==="
             df -h / || true

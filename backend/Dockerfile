@@ -20,18 +20,16 @@ RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
-        build-essential \
+        gcc \
         libpq-dev \
-        libffi-dev \
-        libxml2-dev \
-        libxslt1-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # Install Python requirements and spaCy NLP model
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel && \
     pip install -r requirements.txt && \
-    python -m spacy download en_core_web_sm
+    python -m spacy download en_core_web_sm && \
+    pip cache purge 2>/dev/null || true
 
 # Copy the entire backend application
 COPY . .

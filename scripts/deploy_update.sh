@@ -20,16 +20,21 @@ df -h /
 
 # Prune unused build cache and untagged images before doing any builds or fetches
 echo "Pruning Docker build cache and dangling containers/images..."
-docker builder prune -f --filter "until=24h" 2>/dev/null || docker builder prune -f 2>/dev/null || true
-docker image prune -f --filter "until=24h" 2>/dev/null || true
+docker builder prune -a -f 2>/dev/null || true
+docker image prune -f 2>/dev/null || true
 docker container prune -f 2>/dev/null || true
 
-# Truncate oversized container logs (>25MB)
-sudo find /var/lib/docker/containers/ -name "*-json.log" -size +25M -exec truncate -s 5M {} + 2>/dev/null || true
+# Truncate oversized container logs (>10MB)
+sudo find /var/lib/docker/containers/ -name "*-json.log" -size +10M -exec truncate -s 2M {} + 2>/dev/null || true
 
-# Clean system journal logs and tmp files
-sudo journalctl --vacuum-size=50M 2>/dev/null || true
-sudo rm -rf /tmp/* 2>/dev/null || true
+# Clean system journal logs, package manager cache, and tmp files
+sudo journalctl --vacuum-time=1d 2>/dev/null || sudo journalctl --vacuum-size=20M 2>/dev/null || true
+sudo apt-get clean 2>/dev/null || sudo yum clean all 2>/dev/null || true
+sudo rm -rf /var/cache/apt/archives/* /tmp/* /var/tmp/* 2>/dev/null || true
+
+# Auto-grow filesystem in case EBS volume was resized on AWS
+sudo growpart /dev/nvme0n1 1 2>/dev/null || sudo growpart /dev/xvda 1 2>/dev/null || true
+sudo resize2fs /dev/nvme0n1p1 2>/dev/null || sudo resize2fs /dev/xvda1 2>/dev/null || sudo xfs_growfs / 2>/dev/null || true
 
 echo "--- Disk Status After Cleanup ---"
 df -h /
@@ -53,9 +58,18 @@ docker compose stop worker frontend || true
 sync
 sudo sysctl -w vm.drop_caches=3 2>/dev/null || true
 
-# 4. Build application container images (worker reuses backend image, no redundant build)
-echo "[2/5] Building updated application containers (backend & frontend)..."
-docker compose build backend frontend
+# 4. Build application container images sequentially to prevent peak disk exhaustion
+echo "[2/5] Building backend container image..."
+docker compose build backend
+
+echo "Reclaiming build cache before building frontend..."
+docker builder prune -f 2>/dev/null || true
+
+echo "Building frontend container image..."
+docker compose build frontend
+
+echo "Reclaiming intermediate build cache..."
+docker builder prune -a -f 2>/dev/null || true
 
 # 5. Gracefully restart updated services (keeping db & certbot intact)
 echo "[3/5] Ensuring PostgreSQL database container is healthy..."

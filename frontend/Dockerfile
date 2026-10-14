@@ -6,7 +6,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --prefer-offline --no-audit --no-fund
+RUN npm ci --prefer-offline --no-audit --no-fund && npm cache clean --force
 
 # ==========================================================
 # Stage 2: Build the Next.js application
@@ -27,7 +27,7 @@ ENV NEXT_PRIVATE_WORKER_CORES=1
 # Limit node memory usage on t3.small (2GB RAM)
 ENV NODE_OPTIONS="--max-old-space-size=1536"
 
-RUN npm run build
+RUN npm run build && rm -rf node_modules/.cache
 
 # ==========================================================
 # Stage 3: Production Runner (Super-lightweight Standalone)
