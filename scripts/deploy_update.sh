@@ -21,16 +21,19 @@ df -h /
 # Prune unused build cache and untagged images before doing any builds or fetches
 echo "Pruning Docker build cache and dangling containers/images..."
 docker builder prune -a -f 2>/dev/null || true
-docker image prune -f 2>/dev/null || true
-docker container prune -f 2>/dev/null || true
+docker image prune -a -f 2>/dev/null || true
+docker system prune -a -f --volumes=false 2>/dev/null || true
 
-# Truncate oversized container logs (>10MB)
-sudo find /var/lib/docker/containers/ -name "*-json.log" -size +10M -exec truncate -s 2M {} + 2>/dev/null || true
+# Truncate oversized container logs (>5MB)
+sudo find /var/lib/docker/containers/ -name "*-json.log" -size +5M -exec truncate -s 1M {} + 2>/dev/null || true
 
 # Clean system journal logs, package manager cache, and tmp files
-sudo journalctl --vacuum-time=1d 2>/dev/null || sudo journalctl --vacuum-size=20M 2>/dev/null || true
+sudo journalctl --vacuum-time=1d 2>/dev/null || sudo journalctl --vacuum-size=10M 2>/dev/null || true
 sudo apt-get clean 2>/dev/null || sudo yum clean all 2>/dev/null || true
-sudo rm -rf /var/cache/apt/archives/* /tmp/* /var/tmp/* 2>/dev/null || true
+sudo rm -rf /var/cache/apt/archives/* /tmp/* /var/tmp/* /var/log/*.gz /var/log/*.[0-9] 2>/dev/null || true
+
+# Purge any host node_modules or .next caches that may have been created outside Docker
+rm -rf "$PROJECT_DIR/frontend/node_modules" "$PROJECT_DIR/frontend/.next" 2>/dev/null || true
 
 # Auto-grow filesystem in case EBS volume was resized on AWS
 sudo growpart /dev/nvme0n1 1 2>/dev/null || sudo growpart /dev/xvda 1 2>/dev/null || true
