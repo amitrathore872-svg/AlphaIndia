@@ -300,23 +300,23 @@ def stop_audit_backfill():
 # Company Financial History
 # ==========================================================
 @router.get("/company/{symbol}")
+@router.get("/{symbol}")
 def company_financials(
     symbol: str,
     db: Session = Depends(get_db),
 ):
-
-    symbol = symbol.upper()
+    clean_sym = symbol.strip().upper()
 
     company = (
         db.query(Company)
-        .filter(Company.symbol == symbol)
+        .filter(Company.symbol.ilike(clean_sym))
         .first()
     )
 
     if company is None:
         raise HTTPException(
             status_code=404,
-            detail="Company not found.",
+            detail=f"Company with symbol '{clean_sym}' not found in database.",
         )
 
     results = (
@@ -327,25 +327,31 @@ def company_financials(
     )
 
     return {
-        "symbol": symbol,
+        "symbol": clean_sym,
         "company": company.company,
         "quarters": len(results),
         "financials": [
             {
                 "fiscal_period": q.fiscal_period,
-                "period_end": q.period_end,
+                "period_end": str(q.period_end) if q.period_end else None,
+                "result_date": str(q.result_date) if q.result_date else None,
                 "revenue": q.revenue,
+                "operating_income": q.operating_income,
                 "net_profit": q.net_profit,
                 "eps": q.eps,
                 "interest_income": q.interest_income,
                 "interest_expense": q.interest_expense,
                 "net_interest_income": q.net_interest_income,
+                "total_debt": q.total_debt,
+                "total_equity": q.total_equity,
                 "book_value": q.book_value,
+                "operating_cash_flow": q.operating_cash_flow,
+                "free_cash_flow": q.free_cash_flow,
                 "revenue_growth": q.revenue_growth,
                 "pat_growth": q.pat_growth,
                 "roce": q.roce,
                 "source": q.source,
-                "imported_at": q.imported_at,
+                "imported_at": q.imported_at.isoformat() if q.imported_at else None,
             }
             for q in results
         ],

@@ -84,15 +84,29 @@ def get_staircase_opportunities(
     start_idx = (page - 1) * limit
     paginated_items = filtered[start_idx : start_idx + limit]
 
+    default_metadata = {
+        "total_scanned": len(opportunities),
+        "total_opportunities": len(opportunities),
+        "stealth_accumulator_count": 0,
+        "cupid_archetype_count": 0,
+        "early_staircase_count": 0,
+        "established_count": 0,
+        "tennis_ball_count": 0,
+        "avg_ker_10d": 0.0,
+        "last_scan_time": "",
+    }
+    merged_metadata = {
+        **default_metadata,
+        **metadata,
+        "total_filtered": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1,
+    }
+
     return {
         "opportunities": paginated_items,
-        "metadata": {
-            **metadata,
-            "total_filtered": total_count,
-            "page": page,
-            "limit": limit,
-            "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1,
-        },
+        "metadata": merged_metadata,
         "cached": scan_data.get("cached", False),
     }
 

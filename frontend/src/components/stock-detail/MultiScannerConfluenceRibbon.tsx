@@ -38,7 +38,7 @@ interface MultiScannerConfluenceRibbonProps {
     deliverySurgePct?: number;
     momentumRulesPassed?: number;
     mfNetInflowCr?: number;
-    orderBookValueCr?: number;
+    orderBookValueCr?: number | null;
     salesYoY?: string;
     sentimentStatus?: string;
     riskReward?: string | number;
@@ -54,23 +54,38 @@ export default function MultiScannerConfluenceRibbon({
   const [viewMode, setViewMode] = useState<"pillars" | "matrix">("pillars");
 
   const data = {
-    technoFundaGrade: confluenceData?.technoFundaGrade || "Grade A",
-    technoFundaScore: confluenceData?.technoFundaScore || 81,
-    athenaGrade: confluenceData?.athenaGrade || "AAA+",
-    athenaScore: confluenceData?.athenaScore || 94,
-    piotroskiScore: confluenceData?.piotroskiScore || 8,
-    minerviniScore: confluenceData?.minerviniScore || 8,
-    momentumScore: confluenceData?.momentumScore || 9,
-    masterCompositeScore: confluenceData?.masterCompositeScore || 95.2,
-    patternLabel: confluenceData?.patternLabel || "VCP Multi-Contract",
-    deliverySurgePct: confluenceData?.deliverySurgePct || 240,
-    momentumRulesPassed: confluenceData?.momentumRulesPassed || 9,
-    mfNetInflowCr: confluenceData?.mfNetInflowCr || 48.2,
-    orderBookValueCr: confluenceData?.orderBookValueCr || 3420,
-    salesYoY: confluenceData?.salesYoY || "+34.2%",
-    sentimentStatus: confluenceData?.sentimentStatus || "HOT",
-    riskReward: confluenceData?.riskReward ? String(confluenceData.riskReward) : "1 : 2.7",
+    technoFundaGrade: confluenceData?.technoFundaGrade || "Grade B+",
+    technoFundaScore: confluenceData?.technoFundaScore ?? 70,
+    athenaGrade: confluenceData?.athenaGrade || "AA+",
+    athenaScore: confluenceData?.athenaScore ?? 82,
+    piotroskiScore: confluenceData?.piotroskiScore ?? 7,
+    minerviniScore: confluenceData?.minerviniScore ?? 6,
+    momentumScore: confluenceData?.momentumScore ?? 7,
+    masterCompositeScore: confluenceData?.masterCompositeScore ?? 76.5,
+    patternLabel: confluenceData?.patternLabel || "Base Consolidation",
+    deliverySurgePct: confluenceData?.deliverySurgePct ?? 140,
+    momentumRulesPassed: confluenceData?.momentumRulesPassed ?? 7,
+    mfNetInflowCr: confluenceData?.mfNetInflowCr ?? 24.5,
+    orderBookValueCr: confluenceData?.orderBookValueCr !== undefined ? confluenceData.orderBookValueCr : null,
+    salesYoY: confluenceData?.salesYoY || "+18.2%",
+    sentimentStatus: confluenceData?.sentimentStatus || "WARM",
+    riskReward: confluenceData?.riskReward ? String(confluenceData.riskReward) : "1 : 2.5",
   };
+
+  const confluentCount = [
+    data.technoFundaScore >= 60,
+    data.athenaScore >= 70,
+    data.minerviniScore >= 5,
+    data.piotroskiScore >= 6,
+    data.momentumRulesPassed >= 6,
+  ].filter(Boolean).length;
+
+  const synthesisTier =
+    data.masterCompositeScore >= 85
+      ? "ELITE"
+      : data.masterCompositeScore >= 70
+      ? "PRIME"
+      : "WATCH";
 
   const quantitativeModels = [
     {
@@ -80,7 +95,7 @@ export default function MultiScannerConfluenceRibbon({
       badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
       score: `${data.technoFundaScore} / 100`,
       scoreColor: "text-emerald-600 dark:text-emerald-400",
-      interpretation: "High-probability pre-breakout base; pristine volume dry-up.",
+      interpretation: "Pre-breakout base tightness and volume profile confirmation.",
       icon: Zap,
     },
     {
@@ -90,37 +105,37 @@ export default function MultiScannerConfluenceRibbon({
       badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
       score: `${data.athenaScore} / 100`,
       scoreColor: "text-emerald-600 dark:text-emerald-400",
-      interpretation: "Verified fundamental shock; zero forensic audit red flags.",
+      interpretation: "Verified fundamental shock; forensic accounting evaluation.",
       icon: ShieldCheck,
     },
     {
       name: "Piotroski F-Score",
       tabId: "financials",
-      badge: "High Cash Quality",
+      badge: "Financial Health",
       badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30",
       score: `${data.piotroskiScore} / 9`,
       scoreColor: "text-cyan-600 dark:text-cyan-400",
-      interpretation: "Strong operational cash flow conversion and low leverage.",
+      interpretation: "Operational cash flow generation and balance sheet quality.",
       icon: CheckCircle2,
     },
     {
       name: "Minervini Stage-2 Audit",
       tabId: "overview",
-      badge: "Stage 2 Confirmed",
+      badge: data.minerviniScore >= 6 ? "Stage 2 Confirmed" : "Stage Basing",
       badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30",
       score: `${data.minerviniScore} / 8 Criteria`,
       scoreColor: "text-cyan-600 dark:text-cyan-400",
-      interpretation: "Price above rising 50 & 200 DMA; relative strength leader.",
+      interpretation: "Price above moving averages; relative strength alignment.",
       icon: TrendingUp,
     },
     {
       name: "Momentum 10-Rule Audit",
       tabId: "momentum",
-      badge: "High Conviction",
+      badge: data.momentumRulesPassed >= 8 ? "High Conviction" : "Developing",
       badgeColor: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30",
-      score: `${data.momentumScore} / 10 Rules`,
+      score: `${data.momentumRulesPassed} / 10 Rules`,
       scoreColor: "text-cyan-600 dark:text-cyan-400",
-      interpretation: "Coiling against upper Bollinger Band with expanding RSI.",
+      interpretation: "Multi-timeframe Bollinger Band envelope & RSI expansion.",
       icon: SlidersHorizontal,
     },
   ];
@@ -128,35 +143,42 @@ export default function MultiScannerConfluenceRibbon({
   const pillars = [
     {
       title: "Quantitative Engine Audits",
-      category: "5 Models Confluent",
+      category: `${confluentCount} of 5 Models Confluent`,
       items: [
         {
           id: "overview",
           label: "Techno-Funda",
           metric: `${data.technoFundaGrade} (${data.technoFundaScore}/100)`,
-          badge: "Pre-Breakout",
+          badge: data.technoFundaScore >= 75 ? "Prime Base" : "Developing",
           icon: Zap,
         },
         {
           id: "financials",
           label: "Athena 5-Gate",
           metric: `${data.athenaGrade} (${data.athenaScore}/100)`,
-          badge: "0 Red Flags",
+          badge: "Forensic Checked",
           icon: ShieldCheck,
         },
         {
           id: "overview",
           label: "Minervini Stage-2",
           metric: `${data.minerviniScore}/8 Criteria Passed`,
-          badge: "Markup Phase",
+          badge: data.minerviniScore >= 6 ? "Markup Phase" : "Consolidating",
           icon: TrendingUp,
         },
         {
           id: "financials",
           label: "Piotroski F-Score",
-          metric: `${data.piotroskiScore}/9 High Cash Quality`,
-          badge: "Pristine",
+          metric: `${data.piotroskiScore}/9 Financial Health`,
+          badge: data.piotroskiScore >= 7 ? "Pristine" : "Stable",
           icon: CheckCircle2,
+        },
+        {
+          id: "momentum",
+          label: "Momentum Rules",
+          metric: `${data.momentumRulesPassed}/10 Passed`,
+          badge: data.momentumRulesPassed >= 8 ? "Expanding RS" : "In Progress",
+          icon: Rocket,
         },
       ],
     },
@@ -168,28 +190,28 @@ export default function MultiScannerConfluenceRibbon({
           id: "overview",
           label: "Base Pattern",
           metric: `${data.patternLabel}`,
-          badge: "Score 99",
+          badge: "Score " + Math.min(99, Math.round(data.technoFundaScore * 1.1)),
           icon: Layers,
         },
         {
           id: "momentum",
           label: "Delivery Volume",
           metric: `+${data.deliverySurgePct}% Surge`,
-          badge: "Accumulation",
+          badge: data.deliverySurgePct >= 100 ? "Accumulation" : "Normal Flow",
           icon: Package,
         },
         {
-          id: "momentum",
-          label: "Momentum Rules",
-          metric: `${data.momentumRulesPassed}/10 Passed`,
-          badge: "Expanding RS",
-          icon: Rocket,
+          id: "chart",
+          label: "Moving Average Alignment",
+          metric: "Golden Curvature",
+          badge: "Dynamic Support",
+          icon: TrendingUp,
         },
         {
           id: "mutual-funds",
-          label: "Mutual Fund Net Flow",
+          label: "Institutional Flow",
           metric: `+₹${data.mfNetInflowCr} Cr Inflow`,
-          badge: "8 AMCs Active",
+          badge: "Institutional Footprint",
           icon: Building2,
         },
       ],
@@ -201,8 +223,8 @@ export default function MultiScannerConfluenceRibbon({
         {
           id: "order-book",
           label: "Order Book Pipeline",
-          metric: `₹${data.orderBookValueCr.toLocaleString()} Cr`,
-          badge: "2.1x Sales",
+          metric: data.orderBookValueCr != null ? `₹${data.orderBookValueCr.toLocaleString()} Cr` : "Sector N/A",
+          badge: data.orderBookValueCr != null ? "2.1x Sales" : "Services/Tech Model",
           icon: FileText,
         },
         {
@@ -215,8 +237,8 @@ export default function MultiScannerConfluenceRibbon({
         {
           id: "overview",
           label: "Market Sentiment",
-          metric: `${data.sentimentStatus} (88/100)`,
-          badge: "High Buzz",
+          metric: `${data.sentimentStatus}`,
+          badge: data.sentimentStatus === "HOT" ? "High Buzz" : "Steady",
           icon: Flame,
         },
         {
@@ -245,7 +267,7 @@ export default function MultiScannerConfluenceRibbon({
                 Multi-Model & Radar Confluence Engine
               </h3>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 font-bold">
-                5 of 5 Quantitative Engines in Strong Confluence
+                {confluentCount} of 5 Quantitative Engines in Confluence
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -291,7 +313,7 @@ export default function MultiScannerConfluenceRibbon({
                 Master Synthesis
               </div>
               <div className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                ELITE · {data.masterCompositeScore} / 100
+                {synthesisTier} · {data.masterCompositeScore} / 100
               </div>
             </div>
             <div className="h-6 w-px bg-slate-300 dark:bg-slate-700" />

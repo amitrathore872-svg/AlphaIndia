@@ -264,8 +264,32 @@ class VelocityBurstOrchestrator:
         except Exception as e:
             logger.warning(f"[VelocityOrchestrator] Market data preloading notice: {e}")
 
-        # Load authentic delivery data from delivery radar cache if available
+        # Load authentic delivery data from the latest NSE security-wise bhavcopy archives
         delivery_map: Dict[str, float] = {}
+        try:
+            import glob
+            from pathlib import Path
+            import pandas as pd
+            base_dir = Path(__file__).resolve().parent.parent.parent
+            bhav_files = glob.glob(str(base_dir / "data" / "nse_delivery" / "sec_bhavdata_full_*.csv"))
+            if bhav_files:
+                latest_bhav = sorted(bhav_files)[-1]
+                bhav_df = pd.read_csv(latest_bhav)
+                bhav_df.columns = [c.strip() for c in bhav_df.columns]
+                if "SYMBOL" in bhav_df.columns and "DELIV_PER" in bhav_df.columns:
+                    for _, row in bhav_df.iterrows():
+                        sym_raw = str(row["SYMBOL"]).strip().upper()
+                        try:
+                            val = float(str(row["DELIV_PER"]).strip())
+                            if not pd.isna(val):
+                                delivery_map[sym_raw] = round(val, 2)
+                        except (ValueError, TypeError):
+                            pass
+                logger.info(f"[VelocityOrchestrator] Loaded authentic NSE delivery data for {len(delivery_map)} symbols from {Path(latest_bhav).name}")
+        except Exception as be:
+            logger.warning(f"[VelocityOrchestrator] Notice loading bhavcopy delivery data: {be}")
+
+        # Also merge delivery radar cache opportunities if available
         try:
             from pathlib import Path
             import json
@@ -349,7 +373,7 @@ class VelocityBurstOrchestrator:
                     live_signals_list.append(breakout_sig)
 
             # 8. Stage 13: BTST Scan (if closing near highs)
-            btst_cand = BTSTContinuationEngine.scan_evening_btst(sym, df_stock)
+            btst_cand = BTSTContinuationEngine.scan_evening_btst(sym, df_stock, delivery_pct=deliv_override)
             if btst_cand:
                 btst_list.append(btst_cand)
 

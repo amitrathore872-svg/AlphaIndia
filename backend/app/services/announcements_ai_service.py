@@ -76,6 +76,8 @@ CATALYST_RULES = {
             r"(pli\s+scheme|production\s+linked\s+incentive)\s+.*?(facility|incentive|approval|operational|online)",
             r"commission\w*\s+\d+\s*(mw|gw|mwh|mtpa|tpd|klpd)",
             r"(commission\w*|inaugurat\w*)\s+.*?(corridor|substation|transmission\s+line|pipeline|captive\s+solar)",
+            r"(completion\s+certificate|provisional\s+completion|commercial\s+operation\s+date|taking\s+over\s+certificate|handover\s+certificate|completion\s+of\s+(?:the\s+)?project|declared\s+fit\s+for\s+entry\s+into\s+operation)",
+            r"(highway|corridor|expressway|stretch|section)\s+.*?(completed|fit\s+for\s+entry\s+into\s+operation)",
         ],
         "default_score": 8.8,
         "impact_level": "CRITICAL",
@@ -138,8 +140,17 @@ def classify_catalyst(text_content: str) -> Tuple[str, str, float, Optional[floa
       (catalyst_type, impact_level, impact_score, deal_value_cr)
     """
     deal_val = extract_deal_value(text_content)
+    lower = text_content.lower()
+
+    # Detect completion certificates / completed projects to avoid classifying as new order wins
+    is_completion = bool(re.search(
+        r"(completion\s+certificate|provisional\s+completion|commercial\s+operation\s+date|\bcod\b|taking\s+over\s+certificate|handover\s+certificate|completion\s+of\s+(?:the\s+)?project|declared\s+fit\s+for\s+entry\s+into\s+operation)",
+        lower,
+    ))
 
     for cat_type, config in CATALYST_RULES.items():
+        if is_completion and cat_type == "ORDER_WIN":
+            continue  # Do not classify completion certificates as new order wins
         for pat in config["patterns"]:
             if re.search(pat, text_content, re.IGNORECASE):
                 score = config["default_score"]

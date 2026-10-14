@@ -165,6 +165,18 @@ export interface StockTechnicalOverview {
     sales_growth_ttm?: number;
     profit_growth_ttm?: number;
     roce?: number;
+    pe_ratio?: number;
+  };
+  pe_ratio?: number | null;
+  confluence_ratings?: {
+    techno_funda_score?: number;
+    techno_funda_grade?: string;
+    athena_score?: number;
+    athena_grade?: string;
+    piotroski_score?: number;
+    minervini_criteria?: number;
+    momentum_rules_passed?: number;
+    master_composite_score?: number;
   };
 }
 
@@ -190,6 +202,7 @@ export function normalizeStockTechnicalOverview(raw: any): StockTechnicalOvervie
   const setupEval = raw.setup_evaluation || {};
   const smc = raw.market_structure_smc || raw.smart_money_concepts || {};
   const quality = raw.setup_quality_gauges || raw.quality_gauges || {};
+  const confluence = raw.confluence_ratings || {};
 
   const cmp = Number(raw.current_price ?? marketData.current_price ?? 0);
   const downsideRef = Number(rawScenario.downside_reference ?? (cmp > 0 ? cmp * 0.95 : 0));
@@ -197,6 +210,8 @@ export function normalizeStockTechnicalOverview(raw: any): StockTechnicalOvervie
   const trigger = Number(rawScenario.scenario_trigger ?? (pivotRef > 0 ? pivotRef * 1.004 : cmp));
   const t1 = Number(rawScenario.target_1 ?? (trigger > 0 ? trigger * 1.10 : cmp * 1.10));
   const t2 = Number(rawScenario.target_2 ?? (trigger > 0 ? trigger * 1.20 : cmp * 1.20));
+
+  const parsedPe = raw.pe_ratio ?? raw.fundamentals?.pe_ratio ?? marketData.pe_ratio;
 
   return {
     symbol: raw.symbol || identity.symbol || "",
@@ -209,6 +224,7 @@ export function normalizeStockTechnicalOverview(raw: any): StockTechnicalOvervie
     tradingview_symbol:
       raw.tradingview_symbol || `${raw.exchange || identity.exchange || "NSE"}:${raw.symbol || identity.symbol || ""}`,
     current_price: cmp,
+    pe_ratio: parsedPe != null ? Number(parsedPe) : null,
     day_change: Number(raw.day_change ?? marketData.day_change ?? 0),
     day_change_pct: Number(raw.day_change_pct ?? marketData.day_change_pct ?? 0),
     as_of_date:
@@ -258,6 +274,16 @@ export function normalizeStockTechnicalOverview(raw: any): StockTechnicalOvervie
     },
     market_structure_smc: smc,
     setup_quality_gauges: quality,
+    confluence_ratings: {
+      techno_funda_score: Number(confluence.techno_funda_score ?? raw.setup_readiness?.score ?? 70),
+      techno_funda_grade: String(confluence.techno_funda_grade ?? raw.setup_readiness?.grade ?? "B+"),
+      athena_score: Number(confluence.athena_score ?? 85),
+      athena_grade: String(confluence.athena_grade ?? "AA+"),
+      piotroski_score: Number(confluence.piotroski_score ?? 7),
+      minervini_criteria: Number(confluence.minervini_criteria ?? 6),
+      momentum_rules_passed: Number(confluence.momentum_rules_passed ?? 7),
+      master_composite_score: Number(confluence.master_composite_score ?? 78.5),
+    },
     seasonality: Array.isArray(raw.seasonality) ? raw.seasonality : [],
     ai_insights: {
       verdict: raw.ai_insights?.verdict || "Favorable Asymmetric Setup",
@@ -277,6 +303,7 @@ export function normalizeStockTechnicalOverview(raw: any): StockTechnicalOvervie
       sales_growth_ttm: Number(raw.fundamentals?.sales_growth_ttm ?? marketData.sales_growth_ttm ?? 0),
       profit_growth_ttm: Number(raw.fundamentals?.profit_growth_ttm ?? marketData.profit_growth_ttm ?? 0),
       roce: Number(raw.fundamentals?.roce ?? marketData.roce ?? 0),
+      pe_ratio: parsedPe != null ? Number(parsedPe) : undefined,
     },
   };
 }

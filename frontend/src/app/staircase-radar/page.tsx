@@ -86,14 +86,22 @@ export default function StaircaseRadarPage() {
         sort_by: sortBy,
         sort_order: sortOrder,
       });
-      setOpportunities(res.opportunities || []);
-      setMetadata(res.metadata || {
-        total_scanned: 0,
-        total_opportunities: 0,
-        cupid_archetype_count: 0,
-        early_staircase_count: 0,
-        established_count: 0,
-        avg_ker_10d: 0,
+      setOpportunities(res?.opportunities || []);
+      const m = res?.metadata || {};
+      setMetadata({
+        total_scanned: m.total_scanned ?? (res?.opportunities?.length || 0),
+        total_opportunities: m.total_opportunities ?? (res?.opportunities?.length || 0),
+        stealth_accumulator_count: m.stealth_accumulator_count ?? m.cupid_archetype_count ?? 0,
+        cupid_archetype_count: m.cupid_archetype_count ?? m.stealth_accumulator_count ?? 0,
+        early_staircase_count: m.early_staircase_count ?? 0,
+        established_count: m.established_count ?? 0,
+        tennis_ball_count: m.tennis_ball_count ?? 0,
+        avg_ker_10d: m.avg_ker_10d ?? 0,
+        last_scan_time: m.last_scan_time,
+        total_filtered: m.total_filtered ?? (res?.opportunities?.length || 0),
+        page: m.page ?? 1,
+        limit: m.limit ?? 25,
+        total_pages: m.total_pages ?? 1,
       });
     } catch (err: any) {
       console.error("Failed to load staircase opportunities:", err);
@@ -216,35 +224,35 @@ export default function StaircaseRadarPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
           <KpiCard
             label="Total Scanned"
-            value={metadata.total_scanned.toString()}
-            sub={`${metadata.total_opportunities} Qualified Trends`}
+            value={(metadata?.total_scanned ?? 0).toString()}
+            sub={`${metadata?.total_opportunities ?? 0} Qualified Trends`}
             icon={<Activity size={16} />}
             color="default"
           />
           <KpiCard
             label="Stealth Accumulators"
-            value={(metadata.stealth_accumulator_count ?? metadata.cupid_archetype_count ?? 0).toString()}
+            value={(metadata?.stealth_accumulator_count ?? metadata?.cupid_archetype_count ?? 0).toString()}
             sub="KER > 0.70 & Sweet Base"
             icon={<Flame size={16} />}
             color="cyan"
           />
           <KpiCard
             label="Early Ignition"
-            value={metadata.early_staircase_count.toString()}
+            value={(metadata?.early_staircase_count ?? 0).toString()}
             sub="Day 3-6 Post-Breakout"
             icon={<Sparkles size={16} />}
             color="emerald"
           />
           <KpiCard
             label="Established Runners"
-            value={metadata.established_count.toString()}
+            value={(metadata?.established_count ?? 0).toString()}
             sub="Holding 10 EMA Stack"
             icon={<TrendingUp size={16} />}
             color="amber"
           />
           <KpiCard
             label="Avg Trend Efficiency"
-            value={metadata.avg_ker_10d.toFixed(2)}
+            value={(metadata?.avg_ker_10d ?? 0).toFixed(2)}
             sub="KER (1.0 = Pure Line)"
             icon={<Gauge size={16} />}
             color="purple"
@@ -358,12 +366,18 @@ export default function StaircaseRadarPage() {
           <EmptyState
             title="No Staircase Opportunities Found"
             description="No stocks currently match the specified tier and conviction threshold. Try lowering the conviction score or resetting the search filter."
-            actionText="Reset Filters"
-            onAction={() => {
-              setSelectedTier("ALL");
-              setSearchQuery("");
-              setMinScore(50);
-            }}
+            action={
+              <button
+                onClick={() => {
+                  setSelectedTier("ALL");
+                  setSearchQuery("");
+                  setMinScore(50);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-xs font-mono font-bold text-cyan-400 hover:bg-cyan-500/20 transition cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            }
           />
         ) : (
           <div className="rounded-xl border border-slate-800 bg-slate-950/70 overflow-hidden shadow-xl">

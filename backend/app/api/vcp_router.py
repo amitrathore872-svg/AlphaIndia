@@ -230,12 +230,13 @@ def get_vcp_history(
 @router.get("/backtest", summary="Get Historical VCP Quantitative Backtest Report (2-Year Empirical or 10-Year Macro)")
 def get_vcp_backtest(
     period: str = Query("2y", description="Backtest timeframe: '2y' (2-Year Empirical) or '10y' (10-Year Macro)"),
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Returns empirical backtest analytics across Indian market data (2024–2026 or 2014–2024)
     evaluating the 3-Rule Mark Minervini VCP + Volume Breakout engine.
     """
-    return VCPBacktestService.get_backtest_report(period=period)
+    return VCPBacktestService.get_backtest_report(period=period, db=db)
 
 
 

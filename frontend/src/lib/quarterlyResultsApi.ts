@@ -295,3 +295,45 @@ export async function triggerExchangeScan(
     }
   );
 }
+
+export interface CompanyFinancialItem {
+  fiscal_period: string;
+  period_end: string | null;
+  result_date: string | null;
+  revenue: number | null;
+  operating_income: number | null;
+  net_profit: number | null;
+  eps: number | null;
+  interest_income: number | null;
+  interest_expense: number | null;
+  net_interest_income: number | null;
+  total_debt: number | null;
+  total_equity: number | null;
+  book_value: number | null;
+  operating_cash_flow: number | null;
+  free_cash_flow: number | null;
+  revenue_growth: number | null;
+  pat_growth: number | null;
+  roce: number | null;
+  source: string;
+  imported_at: string | null;
+}
+
+export interface CompanyFinancialsResponse {
+  symbol: string;
+  company: string;
+  quarters: number;
+  financials: CompanyFinancialItem[];
+}
+
+export async function fetchCompanyFinancials(symbol: string): Promise<CompanyFinancialsResponse> {
+  const cleanSym = symbol.trim().toUpperCase();
+  return fetchJson<CompanyFinancialsResponse>(`/financials/${encodeURIComponent(cleanSym)}`);
+}
+
+export async function triggerCompanyImport(symbol: string): Promise<{ success: boolean; message?: string }> {
+  const cleanSym = symbol.trim().toUpperCase();
+  return fetchJson<{ success: boolean; message?: string }>(`/financials/import/${encodeURIComponent(cleanSym)}`, {
+    method: "POST",
+  });
+}

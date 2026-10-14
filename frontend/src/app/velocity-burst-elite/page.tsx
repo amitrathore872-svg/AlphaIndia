@@ -945,7 +945,7 @@ export default function VelocityBurstElitePage() {
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Clock className="h-5 w-5 text-sky-400" />
-                Stage 13: BTST Continuation Engine (2:15 PM - 3:15 PM)
+                Stage 13: BTST Continuation Engine (3:15 PM - 3:30 PM)
               </h3>
               <p className="text-xs text-slate-400">
                 Catches late afternoon aggressive institutional buy surges closing near day highs with high delivery %.
@@ -975,8 +975,18 @@ export default function VelocityBurstElitePage() {
                       <td className="p-3.5 font-bold text-white">{b.btst_confidence}/100</td>
                       <td className="p-3.5 font-bold text-cyan-400">{b.continuation_probability}%</td>
                       <td className="p-3.5">
-                        <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/40">
-                          {b.action_recommended}
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[10px] font-bold border ${
+                            b.action_recommended === "BUY_BTST_ELITE"
+                              ? "bg-emerald-500/25 text-emerald-300 border-emerald-400/60 shadow-sm shadow-emerald-950"
+                              : b.action_recommended === "BUY_BTST"
+                              ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                              : b.action_recommended === "BTST_ACCUMULATE"
+                              ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                              : "bg-slate-700/40 text-slate-300 border-slate-600/40"
+                          }`}
+                        >
+                          {b.action_recommended || "WATCH_AT_CLOSE"}
                         </span>
                       </td>
                     </tr>

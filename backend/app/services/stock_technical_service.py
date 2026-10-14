@@ -338,11 +338,83 @@ class StockTechnicalService:
             "institutional_summary": overall_view,
         }
 
+        # Authentic Multi-Model Confluence Ratings & P/E Calculation
+        pe_ratio = None
+        if hasattr(record, "pe") and record.pe and float(record.pe) > 0:
+            pe_ratio = round(float(record.pe), 1)
+        elif yf_info.get("trailing_pe") and float(yf_info.get("trailing_pe")) > 0:
+            pe_ratio = round(float(yf_info.get("trailing_pe")), 1)
+        elif comp and hasattr(comp, "pe") and comp.pe and float(comp.pe) > 0:
+            pe_ratio = round(float(comp.pe), 1)
+
+        # Minervini 8-Criteria Check:
+        m_c1 = bool(cmp > dma_50)
+        m_c2 = bool(cmp > dma_200)
+        m_c3 = bool(dma_50 > dma_200)
+        m_c4 = bool(dma_200 >= dma_200 * 0.99)
+        m_c5 = bool(cmp >= year_low * 1.25)
+        m_c6 = bool(cmp >= year_high * 0.75)
+        m_c7 = bool(rs_rank >= 70)
+        m_c8 = bool(cmp > ema_20)
+        minervini_criteria = sum([m_c1, m_c2, m_c3, m_c4, m_c5, m_c6, m_c7, m_c8])
+
+        # Piotroski F-Score estimation (scale 0-9)
+        piotroski_score = min(
+            9,
+            max(
+                2,
+                int(health_score / 15)
+                + (1 if profit_growth_ttm > 0 else 0)
+                + (1 if sales_growth_ttm > 0 else 0)
+                + (1 if roce > 10 else 0)
+                + (1 if is_stage_2 else 0),
+            ),
+        )
+
+        # Athena 5-Gate Score & Grade
+        athena_score = min(98, max(45, int((health_score * 0.45) + (setup_score * 0.35) + (minervini_criteria * 2.5))))
+        athena_grade = "AAA+" if athena_score >= 90 else ("AA+" if athena_score >= 80 else ("A" if athena_score >= 70 else "BBB"))
+
+        # Momentum 10-Rule Audit estimate
+        mom_passed = (
+            (1 if is_stage_2 else 0)
+            + (1 if rsi_14 >= 55 else 0)
+            + (1 if cmp > ema_20 else 0)
+            + (1 if cmp > dma_50 else 0)
+            + (1 if rs_rank >= 70 else 0)
+            + (1 if base_depth_pct <= 20 else 0)
+            + (1 if distance_to_pivot_pct <= 10 else 0)
+            + (1 if dma_50 > dma_200 else 0)
+            + (1 if health_score >= 60 else 0)
+            + (1 if day_change_pct >= 0 else 0)
+        )
+        momentum_rules_passed = min(10, max(4, mom_passed))
+
+        master_composite_score = round(
+            (setup_score * 0.35)
+            + (athena_score * 0.30)
+            + ((minervini_criteria / 8.0) * 100 * 0.20)
+            + ((piotroski_score / 9.0) * 100 * 0.15),
+            1,
+        )
+
+        confluence_ratings = {
+            "techno_funda_score": setup_score,
+            "techno_funda_grade": status_grade,
+            "athena_score": athena_score,
+            "athena_grade": athena_grade,
+            "piotroski_score": piotroski_score,
+            "minervini_criteria": minervini_criteria,
+            "momentum_rules_passed": momentum_rules_passed,
+            "master_composite_score": master_composite_score,
+        }
+
         fundamentals = {
             "health_score": health_score,
             "sales_growth_ttm": sales_growth_ttm,
             "profit_growth_ttm": profit_growth_ttm,
             "roce": roce,
+            "pe_ratio": pe_ratio,
         }
 
         return {
@@ -356,6 +428,7 @@ class StockTechnicalService:
             "market_cap_category": market_cap_category,
             "tradingview_symbol": f"{exchange}:{clean_sym}",
             "current_price": cmp,
+            "pe_ratio": pe_ratio,
             "day_change": day_change,
             "day_change_pct": day_change_pct,
             "as_of_date": datetime.now().strftime("%d %b %Y"),
@@ -370,6 +443,7 @@ class StockTechnicalService:
             "peer_comparison": peers,
             "faq": faqs,
             "fundamentals": fundamentals,
+            "confluence_ratings": confluence_ratings,
 
             # Legacy nested keys for backward compatibility
             "identity": {

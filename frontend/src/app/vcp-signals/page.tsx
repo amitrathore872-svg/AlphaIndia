@@ -71,12 +71,12 @@ export default function VCPSignalsPage() {
   };
 
   const handleOpenChart = (sig: VCPSignalRecord) => {
-    // Map VCPSignalRecord to VCPStockPick structure for VCPChartModal
-    const mockPick: VCPStockPick = {
+    // Map authentic VCPSignalRecord to VCPStockPick structure for VCPChartModal
+    const stockPick: VCPStockPick = {
       symbol: sig.symbol,
-      company_name: sig.company_name,
-      sector: sig.sector,
-      market_cap: 15000,
+      company_name: sig.company_name || sig.symbol,
+      sector: sig.sector || "Equity",
+      market_cap: 0,
       cmp: sig.cmp,
       pivot_price: sig.entry_price,
       entry_zone: `₹${(sig.entry_price * 0.998).toFixed(1)}–${(sig.entry_price * 1.015).toFixed(1)}`,
@@ -87,28 +87,29 @@ export default function VCPSignalsPage() {
       target_3: sig.target_3,
       reward_risk: sig.reward_risk,
       vcp_stage: sig.vcp_stage,
-      contraction_sizes: [16.4, 9.2, 4.1],
-      volume_breakout_ratio: 2.8,
-      volume_dryup_pct: 72,
-      trend_score: 92,
-      vcp_score: 94,
-      volume_score: 90,
-      breakout_score: 93,
-      institutional_score: 95,
-      growth_score: 91,
-      catalyst_score: 94,
+      contraction_sizes: [],
+      volume_breakout_ratio: 0,
+      volume_dryup_pct: 0,
+      trend_score: sig.final_ai_score,
+      vcp_score: sig.final_ai_score,
+      volume_score: sig.final_ai_score,
+      breakout_score: sig.final_ai_score,
+      institutional_score: sig.final_ai_score,
+      growth_score: sig.final_ai_score,
+      catalyst_score: sig.final_ai_score,
       final_ai_score: sig.final_ai_score,
       verdict: sig.verdict,
-      confidence: 96,
+      confidence: sig.final_ai_score,
       time_horizon: "2–8 Weeks",
       why_selected: [
-        `${sig.vcp_stage} completed.`,
-        `Current return: ${sig.return_pct > 0 ? "+" : ""}${sig.return_pct}%.`,
-        `Trade status: ${sig.status}.`,
+        `${sig.vcp_stage} pattern structure.`,
+        `Recommendation price: ₹${sig.entry_price.toFixed(2)}.`,
+        `Return since entry: ${sig.return_pct > 0 ? "+" : ""}${sig.return_pct.toFixed(2)}%.`,
+        `Current trade state: ${sig.status.replace(/_/g, " ")}.`,
       ],
       is_elite: sig.is_elite,
     };
-    setSelectedStockForChart(mockPick);
+    setSelectedStockForChart(stockPick);
   };
 
   const kpi = data?.kpi;

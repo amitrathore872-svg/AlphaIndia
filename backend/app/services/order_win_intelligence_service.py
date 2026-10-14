@@ -65,6 +65,15 @@ ORDER_NOISE_PATTERNS = [
     r"meeting\s+order",
     r"order\s+of\s+the\s+hon'?ble",
     r"demat\s+remat",
+    r"completion\s+certificate",
+    r"provisional\s+completion\s+certificate",
+    r"taking\s+over\s+certificate",
+    r"handover\s+certificate",
+    r"completion\s+of\s+(?:the\s+)?(?:order|contract|project|highway|stretch|package|works)",
+    r"project\s+completion",
+    r"commercial\s+operation\s+date",
+    r"\bcod\b",
+    r"declared\s+fit\s+for\s+entry\s+into\s+operation",
 ]
 
 MONTH_NAMES = {

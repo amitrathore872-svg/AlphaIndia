@@ -28,10 +28,22 @@ logger = logging.getLogger(__name__)
 # Persistent Disk Cache Path
 DISK_CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "staircase_screener_cache.json"
 
+_DEFAULT_METADATA: Dict[str, Any] = {
+    "total_scanned": 0,
+    "total_opportunities": 0,
+    "stealth_accumulator_count": 0,
+    "cupid_archetype_count": 0,
+    "early_staircase_count": 0,
+    "established_count": 0,
+    "tennis_ball_count": 0,
+    "avg_ker_10d": 0.0,
+    "last_scan_time": "",
+}
+
 _CACHE: Dict[str, Any] = {
     "timestamp": 0,
     "opportunities": [],
-    "metadata": {},
+    "metadata": dict(_DEFAULT_METADATA),
 }
 CACHE_TTL_SECONDS = 300  # 5 minutes
 _scan_in_progress = False
@@ -396,24 +408,28 @@ class StaircaseScreenerService:
             try:
                 with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
                     disk_data = json.load(f)
-                    if now - disk_data.get("timestamp", 0) < (CACHE_TTL_SECONDS * 3):
-                        _CACHE["opportunities"] = disk_data.get("opportunities", [])
-                        _CACHE["metadata"] = disk_data.get("metadata", {})
+                    opps = disk_data.get("opportunities", [])
+                    meta = {**_DEFAULT_METADATA, **disk_data.get("metadata", {})}
+                    if opps:
+                        _CACHE["opportunities"] = opps
+                        _CACHE["metadata"] = meta
                         _CACHE["timestamp"] = disk_data.get("timestamp", now)
-                        return {
-                            "opportunities": _CACHE["opportunities"],
-                            "metadata": _CACHE["metadata"],
-                            "cached": True,
-                        }
+                        # Serve immediately if disk cache is under 2 hours
+                        if now - disk_data.get("timestamp", 0) < 7200:
+                            return {
+                                "opportunities": _CACHE["opportunities"],
+                                "metadata": _CACHE["metadata"],
+                                "cached": True,
+                            }
             except Exception as e:
                 logger.warning(f"Failed to read disk cache: {e}")
 
-        # If scan is already running in background, return stale cache or empty
+        # If scan is already running in background, return stale cache or defaults
         with _scan_lock:
             if _scan_in_progress:
                 return {
                     "opportunities": _CACHE.get("opportunities", []),
-                    "metadata": _CACHE.get("metadata", {}),
+                    "metadata": {**_DEFAULT_METADATA, **_CACHE.get("metadata", {})},
                     "scan_in_progress": True,
                 }
             _scan_in_progress = True

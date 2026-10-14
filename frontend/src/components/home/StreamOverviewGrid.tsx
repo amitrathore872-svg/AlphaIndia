@@ -71,7 +71,7 @@ export const DEFAULT_ALPHA_INDIA_STREAMS: StreamCard[] = [
     id: "exchange-catalysts",
     title: "Live Catalysts & Order Wins",
     subtitle: "Exchange Regulatory Filings & Material Capex",
-    viewHref: "/trend-genesis",
+    viewHref: "/order-wins",
     viewLabel: "View Wire",
     items: [
       { primary: "L&T", secondary: "Mega International EPC Order", badge: "Order Win", badgeColor: "emerald" },

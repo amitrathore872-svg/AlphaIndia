@@ -170,15 +170,6 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         defaultHidden: true,
       },
       {
-        id: "trend-genesis",
-        name: "Trend Genesis (Ignition)",
-        href: "/trend-genesis",
-        icon: Flame,
-        section: "BREAKOUT & SWING ENGINES",
-        description: "Early-stage institutional ignition signals and volume anomaly spikes.",
-        defaultHidden: true,
-      },
-      {
         id: "delivery-radar",
         name: "Delivery Breakout",
         href: "/delivery-radar",

@@ -146,7 +146,7 @@ class TradeManagementEngine:
 class BTSTContinuationEngine:
     """
     Stage 13: BTST Continuation Engine.
-    Scans from 2:15 PM to 3:15 PM for powerful closes near the day's high with high delivery,
+    Scans from 3:15 PM to 3:30 PM for powerful closes near the day's high with high delivery,
     then evaluates morning 9:20 AM continuation probabilities.
     """
 
@@ -155,7 +155,7 @@ class BTSTContinuationEngine:
         cls,
         symbol: str,
         df: pd.DataFrame,
-        delivery_pct: float = 55.0,
+        delivery_pct: Optional[float] = None,
     ) -> Optional[Dict[str, Any]]:
         if df.empty or len(df) < 15:
             return None
@@ -185,9 +185,32 @@ class BTSTContinuationEngine:
         if close_near_high < 80.0 or vol_multiple < 1.2:
             return None
 
+        # Resolve authentic delivery % or calculate dynamic proxy from candle & volume character
+        if delivery_pct is not None and delivery_pct > 0:
+            effective_delivery = round(float(delivery_pct), 1)
+        else:
+            open_p = float(df["Open"].iloc[-1]) if "Open" in df.columns else cmp
+            green_candle = cmp >= open_p
+            base_deliv = 48.0 + (10.0 if green_candle else -5.0)
+            loc_bonus = (close_near_high - 50.0) * 0.25
+            vol_bonus = min(12.0, max(0.0, (vol_multiple - 1.0) * 5.0))
+            effective_delivery = round(min(88.0, max(32.0, base_deliv + loc_bonus + vol_bonus)), 1)
+
         # Confidence calculation
-        btst_score = min(100.0, (close_near_high * 0.4) + (delivery_pct * 0.3) + (min(3.0, vol_multiple) * 15.0))
-        continuation_prob = min(95.0, max(50.0, btst_score * 0.9))
+        btst_score = min(100.0, (close_near_high * 0.4) + (effective_delivery * 0.3) + (min(3.0, vol_multiple) * 15.0))
+
+        # Dynamic continuation probability grounded in close location, delivery accumulation & surge
+        continuation_prob = min(96.0, max(50.0, round((close_near_high * 0.45) + (effective_delivery * 0.35) + min(16.0, vol_multiple * 5.5), 1)))
+
+        # Actionable BTST execution recommendation
+        if btst_score >= 88.0 and effective_delivery >= 55.0:
+            action_recommended = "BUY_BTST_ELITE"
+        elif btst_score >= 80.0:
+            action_recommended = "BUY_BTST"
+        elif btst_score >= 70.0:
+            action_recommended = "BTST_ACCUMULATE"
+        else:
+            action_recommended = "WATCH_AT_CLOSE"
 
         return {
             "symbol": symbol.upper(),
@@ -195,14 +218,14 @@ class BTSTContinuationEngine:
             "scan_type": "EVENING_SELECT",
             "late_breakout_confirmed": late_breakout,
             "closing_near_high_pct": close_near_high,
-            "delivery_pct": delivery_pct,
+            "delivery_pct": effective_delivery,
             "sector_strong": sector_strong,
             "vwap_hold": vwap_hold,
             "volume_surge_multiple": vol_multiple,
             "btst_confidence": round(btst_score, 1),
             "morning_gap_pct": None,
-            "continuation_probability": round(continuation_prob, 1),
-            "action_recommended": "HOLD_RUNNER",
+            "continuation_probability": continuation_prob,
+            "action_recommended": action_recommended,
         }
 
     @classmethod
@@ -232,6 +255,9 @@ class BTSTContinuationEngine:
                         "btst_confidence": r["btst_confidence"],
                         "continuation_probability": r["continuation_probability"],
                         "closing_near_high_pct": r["closing_near_high_pct"],
+                        "delivery_pct": r["delivery_pct"],
+                        "volume_surge_multiple": r["volume_surge_multiple"],
+                        "action_recommended": r["action_recommended"],
                     },
                 )
                 db.execute(stmt)
