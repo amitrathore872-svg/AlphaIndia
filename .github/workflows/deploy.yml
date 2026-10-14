@@ -6,10 +6,10 @@ on:
       - main
   workflow_dispatch:
 
-# Ensure only one deployment runs at a time on the EC2 server
+# Ensure only one deployment runs at a time on the EC2 server, cancelling superseded runs
 concurrency:
   group: production-ec2-deployment
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -145,10 +145,12 @@ jobs:
             echo "=== DOCKER COMPOSE LOGS (NGINX) ===" >> /tmp/deploy_diag.txt
             docker compose logs --tail=50 nginx >> /tmp/deploy_diag.txt 2>&1
           ' || true
-          scp -i ~/.ssh/deploy_key -P "$CLEAN_PORT" "$CLEAN_USER@$CLEAN_HOST:/tmp/deploy_diag.txt" ./deploy_diag.txt || true
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B deploy-diag
-          git add deploy_diag.txt || true
-          git commit -m "chore: record deployment diagnostics" || true
-          git push -f origin deploy-diag || true
+          scp -i ~/.ssh/deploy_key -P "$CLEAN_PORT" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$CLEAN_USER@$CLEAN_HOST:/tmp/deploy_diag.txt" ./deploy_diag.txt 2>/dev/null || true
+          if [ -f "./deploy_diag.txt" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git checkout -B deploy-diag
+            git add deploy_diag.txt || true
+            git commit -m "chore: record deployment diagnostics" || true
+            timeout 30 git push -f origin deploy-diag || true
+          fi
