@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.swing_quant_service import SwingQuantService
 from app.services.swing_backtest_service import SwingBacktestService
 from app.models.swing_overlay import SwingPosition, SwingTradeLog
@@ -31,13 +32,20 @@ def get_swing_overlay_dashboard(
     - Exact Rupee Levels (Buy Zone, Stop Loss, Target 1, Target 2)
     - Adaptive Indicator DNA per stock
     """
+    cache_key = f"swing:dashboard:{source}:{portfolio_id}:{watchlist_id}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
     try:
-        return SwingQuantService.get_dashboard_payload(
+        data = SwingQuantService.get_dashboard_payload(
             source=source,
             portfolio_id=portfolio_id,
             watchlist_id=watchlist_id,
             db=db,
         )
+        cache.set_json_sync(cache_key, data, expire_seconds=45)
+        return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch swing dashboard: {str(e)}")
 

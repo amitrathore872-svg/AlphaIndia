@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.cup_handle.cup_handle_orchestrator import (
     scan_patterns,
     compute_stage_funnel,
@@ -47,6 +48,11 @@ def get_cup_handle_patterns(
     Returns AI-scored Cup & Handle breakout candidates.
     All 8 stages must pass; only high-conviction patterns surface here.
     """
+    cache_key = f"cuphandle:patterns:{min_score}:{conviction_tier}:{search}:{sector}:{breakout_only}:{sort_by}:{sort_order}:{page}:{limit}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
     scan_data = scan_patterns(db=db, force_refresh=False)
     patterns = scan_data.get("patterns", [])
     metadata = scan_data.get("metadata", {})
@@ -103,7 +109,7 @@ def get_cup_handle_patterns(
     start = (page - 1) * limit
     items = filtered[start : start + limit]
 
-    return {
+    out = {
         "metadata": metadata,
         "total_count": total_count,
         "page": page,
@@ -111,6 +117,8 @@ def get_cup_handle_patterns(
         "total_pages": total_pages,
         "items": items,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=60)
+    return out
 
 
 # ---------------------------------------------------------------------------

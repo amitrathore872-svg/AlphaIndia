@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.momentum_screener_service import MomentumScreenerService
 from app.services.momentum_universe_scanner import (
     MomentumUniverseScanner,
@@ -41,6 +42,11 @@ def get_momentum_opportunities(
     """
     Returns multi-timeframe momentum opportunities matching the Chartink criteria.
     """
+    cache_key = f"momentum:screener:{min_matches}:{require_strict}:{search}:{sector}:{sort_by}:{sort_order}:{page}:{limit}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
     scan_data = MomentumScreenerService.scan_opportunities(db=db, force_refresh=False)
     opportunities = scan_data.get("opportunities", [])
     metadata = scan_data.get("metadata", {})
@@ -98,7 +104,7 @@ def get_momentum_opportunities(
     from app.services.stock_trend_enricher import StockTrendEnricher
     StockTrendEnricher.enrich(db, paginated_items, symbol_key="symbol", cmp_key="cmp")
 
-    return {
+    out = {
         "metadata": metadata,
         "total_count": total_count,
         "page": page,
@@ -106,6 +112,8 @@ def get_momentum_opportunities(
         "total_pages": total_pages,
         "items": paginated_items,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=60)
+    return out
 
 
 @router.post("/scan", response_model=Dict[str, Any])

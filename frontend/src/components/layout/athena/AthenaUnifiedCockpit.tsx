@@ -45,6 +45,12 @@ import {
   TrendingDown,
   Info,
   Calendar,
+  LayoutGrid,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Table as TableIcon,
 } from "lucide-react";
 
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
@@ -360,7 +366,7 @@ function Master5QSparkline({
       <div className="flex flex-col gap-0.5 shrink-0">
         {streak && streak >= 2 ? (
           <span
-            className="px-1.5 py-0.2 rounded text-[9px] font-black font-mono tracking-tight bg-amber-500/15 border border-amber-500/40 text-amber-400 whitespace-nowrap"
+            className="px-2 py-0.5 rounded text-[11px] font-bold font-mono tracking-tight bg-amber-500/15 border border-amber-500/40 text-amber-300 whitespace-nowrap"
             title={`${streak} consecutive quarters of sequential PAT expansion`}
           >
             🔥 {streak}Q
@@ -368,7 +374,7 @@ function Master5QSparkline({
         ) : null}
         {isAth ? (
           <span
-            className="px-1.5 py-0.2 rounded text-[9px] font-black font-mono tracking-tight bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 whitespace-nowrap"
+            className="px-2 py-0.5 rounded text-[11px] font-bold font-mono tracking-tight bg-cyan-500/15 border border-cyan-500/40 text-cyan-200 whitespace-nowrap"
             title="All-Time High Quarter Sales or Profit"
           >
             ★ ATH
@@ -377,14 +383,14 @@ function Master5QSparkline({
       </div>
 
       {/* Hover Trajectory Tooltip */}
-      <div className="hidden group-hover:flex absolute bottom-full mb-1 left-0 z-30 flex-col gap-1 bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 shadow-2xl text-[10px] font-mono pointer-events-none whitespace-nowrap">
+      <div className="hidden group-hover:flex absolute bottom-full mb-1 left-0 z-30 flex-col gap-1 bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 shadow-2xl text-xs font-mono pointer-events-none whitespace-nowrap">
         <span className="font-bold text-cyan-400 border-b border-slate-800 pb-1">5-Quarter Trajectory:</span>
-        <div className="flex gap-2 text-[9px]">
+        <div className="flex gap-2 text-[11px]">
           {trend.map((t, i) => (
             <div key={i} className="flex flex-col text-center border-r border-slate-800 last:border-0 pr-2 last:pr-0">
-              <span className="text-slate-400 font-bold">{formatFiscalPeriod(t.period)}</span>
+              <span className="text-slate-300 font-bold">{formatFiscalPeriod(t.period)}</span>
               <span className="font-bold text-cyan-300">Rev ₹{t.revenue ?? 0}</span>
-              <span className="font-bold text-emerald-400">PAT ₹{t.net_profit ?? 0}</span>
+              <span className="font-bold text-emerald-300">PAT ₹{t.net_profit ?? 0}</span>
             </div>
           ))}
         </div>
@@ -715,6 +721,14 @@ function resolveFilingAuditDetails(item: UnifiedMasterItem): {
   };
 }
 
+function formatCompactPeriod(period?: string | null): string {
+  if (!period) return "LATEST";
+  let s = formatFiscalPeriod(period).trim();
+  s = s.replace(/\b(20)(\d{2})\b/g, "'$2");
+  s = s.replace(/FY\s*(\d{2})/gi, "'$1");
+  return s;
+}
+
 // =========================================================================
 // Main Unified Cockpit Component
 // =========================================================================
@@ -728,14 +742,56 @@ export default function AthenaUnifiedCockpit() {
 
   // Filters & Controls
   const [universeMode, setUniverseMode] = useState<"active_season" | "all_universe">("active_season");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("current");
-  const [selectedSector, setSelectedSector] = useState("all");
   const [selectedFreshness, setSelectedFreshness] = useState("all");
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedBuyZone, setSelectedBuyZone] = useState("all");
   const [sortColumn, setSortColumn] = useState<string>("recency");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Institutional Growth Radar Default Filters (Item 6: MCap > 300 Cr, PEAD Score >= 40, Recency <= 45 Days)
+  const [minMarketCap, setMinMarketCap] = useState<number>(300);
+  const [minPeadScore, setMinPeadScore] = useState<number>(40);
+  const [maxRecencyDays, setMaxRecencyDays] = useState<number>(45);
+
+  const isInstitutionalDefaultActive = minMarketCap === 300 && minPeadScore === 40 && maxRecencyDays === 45;
+  const isAnyInstitutionalFilterActive = minMarketCap > 0 || minPeadScore > 0 || maxRecencyDays > 0;
+
+  const handleApplyInstitutionalDefault = () => {
+    setMinMarketCap(300);
+    setMinPeadScore(40);
+    setMaxRecencyDays(45);
+  };
+
+  const handleClearInstitutionalFilters = () => {
+    setMinMarketCap(0);
+    setMinPeadScore(0);
+    setMaxRecencyDays(0);
+  };
+
+  // Mobile Filter Drawer Toggle
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // Active Filters Counter
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedPeriod !== "current") count++;
+    if (selectedGrade) count++;
+    if (selectedBuyZone !== "all") count++;
+    if (minMarketCap !== 300) count++;
+    if (minPeadScore !== 40) count++;
+    if (maxRecencyDays !== 45) count++;
+    return count;
+  }, [selectedPeriod, selectedGrade, selectedBuyZone, minMarketCap, minPeadScore, maxRecencyDays]);
+
+  // Auto-detect mobile screen to default to card view on mobile devices
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setViewMode("cards");
+    }
+  }, []);
 
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
@@ -769,7 +825,7 @@ export default function AthenaUnifiedCockpit() {
       const [flashRes, filingsRes, qrRes, calStatsRes] = await Promise.allSettled([
         fetchFlashDecisions(),
         fetchFilingsFeed(),
-        fetchQuarterlyResults({ limit: 500, sort_by: "discovered_at", sort_order: "desc", feed_type: "RESULTS" }),
+        fetchQuarterlyResults({ limit: 100, sort_by: "discovered_at", sort_order: "desc", feed_type: "RESULTS" }),
         fetchCalendarStats(),
       ]);
 
@@ -1157,20 +1213,6 @@ export default function AthenaUnifiedCockpit() {
     return allAvailablePeriods.filter((p) => p !== currentFilingPeriod);
   }, [allAvailablePeriods, currentFilingPeriod]);
 
-  // Extract unique sectors (excluding Unknown / N/A)
-  const availableSectors = useMemo(() => {
-    const set = new Set<string>();
-    unifiedItems.forEach((item) => {
-      if (
-        item.sector &&
-        item.sector.trim() &&
-        !["unknown", "n/a", "-", "null", "undefined"].includes(item.sector.trim().toLowerCase())
-      ) {
-        set.add(item.sector.trim());
-      }
-    });
-    return Array.from(set).sort();
-  }, [unifiedItems]);
 
   // Filtered & Sorted Master Items
   const filteredMasterItems = useMemo(() => {
@@ -1199,10 +1241,6 @@ export default function AthenaUnifiedCockpit() {
         }
       }
 
-      // Sector
-      if (selectedSector !== "all" && item.sector !== selectedSector) {
-        return false;
-      }
 
       // Conviction Grade
       if (selectedGrade && item.conviction_grade !== selectedGrade) {
@@ -1213,6 +1251,32 @@ export default function AthenaUnifiedCockpit() {
       if (selectedBuyZone !== "all") {
         if (!item.pead_drift || item.pead_drift.zone_status !== selectedBuyZone) {
           return false;
+        }
+      }
+
+      // Institutional Filter: Market Cap (Default: > 300 Cr)
+      if (minMarketCap > 0) {
+        if (item.market_cap == null || item.market_cap < minMarketCap) {
+          return false;
+        }
+      }
+
+      // Institutional Filter: PEAD Score (Default: >= 40)
+      if (minPeadScore > 0) {
+        const score = item.shock_score ?? item.pead_score ?? 0;
+        if (score < minPeadScore) {
+          return false;
+        }
+      }
+
+      // Institutional Filter: Recency Horizon (Default: <= 45 Days)
+      if (maxRecencyDays > 0) {
+        const ts = item.published_at || item.detected_at;
+        if (ts) {
+          const diffDays = (Date.now() - new Date(ts).getTime()) / (1000 * 60 * 60 * 24);
+          if (diffDays > maxRecencyDays) {
+            return false;
+          }
         }
       }
 
@@ -1343,7 +1407,18 @@ export default function AthenaUnifiedCockpit() {
     });
 
     return sorted;
-  }, [unifiedItems, searchQuery, selectedSector, selectedGrade, selectedBuyZone, selectedFreshness, sortColumn, sortDirection]);
+  }, [
+    unifiedItems,
+    searchQuery,
+    selectedGrade,
+    selectedBuyZone,
+    selectedFreshness,
+    minMarketCap,
+    minPeadScore,
+    maxRecencyDays,
+    sortColumn,
+    sortDirection,
+  ]);
 
   // Aggregate stats & dynamic telemetry
   const eliteCandidatesCount = unifiedItems.filter(
@@ -1368,26 +1443,26 @@ export default function AthenaUnifiedCockpit() {
   ) => {
     const isActive = sortColumn === colKey;
     const stickyClass = isSticky
-      ? "sticky left-0 z-30 bg-slate-950/95 border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.6)]"
-      : "";
+      ? "sticky left-0 top-0 z-40 bg-[#050B14] border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.6)]"
+      : "sticky top-0 z-30 bg-[#050B14]";
     return (
       <th
         className={`p-3 ${minWidth} cursor-pointer select-none transition-colors group ${stickyClass} ${
           align === "right" ? "text-right" : "text-left"
-        } ${isActive ? "text-cyan-300 bg-cyan-950/30" : "hover:text-slate-200 hover:bg-slate-900/40"}`}
+        } ${isActive ? "text-cyan-300 bg-cyan-950/60" : "hover:text-slate-100 hover:bg-slate-900/50"}`}
         title={title || `Click to sort by ${label}`}
         onClick={() => handleSort(colKey)}
       >
         <div className={`inline-flex items-center gap-1.5 ${align === "right" ? "justify-end" : "justify-start"}`}>
-          <span>{label}</span>
+          <span className="font-bold">{label}</span>
           {isActive ? (
             sortDirection === "asc" ? (
-              <ArrowUp className="w-3 h-3 text-cyan-400 shrink-0" />
+              <ArrowUp className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
             ) : (
-              <ArrowDown className="w-3 h-3 text-cyan-400 shrink-0" />
+              <ArrowDown className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
             )
           ) : (
-            <ArrowUpDown className="w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-colors opacity-60 shrink-0" />
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors opacity-70 shrink-0" />
           )}
         </div>
       </th>
@@ -1395,116 +1470,246 @@ export default function AthenaUnifiedCockpit() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* =========================================================================
-          TIER 1: EXECUTIVE TELEMETRY RIBBON & UNIVERSE SWITCHER
+          UNIFIED INSTITUTIONAL COMMAND CONSOLE (Mobile-Optimized & Bloomberg Density)
       ========================================================================= */}
-      <div className="rounded-xl border border-slate-800 bg-[#050B14]/90 p-3.5 shadow-2xl backdrop-blur">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Status & Telemetry Indicators */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-mono text-xs font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
-              LIVE NSE/BSE Feed
+      <div className="rounded-xl border border-slate-800 bg-[#050B14]/95 shadow-2xl backdrop-blur-md overflow-hidden">
+        {/* Strip 1: Telemetry & Live Status Strip */}
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-950/70 border-b border-slate-800/80 text-[11px] font-mono text-slate-300 overflow-x-auto no-scrollbar">
+          {/* Left: Live status badge + Scheduled Radar button + Telemetry */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 font-bold shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+              <span>LIVE</span>
+              <span className="hidden sm:inline">NSE/BSE</span>
             </div>
 
             {/* Official NSE Scheduled Earnings Radar Button */}
             <button
               onClick={() => setIsEarningsRadarOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-950/80 border border-cyan-500/40 hover:bg-cyan-900/60 text-cyan-300 font-mono text-xs font-bold transition-all shadow-sm cursor-pointer group"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/40 hover:bg-cyan-900/60 text-cyan-300 font-bold transition-all shadow-xs cursor-pointer shrink-0"
               title="Open Official NSE Scheduled Earnings Radar"
             >
-              <Calendar className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
-              <span>Earnings Radar</span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                {calendarStats?.upcoming_next_14d ?? 263} Expected
+              <Calendar className="w-3 h-3 text-cyan-400" />
+              <span>Radar</span>
+              <span className="px-1 py-0.2 rounded text-[10px] bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 font-semibold">
+                {calendarStats?.upcoming_next_14d ?? 199}
               </span>
             </button>
 
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-mono text-slate-300">
-              <span className="text-slate-500">SLA:</span>
-              <span className="text-cyan-400 font-bold">{slaMetPct}% (&lt; 5m)</span>
-              <span className="text-slate-700 hidden sm:inline">|</span>
-              <span className="text-slate-500">Avg Ingestion:</span>
-              <span className="text-cyan-400 font-bold">{avgIngestionSec}s</span>
-              <span className="text-slate-700 hidden sm:inline">|</span>
-              <span className="text-slate-500">Master Universe:</span>
-              <span className="text-white font-bold">{unifiedItems.length} Equities</span>
-              <span className="text-slate-700 hidden sm:inline">|</span>
-              <span className="text-slate-500">Elite Setups:</span>
-              <span className="text-amber-400 font-bold">{eliteCandidatesCount}</span>
+            {/* Condensed Telemetry Metrics */}
+            <div className="hidden md:flex items-center gap-2 text-slate-400">
+              <span>SLA: <strong className="text-cyan-400 font-semibold">{slaMetPct}% (&lt;5m)</strong></span>
+              <span className="text-slate-700">·</span>
+              <span>Ingestion: <strong className="text-cyan-400 font-semibold">{avgIngestionSec}s</strong></span>
+              <span className="text-slate-700">·</span>
+              <span>Universe: <strong className="text-white font-semibold">{unifiedItems.length} Equities</strong></span>
+              <span className="text-slate-700">·</span>
+              <span>Elite: <strong className="text-amber-400 font-semibold">{eliteCandidatesCount}</strong></span>
             </div>
           </div>
 
-          {/* Universe Switcher Toggle & Master Scan Action */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-lg text-xs font-mono">
+          {/* Right: Universe Mode Toggle & Poll Wire */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center bg-slate-900 border border-slate-800 p-0.5 rounded-lg text-xs font-mono">
               <button
+                type="button"
                 onClick={() => setUniverseMode("active_season")}
-                className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                className={`px-2 py-0.5 rounded-md font-bold transition-all cursor-pointer text-xs ${
                   universeMode === "active_season"
-                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-xs"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                Active Earnings &amp; PEAD Season
+                Active Season
               </button>
               <button
+                type="button"
                 onClick={() => setUniverseMode("all_universe")}
-                className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                className={`px-2 py-0.5 rounded-md font-bold transition-all cursor-pointer text-xs ${
                   universeMode === "all_universe"
-                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-xs"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                Full 2,000+ Universe
+                2,000+
               </button>
             </div>
 
             <button
+              type="button"
               onClick={handleTriggerScan}
               disabled={scanning}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs uppercase transition-all shadow-md shadow-cyan-500/20 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs uppercase transition-all shadow-md shadow-cyan-500/20 disabled:opacity-50 cursor-pointer shrink-0"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`} />
-              <span>{scanning ? "Scanning..." : "Poll Wire"}</span>
+              <RefreshCw className={`w-3 h-3 ${scanning ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">{scanning ? "Scanning..." : "Poll Wire"}</span>
+              <span className="sm:hidden">{scanning ? "..." : "Poll"}</span>
             </button>
           </div>
         </div>
 
-        {/* Secondary Filter & Tools Toolbar */}
-        <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Search */}
-            <div className="relative w-full sm:w-auto">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+        {/* Strip 2: Command & Filter Toolbar */}
+        <div className="p-2.5 sm:p-3 space-y-2">
+          {/* Row 1: Search + View Modes + Sort + Cols + Export + Filter Drawer Toggle */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[120px]">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search symbol, company..."
-                className="bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-7 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-full sm:w-48 md:w-56"
+                placeholder="Search ticker, company..."
+                className="bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-full shadow-xs font-mono"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
                   title="Clear search"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Fiscal Period Filter (Default: Current Quarter of Filing) */}
+            {/* View Mode Toggle: Table vs Cards */}
+            <div className="flex items-center bg-slate-950 border border-slate-800 p-0.5 rounded-lg shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "table"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Table View"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                className={`p-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "cards"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Card View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Quick Sort Dropdown */}
+            <select
+              value={sortColumn}
+              onChange={(e) => {
+                setSortColumn(e.target.value);
+                setSortDirection("desc");
+              }}
+              className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-cyan-400 font-semibold focus:outline-none focus:border-cyan-500 cursor-pointer shadow-xs shrink-0 max-w-[85px] sm:max-w-none truncate font-mono"
+              title="Sort Column"
+            >
+              <option value="recency">Sort: Recency</option>
+              <option value="shock">Sort: PEAD Score</option>
+              <option value="drift">Sort: Drift %</option>
+              <option value="qoq_pat">Sort: QoQ PAT</option>
+              <option value="qoq_rev">Sort: QoQ Rev</option>
+              <option value="period">Sort: Period</option>
+              <option value="cmp">Sort: CMP</option>
+              <option value="mcap">Sort: Market Cap</option>
+              <option value="symbol">Sort: Ticker</option>
+            </select>
+
+            {/* Screener Columns Customizer Button */}
+            <button
+              type="button"
+              onClick={() => setIsColumnModalOpen(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 inline-flex items-center gap-1 font-mono"
+              title="Customize Columns"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Cols</span>
+            </button>
+
+            {/* Export CSV Button */}
+            <button
+              type="button"
+              onClick={() => exportMasterToCsv(filteredMasterItems)}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 inline-flex items-center gap-1 font-mono"
+              title="Export CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+
+            {/* Filter Drawer Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)}
+              className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all shadow-xs cursor-pointer shrink-0 ${
+                isMobileFilterOpen || activeFiltersCount > 0
+                  ? "bg-cyan-950/80 border-cyan-500/60 text-cyan-300"
+                  : "bg-slate-950 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700"
+              }`}
+              title="Toggle Detailed Filters Drawer"
+            >
+              <Filter className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden xs:inline">Filters</span>
+              {activeFiltersCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 text-[10px] font-black">
+                  {activeFiltersCount}
+                </span>
+              )}
+              {isMobileFilterOpen ? (
+                <ChevronUp className="w-3 h-3 text-cyan-400" />
+              ) : (
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              )}
+            </button>
+          </div>
+
+          {/* Row 2: 1-Line Clean Horizontal Quick Filter Chips (zero wrap, overflow-x-auto) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
+            {/* Institutional Defaults Preset Pill */}
+            <button
+              type="button"
+              onClick={isInstitutionalDefaultActive ? handleClearInstitutionalFilters : handleApplyInstitutionalDefault}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
+                isInstitutionalDefaultActive
+                  ? "bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-xs"
+                  : isAnyInstitutionalFilterActive
+                  ? "bg-cyan-950/80 border-cyan-500/50 text-cyan-300 shadow-xs"
+                  : "bg-slate-950 border-slate-800 text-slate-400 hover:text-white"
+              }`}
+              title="Click to toggle Institutional Preset: MCap > 300Cr, PEAD >= 40, Recency <= 45d"
+            >
+              <Shield className="w-3 h-3 text-cyan-400" />
+              <span>
+                {isInstitutionalDefaultActive
+                  ? "Defaults: >300Cr · ≥40 · ≤45d"
+                  : isAnyInstitutionalFilterActive
+                  ? "Custom Preset Active"
+                  : "Apply Defaults"}
+              </span>
+              {isInstitutionalDefaultActive ? (
+                <Check className="w-3 h-3 text-emerald-400" />
+              ) : isAnyInstitutionalFilterActive ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+              ) : null}
+            </button>
+
+            {/* Quick Period Dropdown Pill */}
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-cyan-300 font-bold focus:outline-none focus:border-cyan-500 cursor-pointer shadow-xs"
-              title="Filter by Reported Quarter of Filing (Defaults to current active quarter of filing)"
+              className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-cyan-300 font-bold focus:outline-none focus:border-cyan-500 cursor-pointer shadow-xs shrink-0 whitespace-nowrap"
             >
-              <option value="current">Current Quarter ({currentFilingPeriod})</option>
+              <option value="current">{formatCompactPeriod(currentFilingPeriod)}</option>
               <option value="all">All Quarters</option>
               {availablePeriods.map((p) => (
                 <option key={p} value={p}>
@@ -1513,51 +1718,20 @@ export default function AthenaUnifiedCockpit() {
               ))}
             </select>
 
-            {/* Sector Dropdown */}
-            <select
-              value={selectedSector}
-              onChange={(e) => setSelectedSector(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-cyan-500 cursor-pointer"
-            >
-              <option value="all">All Sectors</option>
-              {availableSectors.map((sec) => (
-                <option key={sec} value={sec}>
-                  {sec}
-                </option>
-              ))}
-            </select>
 
-            {/* Conviction Grade Filter */}
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
-              {["", "AAA+", "AAA", "AA"].map((gr) => (
-                <button
-                  key={gr || "ALL"}
-                  onClick={() => setSelectedGrade(gr)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                    selectedGrade === gr
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {gr || "ALL GRADES"}
-                </button>
-              ))}
-            </div>
-
-            {/* PEAD Buy-Zone Filter */}
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+            {/* Quick Buy-Zone Segmented Pill */}
+            <div className="flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 shrink-0">
               {[
-                { id: "all", label: "ALL ZONES" },
-                { id: "IN_BUY_ZONE", label: "BUY ZONE" },
-                { id: "ACCELERATING", label: "ACCEL" },
-                { id: "EXTENDED", label: "EXTENDED" },
+                { id: "all", label: "All Zones" },
+                { id: "IN_BUY_ZONE", label: "Buy Zone" },
+                { id: "ACCELERATING", label: "Accel" },
               ].map((bz) => (
                 <button
                   key={bz.id}
                   onClick={() => setSelectedBuyZone(bz.id)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
                     selectedBuyZone === bz.id
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -1565,47 +1739,223 @@ export default function AthenaUnifiedCockpit() {
                 </button>
               ))}
             </div>
+
+            {/* Quick Conviction Grade Segmented Pill */}
+            <div className="flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 shrink-0">
+              {["", "AAA+", "AAA"].map((gr) => (
+                <button
+                  key={gr || "ALL"}
+                  onClick={() => setSelectedGrade(gr)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    selectedGrade === gr
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {gr || "All Grades"}
+                </button>
+              ))}
+            </div>
+
+            {/* Reset Defaults button (if custom filters are applied) */}
+            {activeFiltersCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleClearInstitutionalFilters();
+                  setSelectedGrade("");
+                  setSelectedBuyZone("all");
+                  setSelectedPeriod("current");
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 text-rose-300 text-xs font-bold transition-all cursor-pointer shrink-0"
+                title="Reset all filters"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
 
-          {/* Action Tools: Sort & Column Customizer & CSV Export */}
-          <div className="flex items-center gap-2">
-            <select
-              value={sortColumn}
-              onChange={(e) => {
-                setSortColumn(e.target.value);
-                setSortDirection("desc");
-              }}
-              className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-cyan-400 focus:outline-none focus:border-cyan-500 cursor-pointer"
-            >
-              <option value="recency">Sort: Filing Recency</option>
-              <option value="period">Sort: Fiscal Period</option>
-              <option value="qoq_rev">Sort: QoQ Revenue</option>
-              <option value="qoq_pat">Sort: QoQ Profit</option>
-              <option value="shock">Sort: PEAD Score</option>
-              <option value="drift">Sort: PEAD Drift %</option>
-              <option value="cmp">Sort: Market Price (CMP)</option>
-              <option value="mcap">Sort: Market Cap</option>
-              <option value="symbol">Sort: Ticker (A-Z)</option>
-            </select>
+          {/* Collapsible Detailed Institutional Filter Drawer */}
+          {isMobileFilterOpen && (
+            <div className="pt-3 border-t border-slate-800/80 space-y-3 font-mono text-xs animate-in fade-in slide-in-from-top-2 duration-150">
+              {/* Group 1: Institutional Radar Thresholds (Grid of 3 cleanly segmented pill cards) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {/* 1. Min Market Cap Card */}
+                <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300">Min Market Cap</span>
+                    <span className="text-[10px] text-cyan-400 font-semibold">
+                      {minMarketCap === 0 ? "All" : `> ₹${minMarketCap.toLocaleString()} Cr`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      { val: 300, label: "> 300 Cr (Def)" },
+                      { val: 1000, label: "> 1,000 Cr" },
+                      { val: 5000, label: "> 5,000 Cr" },
+                      { val: 0, label: "All MCap" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => setMinMarketCap(opt.val)}
+                        className={`px-2 py-1 rounded text-[11px] font-bold transition-all text-center cursor-pointer border ${
+                          minMarketCap === opt.val
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/60 shadow-xs"
+                            : "bg-slate-900/80 text-slate-400 hover:text-white border-slate-800/80"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <button
-              onClick={() => setIsColumnModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-bold transition cursor-pointer"
-              title="Customize fundamental columns"
-            >
-              <SlidersHorizontal className="w-3 h-3 text-cyan-400" />
-              <span>Columns</span>
-            </button>
+                {/* 2. Min PEAD Score Card */}
+                <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300">Min PEAD Score</span>
+                    <span className="text-[10px] text-cyan-400 font-semibold">
+                      {minPeadScore === 0 ? "All" : `≥ ${minPeadScore}`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      { val: 40, label: "≥ 40 (Def)" },
+                      { val: 60, label: "≥ 60 (High)" },
+                      { val: 75, label: "≥ 75 (Elite)" },
+                      { val: 0, label: "All Scores" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => setMinPeadScore(opt.val)}
+                        className={`px-2 py-1 rounded text-[11px] font-bold transition-all text-center cursor-pointer border ${
+                          minPeadScore === opt.val
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/60 shadow-xs"
+                            : "bg-slate-900/80 text-slate-400 hover:text-white border-slate-800/80"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <button
-              onClick={() => exportMasterToCsv(filteredMasterItems)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-bold transition cursor-pointer"
-              title="Export visible master data to CSV"
-            >
-              <Download className="w-3 h-3 text-emerald-400" />
-              <span>Export</span>
-            </button>
-          </div>
+                {/* 3. Recency Horizon Card */}
+                <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300">Recency Horizon</span>
+                    <span className="text-[10px] text-cyan-400 font-semibold">
+                      {maxRecencyDays === 0 ? "All" : `≤ ${maxRecencyDays}d`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      { val: 45, label: "≤ 45d (Def)" },
+                      { val: 15, label: "≤ 15d (Fresh)" },
+                      { val: 7, label: "≤ 7d (Hot Wire)" },
+                      { val: 0, label: "All Historical" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => setMaxRecencyDays(opt.val)}
+                        className={`px-2 py-1 rounded text-[11px] font-bold transition-all text-center cursor-pointer border ${
+                          maxRecencyDays === opt.val
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/60 shadow-xs"
+                            : "bg-slate-900/80 text-slate-400 hover:text-white border-slate-800/80"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Conviction Grade & Buy-Zones */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80">
+                  <span className="text-[11px] text-slate-300 block mb-1.5 font-bold">Conviction Grade</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {["", "AAA+", "AAA", "AA"].map((gr) => (
+                      <button
+                        key={gr || "ALL"}
+                        type="button"
+                        onClick={() => setSelectedGrade(gr)}
+                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                          selectedGrade === gr
+                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-xs"
+                            : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                        }`}
+                      >
+                        {gr || "ALL GRADES"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80">
+                  <span className="text-[11px] text-slate-300 block mb-1.5 font-bold">PEAD Buy-Zone</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {[
+                      { id: "all", label: "ALL ZONES" },
+                      { id: "IN_BUY_ZONE", label: "BUY ZONE" },
+                      { id: "ACCELERATING", label: "ACCEL" },
+                      { id: "EXTENDED", label: "EXTENDED" },
+                    ].map((bz) => (
+                      <button
+                        key={bz.id}
+                        type="button"
+                        onClick={() => setSelectedBuyZone(bz.id)}
+                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                          selectedBuyZone === bz.id
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-xs"
+                            : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                        }`}
+                      >
+                        {bz.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Action Bar */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-slate-400">
+                  Showing <strong className="text-white">{filteredMasterItems.length}</strong> of{" "}
+                  <strong className="text-slate-300">{unifiedItems.length}</strong> Equities
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleApplyInstitutionalDefault}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-400 hover:text-cyan-200 border border-slate-800 text-[11px] font-bold cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Reset Defaults
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearInstitutionalFilters}
+                    className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 text-[11px] font-bold cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileFilterOpen(false)}
+                    className="px-3.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs cursor-pointer shadow-md"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1624,23 +1974,233 @@ export default function AthenaUnifiedCockpit() {
                 <p className="text-sm font-bold text-white">No securities match your selected filters</p>
                 <p className="text-xs text-slate-500">Try resetting the sector, conviction grade, or PEAD buy-zone filter.</p>
               </div>
+            ) : viewMode === "cards" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 p-3.5 sm:p-4">
+                {filteredMasterItems.map((item) => {
+                  const fInfo = getFreshnessInfo(item.published_at, item.detected_at);
+                  const convictionVal = item.conviction_score || 0;
+                  const isBuyZone = item.pead_drift?.zone_status === "IN_BUY_ZONE";
+                  const isExtended = item.pead_drift?.zone_status === "EXTENDED";
+                  const isFailed = item.pead_drift?.zone_status === "DRIFT_FAILED";
+                  const { revQoQ, patQoQ } = getQoQGrowth(item);
+                  const scoreVal = item.shock_score ?? item.pead_score ?? item.decision_drivers?.financial_shock ?? null;
+                  const isForensicClean = item.forensic_status !== "FLAGGED";
+                  const fileInfo = getQuarterlyResultFileUrl(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedDrawerItem(item)}
+                      className="rounded-xl border border-slate-800 bg-[#07111F]/95 hover:border-cyan-500/50 p-4 transition-all duration-200 shadow-lg cursor-pointer flex flex-col justify-between gap-3 group"
+                    >
+                      {/* Card Top: Ticker, Badges & Recency */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <AddToWatchlistButton
+                            symbol={item.symbol}
+                            companyName={item.company_name}
+                            defaultConviction={convictionVal >= 90 ? 5 : convictionVal >= 75 ? 4 : convictionVal >= 60 ? 3 : 2}
+                            defaultThesis={`${item.flash_signal || "WATCHLIST"}: PEAD ${scoreVal != null ? `${scoreVal.toFixed(0)}/100` : "—"}`}
+                            variant="icon"
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-baseline gap-1.5 min-w-0">
+                              <span className="font-bold text-white text-base tracking-wide group-hover:text-cyan-300 transition-colors shrink-0">
+                                {item.symbol}
+                              </span>
+                              <span className="text-xs text-slate-300 truncate font-sans" title={item.company_name}>
+                                {item.company_name}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Top-Right Badges: PEAD Score & Compact Period */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {scoreVal != null && (
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded font-black font-mono tracking-tight ${
+                                isForensicClean
+                                  ? "bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 shadow-xs"
+                                  : "bg-rose-950/90 border border-rose-500/50 text-rose-300 shadow-xs"
+                              }`}
+                              title={`PEAD Score: ${scoreVal.toFixed(0)}/100 • Forensics: ${isForensicClean ? "Clean" : "Flagged Concerns"}`}
+                            >
+                              PEAD {scoreVal.toFixed(0)}
+                            </span>
+                          )}
+                          <span
+                            className="text-xs px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 font-bold font-mono whitespace-nowrap cursor-help"
+                            title={`Financial Results Period: ${formatFiscalPeriod(item.fiscal_period)}`}
+                          >
+                            {formatCompactPeriod(item.fiscal_period)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sub-header: Sector & Ingestion Recency (Compact) */}
+                      <div className="flex items-center gap-2 text-xs text-slate-400 font-mono -mt-1">
+                        {item.sector && !["unknown", "n/a", "-", "null", "undefined"].includes(item.sector.trim().toLowerCase()) && (
+                          <>
+                            <span className="text-cyan-400 truncate max-w-[150px]">{item.sector}</span>
+                            <span className="text-slate-600">•</span>
+                          </>
+                        )}
+                        <span
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium truncate ${fInfo.colorClass}`}
+                          title={`Radar Ingested: ${fInfo.formattedDate} • ${fInfo.displayRecency}`}
+                        >
+                          <Clock className="w-3 h-3 shrink-0" />
+                          <span>{fInfo.relative}</span>
+                        </span>
+                      </div>
+
+                      {/* Pricing, Market Cap & Zone Row */}
+                      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2.5 gap-2">
+                        <div>
+                          <span className="text-xs text-slate-400 block font-mono">CMP</span>
+                          <span className="text-base font-bold text-white font-mono">
+                            ₹{item.current_price != null ? item.current_price.toLocaleString("en-IN") : "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-slate-400 block font-mono">Market Cap</span>
+                          <span className="text-sm sm:text-base font-bold text-slate-100 font-mono">
+                            {item.market_cap != null && item.market_cap > 0
+                              ? `₹${Math.round(item.market_cap).toLocaleString("en-IN")} Cr`
+                              : "—"}
+                          </span>
+                        </div>
+                        <div>
+                          {isBuyZone ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-wider bg-emerald-500/15 border border-emerald-500/40 text-emerald-300">
+                              <Zap className="w-3 h-3 text-emerald-400" />
+                              IN BUY ZONE
+                            </span>
+                          ) : isExtended ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-300">
+                              EXTENDED
+                            </span>
+                          ) : isFailed ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider bg-rose-500/15 border border-rose-500/40 text-rose-300">
+                              DRIFT FAILED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+                              ACCELERATING
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 2x2 Financial Metric Matrix */}
+                      <div className="grid grid-cols-2 gap-2 bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5 text-xs font-mono">
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">QoQ Revenue</span>
+                          {revQoQ !== null ? (
+                            <span className={`text-sm font-bold ${revQoQ >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {revQoQ > 0 ? "+" : ""}{revQoQ.toFixed(1)}%
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-sm">—</span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">QoQ Net Profit</span>
+                          {patQoQ !== null ? (
+                            <span className={`text-sm font-bold ${patQoQ >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {patQoQ > 0 ? "+" : ""}{patQoQ.toFixed(1)}%
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-sm">—</span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">PEAD Score</span>
+                          {scoreVal !== null && scoreVal !== undefined ? (
+                            <span className={`text-sm font-bold ${isForensicClean ? "text-emerald-400" : "text-rose-400"}`}>
+                              {scoreVal.toFixed(0)} <span className="text-[10px] text-slate-400 font-normal">({isForensicClean ? "Clean" : "Flagged"})</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-sm">—</span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">Realized Drift</span>
+                          {item.pead_drift?.drift_pct !== undefined && item.pead_drift?.drift_pct !== null ? (
+                            <span className={`text-sm font-black ${item.pead_drift.drift_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {item.pead_drift.drift_pct >= 0 ? "+" : ""}{item.pead_drift.drift_pct.toFixed(1)}%
+                              {item.pead_drift?.drift_days !== undefined && item.pead_drift?.drift_days !== null ? (
+                                <span className="text-[10px] text-slate-400 ml-1">
+                                  ({item.pead_drift.drift_days === 0 ? "0d" : `${item.pead_drift.drift_days}d`})
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-sm">—</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Sparkline & Actions Footer (Icon Buttons) */}
+                      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2.5">
+                        <Master5QSparkline
+                          trend={item.quarterly_trend_5q}
+                          streak={item.acceleration_streak}
+                          isAth={item.is_ath_quarter}
+                        />
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <a
+                            href={fileInfo.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-2 rounded-lg bg-slate-900/90 hover:bg-cyan-950/70 text-slate-300 hover:text-cyan-300 transition-all border border-slate-700/80 hover:border-cyan-500/50 shadow-xs cursor-pointer flex items-center justify-center group/btn"
+                            title={`View Filing ${fileInfo.isPdf ? "PDF" : "Document"}`}
+                          >
+                            <FileText className="w-4 h-4 text-cyan-400 group-hover/btn:scale-110 transition-transform" />
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDrawerItem(item);
+                              setDrawerTab("audit");
+                            }}
+                            className="p-2 rounded-lg bg-slate-900/90 hover:bg-emerald-950/70 text-slate-300 hover:text-emerald-300 transition-all border border-slate-700/80 hover:border-emerald-500/50 shadow-xs cursor-pointer flex items-center justify-center group/btn"
+                            title="Open Institutional Audit Drawer"
+                          >
+                            <ShieldCheck className="w-4 h-4 text-emerald-400 group-hover/btn:scale-110 transition-transform" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-slate-950/90 text-slate-400 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10 backdrop-blur">
+              <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-230px)] relative border border-slate-800/80 rounded-xl shadow-2xl">
+                <table className="w-full text-left text-xs sm:text-sm font-mono border-collapse">
+                  <thead className="bg-[#050B14] text-slate-300 border-b border-slate-800 text-xs font-bold uppercase tracking-wider sticky top-0 z-30 shadow-md backdrop-blur-md">
                     <tr>
-                      {renderSortHeader("symbol", "Ticker & Company", "Sort by Symbol / Company", "min-w-[180px] sm:min-w-[200px]", "left", true)}
-                      {renderSortHeader("recency", "Filing Recency", "Sort by Filing Ingestion Timestamp", "min-w-[130px]")}
-                      {renderSortHeader("period", "Period", "Sort by Financial Results Period", "min-w-[95px]")}
+                      {renderSortHeader("symbol", "Ticker & Company", "Sort by Symbol / Company", "min-w-[140px] sm:min-w-[190px]", "left", true)}
+                      {renderSortHeader("recency", "Filing Recency", "Sort by Filing Ingestion Timestamp", "min-w-[95px]")}
+                      {renderSortHeader("period", "Period", "Sort by Financial Results Period", "min-w-[85px]")}
                       {renderSortHeader("qoq_rev", "QoQ Revenue", "Sort by Sequential QoQ Revenue Growth", "min-w-[105px]")}
                       {renderSortHeader("qoq_pat", "QoQ Profit", "Sort by Sequential QoQ Net Profit Growth", "min-w-[105px]")}
-                      {renderSortHeader("trajectory", "5-Quarter Trajectory", "Sort by Trajectory Streak", "min-w-[145px]")}
-                      {renderSortHeader("shock", "PEAD Score", "Sort by PEAD Score (Green = Forensic Clean, Red = Forensic Concerns)", "min-w-[110px]")}
+                      {renderSortHeader("trajectory", "5-Quarter Trajectory", "Sort by Trajectory Streak", "min-w-[140px]")}
+                      {renderSortHeader("shock", "PEAD Score", "Sort by PEAD Score (Green = Forensic Clean, Red = Forensic Concerns)", "min-w-[100px]")}
                       {renderSortHeader("drift", "Realized PEAD", "Sort by Realized Post-Earnings Drift %", "min-w-[125px]")}
                       {renderSortHeader("buyzone", "PEAD Buy-Zone", "Sort by Active PEAD Entry Zone", "min-w-[120px]")}
                       {renderSortHeader("cmp", "CMP (₹)", "Sort by Current Market Price", "min-w-[95px]")}
-                      {renderSortHeader("mcap", "Market Cap", "Sort by Market Capitalization (₹ Cr)", "min-w-[115px]")}
-                      {renderSortHeader("action", "Actions", "Audit and Filing Actions", "min-w-[110px]", "right")}
+                      {renderSortHeader("mcap", "Market Cap", "Sort by Market Capitalization (₹ Cr)", "min-w-[110px]")}
+                      {renderSortHeader("action", "Actions", "Audit and Filing Actions", "min-w-[75px]", "right")}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
@@ -1669,19 +2229,16 @@ export default function AthenaUnifiedCockpit() {
                                 size="sm"
                               />
                               <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-white text-sm tracking-wide group-hover:text-cyan-300 transition-colors">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-white text-sm sm:text-base tracking-wide group-hover:text-cyan-300 transition-colors">
                                     {item.symbol}
                                   </span>
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-400 font-bold">
-                                    {item.exchange}
-                                  </span>
                                 </div>
-                                <span className="text-[11px] text-slate-400 truncate max-w-xs block font-sans" title={item.company_name}>
+                                <span className="text-xs text-slate-300 truncate max-w-[130px] sm:max-w-xs block font-sans" title={item.company_name}>
                                   {item.company_name}
                                 </span>
                                 {item.sector && !["unknown", "n/a", "-", "null", "undefined"].includes(item.sector.trim().toLowerCase()) ? (
-                                  <span className="text-[10px] text-cyan-400/80 font-mono block">
+                                  <span className="text-xs text-cyan-400 font-mono block">
                                     {item.sector}
                                   </span>
                                 ) : null}
@@ -1689,24 +2246,24 @@ export default function AthenaUnifiedCockpit() {
                             </div>
                           </td>
 
-                          {/* 2. Filing Recency */}
+                          {/* 2. Filing Recency (Compact) */}
                           <td className="p-3 whitespace-nowrap">
                             <span
-                              title={`Radar Ingested: ${fInfo.formattedDate} (${fInfo.relative})`}
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1 ${fInfo.colorClass}`}
+                              title={`Radar Ingested: ${fInfo.formattedDate} • ${fInfo.displayRecency}`}
+                              className={`px-2 py-0.5 rounded text-xs font-bold inline-flex items-center gap-1 ${fInfo.colorClass}`}
                             >
-                              <Clock className="w-2.5 h-2.5" />
-                              {fInfo.displayRecency}
+                              <Clock className="w-3 h-3 shrink-0" />
+                              <span>{fInfo.relative}</span>
                             </span>
                           </td>
 
-                          {/* 3. Period */}
+                          {/* 3. Period (Compact) */}
                           <td className="p-3 whitespace-nowrap">
                             <span
-                              className="text-cyan-300 font-semibold cursor-help text-[11px]"
+                              className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 whitespace-nowrap cursor-help"
                               title={`Financial Results Period: ${formatFiscalPeriod(item.fiscal_period)}`}
                             >
-                              {formatFiscalPeriod(item.fiscal_period)}
+                              {formatCompactPeriod(item.fiscal_period)}
                             </span>
                           </td>
 
@@ -1716,7 +2273,7 @@ export default function AthenaUnifiedCockpit() {
                               const { revQoQ } = getQoQGrowth(item);
                               return revQoQ !== null ? (
                                 <span
-                                  className={`text-xs font-bold ${
+                                  className={`text-sm font-bold ${
                                     revQoQ >= 0 ? "text-emerald-400" : "text-rose-400"
                                   }`}
                                   title="Sequential Quarter-on-Quarter Revenue Growth"
@@ -1725,7 +2282,7 @@ export default function AthenaUnifiedCockpit() {
                                   {revQoQ.toFixed(1)}%
                                 </span>
                               ) : (
-                                <span className="text-slate-600 text-xs">—</span>
+                                <span className="text-slate-500 text-sm">—</span>
                               );
                             })()}
                           </td>
@@ -1736,7 +2293,7 @@ export default function AthenaUnifiedCockpit() {
                               const { patQoQ } = getQoQGrowth(item);
                               return patQoQ !== null ? (
                                 <span
-                                  className={`text-xs font-bold ${
+                                  className={`text-sm font-bold ${
                                     patQoQ >= 0 ? "text-emerald-400" : "text-rose-400"
                                   }`}
                                   title="Sequential Quarter-on-Quarter Net Profit Growth"
@@ -1745,7 +2302,7 @@ export default function AthenaUnifiedCockpit() {
                                   {patQoQ.toFixed(1)}%
                                 </span>
                               ) : (
-                                <span className="text-slate-600 text-xs">—</span>
+                                <span className="text-slate-500 text-sm">—</span>
                               );
                             })()}
                           </td>
@@ -1759,17 +2316,16 @@ export default function AthenaUnifiedCockpit() {
                             />
                           </td>
 
-
                           {/* 7. PEAD Score */}
                           <td className="p-3 whitespace-nowrap font-mono">
                             {(() => {
                               const scoreVal = item.shock_score ?? item.pead_score ?? item.decision_drivers?.financial_shock ?? null;
                               const isForensicClean = item.forensic_status !== "FLAGGED";
-                              if (scoreVal === null || scoreVal === undefined) return <span className="text-slate-600 text-xs">—</span>;
+                              if (scoreVal === null || scoreVal === undefined) return <span className="text-slate-500 text-sm">—</span>;
 
                               return (
                                 <span
-                                  className={`text-xs font-bold ${
+                                  className={`text-sm font-bold ${
                                     isForensicClean ? "text-emerald-400" : "text-rose-400"
                                   }`}
                                   title={`PEAD Score: ${scoreVal.toFixed(0)}/100 • Forensics: ${
@@ -1782,12 +2338,12 @@ export default function AthenaUnifiedCockpit() {
                             })()}
                           </td>
 
-                          {/* 9. Realized PEAD Drift */}
+                          {/* 8. Realized PEAD Drift */}
                           <td className="p-3 whitespace-nowrap font-mono">
                             <div className="flex items-center gap-1.5">
                               {item.pead_drift?.drift_pct !== undefined && item.pead_drift?.drift_pct !== null ? (
                                 <span
-                                  className={`text-xs font-black ${
+                                  className={`text-sm font-black ${
                                     item.pead_drift.drift_pct >= 0 ? "text-emerald-400" : "text-rose-400"
                                   }`}
                                 >
@@ -1795,33 +2351,33 @@ export default function AthenaUnifiedCockpit() {
                                   {item.pead_drift.drift_pct.toFixed(1)}% Drift
                                 </span>
                               ) : (
-                                <span className="text-slate-500 text-xs">—</span>
+                                <span className="text-slate-500 text-sm">—</span>
                               )}
-                              {item.pead_drift?.drift_days ? (
-                                <span className="text-[10px] text-slate-500">
-                                  ({item.pead_drift.drift_days}d)
+                              {item.pead_drift?.drift_days !== undefined && item.pead_drift?.drift_days !== null ? (
+                                <span className="text-xs text-slate-400 font-mono">
+                                  ({item.pead_drift.drift_days === 0 ? "0d" : `${item.pead_drift.drift_days}d`})
                                 </span>
                               ) : null}
                             </div>
                           </td>
 
-                          {/* 10. PEAD Buy-Zone */}
+                          {/* 9. PEAD Buy-Zone */}
                           <td className="p-3 whitespace-nowrap">
                             {isBuyZone ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-500/15 border border-emerald-500/40 text-emerald-300">
-                                <Zap className="w-2.5 h-2.5 text-emerald-400" />
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-wider bg-emerald-500/15 border border-emerald-500/40 text-emerald-300">
+                                <Zap className="w-3 h-3 text-emerald-400" />
                                 IN BUY ZONE
                               </span>
                             ) : isExtended ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-300">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-300">
                                 EXTENDED
                               </span>
                             ) : isFailed ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/15 border border-rose-500/40 text-rose-300">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider bg-rose-500/15 border border-rose-500/40 text-rose-300">
                                 DRIFT FAILED
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
                                 ACCELERATING
                               </span>
                             )}
@@ -1829,7 +2385,7 @@ export default function AthenaUnifiedCockpit() {
 
                           {/* 10. CMP */}
                           <td className="p-3 whitespace-nowrap font-mono">
-                            <span className="text-slate-200 text-xs font-bold">
+                            <span className="text-white text-sm font-bold">
                               ₹{item.current_price != null ? item.current_price.toLocaleString("en-IN") : "—"}
                             </span>
                           </td>
@@ -1838,22 +2394,21 @@ export default function AthenaUnifiedCockpit() {
                           <td className="p-3 whitespace-nowrap font-mono">
                             {item.market_cap != null && item.market_cap > 0 ? (
                               <div>
-                                <span className="text-slate-200 text-xs font-bold">
+                                <span className="text-white text-sm font-bold">
                                   ₹{Math.round(item.market_cap).toLocaleString("en-IN")} Cr
                                 </span>
                                 {item.market_cap_category && (
-                                  <span className="block text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
+                                  <span className="block text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
                                     {item.market_cap_category}
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-slate-600 text-xs">—</span>
+                              <span className="text-slate-500 text-sm">—</span>
                             )}
                           </td>
 
-
-                          {/* 13. Actions */}
+                          {/* 12. Actions (Compact Icon Buttons) */}
                           <td className="p-3 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1.5">
                               {(() => {
@@ -1864,12 +2419,10 @@ export default function AthenaUnifiedCockpit() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-400 hover:text-cyan-200 text-[10px] font-bold uppercase transition-all border border-slate-700/80 hover:border-cyan-500/60 shadow-xs cursor-pointer"
-                                    title="Open official quarterly filing PDF / exchange result document to validate against Athena analysis"
+                                    className="p-1.5 rounded-lg bg-slate-900/90 hover:bg-cyan-950/70 text-slate-300 hover:text-cyan-300 transition-all border border-slate-800 hover:border-cyan-500/50 shadow-xs cursor-pointer flex items-center justify-center group/btn"
+                                    title={`View Filing ${fileInfo.isPdf ? "PDF" : "Document"}`}
                                   >
-                                    <FileText className="w-3 h-3 text-cyan-400 shrink-0" />
-                                    <span>{fileInfo.isPdf ? "PDF" : "Result"}</span>
-                                    <ExternalLink className="w-2.5 h-2.5 text-slate-500" />
+                                    <FileText className="w-4 h-4 text-cyan-400 group-hover/btn:scale-110 transition-transform" />
                                   </a>
                                 );
                               })()}
@@ -1880,9 +2433,10 @@ export default function AthenaUnifiedCockpit() {
                                   setSelectedDrawerItem(item);
                                   setDrawerTab("audit");
                                 }}
-                                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-slate-300 text-[10px] font-bold uppercase transition-all border border-slate-700 cursor-pointer"
+                                className="p-1.5 rounded-lg bg-slate-900/90 hover:bg-emerald-950/70 text-slate-300 hover:text-emerald-300 transition-all border border-slate-800 hover:border-emerald-500/50 shadow-xs cursor-pointer flex items-center justify-center group/btn"
+                                title="Open Institutional Audit Drawer"
                               >
-                                Audit
+                                <ShieldCheck className="w-4 h-4 text-emerald-400 group-hover/btn:scale-110 transition-transform" />
                               </button>
                             </div>
                           </td>
@@ -2099,15 +2653,15 @@ export default function AthenaUnifiedCockpit() {
                             <FileText className="w-3.5 h-3.5 text-cyan-400" />
                             <span>Interpreted Filing Figures vs Historical Baselines</span>
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-xs text-slate-400 font-mono">
                             Reporting Unit: ₹ Crore
                           </span>
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse text-[11px] font-mono">
+                          <table className="w-full text-left border-collapse text-xs font-mono">
                             <thead>
-                              <tr className="border-b border-slate-800/80 bg-slate-950 text-slate-400 text-[10px] uppercase">
+                              <tr className="border-b border-slate-800/80 bg-slate-950 text-slate-300 text-xs font-bold uppercase">
                                 <th className="p-2.5">Line Item</th>
                                 <th className="p-2.5 text-right text-cyan-400">Reported (Q0)</th>
                                 <th className="p-2.5 text-right">Prior Year (Q-4)</th>
@@ -2123,16 +2677,16 @@ export default function AthenaUnifiedCockpit() {
                                   <td className="p-2.5 font-bold text-slate-200 whitespace-nowrap">{row.metric}</td>
                                   <td className="p-2.5 text-right font-black text-cyan-300 whitespace-nowrap">{row.reportedQ0}</td>
                                   <td className="p-2.5 text-right text-slate-400 whitespace-nowrap">{row.baselineQ4}</td>
-                                  <td className="p-2.5 text-right text-slate-500 whitespace-nowrap">{row.baselineQ1}</td>
+                                  <td className="p-2.5 text-right text-slate-400 whitespace-nowrap">{row.baselineQ1}</td>
                                   <td className={`p-2.5 text-right font-bold whitespace-nowrap ${row.isPositive ? "text-emerald-400" : "text-rose-400"}`}>
                                     {row.calculatedDelta}
                                   </td>
-                                  <td className="p-2.5 text-[10px] text-slate-300 font-sans max-w-xs truncate" title={row.auditProof}>
+                                  <td className="p-2.5 text-xs text-slate-300 font-sans max-w-xs truncate" title={row.auditProof}>
                                     {row.auditProof}
                                   </td>
                                   <td className="p-2.5 text-center">
                                     <span
-                                      className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                                      className={`px-2 py-0.5 rounded text-xs font-black uppercase tracking-wider ${
                                         row.status === "FLAGGED"
                                           ? "bg-rose-950 text-rose-300 border border-rose-600"
                                           : row.status === "VERIFIED"

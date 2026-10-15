@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.breakout_execution_service import BreakoutExecutionService
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,11 @@ def get_watched_candidates(
     """
     Returns all active watched breakout candidates with live execution states.
     """
+    cache_key = f"breakout:candidates:{status}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
     candidates = BreakoutExecutionService.get_watched_candidates(db=db, status_filter=status)
     stats = BreakoutExecutionService.get_execution_stats(db=db)
 
@@ -107,11 +113,13 @@ def get_watched_candidates(
             "techno_funda_url": f"/techno-funda/{c.symbol}",
         })
 
-    return {
+    out = {
         "stats": stats,
         "total_count": len(items),
         "items": items,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=30)
+    return out
 
 
 @router.post("/watch", response_model=Dict[str, Any])

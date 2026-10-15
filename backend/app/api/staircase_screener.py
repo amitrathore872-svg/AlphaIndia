@@ -108,17 +108,21 @@ def get_staircase_opportunities(
         "opportunities": paginated_items,
         "metadata": merged_metadata,
         "cached": scan_data.get("cached", False),
+        "scan_in_progress": scan_data.get("scan_in_progress", False),
     }
 
 
 @router.post("/refresh", response_model=Dict[str, Any])
 def refresh_staircase_scan(db: Session = Depends(get_db)):
     """
-    Forces an immediate live rescan of the universe.
+    Forces an immediate live rescan of the universe in a non-blocking background worker.
     """
     scan_data = StaircaseScreenerService.scan_universe(db=db, force_refresh=True)
+    in_progress = scan_data.get("scan_in_progress", False)
+    opps_count = len(scan_data.get("opportunities", []))
     return {
-        "status": "success",
-        "message": f"Scan completed. Found {len(scan_data.get('opportunities', []))} staircase setups.",
+        "status": "scanning" if in_progress else "success",
+        "message": "Live rescan initiated in background worker." if in_progress else f"Scan completed. Found {opps_count} staircase setups.",
         "metadata": scan_data.get("metadata", {}),
+        "scan_in_progress": in_progress,
     }

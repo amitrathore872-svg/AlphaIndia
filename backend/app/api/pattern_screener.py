@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.pattern_engine.pattern_orchestrator import (
     get_pattern_results,
     analyze_all_patterns,
@@ -48,6 +49,12 @@ def list_patterns(
     """
     Returns filtered and sorted institutional chart patterns.
     """
+    cache_key = f"chart_patterns:list:{pattern_type}:{min_score}:{exchange}:{sector}:{search}:{is_breakout}:{sort_by}:{sort_order}:{page}:{limit}"
+    if not force_refresh:
+        cached_resp = cache.get_json_sync(cache_key)
+        if cached_resp:
+            return cached_resp
+
     res = get_pattern_results(db=db, force_refresh=force_refresh)
     patterns: List[Dict[str, Any]] = res.get("patterns", [])
     metadata: Dict[str, Any] = res.get("metadata", {})
@@ -113,7 +120,7 @@ def list_patterns(
     start_idx = (page - 1) * limit
     paged = patterns[start_idx : start_idx + limit]
 
-    return {
+    out = {
         "metadata": metadata,
         "total_count": total_count,
         "page": page,
@@ -121,6 +128,8 @@ def list_patterns(
         "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1,
         "patterns": paged,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=60)
+    return out
 
 
 @router.get("/summary", summary="Aggregate summary of detected patterns")

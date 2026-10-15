@@ -33,6 +33,7 @@ import {
   fetchDeliveryOpportunities,
   triggerDeliveryScan,
 } from "@/lib/deliveryRadarApi";
+import DeliveryTreeDrawdownModal from "@/components/delivery/DeliveryTreeDrawdownModal";
 
 export default function DeliveryRadarPage() {
   const [opportunities, setOpportunities] = useState<DeliveryOpportunity[]>([]);
@@ -40,6 +41,7 @@ export default function DeliveryRadarPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [scanning, setScanning] = useState<boolean>(false);
   const [selectedBlueprint, setSelectedBlueprint] = useState<DeliveryOpportunity | null>(null);
+  const [selectedTreeSymbol, setSelectedTreeSymbol] = useState<{ symbol: string; companyName?: string } | null>(null);
 
   // Filters & Controls
   const [selectedTier, setSelectedTier] = useState<string>("ALL");
@@ -301,6 +303,9 @@ export default function DeliveryRadarPage() {
                 <option value={1} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Latest Session</option>
                 <option value={3} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Last 3 Sessions</option>
                 <option value={5} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Last 5 Sessions</option>
+                <option value={10} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Last 10 Sessions</option>
+                <option value={20} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Last 20 Sessions</option>
+                <option value={30} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Full Month (30 Sessions - Blast Radar)</option>
               </select>
             </div>
           </div>
@@ -637,6 +642,14 @@ export default function DeliveryRadarPage() {
                               variant="star"
                             />
                             <button
+                              onClick={() => setSelectedTreeSymbol({ symbol: item.symbol, companyName: item.company_name })}
+                              className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2 py-1.5 text-xs font-semibold text-indigo-400 transition hover:bg-indigo-500 hover:text-white"
+                              title={`View 30-Day Month -> Week -> Day Drawdown Tree for ${item.symbol}`}
+                            >
+                              <Layers size={12} />
+                              <span>30D Tree</span>
+                            </button>
+                            <button
                               onClick={() => setSelectedBlueprint(item)}
                               className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-400 transition hover:bg-cyan-500 hover:text-white"
                             >
@@ -702,6 +715,13 @@ export default function DeliveryRadarPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedTreeSymbol({ symbol: selectedBlueprint.symbol, companyName: selectedBlueprint.company_name })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1.5 text-xs font-semibold text-indigo-400 transition hover:bg-indigo-500 hover:text-white"
+                  >
+                    <Layers size={13} />
+                    <span>30D Tree</span>
+                  </button>
                   <AddToWatchlistButton
                     symbol={selectedBlueprint.symbol}
                     companyName={selectedBlueprint.company_name}
@@ -878,6 +898,15 @@ export default function DeliveryRadarPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* 30-DAY MONTH -> WEEK -> DAY DRAWDOWN TREE MODAL */}
+        {selectedTreeSymbol && (
+          <DeliveryTreeDrawdownModal
+            symbol={selectedTreeSymbol.symbol}
+            companyName={selectedTreeSymbol.companyName}
+            onClose={() => setSelectedTreeSymbol(null)}
+          />
         )}
       </div>
     </DashboardLayout>

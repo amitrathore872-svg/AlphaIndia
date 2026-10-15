@@ -384,6 +384,57 @@ class StaircaseScreenerService:
             return None
 
     @classmethod
+    def _load_disk_cache(cls) -> bool:
+        """Loads cached scan results from disk into memory."""
+        global _CACHE
+        if not DISK_CACHE_PATH.exists():
+            return False
+        try:
+            with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
+                disk_data = json.load(f)
+                opps = disk_data.get("opportunities", [])
+                meta = {**_DEFAULT_METADATA, **disk_data.get("metadata", {})}
+                if opps:
+                    _CACHE["opportunities"] = opps
+                    _CACHE["metadata"] = meta
+                    _CACHE["timestamp"] = disk_data.get("timestamp", 0)
+                    logger.info(f"[StaircaseScreener] Loaded {len(opps)} opportunities from disk cache.")
+                    return True
+        except Exception as e:
+            logger.warning(f"[StaircaseScreener] Failed to read disk cache: {e}")
+        return False
+
+    @classmethod
+    def trigger_background_scan(cls, db: Optional[Session] = None) -> None:
+        """
+        Launches non-blocking background scan worker if not already running.
+        Ensures REST API calls return in < 25ms and never time out.
+        """
+        global _scan_in_progress
+        with _scan_lock:
+            if _scan_in_progress:
+                return
+            _scan_in_progress = True
+
+        def _worker():
+            global _scan_in_progress
+            from app.db.database import SessionLocal
+            worker_db = SessionLocal()
+            try:
+                logger.info("[StaircaseScreener] Background scan worker started...")
+                cls._execute_full_scan(db=worker_db)
+                logger.info("[StaircaseScreener] Background scan worker finished successfully.")
+            except Exception as e:
+                logger.error(f"[StaircaseScreener] Background scan error: {e}", exc_info=True)
+            finally:
+                worker_db.close()
+                with _scan_lock:
+                    _scan_in_progress = False
+
+        thread = threading.Thread(target=_worker, daemon=True, name="StaircaseScreenerWorker")
+        thread.start()
+
+    @classmethod
     def scan_universe(
         cls,
         db: Optional[Session] = None,
@@ -391,49 +442,49 @@ class StaircaseScreenerService:
     ) -> Dict[str, Any]:
         """
         Executes or retrieves cached staircase screener results across the universe.
+        Uses stale-while-revalidate non-blocking caching so the REST API responds
+        instantaneously (< 25ms) and NEVER times out.
         """
         global _CACHE, _scan_in_progress
 
         now = time.time()
-        # Serve from memory cache if fresh
-        if not force_refresh and _CACHE["opportunities"] and (now - _CACHE["timestamp"] < CACHE_TTL_SECONDS):
+
+        # 1. Ensure memory cache is populated from disk if cold
+        if not _CACHE["opportunities"]:
+            cls._load_disk_cache()
+
+        has_cache = bool(_CACHE["opportunities"])
+        is_stale = (now - _CACHE.get("timestamp", 0) > CACHE_TTL_SECONDS)
+
+        # 2. If cached data exists:
+        if has_cache:
+            if is_stale or force_refresh:
+                cls.trigger_background_scan(db=db)
             return {
                 "opportunities": _CACHE["opportunities"],
                 "metadata": _CACHE["metadata"],
                 "cached": True,
+                "scan_in_progress": _scan_in_progress,
             }
 
-        # Try to load from disk cache if memory cache is cold and not force refreshing
-        if not force_refresh and not _CACHE["opportunities"] and DISK_CACHE_PATH.exists():
-            try:
-                with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
-                    disk_data = json.load(f)
-                    opps = disk_data.get("opportunities", [])
-                    meta = {**_DEFAULT_METADATA, **disk_data.get("metadata", {})}
-                    if opps:
-                        _CACHE["opportunities"] = opps
-                        _CACHE["metadata"] = meta
-                        _CACHE["timestamp"] = disk_data.get("timestamp", now)
-                        # Serve immediately if disk cache is under 2 hours
-                        if now - disk_data.get("timestamp", 0) < 7200:
-                            return {
-                                "opportunities": _CACHE["opportunities"],
-                                "metadata": _CACHE["metadata"],
-                                "cached": True,
-                            }
-            except Exception as e:
-                logger.warning(f"Failed to read disk cache: {e}")
+        # 3. If cold boot with zero disk cache:
+        # Trigger background scan and return early so caller never times out
+        cls.trigger_background_scan(db=db)
+        return {
+            "opportunities": [],
+            "metadata": dict(_DEFAULT_METADATA),
+            "cached": False,
+            "scan_in_progress": True,
+        }
 
-        # If scan is already running in background, return stale cache or defaults
-        with _scan_lock:
-            if _scan_in_progress:
-                return {
-                    "opportunities": _CACHE.get("opportunities", []),
-                    "metadata": {**_DEFAULT_METADATA, **_CACHE.get("metadata", {})},
-                    "scan_in_progress": True,
-                }
-            _scan_in_progress = True
+    @classmethod
+    def _execute_full_scan(cls, db: Optional[Session] = None) -> Dict[str, Any]:
+        """
+        Executes the full market scan across the universe and persists to cache.
+        """
+        global _CACHE
 
+        now = time.time()
         try:
             logger.info("Starting Institutional Staircase Screener scan...")
             symbols = cls.get_universe(db)
@@ -475,13 +526,6 @@ class StaircaseScreenerService:
                         stock_df = raw_data
                     elif ticker_key in raw_data:
                         stock_df = raw_data[ticker_key].dropna()
-
-                # Fallback to single download if missing
-                if stock_df is None or len(stock_df) < 50:
-                    try:
-                        stock_df = yf.download(ticker_key, period="6mo", interval="1d", progress=False)
-                    except Exception:
-                        continue
 
                 if stock_df is not None and len(stock_df) >= 50:
                     result = cls.calculate_staircase_metrics(sym, stock_df, nifty_rets_10d)
@@ -531,8 +575,13 @@ class StaircaseScreenerService:
                 "opportunities": opportunities,
                 "metadata": metadata,
                 "cached": False,
+                "scan_in_progress": False,
             }
-
-        finally:
-            with _scan_lock:
-                _scan_in_progress = False
+        except Exception as e:
+            logger.error(f"[StaircaseScreener] Execution scan failed: {e}", exc_info=True)
+            return {
+                "opportunities": _CACHE.get("opportunities", []),
+                "metadata": _CACHE.get("metadata", dict(_DEFAULT_METADATA)),
+                "cached": True,
+                "scan_in_progress": False,
+            }

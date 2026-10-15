@@ -147,3 +147,85 @@ export async function fetchDeliveryStats(): Promise<DeliveryRadarMetadata> {
     timeoutMs: 60000,
   });
 }
+
+export interface DeliveryDayNode {
+  date: string;
+  day_label: string;
+  day_name: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  return_pct: number;
+  drawdown_from_month_peak_pct: number;
+  drawdown_from_week_high_pct: number;
+  delivery_per: number;
+  delivery_qty: number;
+  delivery_spike_x: number;
+  turnover_cr: number;
+  delivery_turnover_cr: number;
+  is_green: boolean;
+  candle_type: string;
+  candle_label: string;
+  candle_color: string;
+}
+
+export interface DeliveryWeekNode {
+  week_index: number;
+  week_key: string;
+  week_label: string;
+  start_date: string;
+  end_date: string;
+  week_open: number;
+  week_close: number;
+  week_high: number;
+  week_low: number;
+  week_return_pct: number;
+  week_drawdown_pct: number;
+  avg_delivery_per: number;
+  total_delivery_cr: number;
+  green_days_count: number;
+  red_days_count: number;
+  net_flow_bias: "ACCUMULATION" | "CONSOLIDATION" | string;
+  days: DeliveryDayNode[];
+}
+
+export interface DeliveryMonthSummary {
+  start_date: string;
+  end_date: string;
+  start_price: number;
+  end_price: number;
+  month_peak_price: number;
+  month_trough_price: number;
+  month_return_pct: number;
+  month_max_drawdown_pct: number;
+  current_drawdown_from_peak_pct: number;
+  total_delivery_cr: number;
+  avg_delivery_per: number;
+  delivery_clusters_55_count: number;
+  green_days_count: number;
+  red_days_count: number;
+  delivery_flow_imbalance_ratio: number;
+  range_squeeze_ratio: number;
+  blast_status: string;
+  blast_badge: string;
+  blast_description: string;
+}
+
+export interface DeliveryTreeResponse {
+  symbol: string;
+  lookback_sessions: number;
+  month_summary: DeliveryMonthSummary;
+  weeks: DeliveryWeekNode[];
+}
+
+export async function fetchDeliveryTreeBreakdown(
+  symbol: string,
+  lookbackSessions: number = 30
+): Promise<DeliveryTreeResponse> {
+  return fetchJson<DeliveryTreeResponse>(
+    `/api/v1/delivery-radar/tree-breakdown?symbol=${encodeURIComponent(symbol)}&lookback_sessions=${lookbackSessions}`,
+    { timeoutMs: 30000 }
+  );
+}
+

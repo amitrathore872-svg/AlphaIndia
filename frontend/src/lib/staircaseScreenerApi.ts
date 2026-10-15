@@ -84,6 +84,7 @@ export interface StaircaseResponse {
   opportunities: StaircaseOpportunity[];
   metadata: StaircaseMetadata;
   cached?: boolean;
+  scan_in_progress?: boolean;
 }
 
 export interface StaircaseQueryParams {
@@ -117,7 +118,7 @@ export async function fetchStaircaseOpportunities(
   const qs = query.toString();
   const endpoint = `/api/v1/staircase-screener${qs ? `?${qs}` : ""}`;
 
-  return fetchJson<StaircaseResponse>(endpoint);
+  return fetchJson<StaircaseResponse>(endpoint, { timeoutMs: 45000 });
 }
 
 /**
@@ -127,12 +128,15 @@ export async function refreshStaircaseScan(): Promise<{
   status: string;
   message: string;
   metadata: StaircaseMetadata;
+  scan_in_progress?: boolean;
 }> {
   return fetchJson<{
     status: string;
     message: string;
     metadata: StaircaseMetadata;
+    scan_in_progress?: boolean;
   }>("/api/v1/staircase-screener/refresh", {
     method: "POST",
+    timeoutMs: 45000,
   });
 }

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.prebreakout_radar_service import PreBreakoutRadarService
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,11 @@ def get_prebreakout_opportunities(
     """
     Returns pre-breakout cheat opportunities filtered by conviction and pattern.
     """
+    cache_key = f"prebreakout:opportunities:{min_score}:{pattern}:{sector}:{search}:{sort_by}:{sort_order}:{page}:{limit}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
     scan_data = PreBreakoutRadarService.scan_prebreakout_opportunities(db=db, force_refresh=False)
     opportunities = scan_data.get("opportunities", [])
     metadata = scan_data.get("metadata", {})
@@ -100,7 +106,7 @@ def get_prebreakout_opportunities(
     from app.services.stock_trend_enricher import StockTrendEnricher
     StockTrendEnricher.enrich(db, paginated, symbol_key="symbol", cmp_key="cmp")
 
-    return {
+    out = {
         "metadata": metadata,
         "total_count": total_count,
         "page": page,
@@ -108,6 +114,8 @@ def get_prebreakout_opportunities(
         "total_pages": total_pages,
         "items": paginated,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=60)
+    return out
 
 
 @router.post("/scan", response_model=Dict[str, Any])

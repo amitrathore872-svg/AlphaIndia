@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.models.screener_growth_record import ScreenerGrowthRecord
+from app.core.redis_cache import cache
 
 router = APIRouter(
     prefix="/screener-growth",
@@ -36,6 +37,11 @@ def get_screener_growth_records(
     """
     Returns paginated, sorted, and filtered list of Screener.in growth companies.
     """
+    cache_key = f"scr_growth:{page}:{limit}:{search}:{sector}:{category}:{min_roce}:{min_sales_growth_3yr}:{min_profit_growth_3yr}:{min_promoter_holding}:{sort_by}:{sort_order}"
+    cached = cache.get_json_sync(cache_key)
+    if cached:
+        return cached
+
     query = db.query(ScreenerGrowthRecord)
 
     # Search filter
@@ -136,7 +142,7 @@ def get_screener_growth_records(
 
     total_pages = max(1, (total + limit - 1) // limit)
 
-    return {
+    response_data = {
         "success": True,
         "page": page,
         "limit": limit,
@@ -144,6 +150,11 @@ def get_screener_growth_records(
         "total_pages": total_pages,
         "results": results,
     }
+    try:
+        cache.set_json_sync(cache_key, response_data, expire_seconds=60)
+    except Exception:
+        pass
+    return response_data
 
 
 @router.get("/filters")

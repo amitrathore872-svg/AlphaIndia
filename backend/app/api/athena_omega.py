@@ -673,6 +673,11 @@ def trigger_exchange_scan(background_tasks: BackgroundTasks, db: Session = Depen
     """
     def _run():
         AthenaExchangeWatcher.scan_recent_exchange_results()
+        try:
+            from app.core.redis_cache import cache
+            cache.clear_prefix_sync("qr_v3:")
+        except Exception:
+            pass
 
     background_tasks.add_task(_run)
     return {

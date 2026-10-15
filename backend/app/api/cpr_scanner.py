@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.cpr_engine_service import CPREngineService
 from app.services.cpr_alert_service import CPRAlertService
 
@@ -50,7 +51,12 @@ def get_cpr_scanner_results(
     """
     Returns paginated, multi-filtered CPR Compression setups with institutional rankings.
     """
-    return CPREngineService.get_cpr_records(
+    cache_key = f"cpr:scanner:{width_max}:{score_min}:{sector}:{marketcap}:{min_marketcap_cr}:{min_price}:{min_volume}:{category}:{triple_cpr_only}:{volume_dryup_only}:{bullish_trend_only}:{search}:{sort_by}:{sort_order}:{page}:{limit}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
+    res = CPREngineService.get_cpr_records(
         db=db,
         width_max=width_max,
         score_min=score_min,
@@ -69,6 +75,8 @@ def get_cpr_scanner_results(
         page=page,
         limit=limit,
     )
+    cache.set_json_sync(cache_key, res, expire_seconds=60)
+    return res
 
 
 @router.get("/top", response_model=List[Dict[str, Any]])
@@ -79,7 +87,14 @@ def get_top_cpr_compression(
     """
     Returns the Top 25 narrowest compression candidates across the entire NSE universe.
     """
-    return CPREngineService.get_top_cpr_stocks(db=db, limit=limit)
+    cache_key = f"cpr:top:{limit}"
+    cached_resp = cache.get_json_sync(cache_key)
+    if cached_resp:
+        return cached_resp
+
+    res = CPREngineService.get_top_cpr_stocks(db=db, limit=limit)
+    cache.set_json_sync(cache_key, res, expire_seconds=60)
+    return res
 
 
 @router.get("/triple", response_model=List[Dict[str, Any]])

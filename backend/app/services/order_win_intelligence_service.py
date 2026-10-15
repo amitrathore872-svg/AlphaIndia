@@ -29,6 +29,7 @@ from app.models.company_market_metrics import CompanyMarketMetrics
 from app.models.company_orderbook_history import CompanyOrderBookHistory
 from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
+from app.core.redis_cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -1213,6 +1214,11 @@ class OrderWinIntelligenceService:
         Returns top gainers ribbon (1Y/6M/3M growth), quarterly backlog sparklines,
         Book/Revenue multiples, and comprehensive company table.
         """
+        cache_key = f"orderbook:view:{timeframe}:{min_order_book_cr}:{min_market_cap_cr}:{search}:{sort_by}:{sort_order}:{page}:{limit}"
+        cached_resp = cache.get_json_sync(cache_key)
+        if cached_resp:
+            return cached_resp
+
         # 1. Fetch all historical orderbook data
         history_rows = (
             db.query(CompanyOrderBookHistory)
@@ -1515,7 +1521,7 @@ class OrderWinIntelligenceService:
         offset = (page - 1) * limit
         paged_items = filtered[offset : offset + limit]
 
-        return {
+        resp_data = {
             "top_gainers": top_gainers,
             "items": paged_items,
             "total_companies": total_matched,
@@ -1524,6 +1530,11 @@ class OrderWinIntelligenceService:
             "total_pages": total_pages,
             "timeframe": timeframe,
         }
+        try:
+            cache.set_json_sync(cache_key, resp_data, expire_seconds=120)
+        except Exception:
+            pass
+        return resp_data
 
     @classmethod
     def get_orderbook_history(cls, db: Session, symbol: str) -> Dict[str, Any]:
@@ -1639,6 +1650,11 @@ class OrderWinIntelligenceService:
         Includes expandable accordions with nested orders, timeframe filters,
         and market cap range filters.
         """
+        cache_key = f"orderbook:comp_view:{timeframe}:{min_revenue_pct}:{min_market_cap_cr}:{max_market_cap_cr}:{search}:{page}:{limit}"
+        cached_resp = cache.get_json_sync(cache_key)
+        if cached_resp:
+            return cached_resp
+
         now = dt_cls.now(tz_cls.utc)
         if timeframe == "3M":
             cutoff = now - td_cls(days=90)
@@ -1796,7 +1812,7 @@ class OrderWinIntelligenceService:
         offset = (page - 1) * limit
         paged_items = filtered[offset : offset + limit]
 
-        return {
+        resp_data = {
             "items": paged_items,
             "total_companies": total_matched,
             "page": page,
@@ -1804,5 +1820,10 @@ class OrderWinIntelligenceService:
             "total_pages": total_pages,
             "timeframe": timeframe,
         }
+        try:
+            cache.set_json_sync(cache_key, resp_data, expire_seconds=120)
+        except Exception:
+            pass
+        return resp_data
 
 

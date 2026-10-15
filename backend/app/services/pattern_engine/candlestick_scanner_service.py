@@ -36,6 +36,8 @@ NIFTY500_CSV = DATA_DIR / "ind_nifty500list.csv"
 _CACHE: Dict[str, Dict[str, Any]] = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 14400  # 4 hours TTL
+_ACTIVE_SCANS: set = set()
+_SCAN_TRIGGER_LOCK = threading.Lock()
 
 # Known inactive / unlisted / problematic tickers to exclude
 EXCLUDED_TICKERS = {"BAGMANE", "DUMMYHEG"}
@@ -193,6 +195,28 @@ class CandlestickScannerService:
             logger.warning(f"Error saving candlestick cache for {u}: {e}")
 
     @classmethod
+    def _trigger_background_scan(cls, universe: str) -> None:
+        """Launches a non-blocking background scan for a universe if one is not already running."""
+        u = universe.strip().upper() if universe else "NIFTY_500"
+        with _SCAN_TRIGGER_LOCK:
+            if u in _ACTIVE_SCANS:
+                return
+            _ACTIVE_SCANS.add(u)
+
+        def _worker():
+            try:
+                symbols, meta_map = cls.get_universe_symbols_and_meta(u)
+                cls._run_scan(symbols=symbols, meta_map=meta_map, universe_name=u)
+            except Exception as e:
+                logger.error(f"[CandlestickScanner] Background scan error for {u}: {e}", exc_info=True)
+            finally:
+                with _SCAN_TRIGGER_LOCK:
+                    _ACTIVE_SCANS.discard(u)
+
+        thread = threading.Thread(target=_worker, daemon=True, name=f"CandlestickScanWorker-{u}")
+        thread.start()
+
+    @classmethod
     def get_candlestick_opportunities(
         cls,
         universe: str = "NIFTY_500",
@@ -203,24 +227,54 @@ class CandlestickScannerService:
         u = universe.strip().upper() if universe else "NIFTY_500"
         now = time.time()
 
+        # 1. Check in-memory cache
         with _CACHE_LOCK:
             cached_data = _CACHE.get(u)
-            if cached_data and not force_refresh:
+            if cached_data:
                 last_scanned = cached_data.get("metadata", {}).get("scanned_at_epoch", 0)
-                if (now - last_scanned) < _CACHE_TTL:
+                is_fresh = (now - last_scanned) < _CACHE_TTL
+                if is_fresh and not force_refresh:
                     return cached_data
+                # Stale or force_refresh: return existing immediately, revalidate in background
+                cls._trigger_background_scan(u)
+                return cached_data
 
-        # Try loading from disk cache
-        if not force_refresh:
-            disk_data = cls._load_cache(u)
-            if disk_data:
-                last_scanned = disk_data.get("metadata", {}).get("scanned_at_epoch", 0)
-                if (now - last_scanned) < _CACHE_TTL:
-                    return disk_data
+        # 2. Try loading from disk cache
+        disk_data = cls._load_cache(u)
+        if disk_data:
+            last_scanned = disk_data.get("metadata", {}).get("scanned_at_epoch", 0)
+            is_fresh = (now - last_scanned) < _CACHE_TTL
+            if is_fresh and not force_refresh:
+                return disk_data
+            # Stale or force_refresh: return existing immediately, revalidate in background
+            cls._trigger_background_scan(u)
+            return disk_data
 
-        # Execute scan across specified universe
-        symbols, meta_map = cls.get_universe_symbols_and_meta(u)
-        return cls._run_scan(symbols=symbols, meta_map=meta_map, universe_name=u)
+        # 3. Cold start with zero cache: trigger background scan and return non-blocking initializing response
+        cls._trigger_background_scan(u)
+        return {
+            "metadata": {
+                "scanned_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "scanned_at_epoch": now,
+                "duration_seconds": 0.0,
+                "total_signals": 0,
+                "universe_scanned": 0,
+                "universe_name": u,
+                "status": "INITIALIZING",
+                "message": f"Candlestick radar is scanning {u} in background. Please refresh shortly.",
+                "bullish_signals": 0,
+                "bearish_signals": 0,
+                "triple_patterns": 0,
+                "double_patterns": 0,
+                "single_patterns": 0,
+                "elite_signals": 0,
+                "high_conviction_signals": 0,
+                "moderate_signals": 0,
+                "speculative_signals": 0,
+                "avg_conviction_score": 0.0,
+            },
+            "signals": [],
+        }
 
     @classmethod
     def _scan_single_stock(cls, symbol: str, company_name: str, sector: str) -> List[Dict[str, Any]]:

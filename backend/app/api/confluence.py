@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.confluence_engine import ConfluenceEngine
 
 logger = logging.getLogger("alpha_india.api.confluence")
@@ -32,6 +33,12 @@ def get_confluence_radar(
     Returns high-probability confluence candidates where 2 or more institutional engines
     (VCP, Cup & Handle, Chart Patterns, Momentum, Pre-Breakout, Delivery) independently concur.
     """
+    cache_key = f"confluence:radar:{tier}:{min_score}:{search}:{sector}"
+    if not force_refresh:
+        cached_resp = cache.get_json_sync(cache_key)
+        if cached_resp:
+            return cached_resp
+
     data = ConfluenceEngine.get_confluence_matrix(db=db, force_refresh=force_refresh)
 
     apex_list = data.get("apex_candidates", [])
@@ -73,7 +80,7 @@ def get_confluence_radar(
         from app.services.stock_trend_enricher import StockTrendEnricher
         StockTrendEnricher.enrich(db, missing_enrich, symbol_key="symbol", cmp_key="cmp")
 
-    return {
+    out = {
         "status": "SUCCESS",
         "metadata": {
             **data.get("metadata", {}),
@@ -87,3 +94,5 @@ def get_confluence_radar(
         "solitary_alpha": filt_solitary,
         "items": all_filtered,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=60)
+    return out

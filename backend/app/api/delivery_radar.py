@@ -18,7 +18,7 @@ router = APIRouter(
 
 @router.get("/opportunities", summary="Get Institutional Delivery Breakout Opportunities")
 def get_delivery_opportunities(
-    lookback_sessions: int = Query(1, ge=1, le=10, description="Number of recent market sessions to scan (1 = latest session)"),
+    lookback_sessions: int = Query(1, ge=1, le=30, description="Number of recent market sessions to scan (1 = latest session, up to 30 for 1 month)"),
     min_spike: float = Query(1.6, ge=1.0, description="Minimum delivery volume multiplier (e.g. 1.6x 10-day SMA)"),
     min_deliv_per: float = Query(55.0, ge=30.0, le=100.0, description="Minimum delivery percentage (e.g. 55%)"),
     search: Optional[str] = Query(None, description="Search symbol or company name"),
@@ -133,3 +133,20 @@ def trigger_fresh_scan(
 @router.get("/stats", summary="Get Telemetry Stats Ribbon")
 def get_delivery_stats() -> Dict[str, Any]:
     return DeliveryScreenerService.get_radar_stats()
+
+
+@router.get("/tree-breakdown", summary="Get 30-Day Month -> Week -> Day Delivery & Drawdown Tree")
+def get_symbol_tree_breakdown(
+    symbol: str = Query(..., description="Equity symbol e.g. SANATHAN, TRENT, BEL"),
+    lookback_sessions: int = Query(30, ge=10, le=60, description="Number of trading sessions to breakdown (default 30 sessions = 1 month)"),
+) -> Dict[str, Any]:
+    """
+    Returns hierarchical Month -> Week -> Day breakdown of delivery accumulation,
+    peak-to-trough drawdown, and blast readiness signatures for visual drilldown.
+    """
+    from app.services.delivery_tree_service import DeliveryTreeService
+    res = DeliveryTreeService.get_symbol_tree_breakdown(symbol=symbol, lookback_sessions=lookback_sessions)
+    if "error" in res:
+        raise HTTPException(status_code=404, detail=res["error"])
+    return res
+

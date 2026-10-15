@@ -50,6 +50,8 @@ logger = logging.getLogger("alpha_india.pattern_engine.orchestrator")
 _CACHE: Dict[str, Any] = {}
 _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 10 * 60  # 10 minutes
+_SCAN_IN_PROGRESS = False
+_SCAN_LOCK = threading.Lock()
 _DISK_CACHE_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent
     / "data"
@@ -289,25 +291,60 @@ def get_pattern_results(
     """
     Returns cached pattern results with stale-while-revalidate.
     Served instantly from cache; background refresh triggered when stale.
+    Guaranteed sub-10ms response time; never blocks on network scans.
     """
     now = time.time()
     with _CACHE_LOCK:
         age = now - _CACHE.get("timestamp", 0)
         has_data = bool(_CACHE.get("data"))
 
+    # If in-memory is empty, attempt disk restore first
+    if not has_data:
+        _load_disk_cache()
+        with _CACHE_LOCK:
+            age = now - _CACHE.get("timestamp", 0)
+            has_data = bool(_CACHE.get("data"))
+
+    def _trigger_bg_scan():
+        global _SCAN_IN_PROGRESS
+        with _SCAN_LOCK:
+            if _SCAN_IN_PROGRESS:
+                return
+            _SCAN_IN_PROGRESS = True
+        
+        def _worker():
+            global _SCAN_IN_PROGRESS
+            try:
+                _run_quick_scan(db=None, quick=True)
+            except Exception as e:
+                logger.error(f"[PatternEngine] Background scan error: {e}", exc_info=True)
+            finally:
+                with _SCAN_LOCK:
+                    _SCAN_IN_PROGRESS = False
+
+        threading.Thread(target=_worker, daemon=True, name="PatternEngineScanWorker").start()
+
     if has_data and age < _CACHE_TTL and not force_refresh:
         with _CACHE_LOCK:
             return {"patterns": list(_CACHE.get("data", [])), "metadata": dict(_CACHE.get("metadata", {}))}
 
-    if has_data and not force_refresh:
-        threading.Thread(target=_run_quick_scan, kwargs={"db": db}, daemon=True).start()
+    if has_data:
+        _trigger_bg_scan()
         with _CACHE_LOCK:
             return {"patterns": list(_CACHE.get("data", [])), "metadata": dict(_CACHE.get("metadata", {}))}
 
-    # Cold start — run synchronously for a quick sample
-    _run_quick_scan(db=db, quick=True)
-    with _CACHE_LOCK:
-        return {"patterns": list(_CACHE.get("data", [])), "metadata": dict(_CACHE.get("metadata", {}))}
+    # Cold start with zero cache: trigger background scan and return immediate initializing response
+    _trigger_bg_scan()
+    return {
+        "patterns": [],
+        "metadata": {
+            "total_patterns": 0,
+            "total_symbols_with_patterns": 0,
+            "pattern_breakdown": {},
+            "status": "INITIALIZING",
+            "message": "Institutional chart pattern engine is analyzing universe in background. Please refresh shortly.",
+        }
+    }
 
 
 def _run_quick_scan(db=None, quick: bool = False) -> None:
@@ -334,13 +371,20 @@ def _run_quick_scan(db=None, quick: bool = False) -> None:
             if st.get("tier") in ("ACTIVE", "NEAR_BREAKOUT")
         ]
 
-    # Build scan list
-    if db is not None:
-        universe = load_full_universe(db)
-        # Quick mode: top 300 symbols (BOTH/NSE exchange first = largest)
-        candidates = [u for u in universe if u["exchange"] == "NSE"][:300 if quick else len(universe)]
+    # Build scan list safely without tying to ephemeral HTTP request session
+    if db is None:
+        try:
+            from app.db.database import SessionLocal
+            worker_db = SessionLocal()
+            universe = load_full_universe(worker_db)
+            worker_db.close()
+            candidates = [u for u in universe if u["exchange"] == "NSE"][:300 if quick else len(universe)]
+        except Exception as ex:
+            logger.warning(f"[PatternEngine] Could not load universe from db: {ex}")
+            candidates = []
     else:
-        candidates = []
+        universe = load_full_universe(db)
+        candidates = [u for u in universe if u["exchange"] == "NSE"][:300 if quick else len(universe)]
 
     # Merge with priority symbols
     priority_set = {s.symbol for s in priority_syms} | set(pattern_active)

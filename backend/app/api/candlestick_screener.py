@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.core.redis_cache import cache
 from app.services.pattern_engine.candlestick_scanner_service import CandlestickScannerService
 
 logger = logging.getLogger("alpha_india.api.candlestick_screener")
@@ -45,6 +46,12 @@ def list_candlesticks(
     Returns filtered and paginated candlestick pattern signals across Nifty 500 or selected universe.
     Supports consolidating multiple patterns into one clean row per stock (group_by_stock=True).
     """
+    cache_key = f"candlesticks:list:{universe}:{group_by_stock}:{conviction_tier}:{direction}:{category}:{pattern_key}:{min_score}:{min_volume_ratio}:{min_risk_reward}:{stage}:{search}:{sort_by}:{sort_order}:{page}:{limit}"
+    if not force_refresh:
+        cached_resp = cache.get_json_sync(cache_key)
+        if cached_resp:
+            return cached_resp
+
     res = CandlestickScannerService.get_candlestick_opportunities(universe=universe, db=db, force_refresh=force_refresh)
     signals: List[Dict[str, Any]] = res.get("signals", [])
     metadata: Dict[str, Any] = dict(res.get("metadata", {}))
@@ -144,7 +151,7 @@ def list_candlesticks(
     start_idx = (page - 1) * limit
     paged = filtered[start_idx : start_idx + limit]
 
-    return {
+    out = {
         "metadata": metadata,
         "total_count": total_count,
         "page": page,
@@ -152,6 +159,8 @@ def list_candlesticks(
         "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1,
         "signals": paged,
     }
+    cache.set_json_sync(cache_key, out, expire_seconds=60)
+    return out
 
 
 @router.get("/summary", summary="Summary statistics of active candlestick patterns")

@@ -18,6 +18,7 @@ from app.models.quarterly_result import QuarterlyResult
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.models.watchlist import Watchlist, WatchlistItem
 from app.services.pead_engine import PEADEngine
+from app.core.redis_cache import cache
 
 router = APIRouter(
     prefix="/growth-screener",
@@ -100,6 +101,16 @@ def growth_screener(
     Enterprise Growth Screener PRO API.
     Powered by Screener.in institutional fundamentals and historical quarterly time-series.
     """
+    cache_key = (
+        f"growth_scr:{page}:{limit}:{search}:{sector}:{exchange}:"
+        f"{market_cap_category}:{min_pe}:{max_pe}:{min_pb}:{max_pb}:"
+        f"{min_roce}:{min_roe}:{min_sales_growth}:{min_profit_growth}:"
+        f"{min_health_score}:{max_health_score}:{watchlist_only}:"
+        f"{watchlist_id}:{min_conviction}:{sort_by}:{sort_order}"
+    )
+    cached = cache.get_json_sync(cache_key)
+    if cached:
+        return cached
 
     query = latest_screener_query(db)
 
@@ -602,7 +613,7 @@ def growth_screener(
             }
         )
 
-    return {
+    response_payload = {
         "success": True,
         "results": results,
         "page": page,
@@ -612,6 +623,11 @@ def growth_screener(
         "sort_by": sort_by,
         "sort_order": sort_order,
     }
+    try:
+        cache.set_json_sync(cache_key, response_payload, expire_seconds=60)
+    except Exception:
+        pass
+    return response_payload
 
 
 # ==========================================================

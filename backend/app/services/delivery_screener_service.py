@@ -410,10 +410,10 @@ class DeliveryScreenerService:
 
         all_df["RSI_14"] = grouped["CLOSE"].transform(calc_rsi)
 
-        # Slice latest sessions based on lookback (universe caches full 10-session pool)
+        # Slice latest sessions based on lookback (universe caches full 30-session pool for 1-month drilldowns)
         unique_dates = sorted(all_df["DATE"].unique())
         latest_date = unique_dates[-1]
-        lookback = max(10, min(10, lookback_sessions))
+        lookback = max(30, min(30, lookback_sessions))
         target_dates = unique_dates[-lookback:]
         
         latest_df = all_df[all_df["DATE"].isin(target_dates)].copy()
