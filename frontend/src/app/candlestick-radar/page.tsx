@@ -189,193 +189,120 @@ export default function CandlestickRadarPage() {
           }
         />
 
-        {/* â”€â”€ UNIVERSE & CONVICTION CONTROLS RIBBON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-[#07111F]/90 border border-slate-200 dark:border-slate-800 shadow-sm">
-          {/* Universe Segment Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 pl-1">
-              <Target className="w-3.5 h-3.5 text-cyan-500" />
-              <span>Universe:</span>
-            </span>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setUniverse("NIFTY_500");
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  universe === "NIFTY_500"
-                    ? "bg-cyan-600 text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                <span>Nifty 500</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded ${
-                  universe === "NIFTY_500" ? "bg-cyan-900/60 text-cyan-200" : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                }`}>
-                  500 Stocks
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUniverse("NIFTY_50");
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  universe === "NIFTY_50"
-                    ? "bg-cyan-600 text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                <span>Nifty 50</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded ${
-                  universe === "NIFTY_50" ? "bg-cyan-900/60 text-cyan-200" : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                }`}>
-                  Large Cap
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setUniverse("FNO");
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  universe === "FNO"
-                    ? "bg-cyan-600 text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                <span>F&O Universe</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded ${
-                  universe === "FNO" ? "bg-cyan-900/60 text-cyan-200" : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                }`}>
-                  180 Liquid
-                </span>
-              </button>
+        {/* ── UNIVERSE & CONVICTION CONTROLS RIBBON (Streamlined & Scrollable) ── */}
+        <div className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-[#07111F]/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          {/* Row 1: Universe tabs & Grouping toggle */}
+          <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+            {/* Universe Segment Tabs */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1 pl-1">
+                <Target className="w-3 h-3 text-cyan-500" />
+                <span className="hidden xs:inline">Universe:</span>
+              </span>
+              <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setUniverse("NIFTY_500"); setPage(1); }}
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                    universe === "NIFTY_500" ? "bg-cyan-600 text-white shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <span>Nifty 500</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setUniverse("NIFTY_50"); setPage(1); }}
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                    universe === "NIFTY_50" ? "bg-cyan-600 text-white shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <span>Nifty 50</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setUniverse("FNO"); setPage(1); }}
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                    universe === "FNO" ? "bg-cyan-600 text-white shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <span>F&O</span>
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Group By Stock (1 Row / Stock) Toggle */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Grouping:</span>
-            </span>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            {/* Group By Stock Toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  setGroupByStock(true);
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  groupByStock
-                    ? "bg-cyan-600 text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                onClick={() => { setGroupByStock(true); setPage(1); }}
+                className={`px-2 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                  groupByStock ? "bg-cyan-600 text-white shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-white"
                 }`}
-                title="Consolidate all patterns for each stock into 1 single row with multi-pattern synergy badge"
+                title="Consolidate all patterns for each stock into 1 single row"
               >
                 <Layers className="w-3 h-3" />
-                <span>1 Row / Stock</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                  groupByStock ? "bg-cyan-900/80 text-cyan-200" : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                }`}>
-                  {summary?.total_unique_stocks ?? metadata?.total_unique_stocks ?? 383}
-                </span>
+                <span>1 Row/Stock</span>
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setGroupByStock(false);
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                  !groupByStock
-                    ? "bg-cyan-600 text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                onClick={() => { setGroupByStock(false); setPage(1); }}
+                className={`px-2 py-1 rounded text-xs font-mono font-semibold flex items-center gap-1 transition cursor-pointer ${
+                  !groupByStock ? "bg-cyan-600 text-white shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-white"
                 }`}
                 title="Show every detected pattern formation as an individual row"
               >
                 <span>All Signals</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                  !groupByStock ? "bg-cyan-900/80 text-cyan-200" : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                }`}>
-                  {metadata?.total_signals ?? summary?.metadata?.total_signals ?? 620}
-                </span>
               </button>
             </div>
           </div>
 
-          {/* Conviction Tier Selector */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Conviction:</span>
+          {/* Row 2: Conviction Tier Selector horizontal ribbon */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1 pl-1 shrink-0">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              <span>Tier:</span>
             </span>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  setConvictionTier("ALL");
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition cursor-pointer ${
-                  convictionTier === "ALL"
-                    ? "bg-slate-300 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                onClick={() => { setConvictionTier("ALL"); setPage(1); }}
+                className={`px-2 py-0.5 rounded text-xs font-mono font-semibold transition cursor-pointer ${
+                  convictionTier === "ALL" ? "bg-slate-300 dark:bg-slate-800 text-slate-900 dark:text-white" : "text-slate-500 hover:text-white"
                 }`}
               >
                 All
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setConvictionTier("ELITE");
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
-                  convictionTier === "ELITE"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
+                onClick={() => { setConvictionTier("ELITE"); setPage(1); }}
+                className={`px-2 py-0.5 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                  convictionTier === "ELITE" ? "bg-emerald-600 text-white" : "text-emerald-500 hover:text-emerald-300"
                 }`}
               >
-                <Zap className="w-3 h-3" />
+                <Zap className="w-2.5 h-2.5" />
                 <span>Elite (90+)</span>
-                <span className="text-[10px] px-1 rounded bg-emerald-950/80 text-emerald-200 border border-emerald-700/50">
+                <span className="text-[9px] px-1 rounded bg-emerald-950/80 text-emerald-200">
                   {summary?.conviction_breakdown?.elite ?? metadata?.elite_signals ?? 0}
                 </span>
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setConvictionTier("HIGH");
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
-                  convictionTier === "HIGH"
-                    ? "bg-cyan-600 text-white shadow-xs"
-                    : "text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
+                onClick={() => { setConvictionTier("HIGH"); setPage(1); }}
+                className={`px-2 py-0.5 rounded text-xs font-mono font-bold flex items-center gap-1 transition cursor-pointer ${
+                  convictionTier === "HIGH" ? "bg-cyan-600 text-white" : "text-cyan-500 hover:text-cyan-300"
                 }`}
               >
-                <CheckCircle2 className="w-3 h-3" />
+                <CheckCircle2 className="w-2.5 h-2.5" />
                 <span>High (80+)</span>
-                <span className="text-[10px] px-1 rounded bg-cyan-950/80 text-cyan-200 border border-cyan-700/50">
+                <span className="text-[9px] px-1 rounded bg-cyan-950/80 text-cyan-200">
                   {summary?.conviction_breakdown?.high ?? metadata?.high_conviction_signals ?? 0}
                 </span>
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setConvictionTier("MODERATE");
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition cursor-pointer ${
-                  convictionTier === "MODERATE"
-                    ? "bg-amber-600 text-white shadow-xs"
-                    : "text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
+                onClick={() => { setConvictionTier("MODERATE"); setPage(1); }}
+                className={`px-2 py-0.5 rounded text-xs font-mono font-medium transition cursor-pointer ${
+                  convictionTier === "MODERATE" ? "bg-amber-600 text-white" : "text-amber-500 hover:text-amber-300"
                 }`}
               >
                 <span>Mod (65+)</span>
@@ -384,201 +311,191 @@ export default function CandlestickRadarPage() {
           </div>
         </div>
 
-        {/* â”€â”€ METRIC TILES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiCard
-            label="Total Formations"
-            value={metadata?.total_signals ?? totalCount}
-            sub={`${metadata?.universe_name || universe.replace("_", " ")} (${metadata?.universe_scanned ?? 500} Eq)`}
-          />
-          <KpiCard
-            label="Multi-Pattern Stocks"
-            value={summary?.multi_pattern_stocks ?? 179}
-            sub="â‰¥2 Pattern Confluence"
-            color="cyan"
-            icon={<Sparkles className="w-3.5 h-3.5" />}
-          />
-          <KpiCard
-            label="Heavy Vol Surges"
-            value={summary?.volume_breakdown?.explosive_2x ?? 0}
-            sub="â‰¥2.0x Institutional Vol"
-            color="amber"
-            icon={<Flame className="w-3.5 h-3.5" />}
-          />
-          <KpiCard
-            label="Elite Setups (90+)"
-            value={summary?.conviction_breakdown?.elite ?? metadata?.elite_signals ?? 0}
-            sub="Ultra Sniper"
-            color="emerald"
-            icon={<Zap className="w-3.5 h-3.5" />}
-          />
-          <KpiCard
-            label="Bullish Setups"
-            value={bullCount}
-            sub="Accumulation Bias"
-            color="emerald"
-            icon={<ArrowUpRight className="w-3.5 h-3.5" />}
-          />
-          <KpiCard
-            label="Bearish Setups"
-            value={bearCount}
-            sub="Distribution / Stop"
-            color="rose"
-            icon={<ArrowDownRight className="w-3.5 h-3.5" />}
-          />
+        {/* ── METRIC TILES (Horizontal Scroll Ribbon on Mobile) ── */}
+        <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-6 pb-1">
+          <div className="shrink-0 min-w-[130px] sm:min-w-0">
+            <KpiCard
+              label="Total Formations"
+              value={metadata?.total_signals ?? totalCount}
+              sub={`${metadata?.universe_name || universe.replace("_", " ")} (${metadata?.universe_scanned ?? 500} Eq)`}
+            />
+          </div>
+          <div className="shrink-0 min-w-[130px] sm:min-w-0">
+            <KpiCard
+              label="Multi-Pattern Stocks"
+              value={summary?.multi_pattern_stocks ?? 179}
+              sub="≥2 Pattern Confluence"
+              color="cyan"
+              icon={<Sparkles className="w-3.5 h-3.5" />}
+            />
+          </div>
+          <div className="shrink-0 min-w-[130px] sm:min-w-0">
+            <KpiCard
+              label="Heavy Vol Surges"
+              value={summary?.volume_breakdown?.explosive_2x ?? 0}
+              sub="≥2.0x Institutional Vol"
+              color="amber"
+              icon={<Flame className="w-3.5 h-3.5" />}
+            />
+          </div>
+          <div className="shrink-0 min-w-[130px] sm:min-w-0">
+            <KpiCard
+              label="Elite Setups (90+)"
+              value={summary?.conviction_breakdown?.elite ?? metadata?.elite_signals ?? 0}
+              sub="Ultra Sniper"
+              color="emerald"
+              icon={<Zap className="w-3.5 h-3.5" />}
+            />
+          </div>
+          <div className="shrink-0 min-w-[130px] sm:min-w-0">
+            <KpiCard
+              label="Bullish Setups"
+              value={bullCount}
+              sub="Accumulation Bias"
+              color="emerald"
+              icon={<ArrowUpRight className="w-3.5 h-3.5" />}
+            />
+          </div>
+          <div className="shrink-0 min-w-[130px] sm:min-w-0">
+            <KpiCard
+              label="Bearish Setups"
+              value={bearCount}
+              sub="Distribution / Stop"
+              color="rose"
+              icon={<ArrowDownRight className="w-3.5 h-3.5" />}
+            />
+          </div>
         </div>
 
-        {/* â”€â”€ FILTER & TOOLBAR RIBBON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-xs">
-          {/* Direction Tabs */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-200 dark:border-slate-800/80">
-            <button
-              onClick={() => {
-                setDirectionFilter("ALL");
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
-                directionFilter === "ALL"
-                  ? "bg-cyan-600 text-white shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              All Signals ({metadata?.total_signals ?? totalCount})
-            </button>
-            <button
-              onClick={() => {
-                setDirectionFilter("BULLISH");
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                directionFilter === "BULLISH"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
-              }`}
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" /> Bullish ({bullCount})
-            </button>
-            <button
-              onClick={() => {
-                setDirectionFilter("BEARISH");
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                directionFilter === "BEARISH"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-              }`}
-            >
-              <ArrowDownRight className="w-3.5 h-3.5" /> Bearish ({bearCount})
-            </button>
-          </div>
-
-          {/* Category, Vol Surge, Score, Search & View Mode Switcher */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Volume Surge Weightage Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 dark:text-slate-400 text-xs font-mono flex items-center gap-1">
-                <Flame className="w-3 h-3 text-amber-500" />
-                <span>Vol:</span>
-              </span>
-              <select
-                value={minVolumeRatio}
-                onChange={(e) => {
-                  setMinVolumeRatio(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2.5 py-1.5 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer shadow-2xs"
-                title="Filter by Institutional Volume Confirmation"
-              >
-                <option value={0}>All Volume</option>
-                <option value={1.2}>â‰¥1.2x (Above Avg)</option>
-                <option value={1.5}>âš¡ â‰¥1.5x (Institutional)</option>
-                <option value={2.0}>”¥ â‰¥2.0x (Heavy Surge)</option>
-                <option value={2.5}>’¥ â‰¥2.5x (Ultra Climax)</option>
-              </select>
-            </div>
-
-            {/* Category Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 dark:text-slate-400 text-xs font-mono">Category:</span>
-              <select
-                value={categoryFilter}
-                onChange={(e) => {
-                  setCategoryFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2.5 py-1.5 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer shadow-2xs"
-              >
-                <option value="ALL">All Categories</option>
-                <option value="TRIPLE">Triple Candlestick (Strike.money)</option>
-                <option value="DOUBLE">Double Candlestick (Engulfing)</option>
-                <option value="SINGLE">Single Candlestick (Hammers)</option>
-              </select>
-            </div>
-
-            {/* Min Conviction Score */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 dark:text-slate-400 text-xs font-mono">Min Score:</span>
-              <select
-                value={minScore}
-                onChange={(e) => {
-                  setMinScore(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2.5 py-1.5 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer shadow-2xs"
-              >
-                <option value={50}>50+ (All Scored)</option>
-                <option value={60}>60+ (Confirmed Base)</option>
-                <option value={70}>70+ (High Probability)</option>
-                <option value={80}>80+ (Elite Institutional)</option>
-                <option value={90}>90+ (Ultra Sniper)</option>
-              </select>
-            </div>
-
-            {/* Search Box */}
-            <div className="relative">
+        {/* ── FILTER & TOOLBAR RIBBON (Streamlined 2-Row Command Bar) ── */}
+        <div className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
+          {/* Row 1: Search + Direction tabs + View mode toggle */}
+          <div className="flex items-center gap-2">
+            {/* Search Box with Clear */}
+            <div className="relative flex-1 min-w-[120px]">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search symbol, pattern, sector..."
+                placeholder="Search symbol, pattern…"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-xs rounded-lg pl-8 pr-3 py-1.5 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-44 md:w-56 font-mono shadow-2xs"
-              >
-              </input>
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-slate-200 text-xs rounded-lg pl-8 pr-7 py-1.5 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => { setSearchQuery(""); setPage(1); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            {/* View Mode Switcher (Table View vs Cards View) */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-lg border border-slate-300 dark:border-slate-800 self-end md:self-auto shadow-2xs">
+            {/* Direction Tabs (Horizontal Scrollable) */}
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shrink-0">
+              <button
+                onClick={() => { setDirectionFilter("ALL"); setPage(1); }}
+                className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                  directionFilter === "ALL" ? "bg-cyan-600 text-white shadow-xs" : "text-slate-500 hover:text-white"
+                }`}
+              >
+                All ({metadata?.total_signals ?? totalCount})
+              </button>
+              <button
+                onClick={() => { setDirectionFilter("BULLISH"); setPage(1); }}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                  directionFilter === "BULLISH" ? "bg-emerald-600 text-white shadow-xs" : "text-emerald-500 hover:text-emerald-300"
+                }`}
+              >
+                <ArrowUpRight className="w-3 h-3" /> Bull ({bullCount})
+              </button>
+              <button
+                onClick={() => { setDirectionFilter("BEARISH"); setPage(1); }}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                  directionFilter === "BEARISH" ? "bg-rose-600 text-white shadow-xs" : "text-rose-500 hover:text-rose-300"
+                }`}
+              >
+                <ArrowDownRight className="w-3 h-3" /> Bear ({bearCount})
+              </button>
+            </div>
+
+            {/* View Mode Switcher */}
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-300 dark:border-slate-800 shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
-                  viewMode === "table"
-                    ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className={`p-1 rounded text-xs transition-all cursor-pointer ${
+                  viewMode === "table" ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40" : "text-slate-500 hover:text-white"
                 }`}
-                title="Switch to Institutional List / Table View"
+                title="Table View"
               >
                 <TableIcon className="w-3.5 h-3.5" />
-                <span>Table View</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("cards")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
-                  viewMode === "cards"
-                    ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className={`p-1 rounded text-xs transition-all cursor-pointer ${
+                  viewMode === "cards" ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40" : "text-slate-500 hover:text-white"
                 }`}
-                title="Switch to Card Grid View"
+                title="Cards View"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Cards View</span>
               </button>
+            </div>
+          </div>
+
+          {/* Row 2: Category + Vol Surge + Min Score quick-chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
+            {/* Category Dropdown */}
+            <div className="relative shrink-0">
+              <select
+                value={categoryFilter}
+                onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
+                className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-[11px] rounded px-2 py-0.5 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
+              >
+                <option value="ALL">All Categories</option>
+                <option value="TRIPLE">Triple (Morning/Evening Star)</option>
+                <option value="DOUBLE">Double (Engulfing/Harami)</option>
+                <option value="SINGLE">Single (Hammers/Doji)</option>
+              </select>
+            </div>
+
+            {/* Volume Surge Dropdown */}
+            <div className="relative shrink-0">
+              <select
+                value={minVolumeRatio}
+                onChange={(e) => { setMinVolumeRatio(Number(e.target.value)); setPage(1); }}
+                className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-[11px] rounded px-2 py-0.5 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
+              >
+                <option value={0}>All Vol</option>
+                <option value={1.2}>≥1.2x Vol</option>
+                <option value={1.5}>⚡ ≥1.5x Inst</option>
+                <option value={2.0}>🔥 ≥2.0x Surge</option>
+                <option value={2.5}>💥 ≥2.5x Climax</option>
+              </select>
+            </div>
+
+            {/* Min Conviction Score */}
+            <div className="relative shrink-0">
+              <select
+                value={minScore}
+                onChange={(e) => { setMinScore(Number(e.target.value)); setPage(1); }}
+                className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-[11px] rounded px-2 py-0.5 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
+              >
+                <option value={50}>50+ Score</option>
+                <option value={60}>60+ Base</option>
+                <option value={70}>70+ High</option>
+                <option value={80}>80+ Elite</option>
+                <option value={90}>90+ Sniper</option>
+              </select>
+            </div>
+
+            {/* Counter */}
+            <div className="ml-auto text-[10px] text-slate-500 shrink-0 font-mono">
+              {totalCount} formations
             </div>
           </div>
         </div>
@@ -625,12 +542,12 @@ export default function CandlestickRadarPage() {
         {/* â”€â”€ INSTITUTIONAL TABLE (LIST) VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {!isLoading && signals.length > 0 && viewMode === "table" && (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#07111F]/90 overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[calc(100vh-230px)]">
               <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-slate-100 dark:bg-slate-950/90 text-[10px] uppercase font-bold tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 select-none">
+                <thead className="sticky top-0 z-30 bg-slate-100 dark:bg-slate-950/95 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 select-none">
                   <tr>
                     <th
-                      className="py-3 px-4 cursor-pointer hover:text-cyan-400 transition"
+                      className="py-3 px-4 cursor-pointer hover:text-cyan-400 transition sticky left-0 z-40 bg-slate-100 dark:bg-[#07111F] shadow-[2px_0_5px_rgba(0,0,0,0.5)]"
                       onClick={() => handleSort("symbol")}
                     >
                       <div className="flex items-center gap-1">
@@ -692,8 +609,8 @@ export default function CandlestickRadarPage() {
                           }`}
                           onClick={() => setSelectedSignal(sig)}
                         >
-                          {/* 1. Symbol, Watchlist & Company */}
-                          <td className="py-3.5 px-4">
+                          {/* 1. Symbol, Watchlist & Company (Sticky Left Column) */}
+                          <td className="py-3.5 px-4 sticky left-0 z-20 bg-white dark:bg-[#07111F] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
                             <div className="flex items-center gap-2">
                               <div onClick={(e) => e.stopPropagation()}>
                                 <AddToWatchlistButton

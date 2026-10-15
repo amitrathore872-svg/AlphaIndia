@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
@@ -430,12 +430,13 @@ export default function PreBreakoutRadarPage() {
         ) : (
           <>
             {/* METRICS & TELEMETRY RIBBON */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-6 pb-1">
               <KpiCard
                 label="Scanned Universe"
                 value={metadata?.total_scanned || 0}
                 sub="Stocks"
                 icon={<Layers className="w-4 h-4 text-slate-400" />}
+                className="min-w-[130px] sm:min-w-0 flex-shrink-0"
               />
               <KpiCard
                 label="A+ Super Coils"
@@ -443,6 +444,7 @@ export default function PreBreakoutRadarPage() {
                 sub="Top Decile"
                 color="emerald"
                 icon={<Sparkles className="w-4 h-4 text-emerald-400" />}
+                className="min-w-[130px] sm:min-w-0 flex-shrink-0"
               />
               <KpiCard
                 label="High Conviction"
@@ -450,6 +452,7 @@ export default function PreBreakoutRadarPage() {
                 sub=">= 70 Pts"
                 color="cyan"
                 icon={<Target className="w-4 h-4 text-cyan-400" />}
+                className="min-w-[130px] sm:min-w-0 flex-shrink-0"
               />
               <KpiCard
                 label="NR7 / Inside Days"
@@ -457,6 +460,7 @@ export default function PreBreakoutRadarPage() {
                 sub="Tight Coils"
                 color="purple"
                 icon={<Activity className="w-4 h-4 text-purple-400" />}
+                className="min-w-[130px] sm:min-w-0 flex-shrink-0"
               />
               <KpiCard
                 label="Volume Dry-Up (VDU)"
@@ -464,6 +468,7 @@ export default function PreBreakoutRadarPage() {
                 sub="<= 0.70x Vol"
                 color="amber"
                 icon={<Flame className="w-4 h-4 text-amber-400" />}
+                className="min-w-[130px] sm:min-w-0 flex-shrink-0"
               />
               <KpiCard
                 label="Avg Risk:Reward"
@@ -471,11 +476,12 @@ export default function PreBreakoutRadarPage() {
                 sub="Asymmetric"
                 color="emerald"
                 icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />}
+                className="min-w-[130px] sm:min-w-0 flex-shrink-0"
               />
             </div>
 
         {/* PATTERN TABS STRIP */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl border border-slate-800 bg-slate-950/70">
+        <div className="flex overflow-x-auto no-scrollbar items-center gap-1.5 p-1.5 rounded-xl border border-slate-800 bg-slate-950/70">
           {PATTERN_TABS.map((tab) => {
             const isActive = activePattern === tab.id;
             return (
@@ -485,7 +491,7 @@ export default function PreBreakoutRadarPage() {
                   setActivePattern(tab.id);
                   setPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
                     : "text-slate-400 hover:text-white hover:bg-slate-900"
@@ -498,11 +504,11 @@ export default function PreBreakoutRadarPage() {
         </div>
 
         {/* TOOLBAR */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-950/70">
-          <div className="flex flex-1 flex-wrap items-center gap-2">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+        <div className="flex flex-col gap-2 p-2.5 rounded-xl border border-slate-800 bg-slate-950/70">
+          {/* Row 1: Search + Watchlisted + View Mode */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
               <input
                 type="text"
                 placeholder="Search symbol or company..."
@@ -511,10 +517,60 @@ export default function PreBreakoutRadarPage() {
                   setSearchTerm(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-9 pr-4 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 shadow-2xs"
+                className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 shadow-2xs"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2 top-2 text-slate-500 hover:text-slate-300 p-0.5"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
+            {/* Watchlisted Only Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowWatchlistedOnly((v) => !v)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                showWatchlistedOnly
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10"
+                  : "bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800"
+              }`}
+              title="Filter to only watchlisted setups"
+            >
+              <Star className={`h-3.5 w-3.5 ${showWatchlistedOnly ? "fill-amber-400 text-amber-400" : ""}`} />
+              <span className="hidden sm:inline">Watchlisted</span>
+              <span className="text-[10px] opacity-75">
+                ({Object.keys(watchlistMap).filter((s) => opportunities.some((o) => o.symbol === s)).length})
+              </span>
+            </button>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-0.5 bg-slate-900 p-0.5 rounded-lg border border-slate-800 flex-shrink-0">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`px-2 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+                  viewMode === "table" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Table
+              </button>
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`px-2 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+                  viewMode === "cards" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Cards
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2: Horizontal scroll ribbon for Sector & Conviction Tier */}
+          <div className="flex overflow-x-auto no-scrollbar items-center gap-2 pt-0.5 whitespace-nowrap">
             {/* Sector Dropdown */}
             <select
               value={selectedSector}
@@ -522,7 +578,7 @@ export default function PreBreakoutRadarPage() {
                 setSelectedSector(e.target.value);
                 setPage(1);
               }}
-              className="py-1.5 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono text-slate-800 dark:text-slate-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer shadow-xs"
+              className="py-1 px-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs font-mono text-slate-800 dark:text-slate-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer shadow-xs flex-shrink-0"
             >
               <option value="ALL">All Sectors</option>
               {sectors.map((sec) => (
@@ -533,8 +589,8 @@ export default function PreBreakoutRadarPage() {
             </select>
 
             {/* Minimum Score */}
-            <div className="flex items-center gap-1.5 text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 shadow-2xs">
-              <span>Conviction Tier:</span>
+            <div className="flex items-center gap-1.5 text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-800 shadow-2xs flex-shrink-0">
+              <span>Tier:</span>
               <select
                 value={minScore}
                 onChange={(e) => {
@@ -550,42 +606,9 @@ export default function PreBreakoutRadarPage() {
               </select>
             </div>
 
-            {/* Watchlisted Only Filter Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowWatchlistedOnly((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
-                showWatchlistedOnly
-                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10"
-                  : "bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800"
-              }`}
-              title="Filter to only watchlisted setups"
-            >
-              <Star className={`h-3.5 w-3.5 ${showWatchlistedOnly ? "fill-amber-400 text-amber-400" : ""}`} />
-              <span>
-                Watchlisted ({Object.keys(watchlistMap).filter((s) => opportunities.some((o) => o.symbol === s)).length})
-              </span>
-            </button>
-          </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 self-end md:self-auto">
-            <button
-              onClick={() => setViewMode("table")}
-              className={`px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
-                viewMode === "table" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Table View
-            </button>
-            <button
-              onClick={() => setViewMode("cards")}
-              className={`px-2.5 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
-                viewMode === "cards" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Cards View
-            </button>
+            <span className="text-[11px] font-mono text-slate-500 ml-auto flex-shrink-0">
+              Showing <span className="text-emerald-400 font-bold">{displayedOpportunities.length}</span> of {opportunities.length} setups
+            </span>
           </div>
         </div>
 
@@ -623,11 +646,11 @@ export default function PreBreakoutRadarPage() {
         ) : viewMode === "table" ? (
           /* TABLE VIEW */
           <div className="rounded-2xl border border-slate-800 bg-[#07111F]/90 overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-slate-950/90 text-[10px] uppercase text-slate-400 border-b border-slate-800">
+            <div className="overflow-x-auto max-h-[calc(100vh-230px)]">
+              <table className="w-full text-left text-xs font-mono relative">
+                <thead className="bg-[#050B14] text-[10px] uppercase text-slate-400 border-b border-slate-800 sticky top-0 z-30 shadow-sm">
                   <tr>
-                    <th className="py-3 px-4">Symbol & Sector</th>
+                    <th className="py-3 px-4 sticky left-0 z-40 bg-[#050B14] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">Symbol & Sector</th>
                     <th className="py-3 px-3">Price & Return</th>
                     <th className="py-3 px-3">Trend (90D)</th>
                     <th className="py-3 px-3">Current Stage</th>
@@ -653,7 +676,7 @@ export default function PreBreakoutRadarPage() {
                         onClick={() => setSelectedOpportunity(opp)}
                       >
                         {/* Symbol & Name */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 sticky left-0 z-20 bg-[#07111F] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center gap-2.5">
                             {/* Watchlist Star Icon */}
                             <button

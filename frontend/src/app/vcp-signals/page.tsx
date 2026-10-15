@@ -30,6 +30,7 @@ import {
   Calendar,
   Layers,
   Eye,
+  X,
 } from "lucide-react";
 
 type FilterTab = "ALL" | "ACTIVE" | "TARGET_MET" | "STOP_HIT" | "CLOSED";
@@ -159,75 +160,75 @@ export default function VCPSignalsPage() {
 
         {/* Portfolio KPI Ribbon */}
         {kpi && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 font-mono text-xs">
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
+          <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-7 pb-1 font-mono text-xs">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
               <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Total Picks</span>
-              <span className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1 block">
                 {kpi.total_signals}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">All-time institutional setups</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate block">All-time setups</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
               <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Active Trades
               </span>
-              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+              <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
                 {kpi.active_trades}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Currently running</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate block">Currently running</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
               <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Closed Trades</span>
-              <span className="text-2xl font-black text-slate-700 dark:text-slate-300 mt-1 block">
+              <span className="text-xl sm:text-2xl font-black text-slate-700 dark:text-slate-300 mt-1 block">
                 {kpi.closed_trades}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Profit taken / stopped</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate block">Profit taken/stopped</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
               <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Win Rate</span>
-              <span className="text-2xl font-black text-cyan-600 dark:text-cyan-400 mt-1 block">
+              <span className="text-xl sm:text-2xl font-black text-cyan-600 dark:text-cyan-400 mt-1 block">
                 {kpi.win_rate_pct}%
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Resolved trade accuracy</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate block">Resolved accuracy</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
               <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Targets Met</span>
-              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+              <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
                 {kpi.targets_met}
               </span>
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400/80">T1, T2 or T3 achieved</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400/80 truncate block">T1, T2 or T3 achieved</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
-              <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Stop Losses Hit</span>
-              <span className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 block">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
+              <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Stop Losses</span>
+              <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 block">
                 {kpi.stop_losses_hit}
               </span>
-              <span className="text-[10px] text-rose-600 dark:text-rose-400/80">Protected at guardrail</span>
+              <span className="text-[10px] text-rose-600 dark:text-rose-400/80 truncate block">Protected guardrail</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3.5 rounded-xl shadow-xs">
+            <div className="bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs min-w-[130px] sm:min-w-0 flex-shrink-0">
               <span className="text-slate-500 dark:text-slate-400 text-[10px] block uppercase font-bold">Avg Win Gain</span>
-              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+              <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
                 +{kpi.average_gain_pct}%
               </span>
-              <span className="text-[10px] text-rose-600 dark:text-rose-400">Avg Loss: {kpi.average_loss_pct}%</span>
+              <span className="text-[10px] text-rose-600 dark:text-rose-400 truncate block">Loss: {kpi.average_loss_pct}%</span>
             </div>
           </div>
         )}
 
         {/* Filters & Search Toolbar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#040A14] border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-[#040A14] border border-slate-200 dark:border-slate-800/80 p-2.5 rounded-xl shadow-xs">
           {/* Filter Tabs */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex overflow-x-auto no-scrollbar items-center gap-1.5 whitespace-nowrap">
             <button
               onClick={() => setCurrentTab("ALL")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
                 currentTab === "ALL"
                   ? "bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(6,182,212,0.3)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
@@ -238,19 +239,19 @@ export default function VCPSignalsPage() {
 
             <button
               onClick={() => setCurrentTab("ACTIVE")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
                 currentTab === "ACTIVE"
                   ? "bg-emerald-500 text-slate-950 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Active Trades ({data?.kpi?.active_trades || 0})
+              Active ({data?.kpi?.active_trades || 0})
             </button>
 
             <button
               onClick={() => setCurrentTab("TARGET_MET")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
                 currentTab === "TARGET_MET"
                   ? "bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(6,182,212,0.3)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
@@ -261,47 +262,56 @@ export default function VCPSignalsPage() {
 
             <button
               onClick={() => setCurrentTab("STOP_HIT")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
                 currentTab === "STOP_HIT"
                   ? "bg-rose-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.3)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
-              Stop Loss Hit ({data?.kpi?.stop_losses_hit || 0})
+              Stop Loss ({data?.kpi?.stop_losses_hit || 0})
             </button>
 
             <button
               onClick={() => setCurrentTab("CLOSED")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
                 currentTab === "CLOSED"
                   ? "bg-slate-700 text-white"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
-              Closed Trades ({data?.kpi?.closed_trades || 0})
+              Closed ({data?.kpi?.closed_trades || 0})
             </button>
           </div>
 
           {/* Search Box */}
-          <div className="relative w-full md:w-72">
-            <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5" />
+          <div className="relative w-full md:w-64">
+            <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search ticker, company, sector..."
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+              placeholder="Search ticker, company..."
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-2 text-slate-500 hover:text-slate-300 p-0.5"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Signals Ledger Table */}
         <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-950/70 shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-50 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider">
+          <div className="overflow-x-auto max-h-[calc(100vh-230px)]">
+            <table className="w-full text-left text-xs font-mono relative">
+              <thead className="bg-slate-50 dark:bg-[#050B14] text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider sticky top-0 z-30 shadow-sm">
                 <tr>
-                  <th className="py-3.5 px-4 font-semibold">Stock / Company</th>
+                  <th className="py-3.5 px-4 font-semibold sticky left-0 z-40 bg-slate-50 dark:bg-[#050B14] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">Stock / Company</th>
                   <th className="py-3.5 px-4 font-semibold">Recommended Timestamp</th>
                   <th className="py-3.5 px-4 font-semibold text-right">Entry / Pivot</th>
                   <th className="py-3.5 px-4 font-semibold text-right">CMP (Live)</th>
@@ -334,7 +344,7 @@ export default function VCPSignalsPage() {
                     return (
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
                         {/* Stock & Company */}
-                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white sticky left-0 z-20 bg-white dark:bg-[#07111F] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-black tracking-tight">{sig.symbol}</span>
                             {sig.is_elite && (

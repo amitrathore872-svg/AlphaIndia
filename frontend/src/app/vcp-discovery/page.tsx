@@ -393,17 +393,18 @@ export default function VCPDiscoveryPage() {
         )}
 
         {/* Interactive Opportunities Filter Bar */}
-        <div className="bg-white dark:bg-[#040A14] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 space-y-3 shadow-xs">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="bg-white dark:bg-[#040A14] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-2.5 sm:p-3.5 space-y-2.5 shadow-xs">
+          {/* Row 1: Search Input & Stage Filter Buttons */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             {/* Search Input */}
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 min-w-[140px]">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search symbol or company..."
-                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-cyan-500 transition-colors"
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-cyan-500 transition-colors shadow-2xs"
               />
               {searchQuery && (
                 <button
@@ -415,11 +416,11 @@ export default function VCPDiscoveryPage() {
               )}
             </div>
 
-            {/* Stage Filter Buttons */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono">
+            {/* Stage Filter Buttons (Horizontal Ribbon) */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono overflow-x-auto no-scrollbar shrink-0">
               <button
                 onClick={() => setStageFilter("ALL")}
-                className={`px-3 py-1 rounded-lg transition-all ${
+                className={`px-2.5 py-1 rounded-lg transition-all shrink-0 cursor-pointer ${
                   stageFilter === "ALL"
                     ? "bg-cyan-500 text-slate-950 font-bold"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -429,7 +430,7 @@ export default function VCPDiscoveryPage() {
               </button>
               <button
                 onClick={() => setStageFilter("BREAKOUT")}
-                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
                   stageFilter === "BREAKOUT"
                     ? "bg-amber-500 text-slate-950 font-bold"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -440,7 +441,7 @@ export default function VCPDiscoveryPage() {
               </button>
               <button
                 onClick={() => setStageFilter("COILING")}
-                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
                   stageFilter === "COILING"
                     ? "bg-violet-500 text-white font-bold"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -450,62 +451,66 @@ export default function VCPDiscoveryPage() {
                 Coiling (R1+R2)
               </button>
             </div>
+          </div>
 
-            {/* Dropdowns: Sector & Minimum Score */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Sector Dropdown */}
-              {allAvailableSectors.length > 0 && (
-                <select
-                  value={selectedSector}
-                  onChange={(e) => setSelectedSector(e.target.value)}
-                  className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
-                >
-                  <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">All Sectors ({allAvailableSectors.length})</option>
-                  {allAvailableSectors.map((sec) => (
-                    <option key={sec} value={sec} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">
-                      {sec}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {/* Minimum Score Dropdown */}
+          {/* Row 2: Sector & Minimum Score Dropdowns */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
+            {/* Sector Dropdown */}
+            {allAvailableSectors.length > 0 && (
               <select
-                value={minScore}
-                onChange={(e) => setMinScore(Number(e.target.value))}
-                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs"
+                value={selectedSector}
+                onChange={(e) => setSelectedSector(e.target.value)}
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs shrink-0"
               >
-                <option value={0} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Any Score</option>
-                <option value={80} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 80</option>
-                <option value={85} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 85</option>
-                <option value={90} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 90 (High Conviction)</option>
-                <option value={95} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">Score &ge; 95 (Elite)</option>
+                <option value="ALL">All Sectors ({allAvailableSectors.length})</option>
+                {allAvailableSectors.map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec}
+                  </option>
+                ))}
               </select>
+            )}
 
-              {/* Reset Filter Button */}
-              {(searchQuery || selectedSector !== "ALL" || stageFilter !== "ALL" || minScore > 0) && (
-                <button
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedSector("ALL");
-                    setStageFilter("ALL");
-                    setMinScore(0);
-                  }}
-                  className="px-2.5 py-1 text-xs font-mono text-cyan-600 dark:text-cyan-400 hover:underline"
-                >
-                  Reset
-                </button>
-              )}
+            {/* Minimum Score Dropdown */}
+            <select
+              value={minScore}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer shadow-xs shrink-0"
+            >
+              <option value={0}>Any Score</option>
+              <option value={80}>Score ≥ 80</option>
+              <option value={85}>Score ≥ 85</option>
+              <option value={90}>Score ≥ 90 (High)</option>
+              <option value={95}>Score ≥ 95 (Elite)</option>
+            </select>
+
+            {/* Reset Filter Button */}
+            {(searchQuery || selectedSector !== "ALL" || stageFilter !== "ALL" || minScore > 0) && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedSector("ALL");
+                  setStageFilter("ALL");
+                  setMinScore(0);
+                }}
+                className="px-2 py-0.5 text-xs font-mono text-cyan-600 dark:text-cyan-400 hover:underline shrink-0"
+              >
+                Reset
+              </button>
+            )}
+
+            <div className="ml-auto text-[10px] text-slate-500 font-mono shrink-0">
+              {activePicks.length} opportunities
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2 bg-white dark:bg-[#040A14] p-1.5 rounded-xl border border-slate-200 dark:border-slate-800/80 self-start shadow-xs">
+        {/* Navigation Tabs (Horizontal Scroll Ribbon) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 bg-white dark:bg-[#040A14] p-1 rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-x-auto no-scrollbar shadow-xs">
             <button
               onClick={() => setTab("DISCOVERY")}
-              className={`px-4 py-2 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                 tab === "DISCOVERY"
                   ? "bg-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.35)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -517,7 +522,7 @@ export default function VCPDiscoveryPage() {
 
             <button
               onClick={() => setTab("WATCHLIST")}
-              className={`px-4 py-2 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                 tab === "WATCHLIST"
                   ? "bg-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.35)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -529,7 +534,7 @@ export default function VCPDiscoveryPage() {
 
             <button
               onClick={() => setTab("BACKTEST")}
-              className={`px-4 py-2 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono tracking-wide transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                 tab === "BACKTEST"
                   ? "bg-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.35)]"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -541,7 +546,7 @@ export default function VCPDiscoveryPage() {
           </div>
 
           {/* Controls: View Mode & Elite Only */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
             {/* View Mode Switcher: Compact vs Detailed */}
             <div className="flex items-center gap-1 bg-white dark:bg-[#040A14] p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono shadow-xs">
               <button

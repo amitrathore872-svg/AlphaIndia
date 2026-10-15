@@ -408,8 +408,8 @@ export default function FxPortfolioSwingScreenerPage() {
 
         {/* Tactical Swing KPI Ribbon */}
         {data?.kpis && strategyMode === "swing" && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-[#0A1324] border border-slate-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-slate-700 transition-all">
+          <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-6 pb-1">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-slate-800 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-slate-700 transition-all">
               <div className="flex items-center justify-between text-slate-400 text-xs">
                 <span>{source === "portfolio" ? "Holdings Monitored" : "Watchlist Equities"}</span>
                 {source === "portfolio" ? <Briefcase size={14} className="text-slate-400" /> : <Star size={14} className="text-slate-400" />}
@@ -424,7 +424,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-emerald-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/50 transition-all shadow-[0_0_15px_rgba(16,185,129,0.06)]">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-emerald-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/50 transition-all shadow-[0_0_15px_rgba(16,185,129,0.06)]">
               <div className="flex items-center justify-between text-emerald-400 text-xs font-bold">
                 <span>Sniper Buy Ready</span>
                 <Zap size={14} className="text-emerald-400" />
@@ -437,7 +437,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-amber-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-[0_0_15px_rgba(245,158,11,0.06)]">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-amber-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-[0_0_15px_rgba(245,158,11,0.06)]">
               <div className="flex items-center justify-between text-amber-400 text-xs font-bold">
                 <span>Trim 50% Profit</span>
                 <Flame size={14} className="text-amber-400" />
@@ -450,7 +450,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-blue-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-blue-500/50 transition-all">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-blue-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-blue-500/50 transition-all">
               <div className="flex items-center justify-between text-blue-400 text-xs font-bold">
                 <span>Hold & Trend</span>
                 <ShieldCheck size={14} className="text-blue-400" />
@@ -463,7 +463,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-rose-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-rose-500/50 transition-all">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-rose-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-rose-500/50 transition-all">
               <div className="flex items-center justify-between text-rose-400 text-xs font-bold">
                 <span>Sell / Stop Alerts</span>
                 <AlertTriangle size={14} className="text-rose-400" />
@@ -476,7 +476,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-cyan-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-cyan-500/50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.06)]">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-cyan-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-cyan-500/50 transition-all shadow-[0_0_15px_rgba(6,182,212,0.06)]">
               <div className="flex items-center justify-between text-cyan-400 text-xs font-bold">
                 <span>Avg FX Confluence</span>
                 <Award size={14} className="text-cyan-400" />
@@ -493,8 +493,8 @@ export default function FxPortfolioSwingScreenerPage() {
 
         {/* Fast Scalp Springboard KPI Ribbon */}
         {data?.fast_scalp_summary && strategyMode === "fast_scalp" && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-[#0A1324] border border-slate-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-slate-700 transition-all">
+          <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-6 pb-1">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-slate-800 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-slate-700 transition-all">
               <div className="flex items-center justify-between text-slate-400 text-xs">
                 <span>Equities Monitored</span>
                 <Compass size={14} className="text-slate-400" />
@@ -507,7 +507,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-amber-500/40 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-amber-500/60 transition-all shadow-[0_0_15px_rgba(245,158,11,0.12)]">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-amber-500/40 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-amber-500/60 transition-all shadow-[0_0_15px_rgba(245,158,11,0.12)]">
               <div className="flex items-center justify-between text-amber-400 text-xs font-bold">
                 <span>⚡ Scalp Buy Ready</span>
                 <Zap size={14} className="text-amber-400 animate-pulse" />
@@ -520,7 +520,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-cyan-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-cyan-500/50 transition-all">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-cyan-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-cyan-500/50 transition-all">
               <div className="flex items-center justify-between text-cyan-400 text-xs font-bold">
                 <span>9/20 EMA Stack</span>
                 <TrendingUp size={14} className="text-cyan-400" />
@@ -533,7 +533,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-emerald-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/50 transition-all">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-emerald-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/50 transition-all">
               <div className="flex items-center justify-between text-emerald-400 text-xs font-bold">
                 <span>Supertrend Green</span>
                 <ShieldCheck size={14} className="text-emerald-400" />
@@ -546,7 +546,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-purple-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-purple-500/50 transition-all">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-purple-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-purple-500/50 transition-all">
               <div className="flex items-center justify-between text-purple-400 text-xs font-bold">
                 <span>Scalp Harvest Plan</span>
                 <Target size={14} className="text-purple-400" />
@@ -559,7 +559,7 @@ export default function FxPortfolioSwingScreenerPage() {
               </div>
             </div>
 
-            <div className="bg-[#0A1324] border border-orange-500/30 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-orange-500/50 transition-all">
+            <div className="shrink-0 min-w-[140px] sm:min-w-0 bg-[#0A1324] border border-orange-500/30 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-orange-500/50 transition-all">
               <div className="flex items-center justify-between text-orange-400 text-xs font-bold">
                 <span>Speed & Win Rate</span>
                 <Activity size={14} className="text-orange-400" />
@@ -672,16 +672,98 @@ export default function FxPortfolioSwingScreenerPage() {
           </div>
         )}
 
-        {/* Toolbar & Filters */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-[#070F1E] border border-slate-800/80 rounded-2xl p-3">
-          {/* Signal Category Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-[#050B14] p-1 rounded-xl border border-slate-800">
+        {/* Toolbar & Filters (Streamlined 2-Row Command Bar) */}
+        <div className="p-2 sm:p-2.5 rounded-xl bg-[#070F1E] border border-slate-800/80 space-y-2">
+          {/* Row 1: Search + Sort + View Mode */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-[120px]">
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"
+              />
+              <input
+                type="text"
+                placeholder="Filter ticker or sector..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white dark:bg-[#050B14] border border-slate-300 dark:border-slate-800 text-xs text-slate-900 dark:text-white rounded-lg pl-8 pr-7 py-1.5 focus:outline-none focus:border-cyan-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 font-mono shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="relative shrink-0">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-white dark:bg-[#050B14] border border-slate-300 dark:border-slate-800 rounded-lg pl-2 pr-6 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer font-mono"
+              >
+                {strategyMode === "fast_scalp" && (
+                  <option value="scalp_ready" className="bg-[#050B14] text-white">
+                    ⚡ Scalp Priority
+                  </option>
+                )}
+                <option value="confluence_score" className="bg-[#050B14] text-white">
+                  FX Confluence
+                </option>
+                <option value="rr_ratio" className="bg-[#050B14] text-white">
+                  Reward:Risk
+                </option>
+                <option value="target_gain_pct" className="bg-[#050B14] text-white">
+                  Target +%
+                </option>
+                <option value="risk_pct" className="bg-[#050B14] text-white">
+                  Stop Loss -%
+                </option>
+                <option value="cmp" className="bg-[#050B14] text-white">
+                  CMP
+                </option>
+              </select>
+              <ChevronDown size={12} className="text-slate-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-[#050B14] border border-slate-800 rounded-lg p-0.5 shrink-0">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                  viewMode === "table"
+                    ? "bg-cyan-500/20 text-cyan-300"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+                title="Table View"
+              >
+                <TableIcon size={13} />
+              </button>
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                  viewMode === "cards"
+                    ? "bg-cyan-500/20 text-cyan-300"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+                title="Cards View"
+              >
+                <LayoutGrid size={13} />
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2: Signal Category Filter Tabs (Horizontal Scroll Ribbon) */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar bg-[#050B14] p-1 rounded-xl border border-slate-800 py-1">
             {(strategyMode === "fast_scalp"
               ? [
                   { id: "ALL", label: "ALL EQUITIES", icon: Layers },
-                  { id: "SCALP_READY", label: "⚡ SCALP BUY READY", icon: Zap },
-                  { id: "SUPERTREND_GREEN", label: "🟢 SUPERTREND GREEN", icon: ShieldCheck },
-                  { id: "EMA_ALIGNED", label: "📈 9/20 EMA STACK", icon: TrendingUp },
+                  { id: "SCALP_READY", label: "⚡ SCALP READY", icon: Zap },
+                  { id: "SUPERTREND_GREEN", label: "🟢 SUPERTREND", icon: ShieldCheck },
+                  { id: "EMA_ALIGNED", label: "📈 EMA STACK", icon: TrendingUp },
                   { id: "SELL_SIGNALS", label: "⚠️ STOP / EXIT", icon: AlertTriangle },
                 ]
               : [
@@ -694,91 +776,21 @@ export default function FxPortfolioSwingScreenerPage() {
               <button
                 key={tab.id}
                 onClick={() => setSignalFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${
                   signalFilter === tab.id
                     ? strategyMode === "fast_scalp"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
-                      : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs"
+                      : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent"
                 }`}
               >
-                <tab.icon size={13} />
+                <tab.icon size={12} />
                 {tab.label}
               </button>
             ))}
-          </div>
 
-          {/* Search & Sort Controls */}
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex-1 md:w-56">
-              <Search
-                size={13}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              />
-              <input
-                type="text"
-                placeholder="Filter ticker or sector..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white dark:bg-[#050B14] border border-slate-300 dark:border-slate-800 text-xs text-slate-900 dark:text-white rounded-xl pl-8 pr-3 py-1.5 focus:outline-none focus:border-cyan-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-2xs"
-              />
-            </div>
-
-            {/* Sort Dropdown */}
-            <div className="flex items-center bg-white dark:bg-[#050B14] border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 shadow-2xs">
-              <span className="text-[11px] text-slate-500 mr-2 font-mono">Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
-              >
-                {strategyMode === "fast_scalp" && (
-                  <option value="scalp_ready" className="bg-white dark:bg-[#050B14] text-slate-800 dark:text-slate-200">
-                    ⚡ Scalp Readiness (Priority)
-                  </option>
-                )}
-                <option value="confluence_score" className="bg-white dark:bg-[#050B14] text-slate-800 dark:text-slate-200">
-                  FX Confluence Score
-                </option>
-                <option value="rr_ratio" className="bg-white dark:bg-[#050B14] text-slate-800 dark:text-slate-200">
-                  Reward:Risk Ratio
-                </option>
-                <option value="target_gain_pct" className="bg-white dark:bg-[#050B14] text-slate-800 dark:text-slate-200">
-                  Target Potential (+%)
-                </option>
-                <option value="risk_pct" className="bg-white dark:bg-[#050B14] text-slate-800 dark:text-slate-200">
-                  Stop Loss Risk (-%)
-                </option>
-                <option value="cmp" className="bg-[#050B14]">
-                  Current Price (CMP)
-                </option>
-              </select>
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-[#050B14] border border-slate-800 rounded-xl p-0.5">
-              <button
-                onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === "table"
-                    ? "bg-cyan-500/20 text-cyan-300"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-                title="Table View"
-              >
-                <TableIcon size={14} />
-              </button>
-              <button
-                onClick={() => setViewMode("cards")}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === "cards"
-                    ? "bg-cyan-500/20 text-cyan-300"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-                title="Cards View"
-              >
-                <LayoutGrid size={14} />
-              </button>
+            <div className="ml-auto text-[10px] text-slate-500 font-mono shrink-0 pl-2">
+              {displayedStocks.length} equities
             </div>
           </div>
         </div>
@@ -818,11 +830,11 @@ export default function FxPortfolioSwingScreenerPage() {
 
         {/* Main Content: Table View */}
         {!loading && viewMode === "table" && displayedStocks.length > 0 && (
-          <div className="overflow-x-auto bg-[#070F1E] border border-slate-800/80 rounded-2xl shadow-2xl">
+          <div className="overflow-x-auto max-h-[calc(100vh-230px)] bg-[#070F1E] border border-slate-800/80 rounded-2xl shadow-2xl">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-800/90 bg-[#0A1324] text-[11px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-                  <th className="py-3.5 px-4">Equity & Sector</th>
+                <tr className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#0A1324] text-[11px] font-mono uppercase tracking-wider text-slate-400 font-bold backdrop-blur-md">
+                  <th className="py-3.5 px-4 sticky left-0 z-40 bg-[#0A1324] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">Equity & Sector</th>
                   <th className="py-3.5 px-3">CMP & 1D Change</th>
                   {strategyMode === "fast_scalp" ? (
                     <>
@@ -855,8 +867,8 @@ export default function FxPortfolioSwingScreenerPage() {
                       key={stock.symbol}
                       className="hover:bg-[#0B1528]/80 transition-colors group"
                     >
-                      {/* Equity & Sector */}
-                      <td className="py-4 px-4">
+                      {/* Equity & Sector (Sticky Left Column) */}
+                      <td className="py-4 px-4 sticky left-0 z-20 bg-[#070F1E] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
                             <span className="font-black text-sm text-white font-mono group-hover:text-cyan-400 transition-colors">

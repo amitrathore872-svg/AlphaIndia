@@ -28,7 +28,11 @@ import {
   Award,
   ChevronDown,
   ArrowUpRight,
+  Table as TableIcon,
+  LayoutGrid,
+  X,
 } from "lucide-react";
+import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
@@ -63,6 +67,9 @@ export default function StaircaseRadarPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // View Mode: Table vs Mobile Cards
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   // Filters & Sorting state
   const [selectedTier, setSelectedTier] = useState<StaircaseTier>("ALL");
@@ -219,89 +226,94 @@ export default function StaircaseRadarPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* KPI Telemetry Header Grid */}
+        {/* KPI Telemetry Header Grid (Mobile 1-Line Horizontal Scroll) */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          <KpiCard
-            label="Total Scanned"
-            value={(metadata?.total_scanned ?? 0).toString()}
-            sub={`${metadata?.total_opportunities ?? 0} Qualified Trends`}
-            icon={<Activity size={16} />}
-            color="default"
-          />
-          <KpiCard
-            label="Stealth Accumulators"
-            value={(metadata?.stealth_accumulator_count ?? metadata?.cupid_archetype_count ?? 0).toString()}
-            sub="KER > 0.70 & Sweet Base"
-            icon={<Flame size={16} />}
-            color="cyan"
-          />
-          <KpiCard
-            label="Early Ignition"
-            value={(metadata?.early_staircase_count ?? 0).toString()}
-            sub="Day 3-6 Post-Breakout"
-            icon={<Sparkles size={16} />}
-            color="emerald"
-          />
-          <KpiCard
-            label="Established Runners"
-            value={(metadata?.established_count ?? 0).toString()}
-            sub="Holding 10 EMA Stack"
-            icon={<TrendingUp size={16} />}
-            color="amber"
-          />
-          <KpiCard
-            label="Avg Trend Efficiency"
-            value={(metadata?.avg_ker_10d ?? 0).toFixed(2)}
-            sub="KER (1.0 = Pure Line)"
-            icon={<Gauge size={16} />}
-            color="purple"
-          />
+        <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-5 pb-1">
+          <div className="shrink-0 min-w-[140px] sm:min-w-0">
+            <KpiCard
+              label="Total Scanned"
+              value={(metadata?.total_scanned ?? 0).toString()}
+              sub={`${metadata?.total_opportunities ?? 0} Qualified Trends`}
+              icon={<Activity size={16} />}
+              color="default"
+            />
+          </div>
+          <div className="shrink-0 min-w-[140px] sm:min-w-0">
+            <KpiCard
+              label="Stealth Accumulators"
+              value={(metadata?.stealth_accumulator_count ?? metadata?.cupid_archetype_count ?? 0).toString()}
+              sub="KER > 0.70 & Sweet Base"
+              icon={<Flame size={16} />}
+              color="cyan"
+            />
+          </div>
+          <div className="shrink-0 min-w-[140px] sm:min-w-0">
+            <KpiCard
+              label="Early Ignition"
+              value={(metadata?.early_staircase_count ?? 0).toString()}
+              sub="Day 3-6 Post-Breakout"
+              icon={<Sparkles size={16} />}
+              color="emerald"
+            />
+          </div>
+          <div className="shrink-0 min-w-[140px] sm:min-w-0">
+            <KpiCard
+              label="Established Runners"
+              value={(metadata?.established_count ?? 0).toString()}
+              sub="Holding 10 EMA Stack"
+              icon={<TrendingUp size={16} />}
+              color="amber"
+            />
+          </div>
+          <div className="shrink-0 min-w-[140px] sm:min-w-0">
+            <KpiCard
+              label="Avg Trend Efficiency"
+              value={(metadata?.avg_ker_10d ?? 0).toFixed(2)}
+              sub="KER (1.0 = Pure Line)"
+              icon={<Gauge size={16} />}
+              color="purple"
+            />
+          </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* Navigation Tabs & Search Toolbar */}
+        {/* Streamlined 2-Row Navigation & Search Command Bar */}
         {/* ========================================================================= */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-md">
-          {/* Tier Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-            {TIER_TABS.map((tab) => {
-              const active = selectedTier === tab.id;
-              return (
+        <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-md space-y-2">
+          {/* Row 1: Search + Tennis Ball + Sort + View Mode */}
+          <div className="flex items-center gap-2">
+            {/* Search Input with Clear */}
+            <div className="relative flex-1 min-w-[120px]">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search symbol..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono shadow-2xs"
+              />
+              {searchQuery && (
                 <button
-                  key={tab.id}
-                  onClick={() => setSelectedTier(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                    active
-                      ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent"
-                  }`}
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                 >
-                  {tab.label}
-                  {tab.badge && (
-                    <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      {tab.badge}
-                    </span>
-                  )}
+                  <X size={14} />
                 </button>
-              );
-            })}
-          </div>
+              )}
+            </div>
 
-          {/* Search & Sort Controls */}
-          <div className="flex items-center gap-2.5 flex-wrap md:flex-nowrap">
             {/* Tennis Ball RS Toggle */}
             <button
               onClick={() => setTennisBallOnly(!tennisBallOnly)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 tennisBallOnly
                   ? "bg-gradient-to-r from-amber-500/25 to-yellow-500/20 text-amber-300 border border-amber-500/50 shadow-md shadow-amber-950/40"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-slate-800"
+                  : "bg-slate-950/80 text-slate-400 hover:text-slate-200 border border-slate-800"
               }`}
-              title="Filter for stocks that held flat or closed green when Nifty dropped (Tennis Ball Leaders)"
+              title="Filter for stocks that held flat or closed green when Nifty dropped"
             >
               <ShieldCheck size={14} className={tennisBallOnly ? "text-amber-400" : "text-slate-500"} />
-              Tennis Ball RS
+              <span className="hidden xs:inline">Tennis Ball</span>
               {metadata.tennis_ball_count !== undefined && metadata.tennis_ball_count > 0 && (
                 <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-400 text-black font-bold">
                   {metadata.tennis_ball_count}
@@ -309,38 +321,81 @@ export default function StaircaseRadarPage() {
               )}
             </button>
 
-            <div className="relative flex-1 md:w-52">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search symbol..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
+            {/* Sort Dropdown */}
             <select
               value={sortBy}
               onChange={(e: any) => setSortBy(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+              className="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer"
             >
-              <option value="conviction_score">Sort: Conviction Score</option>
-              <option value="down_day_alpha_pct">Sort: Down-Day Alpha vs Nifty</option>
-              <option value="ker_10d">Sort: Kaufman Efficiency (KER)</option>
-              <option value="green_days_10d">Sort: Green Days (10d)</option>
-              <option value="distance_from_base_pct">Sort: Base Proximity</option>
-              <option value="cmp">Sort: CMP</option>
-              <option value="day_change_pct">Sort: Day Change %</option>
+              <option value="conviction_score">Conviction</option>
+              <option value="down_day_alpha_pct">Down-Day Alpha</option>
+              <option value="ker_10d">KER 10d</option>
+              <option value="green_days_10d">Green Days</option>
+              <option value="distance_from_base_pct">Base Prox</option>
+              <option value="cmp">CMP</option>
+              <option value="day_change_pct">Day %</option>
             </select>
 
             <button
               onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-              className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+              className="shrink-0 p-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white"
               title={`Order: ${sortOrder.toUpperCase()}`}
             >
               <ArrowUpDown size={14} />
             </button>
+
+            {/* View Mode Toggle */}
+            <div className="shrink-0 flex items-center bg-slate-950/80 border border-slate-800 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`p-1 rounded text-xs transition-colors cursor-pointer ${
+                  viewMode === "table" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "text-slate-500 hover:text-white"
+                }`}
+                title="Table View"
+              >
+                <TableIcon size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                className={`p-1 rounded text-xs transition-colors cursor-pointer ${
+                  viewMode === "cards" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "text-slate-500 hover:text-white"
+                }`}
+                title="Cards View"
+              >
+                <LayoutGrid size={13} />
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2: Tier Tabs Horizontal Scroll Ribbon */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
+            {TIER_TABS.map((tab) => {
+              const active = selectedTier === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedTier(tab.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    active
+                      ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge && (
+                    <span className="px-1 py-0.2 text-[8px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            <div className="ml-auto text-[10px] text-slate-500 shrink-0 font-mono">
+              {opportunities.length} setups
+            </div>
           </div>
         </div>
 
@@ -379,13 +434,135 @@ export default function StaircaseRadarPage() {
               </button>
             }
           />
+        ) : viewMode === "cards" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {opportunities.map((opp) => {
+              const isStealth = opp.setup_tier === "STEALTH_ACCUMULATOR" || opp.setup_tier === "CUPID_ARCHETYPE";
+              const isEarly = opp.setup_tier === "EARLY_STAIRCASE";
+              const score = opp.conviction_score;
+              const ker = opp.metrics.ker_10d;
+
+              return (
+                <div
+                  key={opp.symbol}
+                  className={`rounded-xl border p-3.5 flex flex-col justify-between transition-all bg-slate-900/40 hover:border-slate-700/60 ${
+                    isStealth ? "border-cyan-500/30 bg-cyan-950/10" : "border-slate-800"
+                  }`}
+                >
+                  {/* Card Header: Symbol, Tier, Price */}
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Link
+                            href={opp.techno_funda_url}
+                            className="font-bold text-sm text-white hover:text-cyan-400 transition-colors flex items-center gap-1 group"
+                          >
+                            {opp.symbol}
+                            <ArrowUpRight size={13} className="text-cyan-400" />
+                          </Link>
+                          {isStealth && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-0.5">
+                              <Flame size={9} className="text-cyan-400" /> Stealth
+                            </span>
+                          )}
+                          {isEarly && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-0.5">
+                              <Sparkles size={9} className="text-emerald-400" /> Early
+                            </span>
+                          )}
+                          {opp.metrics.is_tennis_ball && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-0.5">
+                              <ShieldCheck size={9} className="text-amber-400" /> Tennis Ball
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {opp.tier_badge} · Del: {opp.metrics.estimated_delivery_pct}%
+                        </div>
+                      </div>
+
+                      {/* Price & Day Change */}
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-bold font-mono text-white">
+                          ₹{opp.cmp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </div>
+                        <div
+                          className={`text-[11px] font-mono font-semibold flex items-center justify-end gap-0.5 ${
+                            opp.day_change >= 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {opp.day_change >= 0 ? "+" : ""}{opp.day_change_pct.toFixed(2)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Metrics Grid */}
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-3 pt-2.5 border-t border-white/5 text-[10px] font-mono">
+                      <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
+                        <div className="text-slate-500 text-[9px]">CONVICTION</div>
+                        <div className="text-xs font-bold text-cyan-400 mt-0.5">{score}/100</div>
+                      </div>
+                      <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
+                        <div className="text-slate-500 text-[9px]">KER 10D</div>
+                        <div className="text-xs font-bold text-emerald-400 mt-0.5">{ker.toFixed(2)}</div>
+                      </div>
+                      <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
+                        <div className="text-slate-500 text-[9px]">GREEN DAYS</div>
+                        <div className="text-xs font-bold text-emerald-400 mt-0.5">{opp.metrics.green_days_10d}/10d</div>
+                      </div>
+                      <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
+                        <div className="text-slate-500 text-[9px]">DOWN-DAY RS</div>
+                        <div className={`text-xs font-bold mt-0.5 ${opp.metrics.down_day_alpha_pct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {opp.metrics.down_day_alpha_pct >= 0 ? "+" : ""}{opp.metrics.down_day_alpha_pct.toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
+                        <div className="text-slate-500 text-[9px]">BASE PROX</div>
+                        <div className="text-xs font-bold text-slate-300 mt-0.5">+{opp.metrics.distance_from_base_pct}%</div>
+                      </div>
+                      <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
+                        <div className="text-slate-500 text-[9px]">10 EMA STOP</div>
+                        <div className="text-xs font-bold text-amber-400 mt-0.5">₹{opp.blueprint.trailing_stop_10ema.toFixed(0)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer Actions */}
+                  <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-white/5">
+                    <AddToWatchlistButton
+                      symbol={opp.symbol}
+                      companyName={opp.symbol}
+                      currentPrice={opp.cmp}
+                      variant="button"
+                    />
+                    <a
+                      href={opp.tradingview_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-600 transition-colors"
+                      title="Open TradingView Chart"
+                    >
+                      <ExternalLink size={13} />
+                    </a>
+                    <Link
+                      href={opp.techno_funda_url}
+                      className="flex-1 text-center py-1.5 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/40 border border-cyan-800/60 hover:bg-cyan-900/40 transition-colors"
+                    >
+                      Analyze Trend
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="rounded-xl border border-slate-800 bg-slate-950/70 overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[calc(100vh-230px)]">
               <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-900/90 text-slate-400 font-semibold tracking-wider">
-                    <th className="py-3 px-4">SYMBOL & ARCHETYPE</th>
+                <thead className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 text-slate-400 font-semibold tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4 sticky left-0 z-40 bg-[#050B14] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">SYMBOL & ARCHETYPE</th>
                     <th className="py-3 px-4">CMP & CHANGE</th>
                     <th className="py-3 px-4">CONVICTION</th>
                     <th className="py-3 px-4">EFFICIENCY (KER 10D)</th>
@@ -410,8 +587,8 @@ export default function StaircaseRadarPage() {
                           isStealth ? "bg-cyan-950/15" : ""
                         }`}
                       >
-                        {/* Symbol & Archetype Badge */}
-                        <td className="py-3.5 px-4 font-sans">
+                        {/* Symbol & Archetype Badge (Sticky Left Column) */}
+                        <td className="py-3.5 px-4 font-sans sticky left-0 z-20 bg-[#050B14] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center gap-2">
                             <Link
                               href={opp.techno_funda_url}
@@ -558,6 +735,12 @@ export default function StaircaseRadarPage() {
                         {/* Actions */}
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <AddToWatchlistButton
+                              symbol={opp.symbol}
+                              companyName={opp.symbol}
+                              currentPrice={opp.cmp}
+                              variant="icon"
+                            />
                             <a
                               href={opp.tradingview_url}
                               target="_blank"

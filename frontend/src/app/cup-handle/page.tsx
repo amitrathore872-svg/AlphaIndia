@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Cpu,
   Layers,
+  X,
 } from "lucide-react";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -257,12 +258,12 @@ function PatternCard({ pattern, expanded, onToggle }: {
 
       {/* ── Main row ── */}
       <div
-        className="flex items-center gap-4 px-5 py-4 cursor-pointer"
+        className="flex items-center gap-2.5 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 cursor-pointer"
         onClick={onToggle}
       >
         {/* AI Score ring */}
-        <div className="flex-shrink-0 relative w-14 h-14">
-          <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+        <div className="flex-shrink-0 relative w-11 h-11 sm:w-14 sm:h-14">
+          <svg className="w-11 h-11 sm:w-14 sm:h-14 -rotate-90" viewBox="0 0 56 56">
             <circle cx="28" cy="28" r="24" fill="none" stroke="#1e293b" strokeWidth="4" />
             <circle
               cx="28" cy="28" r="24"
@@ -273,36 +274,42 @@ function PatternCard({ pattern, expanded, onToggle }: {
               strokeLinecap="round"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white">
+          <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm font-bold text-white font-mono">
             {pattern.ai_conviction_score}
           </span>
         </div>
 
         {/* Symbol + Company */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-bold text-white tracking-wide">{pattern.symbol}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <span className="text-sm sm:text-base font-bold text-white tracking-wide">{pattern.symbol}</span>
             <ConvictionBadge score={pattern.ai_conviction_score} tier={pattern.conviction_tier} />
             {breakoutReady && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+              <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                 <Zap className="w-2.5 h-2.5" /> BREAKOUT
               </span>
             )}
           </div>
           <div className="text-[11px] text-slate-400 truncate mt-0.5">{pattern.company_name}</div>
-          <div className="text-[10px] text-slate-600 mt-0.5">{pattern.sector}</div>
+          <div className="text-[10px] text-slate-500 sm:text-slate-600 mt-0.5 flex items-center gap-2">
+            <span>{pattern.sector}</span>
+            <span className="lg:hidden text-slate-400 font-mono">
+              · Pivot <span className="text-cyan-400 font-semibold">₹{fmt(pattern.pivot_buy_point, 0)}</span>
+              {" "}· R:R <span className="text-amber-400 font-semibold">{fmt(pattern.risk_reward)}×</span>
+            </span>
+          </div>
         </div>
 
         {/* CMP + Change */}
         <div className="text-right flex-shrink-0">
-          <div className="text-lg font-mono font-bold text-white">₹{fmt(pattern.cmp)}</div>
-          <div className={`text-xs font-mono font-semibold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+          <div className="text-sm sm:text-lg font-mono font-bold text-white">₹{fmt(pattern.cmp)}</div>
+          <div className={`text-[11px] sm:text-xs font-mono font-semibold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
             {isPositive ? <ArrowUpRight className="w-3 h-3 inline" /> : <ArrowDownRight className="w-3 h-3 inline" />}
             {fmt(Math.abs(pattern.day_change_pct))}%
           </div>
         </div>
 
-        {/* Key metrics grid */}
+        {/* Key metrics grid (Desktop) */}
         <div className="hidden lg:grid grid-cols-3 gap-x-6 text-center flex-shrink-0">
           <div>
             <div className="text-[10px] text-slate-500 uppercase tracking-wide">Buy Point</div>
@@ -318,7 +325,7 @@ function PatternCard({ pattern, expanded, onToggle }: {
           </div>
         </div>
 
-        {/* Cup geometry quick stats */}
+        {/* Cup geometry quick stats (Desktop XL) */}
         <div className="hidden xl:flex flex-col items-end gap-1 flex-shrink-0 text-right">
           <div className="text-[10px] text-slate-500">
             Cup <span className="text-white font-mono">{fmt(pattern.cup.depth_pct)}%</span> deep ·{" "}
@@ -337,14 +344,14 @@ function PatternCard({ pattern, expanded, onToggle }: {
         </div>
 
         {/* Watchlist + Expand icon */}
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-1 sm:ml-2" onClick={(e) => e.stopPropagation()}>
           <AddToWatchlistButton
             symbol={pattern.symbol}
             companyName={pattern.company_name}
             currentPrice={pattern.cmp}
             variant="button"
           />
-          <div className="text-slate-500">
+          <div className="text-slate-500 p-1">
             {expanded
               ? <ChevronDown className="w-4 h-4" />
               : <ChevronRight className="w-4 h-4" />}
@@ -657,119 +664,127 @@ export default function CupHandlePage() {
           }
         />
 
-        {/* ─── Stats Strip ─── */}
+        {/* ─── Stats Strip (Mobile Horizontal Ribbon) ─── */}
         {meta && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            <KpiCard
-              label="Universe Scanned"
-              value={meta.total_scanned}
-            />
-            <KpiCard
-              label="Patterns Found"
-              value={meta.patterns_found}
-              color="cyan"
-            />
-            <KpiCard
-              label="ELITE"
-              value={meta.elite_count}
-              color="emerald"
-            />
-            <KpiCard
-              label="HIGH CONVICTION"
-              value={meta.high_conviction_count}
-              color="cyan"
-            />
-            <KpiCard
-              label="DEVELOPING"
-              value={meta.developing_count}
-              color="amber"
-            />
-            <KpiCard
-              label="Breakout Ready"
-              value={meta.breakout_ready_count}
-              color="emerald"
-            />
-            <KpiCard
-              label="Avg AI Score"
-              value={fmt(meta.avg_conviction_score, 1)}
-              color="purple"
-            />
+          <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-4 lg:grid-cols-7 pb-1">
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="Universe Scanned" value={meta.total_scanned} />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="Patterns Found" value={meta.patterns_found} color="cyan" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="ELITE" value={meta.elite_count} color="emerald" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="HIGH CONVICTION" value={meta.high_conviction_count} color="cyan" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="DEVELOPING" value={meta.developing_count} color="amber" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="Breakout Ready" value={meta.breakout_ready_count} color="emerald" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="Avg AI Score" value={fmt(meta.avg_conviction_score, 1)} color="purple" />
+            </div>
           </div>
         )}
 
-        {/* ─── Filters Bar ─── */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Symbol or company…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 rounded-lg pl-8 pr-4 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 w-52 shadow-2xs"
-            />
-          </div>
+        {/* ─── Streamlined 2-Row Command Bar ─── */}
+        <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-md space-y-2">
+          {/* Row 1: Search + Breakout Toggle + Sort Controls */}
+          <div className="flex items-center gap-2">
+            {/* Search with Clear */}
+            <div className="relative flex-1 min-w-[120px]">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Symbol or company…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 font-mono shadow-2xs"
+              />
+              {search && (
+                <button
+                  onClick={() => { setSearch(""); setPage(1); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-          {/* Sector */}
-          <div className="relative">
-            <select
-              value={sector}
-              onChange={(e) => { setSector(e.target.value); setPage(1); }}
-              className="bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white appearance-none pr-8 focus:outline-none focus:border-cyan-500/50 cursor-pointer shadow-xs"
+            {/* Breakout toggle */}
+            <button
+              onClick={() => { setBreakoutOnly((v) => !v); setPage(1); }}
+              className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                breakoutOnly
+                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-sm"
+                  : "bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
             >
-              {SECTORS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+              <Zap className="w-3 h-3 text-emerald-400" />
+              <span className="hidden xs:inline">Breakout</span>
+            </button>
 
-          {/* Sort */}
-          <div className="relative">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-white appearance-none pr-8 focus:outline-none focus:border-cyan-500/50 cursor-pointer shadow-xs"
+            {/* Sort */}
+            <div className="relative shrink-0">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-slate-950/80 border border-slate-800 rounded-lg pl-2 pr-6 py-1.5 text-xs text-slate-300 appearance-none focus:outline-none focus:border-cyan-500/50 cursor-pointer font-mono"
+              >
+                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-slate-950 text-white">{o.label}</option>)}
+              </select>
+              <ChevronDown className="w-3 h-3 text-slate-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Sort order toggle */}
+            <button
+              onClick={() => setSortOrder((o) => o === "desc" ? "asc" : "desc")}
+              className="shrink-0 p-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+              title={sortOrder === "desc" ? "Highest First" : "Lowest First"}
             >
-              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              {sortOrder === "desc" ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
-          {/* Sort order toggle */}
-          <button
-            onClick={() => setSortOrder((o) => o === "desc" ? "asc" : "desc")}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 text-sm text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-600 transition-colors shadow-2xs"
-          >
-            {sortOrder === "desc" ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-            {sortOrder === "desc" ? "Highest" : "Lowest"}
-          </button>
+          {/* Row 2: Quick-chips ribbon (Min Score pills + Sector + Count) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider shrink-0 pl-0.5">Min:</span>
+            {[60, 70, 80].map((score) => (
+              <button
+                key={score}
+                onClick={() => { setMinScore(score); setPage(1); }}
+                className={`shrink-0 px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                  minScore === score
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    : "bg-slate-950/50 text-slate-400 border border-slate-800/80 hover:text-white"
+                }`}
+              >
+                {score}+
+              </button>
+            ))}
 
-          {/* Min score */}
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 rounded-lg px-3 py-2 shadow-2xs">
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Min Score</span>
-            <input
-              type="number"
-              min={0} max={99}
-              value={minScore}
-              onChange={(e) => { setMinScore(Number(e.target.value)); setPage(1); }}
-              className="bg-transparent w-10 text-sm text-slate-900 dark:text-white font-mono focus:outline-none"
-            />
-          </div>
+            <div className="h-3 w-px bg-slate-800 shrink-0 mx-0.5" />
 
-          {/* Breakout toggle */}
-          <button
-            onClick={() => { setBreakoutOnly((v) => !v); setPage(1); }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-colors shadow-2xs ${
-              breakoutOnly
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
-                : "bg-white dark:bg-slate-800/60 border-slate-300 dark:border-slate-700/40 text-slate-600 dark:text-slate-400"
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" /> Breakout Only
-          </button>
+            {/* Sector Selector Dropdown */}
+            <div className="relative shrink-0">
+              <select
+                value={sector}
+                onChange={(e) => { setSector(e.target.value); setPage(1); }}
+                className="bg-slate-950/80 border border-slate-800/80 rounded px-2 pr-5 py-0.5 text-[11px] text-slate-300 appearance-none focus:outline-none focus:border-cyan-500/50 cursor-pointer"
+              >
+                {SECTORS.map((s) => <option key={s} value={s} className="bg-slate-950 text-white">{s === "ALL" ? "All Sectors" : s}</option>)}
+              </select>
+              <ChevronDown className="w-2.5 h-2.5 text-slate-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
 
-          <div className="ml-auto text-[11px] text-slate-500 font-mono">
-            {data?.total_count ?? 0} results
+            {/* Active Count */}
+            <div className="ml-auto text-[10px] text-slate-500 shrink-0 font-mono">
+              {data?.total_count ?? 0} setups
+            </div>
           </div>
         </div>
 
