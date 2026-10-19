@@ -11,6 +11,14 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 import requests
+import socket
+import urllib3.util.connection as urllib3_cn
+
+# Force IPv4 socket resolution to prevent Windows dual-stack IPv6 TCP reset (Error 10054) on Indian ISPs
+try:
+    urllib3_cn.allowed_gai_family = lambda: socket.AF_INET
+except Exception:
+    pass
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -903,6 +911,9 @@ class AlertDispatchService:
         anchor_days_left: Optional[int] = None,
         rationale: Optional[str] = None,
         action_url: str = "http://localhost:3000/ipo-radar",
+        trigger_price: Optional[float] = None,
+        trigger_date: Optional[str] = None,
+        days_since_trigger: Optional[int] = None,
     ) -> str:
         anchor_line = ""
         if anchor_days_left is not None and -5 <= anchor_days_left <= 10:
@@ -915,6 +926,22 @@ class AlertDispatchService:
 
         clean_rat = f"\n💡 *Edge:* {rationale}" if rationale else ""
 
+        trig_val = trigger_price if trigger_price is not None else pivot_price
+        if setup_status == "TRIGGERED" or trigger_date:
+            trig_dt_info = f" ({trigger_date}" + (f", {days_since_trigger}d ago" if days_since_trigger is not None else "") + ")" if trigger_date else ""
+            gain_from_trigger = round(((cmp - trig_val) / trig_val) * 100, 1) if trig_val > 0 else 0.0
+            trigger_block = (
+                f"⚡ *Trigger Price:* ₹{trig_val:,.2f}{trig_dt_info}\n"
+                f"🗓️ *Trigger Date:* {trigger_date or 'Recent Session'}\n"
+                f"💵 *Live CMP:* ₹{cmp:,.2f} ({'+' if gain_from_trigger >= 0 else ''}{gain_from_trigger}% from trigger)\n"
+            )
+        else:
+            dist_to_trig = round(((cmp - trig_val) / trig_val) * 100, 1) if trig_val > 0 else 0.0
+            trigger_block = (
+                f"🎯 *Buy Trigger (Pivot):* ₹{trig_val:,.2f} (Awaiting Breakout)\n"
+                f"💵 *Live CMP:* ₹{cmp:,.2f} ({dist_to_trig:+.1f}% from pivot)\n"
+            )
+
         return (
             f"🚀 *ALPHA INDIA | MAINBOARD IPO RADAR*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -922,8 +949,7 @@ class AlertDispatchService:
             f"⭐ *Institutional Score:* {conviction_score:.1f}/100 ({setup_status})\n"
             f"⚡ *Setup:* {setup_label} | *Age:* {days_since_listing}d post-listing\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
-            f"🎯 *Buy Trigger Price:* ₹{pivot_price:,.2f} (Model Pivot)\n"
+            f"{trigger_block}"
             f"📐 *Day 1 High:* ₹{day1_high:,.2f} | *RelVol:* {rvol:.2f}x\n"
             f"🚀 *Target 1:* ₹{target_1:,.2f} (+15.0%) | *Target 2:* ₹{target_2:,.2f}\n"
             f"🛑 *Stop Loss:* ₹{stop_loss:,.2f} (-{risk_pct:.1f}% risk)"

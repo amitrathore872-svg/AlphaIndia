@@ -144,15 +144,6 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         description: "8-stage AI gating: U-shape geometry, handle tightness, volume signature, RS rank, and fundamental overlay.",
       },
       {
-        id: "chart-patterns",
-        name: "Multi-Pattern Radar",
-        href: "/chart-patterns",
-        icon: Layers,
-        badge: "NEW",
-        section: "BREAKOUT & SWING ENGINES",
-        description: "Institutional 5-pattern scanner: Flat Base, Double Bottom, Ascending Triangle, Bull Flag & High Tight Flag across 4000+ stocks.",
-      },
-      {
         id: "momentum-radar",
         name: "Super Momentum Radar",
         href: "/momentum-radar",

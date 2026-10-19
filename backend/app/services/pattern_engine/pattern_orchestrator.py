@@ -43,6 +43,7 @@ from app.services.pattern_engine.bull_flag_engine import detect_bull_flag, detec
 from app.services.pattern_engine.pattern_core import sanitize_json
 from app.services.cup_handle.cup_handle_universe import load_full_universe
 from app.services.cup_handle.cup_handle_orchestrator import _fetch_nifty_close
+from app.core.redis_cache import cache
 
 logger = logging.getLogger("alpha_india.pattern_engine.orchestrator")
 
@@ -84,12 +85,20 @@ _PATTERN_TIER_COOLDOWNS = {
 
 def _load_disk_cache() -> None:
     try:
+        redis_data = cache.get_json_sync("alpha_india:pattern_engine")
+        if redis_data and isinstance(redis_data, dict) and "data" in redis_data:
+            with _CACHE_LOCK:
+                _CACHE.update(redis_data)
+            logger.info(f"[PatternEngine] Restored {len(_CACHE.get('data', []))} patterns from Redis.")
+            return
+
         if _DISK_CACHE_PATH.exists():
-            with open(_DISK_CACHE_PATH, "r") as f:
+            with open(_DISK_CACHE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             with _CACHE_LOCK:
                 _CACHE.update(data)
             logger.info(f"[PatternEngine] Loaded {len(_CACHE.get('data', []))} patterns from disk.")
+            cache.set_json_sync("alpha_india:pattern_engine", data, expire_seconds=1800)
     except Exception as e:
         logger.warning(f"[PatternEngine] Disk cache load failed: {e}")
 
@@ -99,8 +108,11 @@ def _save_disk_cache() -> None:
         _DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _CACHE_LOCK:
             snapshot = dict(_CACHE)
-        with open(_DISK_CACHE_PATH, "w") as f:
+        cache.set_json_sync("alpha_india:pattern_engine", snapshot, expire_seconds=1800)
+        tmp_file = _DISK_CACHE_PATH.with_suffix(".tmp")
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(snapshot, f, default=str)
+        tmp_file.replace(_DISK_CACHE_PATH)
     except Exception as e:
         logger.warning(f"[PatternEngine] Disk cache save failed: {e}")
 
@@ -108,7 +120,7 @@ def _save_disk_cache() -> None:
 def _load_pattern_state() -> None:
     try:
         if _PATTERN_STATE_PATH.exists():
-            with open(_PATTERN_STATE_PATH, "r") as f:
+            with open(_PATTERN_STATE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             with _STATE_LOCK:
                 _PATTERN_SCAN_STATE.update(data)
@@ -121,8 +133,10 @@ def _save_pattern_state() -> None:
         _PATTERN_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _STATE_LOCK:
             snapshot = dict(_PATTERN_SCAN_STATE)
-        with open(_PATTERN_STATE_PATH, "w") as f:
+        tmp_file = _PATTERN_STATE_PATH.with_suffix(".tmp")
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(snapshot, f, default=str)
+        tmp_file.replace(_PATTERN_STATE_PATH)
     except Exception as e:
         logger.warning(f"[PatternEngine] State save failed: {e}")
 

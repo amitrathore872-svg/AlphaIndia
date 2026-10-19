@@ -469,8 +469,10 @@ class MomentumScreenerService:
 
             # 2. Disk persistence for restart durability
             DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
+            tmp_cache_path = DISK_CACHE_PATH.with_suffix(".tmp")
+            with open(tmp_cache_path, "w", encoding="utf-8") as f:
                 json.dump(_CACHE, f, indent=2)
+            tmp_cache_path.replace(DISK_CACHE_PATH)
         except Exception as e:
             logger.warning(f"[MomentumScreenerService] Error saving cache: {e}")
 

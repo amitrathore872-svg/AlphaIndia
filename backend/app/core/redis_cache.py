@@ -239,25 +239,39 @@ class VelocityCacheManager:
         return self._is_redis_available
 
 
+import inspect
+
 # Global singleton
 cache = VelocityCacheManager()
 
 
 def cached(prefix: str, ttl: int = 60):
     """
-    Decorator to cache async FastAPI controller results.
+    Decorator to cache FastAPI controller results (supports both async and sync endpoints).
     """
     def decorator(fn: Callable[..., Any]):
-        @wraps(fn)
-        async def wrapper(*args, **kwargs):
-            # Compute cache key from prefix and sorted kwargs
-            clean_kwargs = {k: v for k, v in kwargs.items() if not str(type(v)).startswith("<class 'sqlalchemy")}
-            raw_key = f"{prefix}:{fn.__name__}:{json.dumps(clean_kwargs, sort_keys=True, default=str)}"
-            hit = await cache.get_json(raw_key)
-            if hit is not None:
-                return hit
-            res = await fn(*args, **kwargs)
-            await cache.set_json(raw_key, res, expire_seconds=ttl)
-            return res
-        return wrapper
+        if inspect.iscoroutinefunction(fn):
+            @wraps(fn)
+            async def async_wrapper(*args, **kwargs):
+                clean_kwargs = {k: v for k, v in kwargs.items() if not str(type(v)).startswith("<class 'sqlalchemy")}
+                raw_key = f"{prefix}:{fn.__name__}:{json.dumps(clean_kwargs, sort_keys=True, default=str)}"
+                hit = await cache.get_json(raw_key)
+                if hit is not None:
+                    return hit
+                res = await fn(*args, **kwargs)
+                await cache.set_json(raw_key, res, expire_seconds=ttl)
+                return res
+            return async_wrapper
+        else:
+            @wraps(fn)
+            def sync_wrapper(*args, **kwargs):
+                clean_kwargs = {k: v for k, v in kwargs.items() if not str(type(v)).startswith("<class 'sqlalchemy")}
+                raw_key = f"{prefix}:{fn.__name__}:{json.dumps(clean_kwargs, sort_keys=True, default=str)}"
+                hit = cache.get_json_sync(raw_key)
+                if hit is not None:
+                    return hit
+                res = fn(*args, **kwargs)
+                cache.set_json_sync(raw_key, res, expire_seconds=ttl)
+                return res
+            return sync_wrapper
     return decorator

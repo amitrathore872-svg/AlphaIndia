@@ -41,6 +41,7 @@ class Company(Base):
     exchange = Column(String(20), default="NSE")
     bse_code = Column(String(20), nullable=True)
     market_cap_category = Column(String(30), nullable=True)
+    face_value = Column(Float, nullable=True)
     listing_status = Column(String(20), default="Active")
     revenue_growth = Column(Float, default=0)
     pat_growth = Column(Float, default=0)

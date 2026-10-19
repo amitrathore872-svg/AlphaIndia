@@ -11,6 +11,7 @@ from app.models.company import Company
 from app.models.filing_registry import FilingRegistry
 from app.models.monitoring_heartbeat import MonitoringHeartbeat
 from app.collectors.nse.announcements import NSEAnnouncementCollector
+from app.api.quarterly_results import _filing_feed_type, _is_results_filing
 
 
 class DiscoveryWorker:
@@ -92,7 +93,26 @@ class DiscoveryWorker:
             from app.services.live_price_service import LivePriceService
 
             qr_count = db.query(QuarterlyResult).filter(QuarterlyResult.company_id == company.id).count()
-            if qr_count < 2:
+            latest_q = (
+                db.query(QuarterlyResult)
+                .filter(QuarterlyResult.company_id == company.id)
+                .order_by(QuarterlyResult.period_end.desc().nullslast())
+                .first()
+            )
+            # Sync statements if:
+            # 1. Company has < 2 historical quarters
+            # 2. Latest statement is missing or older than 60 days from today (new quarter reported)
+            needs_sync = False
+            if qr_count < 2 or not latest_q:
+                needs_sync = True
+            elif latest_q.period_end:
+                days_since = (datetime.utcnow().date() - latest_q.period_end).days
+                if days_since > 60:
+                    needs_sync = True
+            else:
+                needs_sync = True
+
+            if needs_sync:
                 backfill_company_quarters(db, company.symbol)
 
             # Re-fetch quarters to compute and persist YoY
@@ -173,15 +193,18 @@ class DiscoveryWorker:
                 continue
 
             f_period = DiscoveryWorker._resolve_period_helper(filing.get("period"), filing.get("announcement_date"))
+            f_type = filing.get("filing_type") or "Quarterly Financial Results"
+            p_url = filing.get("pdf_url")
             record = FilingRegistry(
                 company_id=comp_id,
                 symbol=sym,
                 exchange=exchange,
-                filing_type=filing.get("filing_type") or "Quarterly Financial Results",
+                filing_type=f_type,
+                feed_type=_filing_feed_type(f_type, p_url),
                 period=f_period,
                 announcement_date=filing.get("announcement_date"),
-                pdf_url=filing.get("pdf_url"),
-                download_status="COMPLETED" if filing.get("pdf_url") else "PENDING",
+                pdf_url=p_url,
+                download_status="COMPLETED" if p_url else "PENDING",
                 parse_status="PARSED",
                 discovered_at=datetime.utcnow(),
             )
@@ -248,14 +271,17 @@ class DiscoveryWorker:
 
             if not exists_filing and item.get("pdf_url"):
                 f_period = DiscoveryWorker._resolve_period_helper(item.get("period"), item.get("announcement_date"))
+                f_type = (item.get("filing_type") or "Announcement")[:150]
+                p_url = item.get("pdf_url")
                 filing = FilingRegistry(
                     company_id=comp_id,
                     symbol=sym[:20],
                     exchange="NSE",
-                    filing_type=(item.get("filing_type") or "Announcement")[:150],
+                    filing_type=f_type,
+                    feed_type=_filing_feed_type(f_type, p_url),
                     period=f_period[:30],
                     announcement_date=item.get("announcement_date"),
-                    pdf_url=item.get("pdf_url"),
+                    pdf_url=p_url,
                     download_status="COMPLETED",
                     parse_status="PARSED",
                     discovered_at=datetime.utcnow(),
@@ -307,8 +333,9 @@ class DiscoveryWorker:
                 })
 
                 # Auto-enrich newly discovered financial results
-                f_type_str = (item.get("filing_type") or "").lower()
-                if "result" in f_type_str or "financial" in f_type_str:
+                f_type_str = item.get("filing_type") or ""
+                p_url = item.get("pdf_url")
+                if _is_results_filing(f_type_str, p_url):
                     DiscoveryWorker._auto_enrich_filing_company(db, comp)
 
         # 2. Fetch BSE announcements (including Result and Board Meeting categories)
@@ -359,11 +386,13 @@ class DiscoveryWorker:
                 db.add(ann)
 
                 f_period = DiscoveryWorker._resolve_period_helper(None, filing_date)
+                feed_t = _filing_feed_type(cat, pdf_url)
                 filing = FilingRegistry(
                     company_id=comp_id,
                     symbol=sym[:20],
                     exchange="BSE",
                     filing_type=cat[:150],
+                    feed_type=feed_t,
                     period=f_period[:30],
                     announcement_date=filing_date,
                     pdf_url=pdf_url,
@@ -385,9 +414,20 @@ class DiscoveryWorker:
                 })
 
                 # Auto-enrich newly discovered financial results
-                cat_str = cat.lower()
-                if "result" in cat_str or "financial" in cat_str:
+                if feed_t == "RESULT" or _is_results_filing(cat, pdf_url):
                     DiscoveryWorker._auto_enrich_filing_company(db, comp)
+                    try:
+                        from app.services.earnings_calendar_service import EarningsCalendarService
+                        recon_res = EarningsCalendarService.reconcile_incoming_filing(
+                            db=db,
+                            symbol=sym,
+                            filing_type=filing.filing_type,
+                            filing_id=filing.id,
+                            period=f_period,
+                        )
+                        logger.info(f"[DiscoveryWorker] BSE Calendar reconciliation for {sym}: {recon_res.get('reconciliation_type')}")
+                    except Exception as ex_recon:
+                        logger.warning(f"[DiscoveryWorker] BSE Calendar reconciliation warning: {ex_recon}")
 
         db.commit()
 

@@ -17,6 +17,7 @@ from sqlalchemy import desc
 from app.models.breakout_execution import BreakoutExecutionCandidate
 from app.services.prebreakout_radar_service import PreBreakoutRadarService
 from app.services.alert_dispatch_service import AlertDispatchService
+from app.db.database import utc_now
 
 logger = logging.getLogger("alpha_india.breakout_execution")
 
@@ -296,11 +297,11 @@ class BreakoutExecutionService:
                 new_status = "COILING"
 
             c.execution_status = new_status
-            c.updated_at = datetime.utcnow()
+            c.updated_at = utc_now()
 
             # Trigger Event Handling
             if new_status == "TRIGGERED" and not c.alert_dispatched:
-                c.triggered_at = datetime.utcnow()
+                c.triggered_at = utc_now()
                 c.alert_dispatched = True
                 newly_triggered.append(c)
 
@@ -362,7 +363,7 @@ class BreakoutExecutionService:
             "newly_triggered": [c.symbol for c in newly_triggered],
             "newly_ready": [c.symbol for c in newly_ready],
             "updates": updates,
-            "evaluated_at": datetime.utcnow().isoformat(),
+            "evaluated_at": utc_now().isoformat(),
         }
 
     @classmethod

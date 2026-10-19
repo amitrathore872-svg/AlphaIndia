@@ -3,7 +3,7 @@ Alpha India BSE Client
 Connects to BSE India public corporate announcements API.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 from typing import List, Dict, Any
 
@@ -26,15 +26,27 @@ class BSEClient:
         self.session = requests.Session()
         self.session.headers.update(self.API_HEADERS)
 
-    def announcements(self, date_str: str = None, category: str = None) -> List[Dict[str, Any]]:
+    def announcements(
+        self,
+        date_str: str = None,
+        category: str = None,
+        from_date: str = None,
+        to_date: str = None,
+        lookback_days: int = 5,
+    ) -> List[Dict[str, Any]]:
         """
-        Fetches corporate announcements for a given date (YYYYMMDD).
-        Defaults to current date.
-        Queries multiple categories including 'Result' and 'Board Meeting' by default
-        to ensure financial results are never missed.
+        Fetches corporate announcements for a given date range (YYYYMMDD).
+        If date_str is provided, queries for that specific date.
+        Otherwise defaults to a rolling lookback window (today - lookback_days to today)
+        to ensure weekend and after-hours disclosures are never skipped.
+        Queries multiple categories including 'Result' and 'Board Meeting' by default.
         """
-        if not date_str:
-            date_str = datetime.now().strftime("%Y%m%d")
+        if date_str:
+            from_d = date_str
+            to_d = date_str
+        else:
+            to_d = to_date or datetime.now().strftime("%Y%m%d")
+            from_d = from_date or (datetime.now() - timedelta(days=lookback_days)).strftime("%Y%m%d")
 
         categories_to_query = [category] if category else ["Result", "-1", "Board Meeting"]
         results: List[Dict[str, Any]] = []
@@ -43,10 +55,10 @@ class BSEClient:
         for cat in categories_to_query:
             params = {
                 "strCat": cat,
-                "strPrevDate": date_str,
+                "strPrevDate": from_d,
                 "strScrip": "",
                 "strSearch": "P",
-                "strToDate": date_str,
+                "strToDate": to_d,
                 "strType": "C",
             }
 

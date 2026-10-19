@@ -18,6 +18,7 @@ from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.yahoo_client import YahooClient
 from app.clients.dhan_client import DhanClient
 from app.clients.fivepaisa_client import FivePaisaClient
+from app.db.database import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +363,7 @@ class LivePriceService:
                 return
 
         metrics = db.query(CompanyMarketMetrics).filter(CompanyMarketMetrics.symbol == symbol).first()
-        now_utc = datetime.utcnow()
+        now_utc = utc_now()
 
         raw_mcap = quote.get("market_cap")
         if raw_mcap is None and comp.market_cap:

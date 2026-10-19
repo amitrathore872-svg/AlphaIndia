@@ -23,10 +23,15 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from sqlalchemy.orm import Session
+from app.core.redis_cache import cache
 
 from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
-from app.services.cup_handle.cup_handle_engine import analyze_symbol, SECTOR_MAP
+from app.services.cup_handle.cup_handle_engine import (
+    analyze_symbol,
+    analyze_symbol_all_patterns,
+    SECTOR_MAP,
+)
 
 logger = logging.getLogger("alpha_india.cup_handle.orchestrator")
 
@@ -109,6 +114,19 @@ def _fetch_nifty_close() -> Optional[pd.Series]:
 # ---------------------------------------------------------------------------
 
 def _load_disk_cache() -> bool:
+    # 1. Try loading from Redis
+    try:
+        redis_hit = cache.get_json_sync("alpha_india:cup_handle")
+        if redis_hit and isinstance(redis_hit, dict) and redis_hit.get("data"):
+            _CACHE["timestamp"] = redis_hit.get("timestamp", 0)
+            _CACHE["data"] = redis_hit.get("data", [])
+            _CACHE["metadata"] = redis_hit.get("metadata", {})
+            logger.info(f"[CupHandle] Restored {len(_CACHE['data'])} patterns from Redis cache.")
+            return True
+    except Exception:
+        pass
+
+    # 2. Fallback to disk cache
     try:
         if DISK_CACHE_PATH.exists():
             with open(DISK_CACHE_PATH, "r", encoding="utf-8") as f:
@@ -120,6 +138,10 @@ def _load_disk_cache() -> bool:
                 logger.info(
                     f"[CupHandle] Restored {len(_CACHE['data'])} patterns from disk cache."
                 )
+                try:
+                    cache.set_json_sync("alpha_india:cup_handle", _CACHE, expire_seconds=CACHE_TTL_SECONDS * 2)
+                except Exception:
+                    pass
                 return True
     except Exception as e:
         logger.warning(f"[CupHandle] Disk cache load error: {e}")
@@ -127,10 +149,19 @@ def _load_disk_cache() -> bool:
 
 
 def _save_disk_cache() -> None:
+    # 1. Save to Redis
+    try:
+        cache.set_json_sync("alpha_india:cup_handle", _CACHE, expire_seconds=CACHE_TTL_SECONDS * 2)
+    except Exception:
+        pass
+
+    # 2. Atomic disk save
     try:
         DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
+        tmp_file = DISK_CACHE_PATH.with_suffix(f".tmp_{time.time_ns()}")
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(_CACHE, f, indent=2)
+        tmp_file.replace(DISK_CACHE_PATH)
     except Exception as e:
         logger.warning(f"[CupHandle] Disk cache save error: {e}")
 
@@ -145,13 +176,13 @@ def compute_stage_funnel(results: List[Dict[str, Any]], total_scanned: int) -> D
     """
     total = max(1, total_scanned)
     stages = [
-        {"id": "cup_geometry",         "label": "Stage 1 — Cup Geometry (U-shape, depth 15–50%, width ≥ 7w)"},
-        {"id": "handle_geometry",      "label": "Stage 2 — Handle Geometry (drift 5–15%, upper half)"},
-        {"id": "volume_signature",     "label": "Stage 3 — Volume Signature Score ≥ 10/20"},
-        {"id": "trend_integrity",      "label": "Stage 4 — Trend Integrity (RSI zone ok)"},
-        {"id": "base_quality",         "label": "Stage 5 — Base Quality (tight action < 3.5%)"},
+        {"id": "cup_geometry",         "label": "Stage 1 — Cup Geometry (Quick Win 2.5–8.5w or Macro 8–55w)"},
+        {"id": "handle_geometry",      "label": "Stage 2 — Handle Geometry (drift 1.5–15%, upper half)"},
+        {"id": "volume_signature",     "label": "Stage 3 — Volume Signature (contraction & surge)"},
+        {"id": "trend_integrity",      "label": "Stage 4 — Trend Integrity (RSI & EMA support)"},
+        {"id": "base_quality",         "label": "Stage 5 — Base Quality (tight action & inside bars)"},
         {"id": "relative_strength",    "label": "Stage 6 — Relative Strength (outperforms Nifty)"},
-        {"id": "fundamentals",         "label": "Stage 7 — Fundamental Quality (revenue/PAT positive)"},
+        {"id": "fundamentals",         "label": "Stage 7 — Fundamental Quality (growth positive)"},
         {"id": "conviction_threshold", "label": "Stage 8 — AI Conviction Score ≥ 60/100"},
     ]
 
@@ -332,8 +363,8 @@ def _execute_full_scan(db: Optional[Session] = None) -> Dict[str, Any]:
     total_attempted = len(symbols_map)
     results: List[Dict[str, Any]] = []
 
-    def _analyze(sym: str, meta: Dict[str, str]) -> Optional[Dict[str, Any]]:
-        return analyze_symbol(
+    def _analyze(sym: str, meta: Dict[str, str]) -> List[Dict[str, Any]]:
+        return analyze_symbol_all_patterns(
             symbol=sym,
             company_name=meta["company_name"],
             sector=meta["sector"],
@@ -348,9 +379,9 @@ def _execute_full_scan(db: Optional[Session] = None) -> Dict[str, Any]:
         }
         for future in concurrent.futures.as_completed(futures):
             try:
-                result = future.result()
-                if result is not None:
-                    results.append(result)
+                patterns_found = future.result()
+                if patterns_found:
+                    results.extend(patterns_found)
             except Exception as ex:
                 logger.debug(f"[CupHandle] Scan exception: {ex}")
 
@@ -369,6 +400,10 @@ def _execute_full_scan(db: Optional[Session] = None) -> Dict[str, Any]:
     high_count = sum(1 for r in results if r.get("conviction_tier") == "HIGH CONVICTION")
     developing_count = sum(1 for r in results if r.get("conviction_tier") == "DEVELOPING")
     breakout_ready = sum(1 for r in results if r.get("volume", {}).get("breakout_confirmed", False))
+    hourly_1h_count = sum(1 for r in results if r.get("duration_type") == "HOURLY_1H")
+    quick_win_count = sum(1 for r in results if r.get("duration_type") == "QUICK_WIN")
+    standard_count = sum(1 for r in results if r.get("duration_type") == "STANDARD")
+    macro_count = sum(1 for r in results if r.get("duration_type") == "MACRO")
     avg_score = (
         round(float(np.mean([r.get("ai_conviction_score", 0) for r in results])), 1)
         if results else 0.0
@@ -379,6 +414,10 @@ def _execute_full_scan(db: Optional[Session] = None) -> Dict[str, Any]:
     metadata = {
         "total_scanned": total_attempted,
         "patterns_found": len(results),
+        "hourly_1h_count": hourly_1h_count,
+        "quick_win_count": quick_win_count,
+        "standard_count": standard_count,
+        "macro_count": macro_count,
         "elite_count": elite_count,
         "high_conviction_count": high_count,
         "developing_count": developing_count,

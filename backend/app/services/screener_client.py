@@ -173,13 +173,17 @@ class ScreenerClient:
         return result
 
     @classmethod
-    def fetch_full_profile(cls, symbol: str) -> Optional[Dict[str, Any]]:
+    def fetch_full_profile(cls, symbol: str, include_chart: bool = False) -> Optional[Dict[str, Any]]:
         """
         Fetches complete fundamental, valuation, multi-year variance, quarterly momentum,
         cash flows, efficiency ratios, price returns, and shareholding pattern from Screener.in.
         """
         clean_symbol = symbol.strip().upper()
-        target_url, resolved_name = cls.resolve_canonical_url(clean_symbol)
+        resolved_name = None
+        if clean_symbol.isdigit() or clean_symbol.startswith("BSE_"):
+            target_url, resolved_name = cls.resolve_canonical_url(clean_symbol)
+        else:
+            target_url = f"https://www.screener.in/company/{clean_symbol}/consolidated/"
 
         req = urllib.request.Request(
             target_url,
@@ -193,21 +197,33 @@ class ScreenerClient:
         t0 = time.perf_counter()
         html = None
         try:
-            with urllib.request.urlopen(req, timeout=12) as response:
+            with urllib.request.urlopen(req, timeout=10) as response:
                 html = response.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as e:
-            if e.code == 404 and "/consolidated/" in target_url:
+            if e.code == 404:
+                # 1. Try standalone URL if consolidated 404ed
                 fallback_url = f"https://www.screener.in/company/{clean_symbol}/"
                 try:
                     req_standalone = urllib.request.Request(
                         fallback_url,
                         headers={"User-Agent": cls.USER_AGENT, "Accept": "text/html"},
                     )
-                    with urllib.request.urlopen(req_standalone, timeout=10) as resp2:
+                    with urllib.request.urlopen(req_standalone, timeout=8) as resp2:
                         html = resp2.read().decode("utf-8", errors="replace")
-                except Exception as e2:
-                    logger.debug(f"Standalone fallback failed for {clean_symbol}: {e2}")
-                    return None
+                except Exception:
+                    # 2. Try search resolution as final fallback
+                    try:
+                        resolved_url, resolved_name = cls.resolve_canonical_url(clean_symbol)
+                        if resolved_url and resolved_url != target_url and resolved_url != fallback_url:
+                            req_res = urllib.request.Request(
+                                resolved_url,
+                                headers={"User-Agent": cls.USER_AGENT, "Accept": "text/html"},
+                            )
+                            with urllib.request.urlopen(req_res, timeout=8) as resp3:
+                                html = resp3.read().decode("utf-8", errors="replace")
+                    except Exception as e_res:
+                        logger.debug(f"Search resolution fallback failed for {clean_symbol}: {e_res}")
+                        return None
             else:
                 logger.debug(f"Screener fetch failed for {clean_symbol}: {e}")
                 return None
@@ -591,7 +607,16 @@ class ScreenerClient:
                                 public_pct = latest_pct
 
             # 11. Chart API for Price Returns (3m, 6m, 1y, DMA50, DMA200)
-            chart_metrics = cls.fetch_chart_data(company_id)
+            if include_chart:
+                chart_metrics = cls.fetch_chart_data(company_id)
+            else:
+                chart_metrics = {
+                    "return_3m": None,
+                    "return_6m": None,
+                    "return_1y": None,
+                    "dma_50": None,
+                    "dma_200": None,
+                }
 
             # 12. Piotroski F-Score (0 to 9)
             # Calculated from the 9 financial accounting tests

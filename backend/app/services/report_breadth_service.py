@@ -17,10 +17,13 @@ import glob
 import json
 import logging
 import os
+import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+from app.core.redis_cache import cache as redis_cache
 
 logger = logging.getLogger("alpha_india.report_breadth")
 
@@ -35,6 +38,110 @@ class ReportBreadthService:
     Lead institutional service for Market Breadth & Research Reports (20, 50, 200 DMA).
     """
     _memory_cache: Optional[Dict[str, Any]] = None
+    _build_lock = threading.Lock()
+
+    @classmethod
+    def _parse_file_date(cls, f: str) -> datetime.date:
+        try:
+            raw = os.path.basename(f).replace("sec_bhavdata_full_", "").replace(".csv", "")
+            return datetime.datetime.strptime(raw, "%d%m%Y").date()
+        except Exception:
+            return datetime.date.min
+
+    @classmethod
+    def get_latest_bhavcopy_date(cls) -> Optional[datetime.date]:
+        """Scans BHAVCOPY_DIR to quickly find the latest available session date without loading CSVs."""
+        files = glob.glob(str(BHAVCOPY_DIR / "sec_bhavdata_full_*.csv"))
+        if not files:
+            return None
+        max_d = datetime.date.min
+        for f in files:
+            d = cls._parse_file_date(f)
+            if d > max_d:
+                max_d = d
+        return max_d if max_d != datetime.date.min else None
+
+    @classmethod
+    def is_cache_stale(cls, cache: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Checks whether memory or disk cache is missing, corrupted, or older than the newest bhavcopy on disk.
+        """
+        target = cache or cls._memory_cache
+        if not target and CACHE_FILE.exists():
+            try:
+                with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                    target = json.load(f)
+            except Exception:
+                return True
+        if not target or "breadth" not in target:
+            return True
+
+        cached_latest_str = target.get("latest_session", "")
+        if not cached_latest_str:
+            return True
+
+        latest_bhav = cls.get_latest_bhavcopy_date()
+        if not latest_bhav:
+            return False
+
+        try:
+            cached_d = datetime.datetime.strptime(cached_latest_str, "%Y-%m-%d").date()
+            return latest_bhav > cached_d
+        except Exception:
+            return True
+
+    @classmethod
+    def sync_exchange_bhavcopies(cls, days_back: int = 15) -> int:
+        """Downloads any missing recent trading day bhavcopies from NSE archives."""
+        try:
+            from app.services.delivery_screener_service import DeliveryScreenerService
+            count = DeliveryScreenerService.sync_missing_bhavcopies(days_back=days_back)
+            if count > 0:
+                logger.info(f"[ReportBreadthService] Successfully synced {count} new bhavcopies from NSE.")
+            return count
+        except Exception as e:
+            logger.warning(f"[ReportBreadthService] Could not sync missing bhavcopies: {e}")
+            return 0
+
+    @classmethod
+    def ensure_fresh_cache(cls, force_refresh: bool = False, sync_exchange: bool = False) -> Dict[str, Any]:
+        """
+        Thread-safe guarantee that returned cache is loaded, uncorrupted, and synchronized with the latest session.
+        """
+        with cls._build_lock:
+            if sync_exchange:
+                cls.sync_exchange_bhavcopies(days_back=15)
+
+            cache = cls._memory_cache
+
+            # 1. Try loading from Redis distributed cache
+            if not cache and not force_refresh:
+                try:
+                    redis_hit = redis_cache.get_json_sync("alpha_india:report_breadth")
+                    if redis_hit and "breadth" in redis_hit:
+                        cache = redis_hit
+                        cls._memory_cache = cache
+                except Exception:
+                    pass
+
+            # 2. Try loading from disk if memory and Redis are unset
+            if not cache and not force_refresh and CACHE_FILE.exists():
+                try:
+                    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                        disk_cache = json.load(f)
+                    if "breadth" in disk_cache:
+                        cache = disk_cache
+                        cls._memory_cache = cache
+                        redis_cache.set_json_sync("alpha_india:report_breadth", cache, expire_seconds=86400)
+                except Exception as e:
+                    logger.warning(f"[ReportBreadthService] Disk cache read error: {e}")
+
+            # 3. Check if cache is missing or stale compared to available bhavcopies
+            if force_refresh or not cache or cls.is_cache_stale(cache):
+                logger.info("[ReportBreadthService] Breadth cache is missing or stale. Rebuilding from bhavcopies...")
+                cache = cls.build_breadth_cache()
+
+            return cache
 
     @classmethod
     def _load_nifty500_meta(cls) -> Tuple[set, Dict[str, str]]:
@@ -55,11 +162,14 @@ class ReportBreadthService:
         return symbols, sym_to_sector
 
     @classmethod
-    def build_breadth_cache(cls, max_sessions: int = 530) -> Dict[str, Any]:
+    def build_breadth_cache(cls, max_sessions: int = 530, sync_bhavcopies: bool = False) -> Dict[str, Any]:
         """
         Calculates 20, 50, and 200 DMA breadth time series across all trading sessions
         and persists the result into `CACHE_FILE`.
         """
+        if sync_bhavcopies:
+            cls.sync_exchange_bhavcopies(days_back=15)
+
         logger.info(f"[ReportBreadthService] Building breadth calculation for up to {max_sessions} sessions...")
 
         files = glob.glob(str(BHAVCOPY_DIR / "sec_bhavdata_full_*.csv"))
@@ -67,21 +177,14 @@ class ReportBreadthService:
             logger.error(f"[ReportBreadthService] No bhavcopy files found in {BHAVCOPY_DIR}")
             return {"error": "No bhavcopy files found"}
 
-        def parse_file_date(f: str) -> datetime.date:
-            try:
-                raw = os.path.basename(f).replace("sec_bhavdata_full_", "").replace(".csv", "")
-                return datetime.datetime.strptime(raw, "%d%m%Y").date()
-            except Exception:
-                return datetime.date.min
-
-        files_sorted = sorted(files, key=parse_file_date)
+        files_sorted = sorted(files, key=cls._parse_file_date)
         selected_files = files_sorted[-max_sessions:]
 
         nifty500_symbols, sym_to_sector = cls._load_nifty500_meta()
 
         dfs = []
         for fpath in selected_files:
-            file_date = parse_file_date(fpath)
+            file_date = cls._parse_file_date(fpath)
             if file_date == datetime.date.min:
                 continue
             date_str = file_date.strftime("%Y-%m-%d")
@@ -264,14 +367,23 @@ class ReportBreadthService:
             ],
         }
 
+        # 1. Update in-memory & Redis cache
+        cls._memory_cache = payload
         try:
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            redis_cache.set_json_sync("alpha_india:report_breadth", payload, expire_seconds=86400)
+        except Exception:
+            pass
+
+        # 2. Atomic disk write
+        try:
+            tmp_file = CACHE_FILE.with_suffix(f".tmp_{time.time_ns()}")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(payload, f)
+            tmp_file.replace(CACHE_FILE)
             logger.info(f"[ReportBreadthService] Successfully saved multi-DMA cache to {CACHE_FILE}")
         except Exception as e:
             logger.error(f"[ReportBreadthService] Error writing cache file: {e}")
 
-        cls._memory_cache = payload
         return payload
 
     @classmethod
@@ -288,22 +400,7 @@ class ReportBreadthService:
         if dma_period not in (20, 50, 200):
             dma_period = 20
 
-        cache = cls._memory_cache
-
-        if not cache and not force_refresh and CACHE_FILE.exists():
-            try:
-                with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                    cache = json.load(f)
-                # Ensure cache has multi-DMA structure
-                if "breadth" not in cache:
-                    cache = None
-                else:
-                    cls._memory_cache = cache
-            except Exception as e:
-                logger.warning(f"[ReportBreadthService] Cache read error: {e}")
-
-        if not cache or force_refresh:
-            cache = cls.build_breadth_cache()
+        cache = cls.ensure_fresh_cache(force_refresh=force_refresh)
 
         breadth_bucket = cache.get("breadth", {}).get(str(dma_period), {})
         raw_series = breadth_bucket.get("nifty_500" if universe.lower() == "nifty500" else "all_equities", [])
@@ -461,20 +558,7 @@ class ReportBreadthService:
         force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """Returns comparison time series for 20, 50, and 200 DMA breadth together."""
-        cache = cls._memory_cache
-        if not cache and not force_refresh and CACHE_FILE.exists():
-            try:
-                with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                    cache = json.load(f)
-                if "multi_dma_series" in cache:
-                    cls._memory_cache = cache
-                else:
-                    cache = None
-            except Exception:
-                cache = None
-
-        if not cache or force_refresh:
-            cache = cls.build_breadth_cache()
+        cache = cls.ensure_fresh_cache(force_refresh=force_refresh)
 
         raw_series = cache.get("multi_dma_series", [])
         days_map = {

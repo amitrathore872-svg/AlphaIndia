@@ -169,23 +169,14 @@ export default function CandlestickRadarPage() {
           badge={{ label: "20 TRIPLE & DOUBLE SETUPS", color: "cyan" }}
           subtitle="Mathematical pattern recognition scanning Morning Stars, Three White Soldiers, Engulfing bars, and Island reversals with volume expansion, 90D trend sparklines, and DMA defense filters."
           actions={
-            <>
-              <ActionButton
-                variant="secondary"
-                onClick={() => loadData(true)}
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-cyan-400" : ""}`} />
-                {isRefreshing ? "Scanning..." : "Rescan Universe"}
-              </ActionButton>
-              <Link
-                href="/chart-patterns"
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 text-xs font-semibold transition border border-cyan-500/40"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Base Patterns
-              </Link>
-            </>
+            <ActionButton
+              variant="secondary"
+              onClick={() => loadData(true)}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-cyan-400" : ""}`} />
+              {isRefreshing ? "Scanning..." : "Rescan Universe"}
+            </ActionButton>
           }
         />
 

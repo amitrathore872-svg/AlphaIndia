@@ -45,7 +45,6 @@ _RESULT_KEYWORDS = [
     "unaudited result",
     "un-audited result",
     "results approved",
-    "results",
     "financial results updates",
     "integrated filing- financial",
     "integrated filing - financial",
@@ -58,6 +57,8 @@ _RESULT_KEYWORDS = [
     "publish audited results",
     "audited quarterly results",
     "audited financial results",
+    "limited review",
+    "limited review report",
 ]
 
 _RESULT_EXCLUDE_KEYWORDS = [
@@ -66,8 +67,10 @@ _RESULT_EXCLUDE_KEYWORDS = [
     "litigation",
     "chief financial officer",
     "trading window",
+    "closure of trading window",
     "certificate under",
     "press release",
+    "media release",
     "newspaper",
     "clarification",
     "resulting company",
@@ -77,14 +80,23 @@ _RESULT_EXCLUDE_KEYWORDS = [
     "credit rating",
     "resignation",
     "appointment",
+    "re-appointment",
     "postal ballot",
     "loss of share",
+    "duplicate share",
     "demat",
     "shareholders meeting",
     "annual general meeting",
     "agm",
+    "egm",
     "court convened",
     "esop",
+    "esos",
+    "esps",
+    "grant of option",
+    "grant of options",
+    "allotment of",
+    "allotment",
     "buyback",
     "board meeting notice",
     "notice of board meeting",
@@ -99,6 +111,41 @@ _RESULT_EXCLUDE_KEYWORDS = [
     "reasons for delayed",
     "non-submission",
     "delayed/non-submission",
+    "voting result",
+    "voting results",
+    "scrutinizer",
+    "poll result",
+    "poll results",
+    "election result",
+    "esg",
+    "sustainability",
+    "general update",
+    "general updates",
+    "general",
+    "updates",
+    "others",
+    "concall",
+    "con. call",
+    "earnings call",
+    "transcript",
+    "audio recording",
+    "change in management",
+    "change in director",
+    "kmp",
+    "smp",
+    "shareholding pattern",
+    "secretarial compliance",
+    "reg. 74",
+    "reg 74",
+    "reg. 39",
+    "reg 39",
+    "reg. 29",
+    "reg 29",
+    "amalgamation",
+    "incorporation",
+    "joint venture",
+    "settlement",
+    "dispute",
 ]
 
 _ANNOUNCEMENT_KEYWORDS = [
@@ -152,10 +199,10 @@ def _is_announcement_filing(filing_type: Optional[str]) -> bool:
     return any(k in ft for k in _ANNOUNCEMENT_KEYWORDS)
 
 
-def _is_results_filing(filing_type: Optional[str]) -> bool:
+def _is_results_filing(filing_type: Optional[str], pdf_url: Optional[str] = None) -> bool:
     """
     Returns True if filing represents actual declared quarterly financial results.
-    Strictly excludes pre-announcement board meeting notices.
+    Strictly excludes pre-announcement board meeting notices, ESG letters, ESOPs, and compliance updates.
     """
     if not filing_type:
         return False
@@ -165,14 +212,28 @@ def _is_results_filing(filing_type: Optional[str]) -> bool:
     ft = filing_type.lower()
     if any(ex in ft for ex in _RESULT_EXCLUDE_KEYWORDS):
         return False
+
+    # Check PDF URL if available for telltale non-result terms
+    if pdf_url:
+        p_lower = pdf_url.lower()
+        if any(ex in p_lower for ex in [
+            "esg", "esop", "pressrelease", "press_release", "resignation",
+            "concall", "presentation", "trading_window", "grantofoption",
+            "grant_of_option", "duplicate_share", "dup_share", "voting_result",
+            "scrutinizer", "postal_ballot", "loss_of_share"
+        ]):
+            return False
+
     return any(k in ft for k in _RESULT_KEYWORDS)
 
 
-def _filing_feed_type(filing_type: Optional[str]) -> str:
-    """Returns 'ANNOUNCEMENT' or 'RESULT'."""
+def _filing_feed_type(filing_type: Optional[str], pdf_url: Optional[str] = None) -> str:
+    """Returns 'RESULT', 'ANNOUNCEMENT', or 'OTHER'."""
     if _is_announcement_filing(filing_type):
         return "ANNOUNCEMENT"
-    return "RESULT"
+    if _is_results_filing(filing_type, pdf_url=pdf_url):
+        return "RESULT"
+    return "OTHER"
 
 
 # ---------------------------------------------------------------------------
@@ -398,11 +459,17 @@ def _build_filing_query(db: Session, feed_type: str):
                 and_(FilingRegistry.feed_type.is_(None), FilingRegistry.filing_type.ilike("%meeting%"))
             )
         )
-    else:  # ALL — combined feed
+    else:  # ALL — combined feed of results + pre-announcements (strictly excludes OTHER)
         base = base.filter(
             or_(
                 FilingRegistry.feed_type.in_(["RESULT", "ANNOUNCEMENT"]),
-                FilingRegistry.feed_type.is_(None)
+                and_(
+                    FilingRegistry.feed_type.is_(None),
+                    or_(
+                        FilingRegistry.filing_type.ilike("%result%"),
+                        FilingRegistry.filing_type.ilike("%meeting%"),
+                    )
+                )
             )
         )
 
@@ -700,7 +767,7 @@ def get_quarterly_results(
             pass
 
     # Dynamically scale candidate query limit based on page & limit (with buffer for deduplication)
-    candidate_limit = min(600, max(120, int((page * limit) * 2.2)))
+    candidate_limit = min(3000, max(150, int((page * limit) * 2.5)))
     filing_rows = (
         query.order_by(
             FilingRegistry.announcement_date.desc().nullslast(),
@@ -790,7 +857,14 @@ def get_quarterly_results(
         company_qrs = qr_by_company.get(filing.company_id, [])
 
         # Determine this filing's category
-        item_feed_type = _filing_feed_type(filing.filing_type)
+        item_feed_type = _filing_feed_type(filing.filing_type, filing.pdf_url)
+        if feed == "RESULTS" and item_feed_type != "RESULT":
+            continue
+        if feed == "ANNOUNCEMENTS" and item_feed_type != "ANNOUNCEMENT":
+            continue
+        if feed == "ALL" and item_feed_type not in ("RESULT", "ANNOUNCEMENT"):
+            continue
+
         is_pre = item_feed_type == "ANNOUNCEMENT"
 
         if is_pre:

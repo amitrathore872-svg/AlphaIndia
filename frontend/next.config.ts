@@ -16,6 +16,25 @@ const nextConfig: NextConfig = {
       "clsx",
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/indices",
+        destination: "/market-indices",
+        permanent: true,
+      },
+      {
+        source: "/athena",
+        destination: "/pead-drift-screener",
+        permanent: true,
+      },
+      {
+        source: "/athena-omega",
+        destination: "/pead-drift-screener",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

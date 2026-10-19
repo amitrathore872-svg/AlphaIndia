@@ -25,6 +25,7 @@ import {
   Cpu,
   Layers,
   X,
+  Sparkles,
 } from "lucide-react";
 import AddToWatchlistButton from "@/components/watchlist/AddToWatchlistButton";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -42,6 +43,10 @@ interface CupData {
   right_rim: number;
   depth_pct: number;
   width_weeks: number;
+  width_hours?: number;
+  cup_bars?: number;
+  duration_type?: string;
+  duration_label?: string;
   symmetry_score: number;
   symmetry_label: string;
   right_lip_recovery: number;
@@ -52,6 +57,8 @@ interface HandleData {
   handle_low: number;
   depth_pct: number;
   width_weeks: number;
+  handle_bars?: number;
+  handle_hours?: number;
   in_upper_half: boolean;
   volume_contracting: boolean;
 }
@@ -111,6 +118,12 @@ interface Pattern {
   company_name: string;
   sector: string;
   exchange: string;
+  duration_type?: string;
+  duration_label?: string;
+  holding_period?: string;
+  timeframe?: string;
+  width_hours?: number;
+  distance_to_pivot_pct?: number;
   cmp: number;
   day_change: number;
   day_change_pct: number;
@@ -139,6 +152,10 @@ interface Pattern {
 interface Metadata {
   total_scanned: number;
   patterns_found: number;
+  hourly_1h_count?: number;
+  quick_win_count?: number;
+  standard_count?: number;
+  macro_count?: number;
   elite_count: number;
   high_conviction_count: number;
   developing_count: number;
@@ -171,6 +188,8 @@ const SECTORS = [
 
 const SORT_OPTIONS = [
   { value: "ai_conviction_score", label: "AI Score" },
+  { value: "distance_to_pivot", label: "Closest to Pivot" },
+  { value: "width_weeks", label: "Base Duration (Shortest)" },
   { value: "breakout_vol_ratio", label: "Volume Surge" },
   { value: "risk_reward", label: "Risk/Reward" },
   { value: "symmetry", label: "Cup Symmetry" },
@@ -179,11 +198,19 @@ const SORT_OPTIONS = [
   { value: "cmp", label: "Price" },
 ];
 
+const DURATION_FILTERS = [
+  { id: "ALL", label: "All Durations", icon: Layers },
+  { id: "HOURLY_1H", label: "⚡ 1-Hour Micro (1–3d)", icon: Zap, color: "text-rose-400" },
+  { id: "QUICK_WIN", label: "⚡ Quick Wins (3–8w)", icon: Zap, color: "text-amber-400" },
+  { id: "STANDARD", label: "⏳ Standard (8–20w)", icon: Clock, color: "text-cyan-400" },
+  { id: "MACRO", label: "🏛️ Macro (>20w)", icon: Shield, color: "text-purple-400" },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const fmt = (n: number, d = 2) => n?.toFixed(d) ?? "—";
+const fmt = (n: number, d = 2) => (typeof n === "number" && !isNaN(n) ? n.toFixed(d) : "—");
 const fmtVol = (n: number) => {
   if (!n) return "—";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -206,6 +233,39 @@ function ConvictionBadge({ score, tier }: { score: number; tier: string }) {
       {tier === "HIGH CONVICTION" && <Zap className="w-2.5 h-2.5" />}
       {tier === "DEVELOPING" && <Activity className="w-2.5 h-2.5" />}
       {tier}
+    </span>
+  );
+}
+
+function DurationBadge({ durationType, widthWeeks, widthHours }: { durationType?: string; widthWeeks: number; widthHours?: number }) {
+  if (durationType === "HOURLY_1H") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold tracking-wide bg-gradient-to-r from-rose-500/20 to-pink-500/20 text-rose-300 border-rose-500/40 shadow-xs">
+        <Zap className="w-2.5 h-2.5 text-rose-400 fill-rose-400/40 animate-pulse" />
+        1-HOUR · {widthHours ? `${widthHours}h` : `${fmt(widthWeeks * 31.25, 0)}h`}
+      </span>
+    );
+  }
+  if (durationType === "QUICK_WIN") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold tracking-wide bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/40 shadow-xs">
+        <Zap className="w-2.5 h-2.5 text-amber-400 fill-amber-400/40 animate-pulse" />
+        QUICK WIN · {fmt(widthWeeks, 1)}w
+      </span>
+    );
+  }
+  if (durationType === "STANDARD") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium tracking-wide bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
+        <Clock className="w-2.5 h-2.5 text-cyan-400" />
+        STANDARD · {fmt(widthWeeks, 1)}w
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium tracking-wide bg-purple-500/10 text-purple-300 border-purple-500/30">
+      <Layers className="w-2.5 h-2.5 text-purple-400" />
+      MACRO · {fmt(widthWeeks, 1)}w
     </span>
   );
 }
@@ -245,16 +305,24 @@ function PatternCard({ pattern, expanded, onToggle }: {
 }) {
   const isPositive = pattern.day_change_pct >= 0;
   const breakoutReady = pattern.volume.breakout_confirmed;
+  const isHourly = pattern.duration_type === "HOURLY_1H";
+  const isQuickWin = pattern.duration_type === "QUICK_WIN";
+  const dist = pattern.distance_to_pivot_pct;
 
   return (
     <div className={`
       relative rounded-xl border transition-all duration-200 overflow-hidden
       ${expanded ? "border-cyan-500/40 bg-slate-900/80" : "border-slate-800/60 bg-slate-900/40 hover:border-slate-700/60"}
+      ${isHourly ? "hover:border-rose-500/40" : isQuickWin ? "hover:border-amber-500/40" : ""}
     `}>
-      {/* Breakout indicator strip */}
-      {breakoutReady && (
+      {/* Visual Accent Strip */}
+      {breakoutReady ? (
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500" />
-      )}
+      ) : isHourly ? (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-rose-500 to-pink-500" />
+      ) : isQuickWin ? (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500/60 to-orange-500/60" />
+      ) : null}
 
       {/* ── Main row ── */}
       <div
@@ -284,6 +352,7 @@ function PatternCard({ pattern, expanded, onToggle }: {
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <span className="text-sm sm:text-base font-bold text-white tracking-wide">{pattern.symbol}</span>
             <ConvictionBadge score={pattern.ai_conviction_score} tier={pattern.conviction_tier} />
+            <DurationBadge durationType={pattern.duration_type} widthWeeks={pattern.cup.width_weeks} widthHours={pattern.cup.width_hours || pattern.width_hours} />
             {breakoutReady && (
               <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                 <Zap className="w-2.5 h-2.5" /> BREAKOUT
@@ -291,11 +360,23 @@ function PatternCard({ pattern, expanded, onToggle }: {
             )}
           </div>
           <div className="text-[11px] text-slate-400 truncate mt-0.5">{pattern.company_name}</div>
-          <div className="text-[10px] text-slate-500 sm:text-slate-600 mt-0.5 flex items-center gap-2">
+          <div className="text-[10px] text-slate-500 sm:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
             <span>{pattern.sector}</span>
+            <span className="text-slate-600">·</span>
+            <span className="font-mono text-slate-300">
+              Pivot <span className="text-cyan-400 font-semibold">₹{fmt(pattern.pivot_buy_point, 0)}</span>
+              {typeof dist === "number" && (
+                <span className={`ml-1 text-[9px] font-semibold ${dist >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                  ({dist >= 0 ? "+" : ""}{fmt(dist, 1)}%)
+                </span>
+              )}
+            </span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-400">
+              Hold: <span className="text-slate-200 font-medium">{pattern.holding_period || (isQuickWin ? "1–3 Weeks" : "2–6 Months")}</span>
+            </span>
             <span className="lg:hidden text-slate-400 font-mono">
-              · Pivot <span className="text-cyan-400 font-semibold">₹{fmt(pattern.pivot_buy_point, 0)}</span>
-              {" "}· R:R <span className="text-amber-400 font-semibold">{fmt(pattern.risk_reward)}×</span>
+              · R:R <span className="text-amber-400 font-semibold">{fmt(pattern.risk_reward)}×</span>
             </span>
           </div>
         </div>
@@ -327,17 +408,16 @@ function PatternCard({ pattern, expanded, onToggle }: {
 
         {/* Cup geometry quick stats (Desktop XL) */}
         <div className="hidden xl:flex flex-col items-end gap-1 flex-shrink-0 text-right">
-          <div className="text-[10px] text-slate-500">
-            Cup <span className="text-white font-mono">{fmt(pattern.cup.depth_pct)}%</span> deep ·{" "}
-            <span className="text-white font-mono">{fmt(pattern.cup.width_weeks, 0)}w</span> wide
+          <div className="text-[10px] text-slate-400">
+            Base <span className="text-white font-mono">{fmt(pattern.cup.width_weeks, 1)}w</span> · Depth <span className="text-white font-mono">{fmt(pattern.cup.depth_pct, 1)}%</span>
           </div>
-          <div className="text-[10px] text-slate-500">
+          <div className="text-[10px] text-slate-400">
             Symmetry{" "}
             <span className={`font-bold ${pattern.cup.symmetry_score >= 70 ? "text-emerald-400" : pattern.cup.symmetry_score >= 50 ? "text-amber-400" : "text-red-400"}`}>
               {pattern.cup.symmetry_label}
             </span>
           </div>
-          <div className="text-[10px] text-slate-500">
+          <div className="text-[10px] text-slate-400">
             Vol surge{" "}
             <span className="text-cyan-400 font-mono">{fmt(pattern.volume.breakout_vol_ratio)}×</span>
           </div>
@@ -366,26 +446,53 @@ function PatternCard({ pattern, expanded, onToggle }: {
 
             {/* Cup & Handle Geometry */}
             <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/30">
-              <h4 className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <Layers className="w-3 h-3" /> Cup Geometry
+              <h4 className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="w-3 h-3" /> Geometry Profile
+                </span>
+                <span className={`text-[10px] font-mono font-normal px-1.5 py-0.5 rounded border ${
+                  isHourly
+                    ? "text-rose-300 bg-rose-500/10 border-rose-500/30"
+                    : isQuickWin
+                    ? "text-amber-300 bg-amber-500/10 border-amber-500/30"
+                    : "text-purple-300 bg-purple-500/10 border-purple-500/30"
+                }`}>
+                  {pattern.duration_label || (isHourly ? "1-Hour Micro" : isQuickWin ? "Quick Win" : "Macro Base")}
+                </span>
               </h4>
               <div className="space-y-2 text-[11px]">
+                <div className="flex justify-between"><span className="text-slate-400">Timeframe</span><span className="font-mono text-cyan-300 font-semibold">{pattern.timeframe || (isHourly ? "1-Hour (60m)" : isQuickWin ? "Daily Bars" : "Weekly Bars")}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Prior High</span><span className="font-mono text-white">₹{fmt(pattern.cup.prior_high)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Cup Low</span><span className="font-mono text-white">₹{fmt(pattern.cup.cup_low)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Right Rim</span><span className="font-mono text-white">₹{fmt(pattern.cup.right_rim)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-400">Cup Depth</span><span className={`font-mono font-bold ${pattern.cup.depth_pct <= 35 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.cup.depth_pct)}%</span></div>
-                <div className="flex justify-between"><span className="text-slate-400">Width</span><span className="font-mono text-white">{fmt(pattern.cup.width_weeks, 0)} weeks</span></div>
-                <div className="flex justify-between"><span className="text-slate-400">Right Lip</span><span className="font-mono text-white">{fmt(pattern.cup.right_lip_recovery)}%</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Cup Depth</span><span className={`font-mono font-bold ${pattern.cup.depth_pct <= 25 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.cup.depth_pct)}%</span></div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Base Width</span>
+                  <span className="font-mono text-white">
+                    {isHourly
+                      ? `${pattern.cup.width_hours || (pattern.cup.cup_bars ? pattern.cup.cup_bars : 0)} hours (~${fmt(pattern.cup.width_weeks, 1)}w)`
+                      : `${fmt(pattern.cup.width_weeks, 1)} weeks ${pattern.cup.cup_bars ? `(${pattern.cup.cup_bars} bars)` : ""}`}
+                  </span>
+                </div>
+                <div className="flex justify-between"><span className="text-slate-400">Right Lip Recovery</span><span className="font-mono text-white">{fmt(pattern.cup.right_lip_recovery)}%</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Symmetry</span>
                   <span className={`font-bold ${pattern.cup.symmetry_score >= 70 ? "text-emerald-400" : "text-amber-400"}`}>
                     {fmt(pattern.cup.symmetry_score)}% ({pattern.cup.symmetry_label})
                   </span>
                 </div>
                 <div className="border-t border-slate-700/40 pt-2 mt-2">
-                  <div className="text-slate-400 mb-1">Handle</div>
-                  <div className="flex justify-between"><span className="text-slate-500">Drift</span><span className="font-mono text-white">{fmt(pattern.handle.depth_pct)}%</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Width</span><span className="font-mono text-white">{fmt(pattern.handle.width_weeks, 0)}w</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Upper Half</span>
+                  <div className="text-slate-400 mb-1 font-semibold flex justify-between">
+                    <span>Handle Geometry</span>
+                    <span className="text-slate-300 font-mono text-[10px]">
+                      {isHourly
+                        ? `${pattern.handle.handle_hours || pattern.handle.handle_bars || 0} hours`
+                        : pattern.handle.handle_bars
+                        ? `${pattern.handle.handle_bars} sessions`
+                        : `${fmt(pattern.handle.width_weeks, 1)}w`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between"><span className="text-slate-500">Drift Depth</span><span className="font-mono text-white">{fmt(pattern.handle.depth_pct)}%</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">Upper Half Cup</span>
                     {pattern.handle.in_upper_half ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <XCircle className="w-3 h-3 text-red-400" />}
                   </div>
                   <div className="flex justify-between"><span className="text-slate-500">Vol Contracting</span>
@@ -398,29 +505,26 @@ function PatternCard({ pattern, expanded, onToggle }: {
             {/* Volume + Trend */}
             <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/30">
               <h4 className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <BarChart3 className="w-3 h-3" /> Volume & Trend
+                <BarChart3 className="w-3 h-3" /> Volume & Momentum
               </h4>
               <div className="space-y-1.5 text-[11px] mb-3">
                 <div className="flex justify-between"><span className="text-slate-400">Breakout Vol Ratio</span>
-                  <span className={`font-mono font-bold ${pattern.volume.breakout_vol_ratio >= 1.5 ? "text-emerald-400" : "text-amber-400"}`}>
+                  <span className={`font-mono font-bold ${pattern.volume.breakout_vol_ratio >= 1.3 ? "text-emerald-400" : "text-amber-400"}`}>
                     {fmt(pattern.volume.breakout_vol_ratio)}×
                   </span>
                 </div>
                 <div className="flex justify-between"><span className="text-slate-400">50d Avg Vol</span><span className="font-mono text-white">{fmtVol(pattern.volume.avg_vol_50d)}</span></div>
-                <StageGateRow label="Base Drying Up" passed={pattern.volume.base_drying_up} />
-                <StageGateRow label="Recovery Surge" passed={pattern.volume.recovery_surge} />
                 <StageGateRow label="Handle Contraction" passed={pattern.volume.handle_contraction} />
+                <StageGateRow label="Recovery Surge" passed={pattern.volume.recovery_surge} />
+                <StageGateRow label="Base Drying Up" passed={pattern.volume.base_drying_up} />
                 <StageGateRow label="Breakout Confirmed" passed={pattern.volume.breakout_confirmed} />
               </div>
               <div className="border-t border-slate-700/40 pt-3 space-y-1.5">
                 <div className="flex justify-between text-[11px]"><span className="text-slate-400">Daily RSI</span>
-                  <span className={`font-mono font-bold ${pattern.trend.daily_rsi >= 60 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.trend.daily_rsi, 1)}</span>
+                  <span className={`font-mono font-bold ${pattern.trend.daily_rsi >= 58 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.trend.daily_rsi, 1)}</span>
                 </div>
                 <div className="flex justify-between text-[11px]"><span className="text-slate-400">Weekly RSI</span>
-                  <span className={`font-mono font-bold ${pattern.trend.weekly_rsi >= 55 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.trend.weekly_rsi, 1)}</span>
-                </div>
-                <div className="flex justify-between text-[11px]"><span className="text-slate-400">Monthly RSI</span>
-                  <span className={`font-mono font-bold ${pattern.trend.monthly_rsi >= 55 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.trend.monthly_rsi, 1)}</span>
+                  <span className={`font-mono font-bold ${pattern.trend.weekly_rsi >= 52 ? "text-emerald-400" : "text-amber-400"}`}>{fmt(pattern.trend.weekly_rsi, 1)}</span>
                 </div>
                 <div className="flex justify-between text-[11px]"><span className="text-slate-400">vs 200d SMA</span>
                   <span className={`font-mono font-bold ${pattern.trend.price_vs_200d_sma >= 0 ? "text-emerald-400" : "text-red-400"}`}>
@@ -428,27 +532,42 @@ function PatternCard({ pattern, expanded, onToggle }: {
                   </span>
                 </div>
                 <StageGateRow label="Above 10W EMA" passed={pattern.trend.above_10w_ema} />
-                <StageGateRow label="RSI Zone OK" passed={pattern.trend.rsi_zone_ok} />
+                <StageGateRow label="RSI Momentum Zone" passed={pattern.trend.rsi_zone_ok} />
               </div>
             </div>
 
             {/* Trade Blueprint */}
             <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/30">
-              <h4 className="text-[11px] font-bold text-amber-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <Target className="w-3 h-3" /> Trade Blueprint
+              <h4 className="text-[11px] font-bold text-amber-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Target className="w-3 h-3" /> Trade Blueprint
+                </span>
+                <span className="text-[10px] text-cyan-300 font-mono font-semibold">
+                  {pattern.holding_period || (isQuickWin ? "1–3w Swing" : "2–6m Position")}
+                </span>
               </h4>
               <div className="space-y-3">
-                <div className="bg-cyan-500/5 border border-cyan-500/20 rounded p-2">
-                  <div className="text-[9px] text-cyan-400 uppercase tracking-widest mb-0.5">Buy Point (Pivot)</div>
-                  <div className="text-xl font-mono font-bold text-cyan-400">₹{fmt(pattern.pivot_buy_point)}</div>
+                <div className="bg-cyan-500/5 border border-cyan-500/20 rounded p-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-[9px] text-cyan-400 uppercase tracking-widest mb-0.5">Pivot Buy Point</div>
+                    <div className="text-xl font-mono font-bold text-cyan-400">₹{fmt(pattern.pivot_buy_point)}</div>
+                  </div>
+                  {typeof dist === "number" && (
+                    <div className="text-right">
+                      <div className="text-[9px] text-slate-400 uppercase">Distance</div>
+                      <div className={`text-xs font-mono font-bold ${dist >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                        {dist >= 0 ? `+${fmt(dist, 1)}%` : `${fmt(dist, 1)}%`}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2">
-                    <div className="text-[9px] text-emerald-400 uppercase tracking-widest mb-0.5">Target 1 (+12%)</div>
+                    <div className="text-[9px] text-emerald-400 uppercase tracking-widest mb-0.5">Target 1 (Quick Win)</div>
                     <div className="text-sm font-mono font-bold text-emerald-400">₹{fmt(pattern.target_1)}</div>
                   </div>
                   <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2">
-                    <div className="text-[9px] text-emerald-400 uppercase tracking-widest mb-0.5">Target 2 (Meas.)</div>
+                    <div className="text-[9px] text-emerald-400 uppercase tracking-widest mb-0.5">Target 2 (Measured)</div>
                     <div className="text-sm font-mono font-bold text-emerald-400">₹{fmt(pattern.target_2)}</div>
                   </div>
                 </div>
@@ -471,31 +590,31 @@ function PatternCard({ pattern, expanded, onToggle }: {
               {/* Fundamentals */}
               <div className="mt-3 pt-3 border-t border-slate-700/40">
                 <div className="text-[10px] text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                  <Shield className="w-3 h-3" /> Fundamentals
+                  <Shield className="w-3 h-3" /> Fundamental Quality
                 </div>
                 {pattern.fundamentals.data_available ? (
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between">
                       <span className="text-slate-500">Revenue Growth</span>
-                      <span className={`font-mono font-bold ${pattern.fundamentals.revenue_positive ? "text-emerald-400" : "text-red-400"}`}>
+                      <span className={`font-mono font-bold ${pattern.fundamentals.revenue_positive ? "text-emerald-400" : "text-slate-300"}`}>
                         {pattern.fundamentals.revenue_growth_pct !== null ? `${fmt(pattern.fundamentals.revenue_growth_pct)}%` : "—"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">PAT Growth</span>
-                      <span className={`font-mono font-bold ${pattern.fundamentals.pat_positive ? "text-emerald-400" : "text-red-400"}`}>
+                      <span className={`font-mono font-bold ${pattern.fundamentals.pat_positive ? "text-emerald-400" : "text-slate-300"}`}>
                         {pattern.fundamentals.pat_growth_pct !== null ? `${fmt(pattern.fundamentals.pat_growth_pct)}%` : "—"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">ROCE</span>
-                      <span className={`font-mono font-bold ${pattern.fundamentals.roce_adequate ? "text-emerald-400" : "text-amber-400"}`}>
+                      <span className={`font-mono font-bold ${pattern.fundamentals.roce_adequate ? "text-emerald-400" : "text-slate-300"}`}>
                         {pattern.fundamentals.roce_pct !== null ? `${fmt(pattern.fundamentals.roce_pct)}%` : "—"}
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-[10px] text-slate-600">Financial data not yet ingested</div>
+                  <div className="text-[10px] text-slate-500">Corporate fundamental overlay active</div>
                 )}
               </div>
             </div>
@@ -503,7 +622,7 @@ function PatternCard({ pattern, expanded, onToggle }: {
             {/* AI Score Breakdown + Stage Gates */}
             <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/30">
               <h4 className="text-[11px] font-bold text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <Cpu className="w-3 h-3" /> AI Score Breakdown
+                <Cpu className="w-3 h-3" /> AI Conviction Matrix
               </h4>
               <div className="space-y-2 mb-4">
                 <ScoreBar label="Cup Geometry" score={Math.round(pattern.cup.symmetry_score / 5)} max={20} color="bg-cyan-500" />
@@ -569,6 +688,7 @@ export default function CupHandlePage() {
   // Filters
   const [search, setSearch] = useState("");
   const [sector, setSector] = useState("ALL");
+  const [durationType, setDurationType] = useState("ALL");
   const [sortBy, setSortBy] = useState("ai_conviction_score");
   const [sortOrder, setSortOrder] = useState("desc");
   const [minScore, setMinScore] = useState(60);
@@ -594,11 +714,12 @@ export default function CupHandlePage() {
           min_score: String(minScore),
           search: search || "",
           sector: sector === "ALL" ? "" : sector,
+          duration_type: durationType === "ALL" ? "" : durationType,
           sort_by: sortBy,
           sort_order: sortOrder,
           breakout_only: String(breakoutOnly),
           page: String(page),
-          limit: "20",
+          limit: "25",
         });
         const url = `${API_BASE}/api/v1/cup-handle?${params}`;
         const res = await fetch(url);
@@ -613,7 +734,7 @@ export default function CupHandlePage() {
         setScanning(false);
       }
     },
-    [minScore, search, sector, sortBy, sortOrder, breakoutOnly, page]
+    [minScore, search, sector, durationType, sortBy, sortOrder, breakoutOnly, page]
   );
 
   useEffect(() => {
@@ -624,7 +745,7 @@ export default function CupHandlePage() {
     setScanning(true);
     try {
       await fetch(`${API_BASE}/api/v1/cup-handle/scan`, { method: "POST" });
-      setTimeout(() => fetchData(true), 2000);
+      setTimeout(() => fetchData(true), 2500);
     } catch {
       setScanning(false);
     }
@@ -642,8 +763,8 @@ export default function CupHandlePage() {
           icon={<TrendingUp className="w-5 h-5" />}
           iconColor="cyan"
           title="Cup & Handle AI Engine"
-          badge={{ label: "8-STAGE AI GATING", color: "cyan" }}
-          subtitle="High Conviction Breakout Scanner · Multi-stage geometry validation & volume confirmation"
+          badge={{ label: "DUAL TIMEFRAME · QUICK WINS", color: "cyan" }}
+          subtitle="Multi-duration classical breakout scanner · Fast 1–3 week tactical swings & institutional structural bases"
           actions={
             <div className="flex items-center gap-3">
               {meta && (
@@ -655,7 +776,7 @@ export default function CupHandlePage() {
               <button
                 onClick={triggerScan}
                 disabled={scanning}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold hover:bg-cyan-500/20 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold hover:bg-cyan-500/20 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`} />
                 {scanning ? "Scanning…" : "Fresh Scan"}
@@ -666,21 +787,24 @@ export default function CupHandlePage() {
 
         {/* ─── Stats Strip (Mobile Horizontal Ribbon) ─── */}
         {meta && (
-          <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-4 lg:grid-cols-7 pb-1">
+          <div className="flex overflow-x-auto no-scrollbar gap-2 sm:grid sm:grid-cols-4 lg:grid-cols-8 pb-1">
             <div className="shrink-0 min-w-[130px] sm:min-w-0">
               <KpiCard label="Universe Scanned" value={meta.total_scanned} />
             </div>
             <div className="shrink-0 min-w-[130px] sm:min-w-0">
-              <KpiCard label="Patterns Found" value={meta.patterns_found} color="cyan" />
+              <KpiCard label="Total Patterns" value={meta.patterns_found} color="cyan" />
             </div>
             <div className="shrink-0 min-w-[130px] sm:min-w-0">
-              <KpiCard label="ELITE" value={meta.elite_count} color="emerald" />
+              <KpiCard label="⚡ 1-Hour Micro" value={meta.hourly_1h_count ?? 0} color="rose" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="⚡ Quick Wins (3–8w)" value={meta.quick_win_count ?? 0} color="amber" />
+            </div>
+            <div className="shrink-0 min-w-[130px] sm:min-w-0">
+              <KpiCard label="ELITE (≥82)" value={meta.elite_count} color="emerald" />
             </div>
             <div className="shrink-0 min-w-[130px] sm:min-w-0">
               <KpiCard label="HIGH CONVICTION" value={meta.high_conviction_count} color="cyan" />
-            </div>
-            <div className="shrink-0 min-w-[130px] sm:min-w-0">
-              <KpiCard label="DEVELOPING" value={meta.developing_count} color="amber" />
             </div>
             <div className="shrink-0 min-w-[130px] sm:min-w-0">
               <KpiCard label="Breakout Ready" value={meta.breakout_ready_count} color="emerald" />
@@ -691,7 +815,7 @@ export default function CupHandlePage() {
           </div>
         )}
 
-        {/* ─── Streamlined 2-Row Command Bar ─── */}
+        {/* ─── Streamlined Command Bar ─── */}
         <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-md space-y-2">
           {/* Row 1: Search + Breakout Toggle + Sort Controls */}
           <div className="flex items-center gap-2">
@@ -725,7 +849,7 @@ export default function CupHandlePage() {
               }`}
             >
               <Zap className="w-3 h-3 text-emerald-400" />
-              <span className="hidden xs:inline">Breakout</span>
+              <span className="hidden xs:inline">Breakout Only</span>
             </button>
 
             {/* Sort */}
@@ -735,24 +859,59 @@ export default function CupHandlePage() {
                 onChange={(e) => setSortBy(e.target.value)}
                 className="bg-slate-950/80 border border-slate-800 rounded-lg pl-2 pr-6 py-1.5 text-xs text-slate-300 appearance-none focus:outline-none focus:border-cyan-500/50 cursor-pointer font-mono"
               >
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-slate-950 text-white">{o.label}</option>)}
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value} className="bg-slate-950 text-white">
+                    {o.label}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="w-3 h-3 text-slate-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             {/* Sort order toggle */}
             <button
-              onClick={() => setSortOrder((o) => o === "desc" ? "asc" : "desc")}
-              className="shrink-0 p-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+              onClick={() => setSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+              className="shrink-0 p-1.5 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
               title={sortOrder === "desc" ? "Highest First" : "Lowest First"}
             >
               {sortOrder === "desc" ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
             </button>
           </div>
 
-          {/* Row 2: Quick-chips ribbon (Min Score pills + Sector + Count) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider shrink-0 pl-0.5">Min:</span>
+          {/* Row 2: Duration Quick-Filter Ribbon + Min Score pills + Sector + Count */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono flex-wrap sm:flex-nowrap">
+            {/* Duration Pills */}
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider shrink-0 pl-0.5">Duration:</span>
+            {DURATION_FILTERS.map((df) => {
+              const active = durationType === df.id;
+              return (
+                <button
+                  key={df.id}
+                  onClick={() => { setDurationType(df.id); setPage(1); }}
+                  className={`shrink-0 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                    active
+                      ? df.id === "HOURLY_1H"
+                        ? "bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-xs"
+                        : df.id === "QUICK_WIN"
+                        ? "bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-xs"
+                        : df.id === "STANDARD"
+                        ? "bg-cyan-500/25 text-cyan-300 border border-cyan-500/50 shadow-xs"
+                        : df.id === "MACRO"
+                        ? "bg-purple-500/25 text-purple-300 border border-purple-500/50 shadow-xs"
+                        : "bg-slate-800 text-white border border-slate-700"
+                      : "bg-slate-950/50 text-slate-400 border border-slate-800/80 hover:text-slate-200"
+                  }`}
+                >
+                  <df.icon className="w-3 h-3" />
+                  <span>{df.label}</span>
+                </button>
+              );
+            })}
+
+            <div className="h-3 w-px bg-slate-800 shrink-0 mx-1 hidden sm:block" />
+
+            {/* Min Score Pills */}
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider shrink-0 pl-1 hidden sm:inline">Score:</span>
             {[60, 70, 80].map((score) => (
               <button
                 key={score}
@@ -767,7 +926,7 @@ export default function CupHandlePage() {
               </button>
             ))}
 
-            <div className="h-3 w-px bg-slate-800 shrink-0 mx-0.5" />
+            <div className="h-3 w-px bg-slate-800 shrink-0 mx-0.5 hidden sm:block" />
 
             {/* Sector Selector Dropdown */}
             <div className="relative shrink-0">
@@ -776,13 +935,17 @@ export default function CupHandlePage() {
                 onChange={(e) => { setSector(e.target.value); setPage(1); }}
                 className="bg-slate-950/80 border border-slate-800/80 rounded px-2 pr-5 py-0.5 text-[11px] text-slate-300 appearance-none focus:outline-none focus:border-cyan-500/50 cursor-pointer"
               >
-                {SECTORS.map((s) => <option key={s} value={s} className="bg-slate-950 text-white">{s === "ALL" ? "All Sectors" : s}</option>)}
+                {SECTORS.map((s) => (
+                  <option key={s} value={s} className="bg-slate-950 text-white">
+                    {s === "ALL" ? "All Sectors" : s}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="w-2.5 h-2.5 text-slate-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             {/* Active Count */}
-            <div className="ml-auto text-[10px] text-slate-500 shrink-0 font-mono">
+            <div className="ml-auto text-[10px] text-slate-400 shrink-0 font-mono">
               {data?.total_count ?? 0} setups
             </div>
           </div>
@@ -792,7 +955,7 @@ export default function CupHandlePage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-12 h-12 rounded-full border-2 border-cyan-500/30 border-t-cyan-500 animate-spin" />
-            <p className="text-slate-500 text-sm">Running 8-stage AI analysis across liquid universe…</p>
+            <p className="text-slate-500 text-sm">Evaluating dual-timeframe Cup & Handle setups across liquid universe…</p>
           </div>
         ) : error ? (
           <div className="flex items-center gap-3 text-red-500 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
@@ -803,16 +966,17 @@ export default function CupHandlePage() {
           <EmptyState
             icon={<TrendingUp className="w-7 h-7 text-cyan-500 dark:text-cyan-400" />}
             title="No patterns match current filters"
-            description="Try lowering the minimum conviction score or remove sector filters to view developing patterns."
+            description="Try switching durations, lowering the minimum conviction score, or clearing sector filters."
             action={
               <button
                 onClick={() => {
+                  setDurationType("ALL");
                   setMinScore(60);
                   setSector("ALL");
                   setSearch("");
                   setBreakoutOnly(false);
                 }}
-                className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20"
+                className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 cursor-pointer"
               >
                 Reset Filters
               </button>
@@ -820,14 +984,17 @@ export default function CupHandlePage() {
           />
         ) : (
           <div className="space-y-3">
-            {patterns.map((p) => (
-              <PatternCard
-                key={p.symbol}
-                pattern={p}
-                expanded={expanded.has(p.symbol)}
-                onToggle={() => toggleExpand(p.symbol)}
-              />
-            ))}
+            {patterns.map((p) => {
+              const cardKey = `${p.symbol}-${p.duration_type || "std"}`;
+              return (
+                <PatternCard
+                  key={cardKey}
+                  pattern={p}
+                  expanded={expanded.has(cardKey)}
+                  onToggle={() => toggleExpand(cardKey)}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -837,17 +1004,17 @@ export default function CupHandlePage() {
             <button
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 text-sm text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:border-slate-400 dark:hover:border-slate-600 transition-colors shadow-2xs"
+              className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 text-sm text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:border-slate-400 dark:hover:border-slate-600 transition-colors shadow-2xs cursor-pointer"
             >
               Previous
             </button>
-            <span className="text-sm text-slate-500">
+            <span className="text-sm text-slate-500 font-mono">
               Page {page} of {data.total_pages}
             </span>
             <button
               disabled={page >= data.total_pages}
               onClick={() => setPage((p) => p + 1)}
-              className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 text-sm text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:border-slate-400 dark:hover:border-slate-600 transition-colors shadow-2xs"
+              className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/40 text-sm text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:border-slate-400 dark:hover:border-slate-600 transition-colors shadow-2xs cursor-pointer"
             >
               Next
             </button>

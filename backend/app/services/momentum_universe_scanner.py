@@ -396,8 +396,10 @@ class MomentumUniverseScanner:
         try:
             UNIVERSE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
             payload = {"timestamp": ts, "metadata": metadata, "results": results}
-            with open(UNIVERSE_CACHE_PATH, "w", encoding="utf-8") as f:
+            tmp_path = UNIVERSE_CACHE_PATH.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
+            tmp_path.replace(UNIVERSE_CACHE_PATH)
         except Exception as e:
             logger.warning(f"[UniverseScanner] Cache save error: {e}")
 

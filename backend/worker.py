@@ -30,6 +30,10 @@ from app.services.early_stage_scheduler import EarlyStageScheduler
 from app.services.raw_file_archiver import RawFileArchiveService
 from app.services.vcp_scheduler import VCPScheduler
 from app.services.autonomous_scheduler import AutonomousEngineScheduler
+from app.services.velocity.velocity_scheduler import VelocityBurstScheduler
+from app.services.cup_handle.cup_handle_scheduler import CupHandleUniverseScheduler
+from app.services.pattern_engine.pattern_scheduler import PatternUniverseScheduler
+from app.services.mf_radar.mf_dip_scanner_service import MFDipScheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,7 +58,7 @@ def main():
         "--services",
         type=str,
         default="all",
-        help="Comma-separated list of services to run (all, wire, screener, early_stage, archive, vcp)",
+        help="Comma-separated list of services to run (all, wire, velocity, cup_handle, pattern, mf_dip, screener, early_stage, archive, vcp, autonomous)",
     )
     parser.add_argument(
         "--test",
@@ -115,6 +119,26 @@ def main():
         AutonomousEngineScheduler.start()
         started_services.append("AutonomousEngineScheduler")
 
+    # 7. Flagship Velocity Burst Elite Scheduler
+    if run_all or "velocity" in services_requested or "velocity_burst" in services_requested:
+        VelocityBurstScheduler.start()
+        started_services.append("VelocityBurstScheduler")
+
+    # 8. Cup & Handle Universe Scheduler
+    if run_all or "cup_handle" in services_requested:
+        CupHandleUniverseScheduler.start()
+        started_services.append("CupHandleUniverseScheduler")
+
+    # 9. Chart Pattern Universe Scheduler
+    if run_all or "pattern" in services_requested:
+        PatternUniverseScheduler.start()
+        started_services.append("PatternUniverseScheduler")
+
+    # 10. Mutual Fund Dip Scanner Scheduler
+    if run_all or "mf_dip" in services_requested or "mf" in services_requested:
+        MFDipScheduler.start()
+        started_services.append("MFDipScheduler")
+
     logger.info(f"Active Services ({len(started_services)}): {', '.join(started_services)}")
 
     if args.test:
@@ -133,9 +157,11 @@ def main():
         if loop_count % 6 == 0:
             wire_telemetry = LiveExchangeWireWorker.get_telemetry() if "LiveExchangeWireWorker" in started_services else {}
             auto_telemetry = AutonomousEngineScheduler.get_telemetry() if "AutonomousEngineScheduler" in started_services else {}
+            vbe_status = VelocityBurstScheduler.is_running() if "VelocityBurstScheduler" in started_services and hasattr(VelocityBurstScheduler, "is_running") else "N/A"
             logger.info(
                 f"[Heartbeat] Wire Running: {wire_telemetry.get('is_running', False)} | "
                 f"Autonomous Scheduler: {auto_telemetry.get('is_running', False)} | "
+                f"VBE Scheduler: {vbe_status} | "
                 f"Total Filings Scanned: {wire_telemetry.get('total_filings_scanned', 0)} | "
                 f"Catalysts Discovered: {wire_telemetry.get('catalysts_discovered', 0)}"
             )
@@ -160,6 +186,14 @@ def _stop_services(services: List[str]):
         VCPScheduler.stop()
     if "AutonomousEngineScheduler" in services:
         AutonomousEngineScheduler.stop()
+    if "VelocityBurstScheduler" in services:
+        VelocityBurstScheduler.stop()
+    if "CupHandleUniverseScheduler" in services:
+        CupHandleUniverseScheduler.stop()
+    if "PatternUniverseScheduler" in services:
+        PatternUniverseScheduler.stop()
+    if "MFDipScheduler" in services:
+        MFDipScheduler.stop()
 
 
 if __name__ == "__main__":

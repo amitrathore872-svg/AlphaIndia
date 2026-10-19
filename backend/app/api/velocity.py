@@ -36,6 +36,7 @@ from app.models.velocity_models import (
     VelocityBacktest,
     VelocityLearning,
 )
+from app.models.company import Company
 from app.models.system_setting import SystemSetting
 
 # Sub-engine coordinators
@@ -81,7 +82,7 @@ class SettingsUpdateRequest(BaseModel):
 # 1. Status & Mission Control
 # =========================================================================
 @router.get("/status", summary="Get Flagship Engine Command Deck Telemetry")
-async def get_velocity_status(db: Session = Depends(get_db)):
+def get_velocity_status(db: Session = Depends(get_db)):
     """
     Returns real-time KPIs for Mission Control Engine Command Deck.
     """
@@ -117,7 +118,7 @@ async def get_velocity_status(db: Session = Depends(get_db)):
 
 
 @router.post("/scan", summary="Trigger Universe Scan (NSE500)")
-async def run_scan(
+def run_scan(
     request: Optional[ScanRequest] = None,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
@@ -144,20 +145,20 @@ async def run_scan(
 
 
 @router.post("/pause", summary="Pause Velocity Burst Elite Engine")
-async def pause_engine():
+def pause_engine():
     VelocityBurstOrchestrator.pause_engine()
     return {"status": "PAUSED", "message": "Engine operations successfully paused."}
 
 
 @router.post("/resume", summary="Resume Velocity Burst Elite Engine")
-async def resume_engine():
+def resume_engine():
     VelocityBurstOrchestrator.resume_engine()
     return {"status": "ONLINE", "message": "Engine operations successfully resumed."}
 
 
 @router.get("/funnel", summary="Stage-by-Stage Screening Funnel & Attrition Waterfall")
 @cached("vbe:funnel", ttl=30)
-async def get_stage_funnel(db: Session = Depends(get_db)):
+def get_stage_funnel(db: Session = Depends(get_db)):
     """
     Returns the complete institutional stage attrition waterfall showing candidates entered,
     passed, and filtered out at each screening gate.
@@ -185,7 +186,7 @@ async def get_stage_funnel(db: Session = Depends(get_db)):
 # 2. Sub-Engine Endpoints (All Paginated)
 # =========================================================================
 @router.get("/market-regime", summary="Stage 0: Market Regime Intelligence")
-async def get_market_regime(db: Session = Depends(get_db)):
+def get_market_regime(db: Session = Depends(get_db)):
     try:
         return MarketRegimeEngine.get_latest_regime(db)
     except Exception as e:
@@ -223,7 +224,7 @@ async def get_market_regime(db: Session = Depends(get_db)):
 
 
 @router.post("/market-regime/recalculate", summary="Recalculate Market Regime")
-async def recalculate_market_regime(db: Session = Depends(get_db)):
+def recalculate_market_regime(db: Session = Depends(get_db)):
     try:
         return MarketRegimeEngine.evaluate_regime(db)
     except Exception as e:
@@ -232,7 +233,7 @@ async def recalculate_market_regime(db: Session = Depends(get_db)):
 
 
 @router.get("/sleeping-giants", summary="Stage 1: Sleeping Giants (Volatility Contraction)")
-async def get_sleeping_giants(
+def get_sleeping_giants(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     min_score: float = Query(50.0, ge=0.0, le=100.0),
@@ -286,7 +287,7 @@ async def get_sleeping_giants(
 
 
 @router.get("/compression", summary="Stage 2: Compression Intelligence Details")
-async def get_compression(
+def get_compression(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     quality: Optional[str] = Query(None, description="ELITE, HIGH, MEDIUM, LOW"),
@@ -324,7 +325,7 @@ async def get_compression(
 
 
 @router.get("/patterns", summary="Stage 3: Base Pattern Recognitions")
-async def get_base_patterns(
+def get_base_patterns(
     pattern_type: Optional[str] = None,
     status: Optional[str] = None,
     page: int = Query(1, ge=1),
@@ -366,7 +367,7 @@ async def get_base_patterns(
 
 
 @router.get("/institutions", summary="Stage 4: Institutional Footprint Candidates")
-async def get_institutions(
+def get_institutions(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     pocket_pivot_only: bool = False,
@@ -403,7 +404,7 @@ async def get_institutions(
 
 
 @router.get("/rs", summary="Stage 5: Relative Strength Rankings")
-async def get_rs_rankings(
+def get_rs_rankings(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     leaders_only: bool = False,
@@ -439,7 +440,7 @@ async def get_rs_rankings(
 
 
 @router.get("/sector", summary="Stage 6: Sector Strength & Rotation Quadrants")
-async def get_sector_rotation(db: Session = Depends(get_db)):
+def get_sector_rotation(db: Session = Depends(get_db)):
     rows = db.query(VelocitySectorStrength).order_by(VelocitySectorStrength.leadership_rank).all()
     return [
         {
@@ -458,7 +459,7 @@ async def get_sector_rotation(db: Session = Depends(get_db)):
 
 
 @router.get("/smart-money", summary="Stage 7: Smart Money Signals")
-async def get_smart_money(
+def get_smart_money(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -491,7 +492,7 @@ async def get_smart_money(
 
 
 @router.get("/liquidity", summary="Stage 8: Liquidity & Execution Scores")
-async def get_liquidity(
+def get_liquidity(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -520,7 +521,7 @@ async def get_liquidity(
 
 
 @router.get("/news-risk", summary="Stage 9: News Risk & Catalyst Filters")
-async def get_news_risk(
+def get_news_risk(
     verdict: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
@@ -554,7 +555,7 @@ async def get_news_risk(
 
 
 @router.get("/live-signals", summary="Stage 10: Live Breakout Signals")
-async def get_live_signals(
+def get_live_signals(
     verdict: Optional[str] = None,
     active_only: bool = True,
     page: int = Query(1, ge=1),
@@ -580,6 +581,17 @@ async def get_live_signals(
     total = len(deduped_items)
     items = deduped_items[offset : offset + limit]
 
+    # Preload company and sleeping giant maps for symbol enrichment
+    item_syms = [r.symbol.upper() for r in items]
+    sg_map_live = {
+        sg.symbol.upper(): sg
+        for sg in db.query(VelocitySleepingGiant).filter(VelocitySleepingGiant.symbol.in_(item_syms)).all()
+    } if item_syms else {}
+    comp_map_live = {
+        c.symbol.upper(): c
+        for c in db.query(Company).filter(Company.symbol.in_(item_syms)).all()
+    } if item_syms else {}
+
     return {
         "total": total,
         "page": page,
@@ -588,6 +600,8 @@ async def get_live_signals(
             {
                 "id": r.id,
                 "symbol": r.symbol,
+                "company_name": comp_map_live.get(r.symbol.upper()).company if comp_map_live.get(r.symbol.upper()) else (sg_map_live.get(r.symbol.upper()).company_name if sg_map_live.get(r.symbol.upper()) else r.symbol),
+                "sector": comp_map_live.get(r.symbol.upper()).sector if comp_map_live.get(r.symbol.upper()) else (sg_map_live.get(r.symbol.upper()).sector if sg_map_live.get(r.symbol.upper()) else "NSE Equity"),
                 "signal_type": r.signal_type,
                 "confidence_score": r.confidence_score,
                 "ai_verdict": r.ai_verdict,
@@ -609,7 +623,7 @@ async def get_live_signals(
 
 
 @router.get("/recommendations", summary="Consolidated Institutional Trade Recommendations & Prime Setups")
-async def get_all_recommendations(
+def get_all_recommendations(
     limit_per_category: int = Query(25, ge=5, le=100),
     db: Session = Depends(get_db),
 ):
@@ -620,26 +634,52 @@ async def get_all_recommendations(
     3. Coiled Sleeping Giants (Stage 1: Energy compression squeeze)
     4. BTST Momentum Continuations (Stage 13: Closing near highs with institutional delivery)
     """
+    # Preload reference lookup maps for all candidate symbols across 4 queries
+    all_syms = set()
+    for r in live_q: all_syms.add(r.symbol.upper())
+    for p in pattern_q: all_syms.add(p.symbol.upper())
+    for g in sg_q: all_syms.add(g.symbol.upper())
+    for b in btst_q: all_syms.add(b.symbol.upper())
+
+    sg_map_rec = {
+        sg.symbol.upper(): sg
+        for sg in db.query(VelocitySleepingGiant).filter(VelocitySleepingGiant.symbol.in_(list(all_syms))).all()
+    } if all_syms else {}
+
+    comp_map_rec = {
+        c.symbol.upper(): c
+        for c in db.query(Company).filter(Company.symbol.in_(list(all_syms))).all()
+    } if all_syms else {}
+
+    def get_sym_meta(sym_str: str):
+        sym_u = sym_str.upper()
+        c = comp_map_rec.get(sym_u)
+        sg = sg_map_rec.get(sym_u)
+        name = c.company if c and c.company else (sg.company_name if sg and sg.company_name else sym_str)
+        sec = c.sector if c and c.sector else (sg.sector if sg and sg.sector else "NSE Equity")
+        cmp_val = sg.current_price if sg and sg.current_price else None
+        return name, sec, cmp_val
+
     # 1. Live Breakout Signals
-    live_q = db.query(VelocityLiveSignal).filter(
-        VelocityLiveSignal.status == "ACTIVE"
-    ).order_by(desc(VelocityLiveSignal.confidence_score), desc(VelocityLiveSignal.id)).all()
-    
     seen_live = set()
     live_items = []
     for r in live_q:
         s = r.symbol.upper()
         if s not in seen_live:
             seen_live.add(s)
+            c_name, c_sec, _ = get_sym_meta(s)
             live_items.append({
                 "id": r.id,
                 "symbol": r.symbol,
+                "company_name": c_name,
+                "sector": c_sec,
                 "category": "LIVE_BREAKOUT",
                 "category_label": "Live Breakout",
                 "confidence_score": r.confidence_score,
                 "ai_verdict": r.ai_verdict,
                 "setup_type": "Breakout Trigger",
                 "trigger_price": r.entry_price,
+                "current_price": r.entry_price,
                 "stop_loss": r.stop_loss,
                 "target_1": r.target_1,
                 "target_2": r.target_2,
@@ -655,25 +695,25 @@ async def get_all_recommendations(
             break
 
     # 2. Ready Base Pattern Pivots
-    pattern_q = db.query(VelocityBasePattern).filter(
-        VelocityBasePattern.pattern_status.in_(["READY", "BROKEN_OUT"])
-    ).order_by(desc(VelocityBasePattern.base_quality_score), desc(VelocityBasePattern.id)).all()
-
     seen_pattern = set()
     pattern_items = []
     for p in pattern_q:
         s = p.symbol.upper()
         if s not in seen_pattern:
             seen_pattern.add(s)
+            c_name, c_sec, cmp_val = get_sym_meta(s)
             pattern_items.append({
                 "id": p.id,
                 "symbol": p.symbol,
+                "company_name": c_name,
+                "sector": c_sec,
                 "category": "READY_PIVOT",
                 "category_label": "Pivot Ready",
                 "confidence_score": p.base_quality_score,
                 "ai_verdict": "READY TO BURST" if p.pattern_status == "READY" else "BROKEN OUT",
                 "setup_type": p.pattern_type,
                 "trigger_price": p.pivot_point,
+                "current_price": cmp_val or p.pivot_point,
                 "stop_loss": round(p.pivot_point * 0.965, 2) if p.pivot_point else 0.0,
                 "target_1": round(p.pivot_point * 1.08, 2) if p.pivot_point else 0.0,
                 "target_2": round(p.pivot_point * 1.15, 2) if p.pivot_point else 0.0,
@@ -689,26 +729,25 @@ async def get_all_recommendations(
             break
 
     # 3. Coiling Sleeping Giants
-    sg_q = db.query(VelocitySleepingGiant).filter(
-        VelocitySleepingGiant.compression_score >= 60.0
-    ).order_by(desc(VelocitySleepingGiant.compression_score), desc(VelocitySleepingGiant.id)).all()
-
     seen_sg = set()
     sg_items = []
     for g in sg_q:
         s = g.symbol.upper()
         if s not in seen_sg:
             seen_sg.add(s)
+            c_name, c_sec, _ = get_sym_meta(s)
             sg_items.append({
                 "id": g.id,
                 "symbol": g.symbol,
-                "company_name": g.company_name,
+                "company_name": c_name,
+                "sector": c_sec,
                 "category": "COILED_SQUEEZE",
                 "category_label": "Coiled Squeeze",
                 "confidence_score": g.compression_score,
                 "ai_verdict": "SQUEEZE ACTIVE" if g.ttm_squeeze_active else "HIGH COMPRESSION",
                 "setup_type": "TTM Squeeze" if g.ttm_squeeze_active else ("NR10" if g.is_nr10 else "NR7"),
                 "trigger_price": g.current_price,
+                "current_price": g.current_price,
                 "stop_loss": round(g.current_price * 0.96, 2) if g.current_price else 0.0,
                 "target_1": round(g.current_price * 1.09, 2) if g.current_price else 0.0,
                 "target_2": round(g.current_price * 1.18, 2) if g.current_price else 0.0,
@@ -724,29 +763,33 @@ async def get_all_recommendations(
             break
 
     # 4. BTST Continuations
-    btst_q = db.query(VelocityBTST).filter(
-        VelocityBTST.btst_confidence >= 70.0
-    ).order_by(desc(VelocityBTST.btst_confidence), desc(VelocityBTST.id)).all()
-
     seen_btst = set()
     btst_items = []
     for b in btst_q:
         s = b.symbol.upper()
         if s not in seen_btst:
             seen_btst.add(s)
+            c_name, c_sec, cmp_val = get_sym_meta(s)
+            sl_val = round(cmp_val * 0.982, 2) if cmp_val else None
+            t1_val = round(cmp_val * 1.025, 2) if cmp_val else None
+            t2_val = round(cmp_val * 1.045, 2) if cmp_val else None
+
             btst_items.append({
                 "id": b.id,
                 "symbol": b.symbol,
+                "company_name": c_name,
+                "sector": c_sec,
                 "category": "BTST_RUNNER",
                 "category_label": "BTST Runner",
                 "confidence_score": b.btst_confidence,
                 "ai_verdict": b.action_recommended or "BTST CANDIDATE",
                 "setup_type": "Late Surge Continuation",
-                "trigger_price": None,
-                "stop_loss": None,
-                "target_1": None,
-                "target_2": None,
-                "risk_reward": 2.0,
+                "trigger_price": cmp_val,
+                "current_price": cmp_val,
+                "stop_loss": sl_val,
+                "target_1": t1_val,
+                "target_2": t2_val,
+                "risk_reward": 2.2,
                 "continuation_prob": b.continuation_probability,
                 "closing_near_high_pct": b.closing_near_high_pct,
                 "delivery_pct": b.delivery_pct,
@@ -759,6 +802,7 @@ async def get_all_recommendations(
             break
 
     all_recommendations = live_items + pattern_items + sg_items + btst_items
+    all_recommendations.sort(key=lambda x: x.get("confidence_score") or 0.0, reverse=True)
 
     return {
         "summary": {
@@ -777,7 +821,7 @@ async def get_all_recommendations(
 
 
 @router.get("/entry", summary="Stage 11: Entry Quality Gate Verifications")
-async def get_entry_quality(
+def get_entry_quality(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     passed_only: bool = True,
@@ -814,7 +858,7 @@ async def get_entry_quality(
 
 
 @router.get("/trade", summary="Stage 12: Active Trade Lifecycle Manager")
-async def get_trades(
+def get_trades(
     status: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
@@ -868,7 +912,7 @@ async def get_trades(
 
 
 @router.post("/trade/{trade_id}/action", summary="Execute Manual Trade Action")
-async def execute_trade_action(
+def execute_trade_action(
     trade_id: int,
     request: TradeActionRequest,
     db: Session = Depends(get_db),
@@ -898,7 +942,7 @@ async def execute_trade_action(
 
 
 @router.get("/btst", summary="Stage 13: BTST Continuation Candidates")
-async def get_btst(
+def get_btst(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -917,29 +961,57 @@ async def get_btst(
     total = len(deduped_items)
     items = deduped_items[offset : offset + limit]
 
+    # Preload reference lookup maps for symbols
+    item_syms = [r.symbol.upper() for r in items]
+    sg_map = {
+        sg.symbol.upper(): sg
+        for sg in db.query(VelocitySleepingGiant).filter(VelocitySleepingGiant.symbol.in_(item_syms)).all()
+    } if item_syms else {}
+    comp_map = {
+        c.symbol.upper(): c
+        for c in db.query(Company).filter(Company.symbol.in_(item_syms)).all()
+    } if item_syms else {}
+
+    formatted_items = []
+    for r in items:
+        s = r.symbol.upper()
+        sg = sg_map.get(s)
+        comp = comp_map.get(s)
+        cmp_val = sg.current_price if sg and sg.current_price else None
+        sl_val = round(cmp_val * 0.982, 2) if cmp_val else None
+        t1_val = round(cmp_val * 1.025, 2) if cmp_val else None
+        t2_val = round(cmp_val * 1.045, 2) if cmp_val else None
+        c_name = comp.company if comp and comp.company else (sg.company_name if sg and sg.company_name else s)
+        c_sector = comp.sector if comp and comp.sector else (sg.sector if sg and sg.sector else "NSE Equity")
+
+        formatted_items.append({
+            "id": r.id,
+            "symbol": r.symbol,
+            "company_name": c_name,
+            "sector": c_sector,
+            "current_price": cmp_val,
+            "stop_loss": sl_val,
+            "target_1": t1_val,
+            "target_2": t2_val,
+            "scan_date": str(r.scan_date),
+            "closing_near_high_pct": r.closing_near_high_pct,
+            "delivery_pct": r.delivery_pct,
+            "volume_surge_multiple": r.volume_surge_multiple,
+            "btst_confidence": r.btst_confidence,
+            "continuation_probability": r.continuation_probability,
+            "action_recommended": r.action_recommended,
+        })
+
     return {
         "total": total,
         "page": page,
         "limit": limit,
-        "items": [
-            {
-                "id": r.id,
-                "symbol": r.symbol,
-                "scan_date": str(r.scan_date),
-                "closing_near_high_pct": r.closing_near_high_pct,
-                "delivery_pct": r.delivery_pct,
-                "volume_surge_multiple": r.volume_surge_multiple,
-                "btst_confidence": r.btst_confidence,
-                "continuation_probability": r.continuation_probability,
-                "action_recommended": r.action_recommended,
-            }
-            for r in items
-        ],
+        "items": formatted_items,
     }
 
 
 @router.get("/alerts", summary="Stage 15: Velocity Alerts Feed")
-async def get_alerts(
+def get_alerts(
     unread_only: bool = False,
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -948,7 +1020,7 @@ async def get_alerts(
 
 
 @router.post("/alerts/acknowledge", summary="Mark Alerts as Read")
-async def acknowledge_alerts(alert_ids: Optional[List[int]] = None, db: Session = Depends(get_db)):
+def acknowledge_alerts(alert_ids: Optional[List[int]] = None, db: Session = Depends(get_db)):
     query = db.query(VelocityAlert).filter(VelocityAlert.is_read == False)
     if alert_ids:
         query = query.filter(VelocityAlert.id.in_(alert_ids))
@@ -958,7 +1030,7 @@ async def acknowledge_alerts(alert_ids: Optional[List[int]] = None, db: Session 
 
 
 @router.get("/history", summary="Stage 14: Historical Signal Ledger")
-async def get_signal_history(
+def get_signal_history(
     verdict: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
@@ -997,7 +1069,7 @@ async def get_signal_history(
 
 
 @router.get("/company/{symbol}", summary="Stage 16: Company Velocity Intelligence Dossier")
-async def get_company_intelligence(symbol: str, db: Session = Depends(get_db)):
+def get_company_intelligence(symbol: str, db: Session = Depends(get_db)):
     profile = CompanyIntelligenceEngine.get_company_velocity_profile(symbol, db)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found in master database")
@@ -1005,7 +1077,7 @@ async def get_company_intelligence(symbol: str, db: Session = Depends(get_db)):
 
 
 @router.get("/backtest", summary="Stage 17: Backtest Historical Performance")
-async def get_backtests(db: Session = Depends(get_db)):
+def get_backtests(db: Session = Depends(get_db)):
     rows = db.query(VelocityBacktest).order_by(desc(VelocityBacktest.created_at)).limit(5).all()
     if not rows:
         # Run default 5-year simulation
@@ -1033,7 +1105,7 @@ async def get_backtests(db: Session = Depends(get_db)):
 
 
 @router.post("/backtest/run", summary="Trigger New Historical Backtest")
-async def run_backtest(
+def run_backtest(
     request: BacktestRunRequest,
     db: Session = Depends(get_db),
 ):
@@ -1046,7 +1118,7 @@ async def run_backtest(
 
 
 @router.get("/backtest/latest", summary="Get Latest Backtest Results")
-async def get_latest_backtest(db: Session = Depends(get_db)):
+def get_latest_backtest(db: Session = Depends(get_db)):
     bt = db.query(VelocityBacktest).order_by(desc(VelocityBacktest.created_at)).first()
     if not bt:
         return HistoricalLearningEngine.run_backtest_simulation(db)
@@ -1075,7 +1147,7 @@ async def get_latest_backtest(db: Session = Depends(get_db)):
 
 
 @router.get("/learning", summary="Stage 17: Monthly Machine Learning Recalibrations")
-async def get_learning(db: Session = Depends(get_db)):
+def get_learning(db: Session = Depends(get_db)):
     rows = db.query(VelocityLearning).order_by(desc(VelocityLearning.created_at)).limit(5).all()
     if not rows:
         sim = HistoricalLearningEngine.run_monthly_learning_job(db)
@@ -1097,7 +1169,7 @@ async def get_learning(db: Session = Depends(get_db)):
 
 
 @router.post("/learning/recalculate", summary="Recalculate Optimal Model Weights")
-async def recalculate_learning(db: Session = Depends(get_db)):
+def recalculate_learning(db: Session = Depends(get_db)):
     return HistoricalLearningEngine.run_monthly_learning_job(db)
 
 
@@ -1105,7 +1177,7 @@ async def recalculate_learning(db: Session = Depends(get_db)):
 # 3. Dynamic Admin Settings & Configurable Thresholds
 # =========================================================================
 @router.get("/settings", summary="Get Configurable Thresholds & Weights")
-async def get_vbe_settings(db: Session = Depends(get_db)):
+def get_vbe_settings(db: Session = Depends(get_db)):
     settings_rows = db.query(SystemSetting).filter(SystemSetting.setting_key.like("vbe_%")).all()
     res = {}
     for row in settings_rows:
@@ -1118,7 +1190,7 @@ async def get_vbe_settings(db: Session = Depends(get_db)):
 
 
 @router.put("/settings", summary="Update Configurable Thresholds")
-async def update_vbe_settings(request: SettingsUpdateRequest, db: Session = Depends(get_db)):
+def update_vbe_settings(request: SettingsUpdateRequest, db: Session = Depends(get_db)):
     import json
     setting = db.query(SystemSetting).filter(SystemSetting.setting_key == request.key).first()
     val_str = json.dumps(request.value)
@@ -1135,5 +1207,5 @@ async def update_vbe_settings(request: SettingsUpdateRequest, db: Session = Depe
 
     db.commit()
     # Invalidate cached calculations
-    await cache.clear_prefix("vbe:")
+    cache.clear_prefix_sync("vbe:")
     return {"status": "UPDATED", "key": request.key}

@@ -319,9 +319,16 @@ def _merge_results_into_cache(
     stage_funnel = compute_stage_funnel(merged, total_scanned)
     near_breakout_count = state_mgr.get_stats().get("near_breakout", 0)
 
+    quick_win_count = sum(1 for r in merged if r.get("duration_type") == "QUICK_WIN")
+    standard_count = sum(1 for r in merged if r.get("duration_type") == "STANDARD")
+    macro_count = sum(1 for r in merged if r.get("duration_type") == "MACRO")
+
     metadata = {
         "total_scanned": total_scanned,
         "patterns_found": len(merged),
+        "quick_win_count": quick_win_count,
+        "standard_count": standard_count,
+        "macro_count": macro_count,
         "elite_count": elite_count,
         "high_conviction_count": high_count,
         "developing_count": developing_count,

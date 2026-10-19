@@ -35,6 +35,9 @@ def get_cup_handle_patterns(
     conviction_tier: Optional[str] = Query(
         default=None, description="Filter: ELITE | HIGH CONVICTION | DEVELOPING"
     ),
+    duration_type: Optional[str] = Query(
+        default=None, description="Filter: HOURLY_1H | QUICK_WIN | STANDARD | MACRO | ALL"
+    ),
     search: Optional[str] = Query(default=None, description="Filter by symbol or company name"),
     sector: Optional[str] = Query(default=None, description="Filter by sector"),
     breakout_only: bool = Query(default=False, description="Only show breakout-confirmed patterns"),
@@ -46,9 +49,9 @@ def get_cup_handle_patterns(
 ):
     """
     Returns AI-scored Cup & Handle breakout candidates.
-    All 8 stages must pass; only high-conviction patterns surface here.
+    Supports both Quick-Win (3–8w) and Macro (>20w) setups.
     """
-    cache_key = f"cuphandle:patterns:{min_score}:{conviction_tier}:{search}:{sector}:{breakout_only}:{sort_by}:{sort_order}:{page}:{limit}"
+    cache_key = f"cuphandle:patterns:{min_score}:{conviction_tier}:{duration_type}:{search}:{sector}:{breakout_only}:{sort_by}:{sort_order}:{page}:{limit}"
     cached_resp = cache.get_json_sync(cache_key)
     if cached_resp:
         return cached_resp
@@ -70,7 +73,12 @@ def get_cup_handle_patterns(
             if tier_lower in p.get("conviction_tier", "").lower()
         ]
 
-    # 3. Search
+    # 3. Duration Type (QUICK_WIN | STANDARD | MACRO)
+    if duration_type and duration_type.strip().upper() != "ALL":
+        dt = duration_type.strip().upper()
+        filtered = [p for p in filtered if p.get("duration_type", "") == dt]
+
+    # 4. Search
     if search:
         s = search.strip().lower()
         filtered = [
@@ -78,16 +86,16 @@ def get_cup_handle_patterns(
             if s in p.get("symbol", "").lower() or s in p.get("company_name", "").lower()
         ]
 
-    # 4. Sector
+    # 5. Sector
     if sector and sector.upper() != "ALL":
         sec = sector.strip().lower()
         filtered = [p for p in filtered if sec in p.get("sector", "").lower()]
 
-    # 5. Breakout confirmed only
+    # 6. Breakout confirmed only
     if breakout_only:
         filtered = [p for p in filtered if p.get("volume", {}).get("breakout_confirmed", False)]
 
-    # 6. Sort
+    # 7. Sort
     reverse = sort_order.lower() == "desc"
     sort_keys = {
         "ai_conviction_score": lambda x: x.get("ai_conviction_score", 0),
@@ -99,6 +107,8 @@ def get_cup_handle_patterns(
         "breakout_vol_ratio": lambda x: x.get("volume", {}).get("breakout_vol_ratio", 0),
         "risk_reward": lambda x: x.get("risk_reward", 0),
         "weekly_rsi": lambda x: x.get("trend", {}).get("weekly_rsi", 0),
+        "width_weeks": lambda x: x.get("cup", {}).get("width_weeks", 999),
+        "distance_to_pivot": lambda x: abs(x.get("distance_to_pivot_pct", 999)),
     }
     key_fn = sort_keys.get(sort_by, lambda x: x.get("ai_conviction_score", 0))
     filtered.sort(key=key_fn, reverse=reverse)
@@ -169,9 +179,18 @@ def get_filter_options(db: Session = Depends(get_db)):
         {"id": "conviction_threshold", "label": "AI Conviction ≥ 60",   "description": "Composite AI score across all 8 dimensions"},
     ]
 
+    duration_types = [
+        {"id": "ALL",        "label": "All Durations",            "color": "slate"},
+        {"id": "HOURLY_1H",  "label": "⚡ 1-Hour Micro (1–3d)",    "color": "rose",   "description": "Fast intraday/BTST micro-swings (12–65h base, 2–15h handle)"},
+        {"id": "QUICK_WIN",  "label": "⚡ Quick Wins (3–8w)",     "color": "amber",  "description": "Fast 1–3 week swing breakouts (12–42d base, 2–14d handle)"},
+        {"id": "STANDARD",  "label": "⏳ Standard (8–20w)",       "color": "cyan",   "description": "1–3 month intermediate consolidations"},
+        {"id": "MACRO",     "label": "🏛️ Macro (>20w)",           "color": "purple", "description": "Multi-month structural accumulation bases"},
+    ]
+
     return {
         "sectors": sectors,
         "conviction_tiers": tiers,
+        "duration_types": duration_types,
         "stages": stages,
         "metadata": scan_data.get("metadata", {}),
     }

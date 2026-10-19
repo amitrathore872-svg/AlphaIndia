@@ -28,7 +28,19 @@ from app.core.redis_cache import cache
 logger = logging.getLogger(__name__)
 
 # Persistent Disk Cache Path
-DISK_CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "delivery_radar_cache.json"
+def _get_disk_cache_path() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "data" / "delivery_radar_cache.json",
+        Path(__file__).resolve().parent.parent.parent.parent / "data" / "delivery_radar_cache.json",
+        Path("backend/data/delivery_radar_cache.json").resolve(),
+        Path("data/delivery_radar_cache.json").resolve(),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]
+
+DISK_CACHE_PATH = _get_disk_cache_path()
 
 
 class DeliveryScreenerService:
@@ -97,8 +109,10 @@ class DeliveryScreenerService:
 
             # 2. Disk persistence for restart durability
             DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
+            tmp_cache_path = DISK_CACHE_PATH.with_suffix(".tmp")
+            with open(tmp_cache_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
+            tmp_cache_path.replace(DISK_CACHE_PATH)
         except Exception as e:
             logger.warning(f"[DeliveryScreenerService] Error saving cache: {e}")
 
@@ -385,8 +399,48 @@ class DeliveryScreenerService:
         all_df["RANGE_CONTRACTION"] = np.where(range_20 > 0, range_5 / range_20, 1.0)
 
         # Multi-day delivery cluster: count of days with Deliv >= 55% in prior 5 sessions
-        d55 = (all_df["DELIV_PER"] >= 55.0).astype(float)
-        all_df["DELIV_CLUSTER_5D"] = grouped[d55.name].transform(lambda x: x.shift(1).rolling(5, min_periods=3).sum())
+        all_df["IS_D55"] = np.where(all_df["DELIV_PER"] >= 55.0, 1.0, 0.0)
+        all_df["DELIV_CLUSTER_5D"] = grouped["IS_D55"].transform(lambda x: x.shift(1).rolling(5, min_periods=1).sum()).fillna(0.0)
+
+        # Multi-session Cumulative Delivery Inflows (₹ Crores) & Float Turnover
+        all_df["DELIV_CR"] = (all_df["TURNOVER_CR"] * all_df["DELIV_PER"]) / 100.0
+        all_df["NET_DELIV_CR_5D"] = grouped["DELIV_CR"].transform(lambda x: x.rolling(5, min_periods=1).sum())
+        all_df["NET_DELIV_CR_10D"] = grouped["DELIV_CR"].transform(lambda x: x.rolling(10, min_periods=1).sum())
+        all_df["NET_DELIV_CR_20D"] = grouped["DELIV_CR"].transform(lambda x: x.rolling(20, min_periods=1).sum())
+        all_df["NET_DELIV_CR_30D"] = grouped["DELIV_CR"].transform(lambda x: x.rolling(30, min_periods=1).sum())
+
+        # Delivery Accumulation Persistence (Count of sessions with Deliv >= 55% out of last 10 sessions)
+        all_df["DELIV_PERSIST_10D"] = grouped["IS_D55"].transform(lambda x: x.rolling(10, min_periods=1).sum()).fillna(0.0)
+        all_df["AVG_DELIV_PER_30D"] = grouped["DELIV_PER"].transform(lambda x: x.rolling(30, min_periods=1).mean())
+
+        # Composite Buyer Demand Ratio (0.0 to 100.0%)
+        # Synthesizes: Green-day delivery share + Close Location + Delivery % + Institutional Ticket Spike
+        tot_flow = up_sum + down_sum
+        up_ratio = np.where(tot_flow > 0, up_sum / tot_flow, 0.5)
+        ticket_factor = np.clip((all_df["TICKET_SPIKE"] - 0.8) / 1.2, 0.0, 1.0)
+        loc_factor = np.clip(all_df["CLOSE_LOCATION"], 0.0, 1.0)
+        deliv_factor = np.clip(all_df["DELIV_PER"] / 100.0, 0.0, 1.0)
+        all_df["BUYER_DEMAND_RATIO"] = np.round(
+            (0.35 * up_ratio + 0.25 * loc_factor + 0.20 * deliv_factor + 0.20 * ticket_factor) * 100.0,
+            1
+        )
+
+        # Upper Circuit Detection (5%, 10%, or 20% bands)
+        # Locked in circuit: Close at extreme High (Close Location >= 0.96), circuit return, and Deliv % >= 65%
+        is_locked_5 = (all_df["DAY_RET_PCT"] >= 4.8) & (all_df["DAY_RET_PCT"] <= 5.25)
+        is_locked_10 = (all_df["DAY_RET_PCT"] >= 9.7) & (all_df["DAY_RET_PCT"] <= 10.3)
+        is_locked_20 = (all_df["DAY_RET_PCT"] >= 19.5)
+        circuit_ret_match = is_locked_5 | is_locked_10 | is_locked_20
+        all_df["IS_CIRCUIT_LOCKED"] = circuit_ret_match & (all_df["CLOSE_LOCATION"] >= 0.96) & (all_df["DELIV_PER"] >= 65.0)
+        all_df["CIRCUIT_BAND"] = np.where(
+            is_locked_20 | (all_df["DAY_RET_PCT"] > 14.0), "20%",
+            np.where(is_locked_10 | (all_df["DAY_RET_PCT"] > 7.0), "10%", "5%")
+        )
+
+        # Pre-circuit Surge (within 1.5% of circuit band, with surging buyer demand ratio >= 72%)
+        is_pre_5 = (all_df["DAY_RET_PCT"] >= 3.2) & (all_df["DAY_RET_PCT"] <= 4.7)
+        is_pre_10 = (all_df["DAY_RET_PCT"] >= 7.2) & (all_df["DAY_RET_PCT"] <= 9.5)
+        all_df["IS_PRE_CIRCUIT"] = (is_pre_5 | is_pre_10) & (all_df["BUYER_DEMAND_RATIO"] >= 72.0) & (all_df["CLOSE_LOCATION"] >= 0.80)
 
         # Relative Strength (60-day ROC)
         all_df["ROC_60"] = grouped["CLOSE"].transform(lambda x: (x.shift(1) / x.shift(61) - 1.0) * 100.0)
@@ -473,40 +527,58 @@ class DeliveryScreenerService:
             (latest_df["CLOSE"] >= latest_df["SMA_50"] * 0.98)
         )
 
-        # Combine candidates
-        qualifying_mask = is_apex | is_active | is_base
+        # Specialized Circuit & High Buyer Candidate Masks
+        is_circuit_candidate = latest_df["IS_CIRCUIT_LOCKED"] | latest_df["IS_PRE_CIRCUIT"]
+        is_high_buyer_candidate = (latest_df["BUYER_DEMAND_RATIO"] >= 78.0) & (latest_df["DELIV_PER"] >= 50.0)
+
+        # Combine candidates (ensuring circuits and high buyer ratios are preserved)
+        qualifying_mask = is_apex | is_active | is_base | is_circuit_candidate | is_high_buyer_candidate
         candidates = latest_df[qualifying_mask].copy()
 
         # In universe scan, preserve full candidate pool for dynamic in-memory API slice filtering
+        cand_circuit = candidates["IS_CIRCUIT_LOCKED"] | candidates["IS_PRE_CIRCUIT"]
         if min_spike > 1.0:
-            candidates = candidates[candidates["DELIV_SPIKE_10X"] >= min_spike]
+            candidates = candidates[(candidates["DELIV_SPIKE_10X"] >= min_spike) | cand_circuit]
         if min_deliv_per > 30.0:
-            candidates = candidates[candidates["DELIV_PER"] >= min_deliv_per]
+            candidates = candidates[(candidates["DELIV_PER"] >= min_deliv_per) | cand_circuit]
 
         opportunities = []
         for _, row in candidates.iterrows():
             sym = str(row["SYMBOL"])
             close_p = float(row["CLOSE"])
             low_p = float(row["LOW"])
-            high_50 = float(row["HIGH_50"]) if pd.notna(row["HIGH_50"]) else close_p
-            deliv_per = float(row["DELIV_PER"])
-            deliv_spike = float(row["DELIV_SPIKE_10X"])
-            dryup_ratio = float(row["VOL_DRYUP_RATIO"])
-            rsi = float(row["RSI_14"]) if pd.notna(row["RSI_14"]) else 55.0
-            day_ret = float(row["DAY_RET_PCT"])
-            turnover_cr = float(row["TURNOVER_CR"])
-            deliv_flow_20d = float(row["DELIV_FLOW_20D"])
-            dist_to_ema20 = float(row["DIST_TO_EMA20_PCT"])
-            close_location = float(row["CLOSE_LOCATION"])
-            upper_wick = float(row["UPPER_WICK_PCT"])
-            ticket_spike = float(row["TICKET_SPIKE"])
-            range_contraction = float(row["RANGE_CONTRACTION"])
-            roc_60 = float(row["ROC_60"]) if pd.notna(row["ROC_60"]) else 0.0
-            deliv_cluster = int(row["DELIV_CLUSTER_5D"])
-            market_breadth = float(row["MARKET_BREADTH"])
-            mcap_val = float(row["MCAP"])
-            is_breakout = bool(row["IS_50D_BREAKOUT"])
-            is_ema_pullback = bool(row["IS_EMA20_PULLBACK"])
+            high_50 = float(row["HIGH_50"]) if pd.notna(row.get("HIGH_50")) else close_p
+            deliv_per = float(row["DELIV_PER"]) if pd.notna(row.get("DELIV_PER")) else 0.0
+            deliv_spike = float(row["DELIV_SPIKE_10X"]) if pd.notna(row.get("DELIV_SPIKE_10X")) else 1.0
+            dryup_ratio = float(row["VOL_DRYUP_RATIO"]) if pd.notna(row.get("VOL_DRYUP_RATIO")) else 1.0
+            rsi = float(row["RSI_14"]) if pd.notna(row.get("RSI_14")) else 55.0
+            day_ret = float(row["DAY_RET_PCT"]) if pd.notna(row.get("DAY_RET_PCT")) else 0.0
+            turnover_cr = float(row["TURNOVER_CR"]) if pd.notna(row.get("TURNOVER_CR")) else 0.0
+            deliv_flow_20d = float(row["DELIV_FLOW_20D"]) if pd.notna(row.get("DELIV_FLOW_20D")) else 1.0
+            dist_to_ema20 = float(row["DIST_TO_EMA20_PCT"]) if pd.notna(row.get("DIST_TO_EMA20_PCT")) else 0.0
+            close_location = float(row["CLOSE_LOCATION"]) if pd.notna(row.get("CLOSE_LOCATION")) else 0.5
+            upper_wick = float(row["UPPER_WICK_PCT"]) if pd.notna(row.get("UPPER_WICK_PCT")) else 0.0
+            ticket_spike = float(row["TICKET_SPIKE"]) if pd.notna(row.get("TICKET_SPIKE")) else 1.0
+            range_contraction = float(row["RANGE_CONTRACTION"]) if pd.notna(row.get("RANGE_CONTRACTION")) else 1.0
+            roc_60 = float(row["ROC_60"]) if pd.notna(row.get("ROC_60")) else 0.0
+            deliv_cluster = int(row["DELIV_CLUSTER_5D"]) if pd.notna(row.get("DELIV_CLUSTER_5D")) else 0
+            market_breadth = float(row["MARKET_BREADTH"]) if pd.notna(row.get("MARKET_BREADTH")) else 50.0
+            mcap_val = float(row["MCAP"]) if pd.notna(row.get("MCAP")) else 0.0
+            is_breakout = bool(row["IS_50D_BREAKOUT"]) if pd.notna(row.get("IS_50D_BREAKOUT")) else False
+            is_ema_pullback = bool(row["IS_EMA20_PULLBACK"]) if pd.notna(row.get("IS_EMA20_PULLBACK")) else False
+
+            # Cumulative Delivery Inflow & Buyer Dominance metrics
+            net_deliv_cr_5d = round(float(row.get("NET_DELIV_CR_5D", 0.0)), 2) if pd.notna(row.get("NET_DELIV_CR_5D")) else 0.0
+            net_deliv_cr_10d = round(float(row.get("NET_DELIV_CR_10D", 0.0)), 2) if pd.notna(row.get("NET_DELIV_CR_10D")) else 0.0
+            net_deliv_cr_20d = round(float(row.get("NET_DELIV_CR_20D", 0.0)), 2) if pd.notna(row.get("NET_DELIV_CR_20D")) else 0.0
+            net_deliv_cr_30d = round(float(row.get("NET_DELIV_CR_30D", 0.0)), 2) if pd.notna(row.get("NET_DELIV_CR_30D")) else 0.0
+            deliv_persist_10d = int(row.get("DELIV_PERSIST_10D", 0)) if pd.notna(row.get("DELIV_PERSIST_10D")) else 0
+            avg_deliv_per_30d = round(float(row.get("AVG_DELIV_PER_30D", deliv_per)), 1) if pd.notna(row.get("AVG_DELIV_PER_30D")) else deliv_per
+            buyer_demand_ratio = round(float(row.get("BUYER_DEMAND_RATIO", 50.0)), 1) if pd.notna(row.get("BUYER_DEMAND_RATIO")) else 50.0
+            is_circuit_locked = bool(row.get("IS_CIRCUIT_LOCKED", False)) if pd.notna(row.get("IS_CIRCUIT_LOCKED")) else False
+            circuit_band = str(row.get("CIRCUIT_BAND", "5%")) if pd.notna(row.get("CIRCUIT_BAND")) else "5%"
+            is_pre_circuit = bool(row.get("IS_PRE_CIRCUIT", False)) if pd.notna(row.get("IS_PRE_CIRCUIT")) else False
+            pivot_dist = round(float(row.get("PIVOT_DISTANCE_PCT", 0.0)), 2) if pd.notna(row.get("PIVOT_DISTANCE_PCT")) else 0.0
 
             # Determine Tier
             row_idx = row.name
@@ -518,12 +590,46 @@ class DeliveryScreenerService:
                 tier = "BASE_ACCUMULATION"
 
             # Setup Type
-            if is_breakout:
+            if is_circuit_locked:
+                setup_type = "CIRCUIT_LOCKED"
+            elif is_breakout:
                 setup_type = "50D_BREAKOUT"
             elif is_ema_pullback and abs(dist_to_ema20) <= 2.5:
                 setup_type = "EMA20_PULLBACK"
+            elif is_pre_circuit:
+                setup_type = "PRE_CIRCUIT_SURGE"
             else:
                 setup_type = "NEAR_PIVOT_BASE"
+
+            # Actionable Decision Archetype & Institutional Verdict Classification
+            if is_circuit_locked:
+                decision_archetype = "CIRCUIT_LOCK"
+                archetype_label = "Circuit Locked (100% Demand)"
+                inst_verdict = f"🔒 Circuit Locked: Freezing at +{circuit_band} upper ceiling on {deliv_per:.1f}% delivery. Zero ask depth. High gap-up continuation probability."
+            elif is_pre_circuit:
+                decision_archetype = "PRE_CIRCUIT"
+                archetype_label = "Pre-Circuit Buyer Rush"
+                inst_verdict = f"⚡ Pre-Circuit Demand Surge: Up +{day_ret:.2f}% with {buyer_demand_ratio:.1f}% Buyer Dominance. Ticket size {ticket_spike:.2f}x normal. Approaching +{circuit_band} lock."
+            elif is_breakout:
+                decision_archetype = "MOMENTUM_BREAKOUT"
+                archetype_label = "Validated Breakout"
+                inst_verdict = f"🚀 Validated Breakout: Surpassed 50-day pivot on {deliv_spike:.2f}x delivery spike ({deliv_per:.1f}% float absorption). High-velocity momentum runner."
+            elif range_contraction <= 0.88 and (deliv_flow_20d >= 1.35 or deliv_persist_10d >= 5) and abs(pivot_dist) <= 3.5:
+                decision_archetype = "STEALTH_FLOAT_LOCK"
+                archetype_label = "Stealth Float Lockdown"
+                inst_verdict = f"🔒 Stealth Float Lock: ₹{net_deliv_cr_10d:.2f} Cr absorbed across 10 sessions ({deliv_persist_10d}/10 days > 55% deliv). Range squeezed {range_contraction:.2f}x near pivot. Pre-breakout positioning."
+            elif buyer_demand_ratio >= 78.0 and ticket_spike >= 1.2:
+                decision_archetype = "HIGH_BUYER_DOMINANCE"
+                archetype_label = "Extreme Buyer Dominance"
+                inst_verdict = f"⚡ Extreme Buyer Dominance ({buyer_demand_ratio:.1f}% Demand): Institutional ticket size {ticket_spike:.2f}x 20-DMA. Net inflow ratio {deliv_flow_20d:.2f}x with ₹{net_deliv_cr_10d:.2f} Cr 10D delivery."
+            elif is_ema_pullback and deliv_per >= 55.0:
+                decision_archetype = "SUPPORT_DEFENDER"
+                archetype_label = "20 EMA Support Defender"
+                inst_verdict = f"🛡️ 20 EMA Support Defense: Pullback to 20 EMA absorbed with {deliv_per:.1f}% delivery and {buyer_demand_ratio:.1f}% buyer dominance. Low-risk dip buy."
+            else:
+                decision_archetype = "BASE_ACCUMULATION"
+                archetype_label = "Base Accumulation"
+                inst_verdict = f"📦 Base Accumulation: Net ₹{net_deliv_cr_10d:.2f} Cr delivery absorbed over 10 sessions ({deliv_per:.1f}% delivery today). Watchlist positioning."
 
             # Compute Institutional Conviction Score (0 - 100)
             # 1. Delivery Spike (up to 20 pts)
@@ -533,7 +639,7 @@ class DeliveryScreenerService:
             # 3. 20D D-A/D Flow Ratio (up to 20 pts)
             flow_score = min(20.0, max(5.0, 8.0 + (deliv_flow_20d - 1.0) * 10.0))
             # 4. Structure & Range Contraction (up to 20 pts)
-            struct_pts = 10.0 if is_breakout else (8.0 if is_ema_pullback else 6.0)
+            struct_pts = 10.0 if (is_breakout or is_circuit_locked) else (8.0 if is_ema_pullback else 6.0)
             coiling_pts = 10.0 if range_contraction <= 0.85 else (7.0 if range_contraction <= 0.95 else 4.0)
             struct_score = struct_pts + coiling_pts
             # 5. Relative Strength & Candle Quality (up to 20 pts)
@@ -542,6 +648,8 @@ class DeliveryScreenerService:
             momentum_score = rs_pts + candle_pts
 
             total_score = round(min(100.0, spike_score + ticket_score + flow_score + struct_score + momentum_score), 1)
+            if is_circuit_locked:
+                total_score = max(total_score, 88.0)
 
             # Dynamic Buying & Selling Zone Protocol
             entry_price = round(close_p, 2)
@@ -557,6 +665,8 @@ class DeliveryScreenerService:
                 buy_status = "IN_BUY_ZONE"
             elif is_ema_pullback:
                 buy_status = "RETEST_CONFIRMED"
+            elif is_circuit_locked:
+                buy_status = "CIRCUIT_LOCKED_HOLD"
             else:
                 buy_status = "ACCUMULATION_BASE"
 
@@ -618,15 +728,35 @@ class DeliveryScreenerService:
                 "vol_dryup_ratio": round(dryup_ratio, 2),
                 "rsi_14": round(rsi, 1),
                 "50d_high": round(high_50, 2),
-                "pivot_distance_pct": round(float(row["PIVOT_DISTANCE_PCT"]), 2),
+                "breakout_price": round(high_50, 2),
+                "breakout_date": row["DATE"].strftime("%Y-%m-%d") if hasattr(row["DATE"], "strftime") else str(row["DATE"])[:10],
+                "breakout_margin_pct": round(((entry_price - high_50) / high_50) * 100.0, 2) if is_breakout else 0.0,
+                "pivot_distance_pct": pivot_dist,
                 "is_50d_breakout": is_breakout,
                 "setup_type": setup_type,
                 "conviction_score": total_score,
                 "conviction_tier": tier,
+                # Out-of-the-Box Multi-Session & Buyer Dominance Intelligence
+                "net_deliv_cr_5d": net_deliv_cr_5d,
+                "net_deliv_cr_10d": net_deliv_cr_10d,
+                "net_deliv_cr_20d": net_deliv_cr_20d,
+                "net_deliv_cr_30d": net_deliv_cr_30d,
+                "deliv_persist_10d": deliv_persist_10d,
+                "avg_deliv_per_30d": avg_deliv_per_30d,
+                "buyer_demand_ratio": buyer_demand_ratio,
+                "is_circuit_locked": is_circuit_locked,
+                "circuit_band": circuit_band,
+                "is_pre_circuit": is_pre_circuit,
+                "decision_archetype": decision_archetype,
+                "archetype_label": archetype_label,
+                "institutional_verdict": inst_verdict,
                 # Trade Execution Blueprint
                 "blueprint": {
                     "entry_price": entry_price,
                     "pivot_price": pivot_price,
+                    "breakout_price": round(high_50, 2),
+                    "breakout_date": row["DATE"].strftime("%Y-%m-%d") if hasattr(row["DATE"], "strftime") else str(row["DATE"])[:10],
+                    "breakout_margin_pct": round(((entry_price - high_50) / high_50) * 100.0, 2) if is_breakout else 0.0,
                     "buy_corridor_min": buy_corridor_min,
                     "buy_corridor_max": buy_corridor_max,
                     "max_chase_price": max_chase_price,
@@ -660,6 +790,10 @@ class DeliveryScreenerService:
             "confirmed_breakouts_count": sum(1 for o in opportunities if o["is_50d_breakout"]),
             "ema_pullback_count": sum(1 for o in opportunities if o["setup_type"] == "EMA20_PULLBACK"),
             "near_pivot_count": sum(1 for o in opportunities if o["setup_type"] == "NEAR_PIVOT_BASE"),
+            "circuit_locked_count": sum(1 for o in opportunities if o.get("is_circuit_locked")),
+            "pre_circuit_count": sum(1 for o in opportunities if o.get("is_pre_circuit")),
+            "high_buyer_count": sum(1 for o in opportunities if (o.get("buyer_demand_ratio") or 0) >= 78.0),
+            "stealth_lock_count": sum(1 for o in opportunities if o.get("decision_archetype") == "STEALTH_FLOAT_LOCK"),
             "scan_duration_seconds": scan_duration,
             "filters_applied": {
                 "market_cap_floor": ">= Rs 1,000 Cr",

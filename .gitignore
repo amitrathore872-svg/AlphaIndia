@@ -25,6 +25,10 @@ backend/.env
 frontend/.env.local
 frontend/.env.*
 
+# Backups and Dumps
+backups/*.dump
+backups/*.sql
+
 # -------------------------
 # Node / Next.js
 # -------------------------

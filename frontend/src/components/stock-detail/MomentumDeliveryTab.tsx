@@ -12,6 +12,16 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+export interface DeliverySessionItem {
+  date: string;
+  volume: string;
+  delivVol: string;
+  delivPct: number;
+  vsAvg: string;
+  status: string;
+  rawDate?: string;
+}
+
 interface MomentumDeliveryTabProps {
   symbol?: string;
   momentumScore?: number;
@@ -19,6 +29,9 @@ interface MomentumDeliveryTabProps {
   dma50?: number;
   dma200?: number;
   rsi?: number;
+  deliveryHistory?: DeliverySessionItem[];
+  deliverySurgePct?: number;
+  deliverySurgeLabel?: string;
 }
 
 export default function MomentumDeliveryTab({
@@ -28,6 +41,9 @@ export default function MomentumDeliveryTab({
   dma50 = 225.3,
   dma200 = 197.2,
   rsi = 64.5,
+  deliveryHistory: propDeliveryHistory,
+  deliverySurgePct,
+  deliverySurgeLabel,
 }: MomentumDeliveryTabProps) {
   const isAboveDma50 = cmp >= dma50;
   const isAboveDma200 = cmp >= dma200;
@@ -109,17 +125,15 @@ export default function MomentumDeliveryTab({
   const passedCount = momentumRules.filter((r) => r.status === "PASSED").length;
   const convictionPct = Math.round((passedCount / 10) * 100);
 
-  // Generate authentic past 5 trading sessions (skipping weekends & Indian statutory holiday Oct 2 Gandhi Jayanti)
+  // Dynamic past 5 trading sessions from authentic NSE bhavcopy records
   const deliveryHistory = useMemo(() => {
-    const sessions = [
-      { date: "10 Oct", volume: "16.8L", delivVol: "11.9L", delivPct: 70.8, vsAvg: "+210%", status: "DELIVERY BREAKOUT" },
-      { date: "09 Oct", volume: "14.2L", delivVol: "9.5L",  delivPct: 66.9, vsAvg: "+175%", status: "ACCUMULATION" },
-      { date: "08 Oct", volume: "11.0L", delivVol: "6.8L",  delivPct: 61.8, vsAvg: "+130%", status: "ACCUMULATION" },
-      { date: "07 Oct", volume: "8.9L",  delivVol: "4.9L",  delivPct: 55.1, vsAvg: "+90%",  status: "NORMAL" },
-      { date: "06 Oct", volume: "7.4L",  delivVol: "3.5L",  delivPct: 47.3, vsAvg: "+30%",  status: "DRY UP" },
-    ];
-    return sessions;
-  }, []);
+    if (propDeliveryHistory && propDeliveryHistory.length > 0) {
+      return propDeliveryHistory;
+    }
+    return [];
+  }, [propDeliveryHistory]);
+
+  const surgeHeaderLabel = deliverySurgeLabel || (deliverySurgePct != null ? `${deliverySurgePct >= 0 ? "+" : ""}${deliverySurgePct}% Surge Above Baseline` : "Verified Delivery Flow");
 
   return (
     <div className="space-y-6">
@@ -194,48 +208,56 @@ export default function MomentumDeliveryTab({
             </h3>
           </div>
           <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold font-mono">
-            +210% Surge Above Baseline
+            {surgeHeaderLabel}
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] uppercase">
-                <th className="py-2.5 px-3">Trading Date</th>
-                <th className="py-2.5 px-3">Total Traded Vol</th>
-                <th className="py-2.5 px-3">Delivery Volume</th>
-                <th className="py-2.5 px-3">Delivery %</th>
-                <th className="py-2.5 px-3">vs 30D Average</th>
-                <th className="py-2.5 px-3 text-right">Radar Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {deliveryHistory.map((d, idx) => (
-                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
-                  <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">{d.date}</td>
-                  <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">{d.volume}</td>
-                  <td className="py-2.5 px-3 text-cyan-600 dark:text-cyan-300 font-bold">{d.delivVol}</td>
-                  <td className="py-2.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">{d.delivPct}%</td>
-                  <td className="py-2.5 px-3 text-emerald-600 dark:text-emerald-300">{d.vsAvg}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        d.status === "DELIVERY BREAKOUT"
-                          ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40"
-                          : d.status === "ACCUMULATION"
-                          ? "bg-cyan-100 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/40"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                      }`}
-                    >
-                      {d.status}
-                    </span>
-                  </td>
+        {deliveryHistory.length === 0 ? (
+          <div className="py-8 text-center text-xs font-mono text-slate-500 dark:text-slate-400">
+            No recent delivery accumulation records available for {symbol}.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] uppercase">
+                  <th className="py-2.5 px-3">Trading Date</th>
+                  <th className="py-2.5 px-3">Total Traded Vol</th>
+                  <th className="py-2.5 px-3">Delivery Volume</th>
+                  <th className="py-2.5 px-3">Delivery %</th>
+                  <th className="py-2.5 px-3">vs 30D Average</th>
+                  <th className="py-2.5 px-3 text-right">Radar Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                {deliveryHistory.map((d, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
+                    <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">{d.date}</td>
+                    <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">{d.volume}</td>
+                    <td className="py-2.5 px-3 text-cyan-600 dark:text-cyan-300 font-bold">{d.delivVol}</td>
+                    <td className="py-2.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">{d.delivPct}%</td>
+                    <td className="py-2.5 px-3 text-emerald-600 dark:text-emerald-300">{d.vsAvg}</td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          d.status === "DELIVERY BREAKOUT"
+                            ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40"
+                            : d.status === "ACCUMULATION"
+                            ? "bg-cyan-100 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/40"
+                            : d.status === "DRY UP"
+                            ? "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        {d.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

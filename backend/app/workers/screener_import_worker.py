@@ -4,7 +4,7 @@ Parallel Architecture - Isolated background importer with polite rate limiting,
 incremental upserts, live telemetry emission, and batch lifecycle management.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import threading
 import time
@@ -141,6 +141,44 @@ class ScreenerImportWorker:
                 targets = [(s.strip().upper(), None) for s in symbols_override[:batch_size]]
             else:
                 # Incremental Target Resolution:
+                # Priority 0: Companies with recent RESULT filings whose statements are not yet updated.
+                from app.models.filing_registry import FilingRegistry
+                recent_cutoff = datetime.utcnow().date() - timedelta(days=14)
+                result_filing_symbols = [
+                    r[0] for r in (
+                        db.query(FilingRegistry.symbol)
+                        .filter(
+                            FilingRegistry.feed_type == "RESULT",
+                            FilingRegistry.announcement_date >= recent_cutoff,
+                        )
+                        .distinct()
+                        .all()
+                    )
+                ]
+                recent_result_targets = []
+                seen_syms = set()
+                if result_filing_symbols:
+                    for r_sym in result_filing_symbols:
+                        comp = db.query(Company).filter(Company.symbol == r_sym).first()
+                        if not comp:
+                            continue
+                        latest_q = (
+                            db.query(QuarterlyResult)
+                            .filter(QuarterlyResult.company_id == comp.id)
+                            .order_by(QuarterlyResult.period_end.desc().nullslast())
+                            .first()
+                        )
+                        is_stale = False
+                        if not latest_q or not latest_q.period_end:
+                            is_stale = True
+                        elif (datetime.utcnow().date() - latest_q.period_end).days > 60:
+                            is_stale = True
+                        if is_stale and comp.symbol not in seen_syms:
+                            seen_syms.add(comp.symbol)
+                            recent_result_targets.append((comp.symbol, comp.company))
+                            if len(recent_result_targets) >= batch_size:
+                                break
+
                 # Priority 1: Unimported companies first (screener_growth_records.symbol is NULL), ordered by highest market cap.
                 # Priority 2: Once all companies have an initial record, rotate stalest first (oldest last_updated).
                 unimported_count = (
@@ -156,24 +194,34 @@ class ScreenerImportWorker:
                     .count()
                 )
 
-                companies = (
-                    db.query(Company.symbol, Company.company)
-                    .outerjoin(
-                        ScreenerGrowthRecord,
-                        Company.symbol == ScreenerGrowthRecord.symbol,
+                remaining_slots = batch_size - len(recent_result_targets)
+                background_targets = []
+                if remaining_slots > 0:
+                    companies = (
+                        db.query(Company.symbol, Company.company)
+                        .outerjoin(
+                            ScreenerGrowthRecord,
+                            Company.symbol == ScreenerGrowthRecord.symbol,
+                        )
+                        .filter(Company.is_growth_eligible.is_(True))
+                        .order_by(
+                            ScreenerGrowthRecord.last_updated.asc().nullsfirst(),
+                            Company.market_cap.desc().nullslast(),
+                        )
+                        .limit(remaining_slots * 2)
+                        .all()
                     )
-                    .filter(Company.is_growth_eligible.is_(True))
-                    .order_by(
-                        ScreenerGrowthRecord.last_updated.asc().nullsfirst(),
-                        Company.market_cap.desc().nullslast(),
-                    )
-                    .limit(batch_size)
-                    .all()
-                )
-                targets = [(c[0], c[1]) for c in companies]
+                    for c in companies:
+                        if c[0] not in seen_syms:
+                            seen_syms.add(c[0])
+                            background_targets.append((c[0], c[1]))
+                            if len(background_targets) >= remaining_slots:
+                                break
+
+                targets = recent_result_targets + background_targets
 
                 logger.info(
-                    f"ScreenerImportWorker resolved {len(targets)} incremental targets (Unimported remaining: {unimported_count})."
+                    f"ScreenerImportWorker resolved {len(targets)} targets ({len(recent_result_targets)} recent results priority, {len(background_targets)} background, Unimported remaining: {unimported_count})."
                 )
 
             run_record.total_target = len(targets)

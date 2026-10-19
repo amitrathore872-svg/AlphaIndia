@@ -168,8 +168,10 @@ class ScanStateManager:
         try:
             STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
             raw = {sym: s.to_dict() for sym, s in self._state.items()}
-            with open(STATE_PATH, "w", encoding="utf-8") as f:
+            tmp_path = STATE_PATH.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(raw, f, indent=2)
+            tmp_path.replace(STATE_PATH)
             self._dirty = False
             self._last_save_ts = now
         except Exception as e:

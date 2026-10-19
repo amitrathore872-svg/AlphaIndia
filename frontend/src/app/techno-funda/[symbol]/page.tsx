@@ -58,7 +58,6 @@ export default function TechnoFundaStockDetailPage({ params }: PageProps) {
           "/candlestick-radar": "Candlestick Radar",
           "/momentum-radar": "Momentum Radar",
           "/apex-confluence": "Apex Confluence",
-          "/chart-patterns": "Chart Patterns",
           "/cpr-scanner": "CPR Scanner",
           "/home": "Home",
         };

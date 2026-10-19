@@ -43,8 +43,10 @@ def _save_disk_cache() -> None:
     try:
         DISK_SPARKLINE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         data = {s: [ts, pts] for s, (ts, pts) in _SPARKLINE_90D_CACHE.items()}
-        with open(DISK_SPARKLINE_CACHE_PATH, "w", encoding="utf-8") as f:
+        tmp_path = DISK_SPARKLINE_CACHE_PATH.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f)
+        tmp_path.replace(DISK_SPARKLINE_CACHE_PATH)
     except Exception as e:
         logger.debug(f"[StockTrendEnricher] Failed to save disk sparklines: {e}")
 

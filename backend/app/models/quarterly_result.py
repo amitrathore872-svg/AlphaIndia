@@ -57,6 +57,8 @@ class QuarterlyResult(Base):
     revenue_growth = Column(Float)
     pat_growth = Column(Float)
     roce = Column(Float)
+    operating_margin = Column(Float, nullable=True)
+    net_profit_margin = Column(Float, nullable=True)
 
     source = Column(String(30), default="YAHOO_FINANCE")
     imported_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

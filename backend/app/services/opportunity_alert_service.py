@@ -1971,6 +1971,9 @@ class OpportunityAlertService:
                 company_name = cand.get("company", sym)
                 cmp_price = float(cand.get("cmp", 0.0))
                 pivot_price = float(cand.get("pivot_price", 0.0))
+                trigger_price = float(cand.get("trigger_price", pivot_price))
+                trigger_date = cand.get("trigger_date")
+                days_since_trigger = cand.get("days_since_trigger")
                 stop_loss = float(cand.get("stop_loss", 0.0))
                 target_1 = float(cand.get("target_1", 0.0))
                 target_2 = float(cand.get("target_2", 0.0))
@@ -1982,10 +1985,11 @@ class OpportunityAlertService:
                 anchor_days_left = cand.get("anchor_30d_days_left")
 
                 severity = "critical" if setup_status == "TRIGGERED" or c_score >= 90.0 else "warning"
+                trig_text = f"Trigger: ₹{trigger_price:,.1f}" + (f" on {trigger_date}" if trigger_date else "")
                 title = f"🚀 IPO RADAR: {sym} ({setup_label} • {c_score:.0f} PTS)"
                 message = (
                     f"Mainboard IPO setup active ({setup_status}). "
-                    f"CMP: ₹{cmp_price:,.1f}, Pivot: ₹{pivot_price:,.1f}, SL: ₹{stop_loss:,.1f} (-{risk_pct:.1f}%). "
+                    f"CMP: ₹{cmp_price:,.1f}, {trig_text}, SL: ₹{stop_loss:,.1f} (-{risk_pct:.1f}%). "
                     f"2R Target: ₹{target_1:,.1f} (+15%). RelVol: {rvol:.2f}x."
                 )
 
@@ -1999,6 +2003,9 @@ class OpportunityAlertService:
                     "conviction_score": c_score,
                     "cmp": cmp_price,
                     "pivot_price": pivot_price,
+                    "trigger_price": trigger_price,
+                    "trigger_date": trigger_date,
+                    "days_since_trigger": days_since_trigger,
                     "stop_loss": stop_loss,
                     "target_1": target_1,
                     "target_2": target_2,
@@ -2037,6 +2044,9 @@ class OpportunityAlertService:
                     anchor_days_left=anchor_days_left,
                     rationale=cand.get("rationale"),
                     action_url="http://localhost:3000/ipo-radar",
+                    trigger_price=trigger_price,
+                    trigger_date=trigger_date,
+                    days_since_trigger=days_since_trigger,
                 )
                 cls._dispatch_external_channels(db, sym, memo, rules)
                 dispatched.append({"engine": "ipo-radar", "symbol": sym, "title": title, "notif_id": notif.id})

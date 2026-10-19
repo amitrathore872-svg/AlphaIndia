@@ -828,8 +828,10 @@ class MarketIndicesService:
             cls._cache_time = time.time()
             try:
                 os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                tmp_cache = CACHE_FILE + ".tmp"
+                with open(tmp_cache, "w", encoding="utf-8") as f:
                     json.dump(output, f, indent=2)
+                os.replace(tmp_cache, CACHE_FILE)
             except Exception as e:
                 logger.warning(f"[MarketIndicesService] Failed to persist disk cache: {e}")
 

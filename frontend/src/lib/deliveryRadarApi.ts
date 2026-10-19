@@ -24,6 +24,9 @@ export interface TradeBlueprint {
   holding_horizon: string;
   trail_rule: string;
   market_cap_cr?: number;
+  breakout_price?: number;
+  breakout_date?: string;
+  breakout_margin_pct?: number;
 }
 
 export interface DeliveryOpportunity {
@@ -48,11 +51,28 @@ export interface DeliveryOpportunity {
   vol_dryup_ratio: number;
   rsi_14: number;
   "50d_high": number;
+  breakout_price?: number;
+  breakout_date?: string;
+  breakout_margin_pct?: number;
   pivot_distance_pct: number;
   is_50d_breakout: boolean;
-  setup_type: "50D_BREAKOUT" | "EMA20_PULLBACK" | "NEAR_PIVOT_BASE";
+  setup_type: "50D_BREAKOUT" | "EMA20_PULLBACK" | "NEAR_PIVOT_BASE" | "CIRCUIT_LOCKED" | "PRE_CIRCUIT_SURGE" | string;
   conviction_score: number;
   conviction_tier: "APEX_SNIPER" | "ACTIVE_SWING" | "BASE_ACCUMULATION" | string;
+  // Out-of-the-Box Multi-Session & Buyer Dominance Intelligence
+  net_deliv_cr_5d?: number;
+  net_deliv_cr_10d?: number;
+  net_deliv_cr_20d?: number;
+  net_deliv_cr_30d?: number;
+  deliv_persist_10d?: number;
+  avg_deliv_per_30d?: number;
+  buyer_demand_ratio?: number;
+  is_circuit_locked?: boolean;
+  circuit_band?: string;
+  is_pre_circuit?: boolean;
+  decision_archetype?: "CIRCUIT_LOCK" | "PRE_CIRCUIT" | "STEALTH_FLOAT_LOCK" | "HIGH_BUYER_DOMINANCE" | "SUPPORT_DEFENDER" | "MOMENTUM_BREAKOUT" | "BASE_ACCUMULATION" | string;
+  archetype_label?: string;
+  institutional_verdict?: string;
   blueprint: TradeBlueprint;
 }
 
@@ -66,6 +86,10 @@ export interface DeliveryRadarMetadata {
   confirmed_breakouts_count: number;
   ema_pullback_count?: number;
   near_pivot_count: number;
+  circuit_locked_count?: number;
+  pre_circuit_count?: number;
+  high_buyer_count?: number;
+  stealth_lock_count?: number;
   scan_duration_seconds: number;
   filters_applied?: Record<string, string>;
   backtest_proven_stats: {
@@ -98,6 +122,8 @@ export interface DeliveryOpportunitiesParams {
   sector?: string;
   tier?: string;
   setup_type?: string;
+  archetype?: string;
+  min_buyer_ratio?: number;
   min_conviction?: number;
   sort_by?: string;
   sort_order?: string;
@@ -116,6 +142,8 @@ export async function fetchDeliveryOpportunities(
   if (params.sector) query.append("sector", params.sector);
   if (params.tier) query.append("tier", params.tier);
   if (params.setup_type) query.append("setup_type", params.setup_type);
+  if (params.archetype) query.append("archetype", params.archetype);
+  if (params.min_buyer_ratio !== undefined) query.append("min_buyer_ratio", String(params.min_buyer_ratio));
   if (params.min_conviction !== undefined) query.append("min_conviction", String(params.min_conviction));
   if (params.sort_by) query.append("sort_by", params.sort_by);
   if (params.sort_order) query.append("sort_order", params.sort_order);
@@ -125,6 +153,27 @@ export async function fetchDeliveryOpportunities(
   return fetchJson<DeliveryOpportunitiesResponse>(
     `/api/v1/delivery-radar/opportunities?${query.toString()}`,
     { timeoutMs: 60000 }
+  );
+}
+
+export interface LiveBuyerRatioResponse {
+  symbol: string;
+  cmp: number;
+  day_change_pct: number;
+  total_buy_quantity: number;
+  total_sell_quantity: number;
+  buyer_ratio: number;
+  seller_ratio: number;
+  is_upper_circuit_locked: boolean;
+  source: string;
+  status: string;
+  error?: string;
+}
+
+export async function fetchLiveBuyerRatio(symbol: string): Promise<LiveBuyerRatioResponse> {
+  return fetchJson<LiveBuyerRatioResponse>(
+    `/api/v1/delivery-radar/live-buyer-ratio/${encodeURIComponent(symbol)}`,
+    { timeoutMs: 15000 }
   );
 }
 

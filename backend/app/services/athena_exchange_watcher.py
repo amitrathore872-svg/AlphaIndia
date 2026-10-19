@@ -100,8 +100,8 @@ class AthenaExchangeWatcher:
                 db.query(QuarterlyResult, Company)
                 .join(Company, Company.id == QuarterlyResult.company_id)
                 .filter(QuarterlyResult.revenue.isnot(None))
-                .order_by(QuarterlyResult.period_end.desc())
-                .limit(20)
+                .order_by(QuarterlyResult.imported_at.desc().nullslast(), QuarterlyResult.period_end.desc())
+                .limit(60)
                 .all()
             )
 

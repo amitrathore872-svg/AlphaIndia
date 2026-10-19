@@ -15,6 +15,7 @@ from app.models.company import Company
 from app.models.filing_registry import FilingRegistry
 from app.services.discovery_service import DiscoveryService
 from app.services.queue_manager import QueueManager
+from app.api.quarterly_results import _filing_feed_type
 
 router = APIRouter(
     prefix="/discovery",
@@ -263,21 +264,25 @@ def discover_company(symbol: str, db: Session = Depends(get_db)):
             skipped += 1
             continue
 
+        f_type = (
+            filing["filing_type"][:150]
+            if filing["filing_type"]
+            else None
+        )
+        p_url = filing["pdf_url"]
+
         registry = FilingRegistry(
             company_id=company.id,
 
             symbol=symbol,
             exchange="NSE",
 
-            filing_type=(
-                filing["filing_type"][:150]
-                if filing["filing_type"]
-                else None
-            ),
+            filing_type=f_type,
+            feed_type=_filing_feed_type(f_type, p_url),
             period=filing["period"][:30],
             announcement_date=filing["announcement_date"],
 
-            pdf_url=filing["pdf_url"],
+            pdf_url=p_url,
             pdf_local_path=None,
 
             download_status="PENDING",

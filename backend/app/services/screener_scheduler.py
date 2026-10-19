@@ -137,7 +137,7 @@ class ScreenerScheduler:
         ScreenerTelemetryService.set_next_scheduled_run(next_run)
 
         while not cls._stop_event.is_set():
-            now = datetime.utcnow()
+            now = utc_now()
             if now >= next_run:
                 logger.info("ScreenerScheduler: Triggering scheduled batch import.")
                 if not ScreenerImportWorker.is_running():
@@ -146,7 +146,7 @@ class ScreenerScheduler:
                         delay_seconds=cls._delay_seconds,
                     )
                 # Compute next run from now
-                next_run = datetime.utcnow() + timedelta(seconds=cls._interval_seconds)
+                next_run = utc_now() + timedelta(seconds=cls._interval_seconds)
                 ScreenerTelemetryService.set_next_scheduled_run(next_run)
 
             # Sleep short increment to check stop event and update countdown

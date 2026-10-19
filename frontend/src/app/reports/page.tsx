@@ -43,6 +43,7 @@ export default function ReportsDashboardPage() {
   const [catalog, setCatalog] = useState<ReportCatalogItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<{ text: string; isError?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Load breadth report data for selected DMA
@@ -83,11 +84,24 @@ export default function ReportsDashboardPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setSyncStatusMsg(null);
     try {
-      await triggerBreadthRefresh();
+      const res = await triggerBreadthRefresh();
       await loadBreadth(false);
+      const downloadMsg = res?.new_bhavcopies_downloaded
+        ? ` (+${res.new_bhavcopies_downloaded} new session files synced)`
+        : "";
+      setSyncStatusMsg({
+        text: `Exchange synced successfully up to session ${res?.latest_session || ""}${downloadMsg}`,
+      });
+      setTimeout(() => setSyncStatusMsg(null), 6000);
     } catch (err: any) {
       console.error("Failed to refresh breadth:", err);
+      setSyncStatusMsg({
+        text: "Sync request failed. Verify backend service is reachable.",
+        isError: true,
+      });
+      setTimeout(() => setSyncStatusMsg(null), 6000);
     } finally {
       setIsRefreshing(false);
     }
@@ -182,6 +196,32 @@ export default function ReportsDashboardPage() {
                       {isGreenNow ? "GREEN ZONE" : "RED ZONE"}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Latest Session Timestamp Tag */}
+              {metrics?.latest_date && (
+                <div className="flex items-center gap-2 rounded-xl border border-slate-800/90 bg-[#080E1C] px-3 py-1.5 text-xs">
+                  <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Session:</span>
+                  <span className="font-mono font-bold text-cyan-300">{metrics.latest_date}</span>
+                </div>
+              )}
+
+              {syncStatusMsg && (
+                <div
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold animate-fade-in ${
+                    syncStatusMsg.isError
+                      ? "border-rose-500/40 bg-rose-950/40 text-rose-300"
+                      : "border-emerald-500/40 bg-emerald-950/40 text-emerald-300"
+                  }`}
+                >
+                  {syncStatusMsg.isError ? (
+                    <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                  )}
+                  <span>{syncStatusMsg.text}</span>
                 </div>
               )}
 

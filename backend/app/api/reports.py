@@ -12,19 +12,18 @@ Provides endpoints for:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from fastapi import APIRouter, Query, HTTPException
 
 from app.services.report_breadth_service import ReportBreadthService
 
 logger = logging.getLogger("alpha_india.api.reports")
 
-router = APIRouter(prefix="", tags=["Research & Market Reports"])
+router = APIRouter(prefix="/reports", tags=["Research & Market Reports"])
 
 
-@router.get("/reports/breadth")
-@router.get("/api/v1/reports/breadth")
-async def get_breadth_report(
+@router.get("/breadth")
+def get_breadth_report(
     dma: int = Query(20, description="DMA period: 20, 50, or 200"),
     universe: str = Query("all", description="Equities universe: 'all' (all NSE listed) or 'nifty500' (Nifty 500)"),
     timeframe: str = Query("1Y", description="Timeframe period: '1M', '3M', '6M', '1Y', 'ALL'"),
@@ -50,42 +49,38 @@ async def get_breadth_report(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/reports/breadth/20-dma")
-@router.get("/api/v1/reports/breadth/20-dma")
-async def get_20dma_breadth_report(
+@router.get("/breadth/20-dma")
+def get_20dma_breadth_report(
     universe: str = Query("all", description="Equities universe: 'all' or 'nifty500'"),
     timeframe: str = Query("1Y", description="Timeframe period: '1M', '3M', '6M', '1Y', 'ALL'"),
     refresh: bool = Query(False, description="Force recompute and rebuild cache"),
 ) -> Dict[str, Any]:
     """Dedicated endpoint for 20 DMA tactical momentum breadth."""
-    return await get_breadth_report(dma=20, universe=universe, timeframe=timeframe, refresh=refresh)
+    return get_breadth_report(dma=20, universe=universe, timeframe=timeframe, refresh=refresh)
 
 
-@router.get("/reports/breadth/50-dma")
-@router.get("/api/v1/reports/breadth/50-dma")
-async def get_50dma_breadth_report(
+@router.get("/breadth/50-dma")
+def get_50dma_breadth_report(
     universe: str = Query("all", description="Equities universe: 'all' or 'nifty500'"),
     timeframe: str = Query("1Y", description="Timeframe period: '1M', '3M', '6M', '1Y', 'ALL'"),
     refresh: bool = Query(False, description="Force recompute and rebuild cache"),
 ) -> Dict[str, Any]:
     """Dedicated endpoint for 50 DMA intermediate trend health breadth."""
-    return await get_breadth_report(dma=50, universe=universe, timeframe=timeframe, refresh=refresh)
+    return get_breadth_report(dma=50, universe=universe, timeframe=timeframe, refresh=refresh)
 
 
-@router.get("/reports/breadth/200-dma")
-@router.get("/api/v1/reports/breadth/200-dma")
-async def get_200dma_breadth_report(
+@router.get("/breadth/200-dma")
+def get_200dma_breadth_report(
     universe: str = Query("all", description="Equities universe: 'all' or 'nifty500'"),
     timeframe: str = Query("1Y", description="Timeframe period: '1M', '3M', '6M', '1Y', 'ALL'"),
     refresh: bool = Query(False, description="Force recompute and rebuild cache"),
 ) -> Dict[str, Any]:
     """Dedicated endpoint for 200 DMA Stage-2 macro bull/bear structural breadth."""
-    return await get_breadth_report(dma=200, universe=universe, timeframe=timeframe, refresh=refresh)
+    return get_breadth_report(dma=200, universe=universe, timeframe=timeframe, refresh=refresh)
 
 
-@router.get("/reports/breadth/multi-dma")
-@router.get("/api/v1/reports/breadth/multi-dma")
-async def get_multi_dma_breadth_report(
+@router.get("/breadth/multi-dma")
+def get_multi_dma_breadth_report(
     timeframe: str = Query("1Y", description="Timeframe period: '1M', '3M', '6M', '1Y', 'ALL'"),
     refresh: bool = Query(False, description="Force recompute and rebuild cache"),
 ) -> Dict[str, Any]:
@@ -103,9 +98,8 @@ async def get_multi_dma_breadth_report(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/reports/catalog")
-@router.get("/api/v1/reports/catalog")
-async def get_reports_catalog() -> Dict[str, Any]:
+@router.get("/catalog")
+def get_reports_catalog() -> Dict[str, Any]:
     """
     Returns catalog of available and upcoming research & market breadth reports in the dashboard.
     """
@@ -121,17 +115,19 @@ async def get_reports_catalog() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/reports/breadth/refresh")
-@router.post("/api/v1/reports/breadth/refresh")
-async def refresh_breadth_cache() -> Dict[str, Any]:
+@router.post("/breadth/refresh")
+def refresh_breadth_cache() -> Dict[str, Any]:
     """
     Forces immediate re-indexing and calculation of 20, 50, and 200 DMA breadth data across all bhavcopies.
+    Automatically downloads any newly published bhavcopies from NSE first.
     """
     try:
+        new_downloads = ReportBreadthService.sync_exchange_bhavcopies(days_back=15)
         cache = ReportBreadthService.build_breadth_cache(max_sessions=530)
         return {
             "status": "success",
             "message": "Successfully refreshed multi-DMA market breadth cache (20, 50, 200 DMA)",
+            "new_bhavcopies_downloaded": new_downloads,
             "latest_session": cache.get("latest_session"),
             "data_points_20dma": len(cache.get("breadth", {}).get("20", {}).get("all_equities", [])),
             "data_points_50dma": len(cache.get("breadth", {}).get("50", {}).get("all_equities", [])),

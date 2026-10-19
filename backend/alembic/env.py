@@ -20,6 +20,17 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """Exclude archive tables from autogenerate drops."""
+    if type_ == "table" and (
+        name.startswith("archive_")
+        or name.endswith("_archive")
+        or name in ("sqlite_sequence", "spatial_ref_sys")
+    ):
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = settings.DATABASE_URL
@@ -29,6 +40,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -42,6 +54,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

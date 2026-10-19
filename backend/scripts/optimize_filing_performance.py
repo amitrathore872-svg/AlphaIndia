@@ -54,24 +54,28 @@ def run_optimization():
         print("  -> Indexes created successfully (announcement_date, discovered_at, feed_type, feed_type_ann_date).")
         
         # 3. Fast classification and backfill of feed_type
-        print("\n[3/4] Classifying and backfilling 'feed_type' for all historical filings...")
-        rows = db.execute(text("SELECT id, filing_type FROM filing_registry WHERE feed_type IS NULL")).fetchall()
-        print(f"  -> Found {len(rows)} filings requiring feed_type classification.")
+        print("\n[3/4] Reclassifying and updating 'feed_type' for all historical filings...")
+        rows = db.execute(text("SELECT id, filing_type, pdf_url FROM filing_registry")).fetchall()
+        print(f"  -> Found {len(rows)} filings in registry.")
         
         if rows:
             result_ids = []
             announcement_ids = []
-            for fid, ftype in rows:
-                ft = _filing_feed_type(ftype)
+            other_ids = []
+            for fid, ftype, pdf_url in rows:
+                ft = _filing_feed_type(ftype, pdf_url)
                 if ft == "RESULT":
                     result_ids.append(fid)
-                else:
+                elif ft == "ANNOUNCEMENT":
                     announcement_ids.append(fid)
+                else:
+                    other_ids.append(fid)
             
+            chunk_size = 5000
+
             # Batch update RESULTS
             if result_ids:
                 print(f"  -> Updating {len(result_ids)} RESULTS in chunks...")
-                chunk_size = 5000
                 for i in range(0, len(result_ids), chunk_size):
                     chunk = result_ids[i:i + chunk_size]
                     db.execute(
@@ -83,7 +87,6 @@ def run_optimization():
             # Batch update ANNOUNCEMENTS
             if announcement_ids:
                 print(f"  -> Updating {len(announcement_ids)} ANNOUNCEMENTS in chunks...")
-                chunk_size = 5000
                 for i in range(0, len(announcement_ids), chunk_size):
                     chunk = announcement_ids[i:i + chunk_size]
                     db.execute(
@@ -91,10 +94,21 @@ def run_optimization():
                         {"ids": chunk}
                     )
                     db.commit()
+
+            # Batch update OTHER
+            if other_ids:
+                print(f"  -> Updating {len(other_ids)} OTHER (general corporate disclosures) in chunks...")
+                for i in range(0, len(other_ids), chunk_size):
+                    chunk = other_ids[i:i + chunk_size]
+                    db.execute(
+                        text("UPDATE filing_registry SET feed_type = 'OTHER' WHERE id = ANY(:ids)"),
+                        {"ids": chunk}
+                    )
+                    db.commit()
             
-            print(f"  -> Successfully backfilled {len(rows)} filings ({len(result_ids)} RESULTS, {len(announcement_ids)} ANNOUNCEMENTS).")
+            print(f"  -> Successfully reclassified {len(rows)} filings ({len(result_ids)} RESULTS, {len(announcement_ids)} ANNOUNCEMENTS, {len(other_ids)} OTHER).")
         else:
-            print("  -> All filings already have feed_type assigned.")
+            print("  -> No filings found in registry.")
             
         # 4. Run ANALYZE to refresh PostgreSQL query planner statistics
         print("\n[4/4] Updating PostgreSQL table statistics via ANALYZE...")

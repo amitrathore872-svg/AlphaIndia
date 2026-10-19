@@ -42,6 +42,9 @@ import {
   ArrowUp,
   ArrowDown,
   ChevronRight,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   TrendingDown,
   Info,
   Calendar,
@@ -818,20 +821,36 @@ export default function AthenaUnifiedCockpit() {
   const [isEarningsRadarOpen, setIsEarningsRadarOpen] = useState(false);
   const [calendarStats, setCalendarStats] = useState<CalendarStatsResponse["stats"] | null>(null);
 
-  // Initial Data Load
-  const loadMasterData = useCallback(async () => {
+  // Server-Side & Table Pagination State (Sprint 36.5)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(100);
+  const [totalServerCount, setTotalServerCount] = useState<number>(0);
+  const [totalServerPages, setTotalServerPages] = useState<number>(1);
+
+  // Initial & Paginated Data Load
+  const loadMasterData = useCallback(async (pageToLoad: number = 1, limitToLoad: number = 100) => {
     setLoading(true);
     try {
       const [flashRes, filingsRes, qrRes, calStatsRes] = await Promise.allSettled([
         fetchFlashDecisions(),
         fetchFilingsFeed(),
-        fetchQuarterlyResults({ limit: 100, sort_by: "discovered_at", sort_order: "desc", feed_type: "RESULTS" }),
+        fetchQuarterlyResults({
+          page: pageToLoad,
+          limit: limitToLoad,
+          sort_by: "discovered_at",
+          sort_order: "desc",
+          feed_type: "RESULTS",
+        }),
         fetchCalendarStats(),
       ]);
 
       if (flashRes.status === "fulfilled") setDecisions(flashRes.value.results || []);
       if (filingsRes.status === "fulfilled") setFilings(filingsRes.value.filings || []);
-      if (qrRes.status === "fulfilled") setQuarterlyResults(qrRes.value.results || []);
+      if (qrRes.status === "fulfilled") {
+        setQuarterlyResults(qrRes.value.results || []);
+        if (qrRes.value.total != null) setTotalServerCount(qrRes.value.total);
+        if (qrRes.value.pages != null) setTotalServerPages(Math.max(1, qrRes.value.pages));
+      }
       if (calStatsRes.status === "fulfilled" && calStatsRes.value?.stats) {
         setCalendarStats(calStatsRes.value.stats);
       }
@@ -843,8 +862,23 @@ export default function AthenaUnifiedCockpit() {
   }, []);
 
   useEffect(() => {
-    loadMasterData();
-  }, [loadMasterData]);
+    loadMasterData(currentPage, pageSize);
+  }, [loadMasterData, currentPage, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalServerPages || newPage === currentPage) return;
+    setCurrentPage(newPage);
+    loadMasterData(newPage, pageSize);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 180, behavior: "smooth" });
+    }
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    loadMasterData(1, newSize);
+  };
 
   // Active Search Auto-Fetch & Merge (Ensures any searched ticker in the entire exchange database is found)
   useEffect(() => {
@@ -919,6 +953,27 @@ export default function AthenaUnifiedCockpit() {
       ) {
         return;
       }
+
+      // Strictly ignore non-result disclosures (ESG, ESOP, Press Releases, General Updates, etc.)
+      const isNoise = [
+        "esg", "general updates", "general update", "general", "esop", "press release",
+        "media release", "trading window", "loss of share", "agm", "resignation", "appointment"
+      ].some((k) => ft === k || ft.startsWith(k + " ") || ft.includes(k));
+      if (isNoise) return;
+
+      if (f.pdf_url) {
+        const pLower = f.pdf_url.toLowerCase();
+        if (
+          pLower.includes("esg_letter") ||
+          pLower.includes("_esg_") ||
+          pLower.includes("esop") ||
+          pLower.includes("grantofoption") ||
+          pLower.includes("pressrelease")
+        ) {
+          return;
+        }
+      }
+
       const sym = f.symbol.trim().toUpperCase();
       map.set(sym, {
         id: `filing-${f.id}`,
@@ -1024,6 +1079,7 @@ export default function AthenaUnifiedCockpit() {
     quarterlyResults.forEach((qr) => {
       // Strictly ignore pre-announcement board meeting notices in PEAD Drift Screener
       if (qr.feed_type === "ANNOUNCEMENT" || qr.is_pre_announcement) return;
+      if (qr.feed_type && qr.feed_type !== "RESULT") return;
       const ft = (qr.filing_type || "").toLowerCase();
       if (
         ft === "board meeting" ||
@@ -1038,6 +1094,27 @@ export default function AthenaUnifiedCockpit() {
       ) {
         return;
       }
+
+      // Strictly ignore non-result disclosures (ESG, ESOP, Press Releases, General Updates, etc.)
+      const isNoise = [
+        "esg", "general updates", "general update", "general", "esop", "press release",
+        "media release", "trading window", "loss of share", "agm", "resignation", "appointment"
+      ].some((k) => ft === k || ft.startsWith(k + " ") || ft.includes(k));
+      if (isNoise) return;
+
+      if (qr.pdf_url) {
+        const pLower = qr.pdf_url.toLowerCase();
+        if (
+          pLower.includes("esg_letter") ||
+          pLower.includes("_esg_") ||
+          pLower.includes("esop") ||
+          pLower.includes("grantofoption") ||
+          pLower.includes("pressrelease")
+        ) {
+          return;
+        }
+      }
+
       const sym = qr.symbol.trim().toUpperCase();
       const existing = map.get(sym);
       if (existing) {
@@ -2447,6 +2524,96 @@ export default function AthenaUnifiedCockpit() {
             </table>
           </div>
         )}
+
+        {/* Tier 2.5: Master Institutional Pagination Ribbon */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-800 bg-[#060D1A] text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-3 text-slate-400">
+            <span>
+              Showing{" "}
+              <strong className="text-white font-bold">
+                {totalServerCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+              </strong>{" "}
+              to{" "}
+              <strong className="text-white font-bold">
+                {Math.min(currentPage * pageSize, totalServerCount)}
+              </strong>{" "}
+              of{" "}
+              <strong className="text-cyan-400 font-bold">
+                {totalServerCount.toLocaleString()}
+              </strong>{" "}
+              results
+            </span>
+
+            {filteredMasterItems.length !== unifiedItems.length && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/60 border border-cyan-500/30 text-[11px] text-cyan-300">
+                Filtered: {filteredMasterItems.length} visible on page
+              </span>
+            )}
+
+            <div className="flex items-center gap-1.5 ml-0 sm:ml-2">
+              <span className="text-slate-500 text-[11px]">Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                disabled={loading}
+                className="bg-slate-900 border border-slate-700/80 rounded-md px-2 py-0.5 text-xs text-cyan-300 font-bold focus:outline-none focus:border-cyan-500 cursor-pointer disabled:opacity-50"
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Navigation Button Group */}
+          <div className="flex items-center gap-1.5 self-center sm:self-auto">
+            <button
+              type="button"
+              onClick={() => handlePageChange(1)}
+              disabled={currentPage <= 1 || loading}
+              className="flex items-center justify-center h-8 w-8 rounded-lg border border-slate-800 bg-slate-900/80 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              title="First Page"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage <= 1 || loading}
+              className="flex items-center gap-1 px-3 h-8 rounded-lg border border-slate-800 bg-slate-900/80 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-300 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              title="Previous 100 results"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev {pageSize}</span>
+            </button>
+
+            <div className="flex items-center px-3 h-8 rounded-lg bg-cyan-950/70 border border-cyan-500/40 text-cyan-300 font-bold text-xs tracking-wider shadow-xs shadow-cyan-950/50">
+              Page {currentPage} of {Math.max(1, totalServerPages)}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage >= totalServerPages || loading}
+              className="flex items-center gap-1 px-3 h-8 rounded-lg border border-slate-800 bg-slate-900/80 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-300 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              title="Next 100 results"
+            >
+              <span>Next {pageSize}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePageChange(totalServerPages)}
+              disabled={currentPage >= totalServerPages || loading}
+              className="flex items-center justify-center h-8 w-8 rounded-lg border border-slate-800 bg-slate-900/80 hover:bg-cyan-950/60 text-slate-300 hover:text-cyan-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              title="Last Page"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* =========================================================================

@@ -177,6 +177,21 @@ export interface StockTechnicalOverview {
     minervini_criteria?: number;
     momentum_rules_passed?: number;
     master_composite_score?: number;
+    delivery_surge_pct?: number;
+    mf_net_inflow_cr?: number;
+  };
+  delivery_analysis?: {
+    latest_surge_pct?: number;
+    surge_label?: string;
+    sessions?: Array<{
+      date: string;
+      volume: string;
+      delivVol: string;
+      delivPct: number;
+      vsAvg: string;
+      status: string;
+      rawDate?: string;
+    }>;
   };
 }
 

@@ -183,137 +183,75 @@ async def telemetry_middleware(request: Request, call_next):
         )
     return response
 
-# ---------------- Register Routers (Single mount per domain) ----------------
-app.include_router(metrics_router)
-app.include_router(companies_router)
-app.include_router(growth_router)
-app.include_router(dashboard_router)
-app.include_router(import_dashboard_router)
-app.include_router(system_router)
-app.include_router(discovery_router)
-app.include_router(filings_router)
-app.include_router(downloads_router)
-app.include_router(financials_router)
-app.include_router(mission_control_router)
-app.include_router(market_intelligence_router)
-app.include_router(screener_growth_router)
-app.include_router(screener_monitoring_router)
-app.include_router(watchlist_router)
-app.include_router(early_stage_router)
-app.include_router(monitoring_early_stage_router)
-app.include_router(announcements_router)
-app.include_router(announcements_router, prefix="/api/v1")
-app.include_router(athena_omega_router)
-app.include_router(institutional_radar_router)
-app.include_router(institutional_radar_router, prefix="/api/v1")
-app.include_router(mf_radar_router)
-app.include_router(mf_radar_router, prefix="/api")
-app.include_router(quarterly_results_router)
-app.include_router(control_system_router)
-app.include_router(notifications_router)
-app.include_router(alerts_router)
-app.include_router(techno_funda_router)
-app.include_router(techno_funda_router, prefix="/api/v1")
-app.include_router(vcp_router)
-app.include_router(stocks_router)
-app.include_router(stocks_router, prefix="/api")
-app.include_router(delivery_radar_router, prefix="/api/v1")
-app.include_router(momentum_screener_router)
-app.include_router(momentum_screener_router, prefix="/api/v1")
-app.include_router(cup_handle_router, prefix="/api/v1")
-app.include_router(pattern_screener_router, prefix="/api/v1")
-app.include_router(candlestick_screener_router)
-app.include_router(candlestick_screener_router, prefix="/api/v1")
-app.include_router(prebreakout_radar_router, prefix="/api/v1")
-app.include_router(staircase_screener_router)
-app.include_router(staircase_screener_router, prefix="/api/v1")
-app.include_router(breakout_execution_router, prefix="/api/v1")
-app.include_router(confluence_router, prefix="/api/v1")
-app.include_router(confluence_router)
-app.include_router(portfolio_router)
-app.include_router(swing_overlay_router)
-app.include_router(fx_portfolio_screener_router)
-app.include_router(auth_router)
-app.include_router(websockets_router)
-app.include_router(screener_formula_router)
-app.include_router(live_intraday_router)
-app.include_router(live_intraday_router, prefix="/api/v1")
-app.include_router(cpr_scanner_router)
-app.include_router(cpr_scanner_router, prefix="/api/v1")
-app.include_router(velocity_router)
-app.include_router(investor_intelligence_router)
-app.include_router(market_indices_router)
-app.include_router(market_indices_router, prefix="/api/v1")
-app.include_router(reports_router)
-app.include_router(reports_router, prefix="/api/v1")
-app.include_router(sovereign_router)
-app.include_router(sovereign_router, prefix="/api/v1")
-app.include_router(sovereign_intraday_router)
-app.include_router(sovereign_intraday_router, prefix="/api/v1")
-app.include_router(brokerage_router)
-app.include_router(brokerage_router, prefix="/api/v1")
-app.include_router(backtest_router)
-app.include_router(backtest_router, prefix="/api/v1")
-app.include_router(backtest_router, prefix="/api")
-app.include_router(earnings_calendar_router)
-
-# ---------------- Dual Mount Under /api (Same-Origin Reverse Proxy Compatibility) ----------------
-# Allows any client calling /api/<path> or direct /<path> to resolve cleanly
-API_DOMAIN_ROUTERS = [
-    growth_router,
-    brokerage_router,
-    market_intelligence_router,
+# ---------------- Unified Domain Router Registry ----------------
+ALL_DOMAIN_ROUTERS = [
+    metrics_router,
     companies_router,
-    quarterly_results_router,
-    notifications_router,
-    alerts_router,
+    growth_router,
+    dashboard_router,
+    import_dashboard_router,
+    system_router,
+    discovery_router,
+    filings_router,
+    downloads_router,
+    financials_router,
+    mission_control_router,
+    market_intelligence_router,
     screener_growth_router,
     screener_monitoring_router,
-    control_system_router,
-    mission_control_router,
+    watchlist_router,
     early_stage_router,
     monitoring_early_stage_router,
+    announcements_router,
     athena_omega_router,
+    institutional_radar_router,
+    mf_radar_router,
+    quarterly_results_router,
+    control_system_router,
+    notifications_router,
+    alerts_router,
+    techno_funda_router,
     vcp_router,
+    stocks_router,
+    delivery_radar_router,
+    momentum_screener_router,
+    cup_handle_router,
+    pattern_screener_router,
+    candlestick_screener_router,
+    prebreakout_radar_router,
+    staircase_screener_router,
+    breakout_execution_router,
+    confluence_router,
     portfolio_router,
     swing_overlay_router,
     fx_portfolio_screener_router,
     auth_router,
-    filings_router,
-    downloads_router,
-    discovery_router,
-    financials_router,
+    websockets_router,
     screener_formula_router,
-    system_router,
-    dashboard_router,
-    import_dashboard_router,
-    metrics_router,
-    pattern_screener_router,
-    institutional_radar_router,
-    mf_radar_router,
-    ipo_radar_router,
-    market_indices_router,
-    reports_router,
-    sovereign_router,
-    sovereign_intraday_router,
-    techno_funda_router,
-    stocks_router,
-    watchlist_router,
-    announcements_router,
-    delivery_radar_router,
-    momentum_screener_router,
-    cup_handle_router,
-    candlestick_screener_router,
-    prebreakout_radar_router,
-    breakout_execution_router,
-    confluence_router,
     live_intraday_router,
     cpr_scanner_router,
     velocity_router,
     investor_intelligence_router,
+    market_indices_router,
+    reports_router,
+    sovereign_router,
+    sovereign_intraday_router,
+    brokerage_router,
+    backtest_router,
     earnings_calendar_router,
+    ipo_radar_router,
 ]
-for r in API_DOMAIN_ROUTERS:
+
+# Mount once at root (direct path resolution: /growth-screener, /companies, /health)
+for r in ALL_DOMAIN_ROUTERS:
+    app.include_router(r)
+
+# Mount once under /api/v1 for standard institutional API versioning
+for r in ALL_DOMAIN_ROUTERS:
+    app.include_router(r, prefix="/api/v1")
+
+# Mount once under /api for same-origin reverse proxy compatibility
+for r in ALL_DOMAIN_ROUTERS:
     app.include_router(r, prefix="/api")
 
 

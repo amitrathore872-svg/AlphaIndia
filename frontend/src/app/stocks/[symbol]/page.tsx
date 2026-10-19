@@ -451,9 +451,9 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
                 momentumScore: data.confluence_ratings?.momentum_rules_passed || 7,
                 masterCompositeScore: data.confluence_ratings?.master_composite_score || 76.5,
                 patternLabel: data.setup_quality_gauges?.base_vcp?.contractions ? `${data.setup_quality_gauges.base_vcp.contractions} Base` : "Consolidation Base",
-                deliverySurgePct: data.day_change_pct > 1 ? 160 : 65,
+                deliverySurgePct: data.confluence_ratings?.delivery_surge_pct ?? data.delivery_analysis?.latest_surge_pct ?? (data.day_change_pct > 1 ? 160 : 65),
                 momentumRulesPassed: data.confluence_ratings?.momentum_rules_passed || 7,
-                mfNetInflowCr: Math.round((Number(data.market_cap) || 5000) * 0.008 * 10) / 10,
+                mfNetInflowCr: data.confluence_ratings?.mf_net_inflow_cr ?? Math.round((Number(data.market_cap) || 5000) * 0.008 * 10) / 10,
                 orderBookValueCr: ["CAPITAL GOODS", "INFRASTRUCTURE", "CONSTRUCTION", "DEFENCE", "ENGINEERING"].some((s) => (data.sector || "").toUpperCase().includes(s)) ? Math.round((Number(data.market_cap) || 5000) * 1.5) : null,
                 salesYoY: data.fundamentals.sales_growth_ttm ? `+${data.fundamentals.sales_growth_ttm}%` : "—",
                 sentimentStatus: data.context_regime.rs_rank >= 75 ? "HOT" : (data.context_regime.rs_rank >= 55 ? "WARM" : "COLD"),
@@ -1112,6 +1112,9 @@ export default function StockTechnicalOverviewPage({ params }: PageProps) {
                 dma50={data.moving_averages.dma_50}
                 dma200={data.moving_averages.dma_200}
                 rsi={data.context_regime.rsi_14}
+                deliveryHistory={data.delivery_analysis?.sessions}
+                deliverySurgePct={data.confluence_ratings?.delivery_surge_pct ?? data.delivery_analysis?.latest_surge_pct}
+                deliverySurgeLabel={data.delivery_analysis?.surge_label}
               />
             )}
 

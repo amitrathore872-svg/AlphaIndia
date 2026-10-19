@@ -562,12 +562,14 @@ class StaircaseScreenerService:
             # Persist to disk cache
             try:
                 DISK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-                with open(DISK_CACHE_PATH, "w", encoding="utf-8") as f:
+                tmp_path = DISK_CACHE_PATH.with_suffix(".tmp")
+                with open(tmp_path, "w", encoding="utf-8") as f:
                     json.dump({
                         "timestamp": now,
                         "opportunities": opportunities,
                         "metadata": metadata
                     }, f, indent=2)
+                tmp_path.replace(DISK_CACHE_PATH)
             except Exception as e:
                 logger.error(f"Failed to save disk cache: {e}")
 

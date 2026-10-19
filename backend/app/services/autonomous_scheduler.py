@@ -41,6 +41,7 @@ class AutonomousEngineScheduler:
     INTERVAL_MOMENTUM_INTRADAY = 60   # 60s — re-scores watchlist during market hours
     INTERVAL_TELEGRAM_ALERTS = 120    # 2 mins — automated opportunity & sovereign telegram alert dispatcher
     INTERVAL_INVESTOR_INTELLIGENCE = 600 # 10 mins — automated concall & investor presentation forensics
+    INTERVAL_MARKET_BREADTH = 1800    # 30 mins — automated bhavcopy sync & breadth maintenance
 
     # Execution telemetry state
     _engine_telemetry: Dict[str, Dict[str, Any]] = {
@@ -144,6 +145,16 @@ class AutonomousEngineScheduler:
             "last_records": 0,
             "last_error": None,
         },
+        "market_breadth": {
+            "name": "Market Breadth Radar & Bhavcopy Maintenance",
+            "interval_sec": 1800,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
     }
 
     _disabled_engines: set = set()
@@ -227,6 +238,7 @@ class AutonomousEngineScheduler:
         next_momentum_intraday = now + 45 # 45s warmup (market hours only)
         next_telegram_alerts = now + 15   # 15s warmup (auto telegram alerts)
         next_investor = now + 80          # 80s warmup (investor concall forensics)
+        next_breadth = now + 100          # 100s warmup (market breadth radar)
 
         while not cls._stop_event.is_set():
             current_time = time.time()
@@ -324,6 +336,16 @@ class AutonomousEngineScheduler:
                     cls._execute_investor_intelligence_cycle()
                 next_investor = time.time() + cls.INTERVAL_INVESTOR_INTELLIGENCE
                 cls._update_next_run("investor_intelligence", cls.INTERVAL_INVESTOR_INTELLIGENCE)
+
+            # -------------------------------------------------------------
+            # Cycle 11: Market Breadth Radar & Bhavcopy Maintenance
+            # Automatically syncs daily EOD bhavcopies & recalculates breadth
+            # -------------------------------------------------------------
+            if current_time >= next_breadth:
+                if cls.is_engine_enabled("market_breadth"):
+                    cls._execute_market_breadth_cycle()
+                next_breadth = time.time() + cls.INTERVAL_MARKET_BREADTH
+                cls._update_next_run("market_breadth", cls.INTERVAL_MARKET_BREADTH)
 
             # Sleep in 2-second increments for responsive teardown
             for _ in range(2):
@@ -439,6 +461,17 @@ class AutonomousEngineScheduler:
                     logger.info(f"[AutonomousEngineScheduler] Dispatched {len(athena_alerts)} Athena PEAD flash alerts.")
             except Exception as pead_err:
                 logger.warning(f"[AutonomousEngineScheduler] Athena alert check notice: {pead_err}")
+
+            # 4. Scheduled Earnings Calendar Sync (Every 30 mins)
+            now_ts = time.time()
+            if not hasattr(cls, "_last_calendar_sync") or (now_ts - getattr(cls, "_last_calendar_sync", 0)) > 1800:
+                try:
+                    from app.services.earnings_calendar_service import EarningsCalendarService
+                    cal_res = EarningsCalendarService.sync_nse_calendar(db)
+                    cls._last_calendar_sync = now_ts
+                    logger.info(f"[AutonomousEngineScheduler] Synced official NSE Earnings Calendar: {cal_res}")
+                except Exception as cal_err:
+                    logger.warning(f"[AutonomousEngineScheduler] Earnings Calendar sync notice: {cal_err}")
 
             ControlSystemService.record_service_fetch(
                 service_id="athena_omega_watcher",
@@ -850,6 +883,48 @@ class AutonomousEngineScheduler:
             db.close()
 
         cls._record_engine_finish(key, records_count, error_msg)
+
+    @classmethod
+    def _execute_market_breadth_cycle(cls):
+        key = "market_breadth"
+        cls._set_engine_status(key, "RUNNING")
+        t0 = time.perf_counter()
+        records_count = 0
+        error_msg = None
+
+        try:
+            from app.services.report_breadth_service import ReportBreadthService
+            downloaded = ReportBreadthService.sync_exchange_bhavcopies(days_back=5)
+
+            if downloaded > 0 or ReportBreadthService.is_cache_stale():
+                logger.info(f"[AutonomousEngineScheduler] Market breadth cache is stale (new bhavcopies={downloaded}). Rebuilding...")
+                cache = ReportBreadthService.build_breadth_cache(max_sessions=530)
+                records_count = len(cache.get("breadth", {}).get("20", {}).get("all_equities", []))
+            else:
+                records_count = 1
+
+            ControlSystemService.log_action(
+                service_id="market_breadth_radar",
+                service_name="Market Breadth Radar",
+                level="SUCCESS",
+                action="BREADTH_SYNC_COMPLETE",
+                message=f"Breadth radar verified fresh. New bhavcopies: {downloaded}, sessions indexed: {records_count}",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+                records_count=records_count,
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.error(f"[AutonomousEngineScheduler] Market breadth cycle error: {exc}", exc_info=True)
+            ControlSystemService.log_action(
+                service_id="market_breadth_radar",
+                service_name="Market Breadth Radar",
+                level="ERROR",
+                action="BREADTH_SYNC_ERROR",
+                message=f"Market breadth error: {error_msg}",
+                duration_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+        finally:
+            cls._record_engine_finish(key, records_count, error_msg)
 
     @classmethod
     def _set_engine_status(cls, key: str, status: str):

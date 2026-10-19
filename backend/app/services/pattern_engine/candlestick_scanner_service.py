@@ -26,6 +26,7 @@ from app.services.pattern_engine.candlestick_engine import (
     PatternDirection,
     PatternCategory,
 )
+from app.core.redis_cache import cache
 
 logger = logging.getLogger("alpha_india.candlestick_scanner")
 
@@ -145,6 +146,18 @@ class CandlestickScannerService:
     def _load_cache(cls, universe: str = "NIFTY_500") -> Optional[Dict[str, Any]]:
         global _CACHE
         u = universe.strip().upper()
+        
+        # 1. Check Redis distributed cache
+        try:
+            redis_hit = cache.get_json_sync(f"candlestick:scan:{u}")
+            if redis_hit and len(redis_hit.get("signals", [])) > 0:
+                with _CACHE_LOCK:
+                    _CACHE[u] = redis_hit
+                return redis_hit
+        except Exception:
+            pass
+
+        # 2. Check local disk JSON cache
         cache_file = cls._get_cache_file_for_universe(u)
         try:
             if cache_file.exists():
@@ -154,6 +167,8 @@ class CandlestickScannerService:
                 if len(signals) > 0:
                     with _CACHE_LOCK:
                         _CACHE[u] = data
+                    # Populate Redis in background
+                    cache.set_json_sync(f"candlestick:scan:{u}", data, expire_seconds=_CACHE_TTL)
                     logger.info(f"Loaded {len(signals)} candlestick signals from {cache_file.name}.")
                     return data
             
@@ -167,6 +182,7 @@ class CandlestickScannerService:
                         logger.info(f"Loaded {len(fno_data['signals'])} signals from FNO cache as fallback for NIFTY_500.")
                         with _CACHE_LOCK:
                             _CACHE[u] = fno_data
+                        cache.set_json_sync(f"candlestick:scan:{u}", fno_data, expire_seconds=_CACHE_TTL)
                         return fno_data
         except Exception as e:
             logger.warning(f"Error loading candlestick cache for {u}: {e}")
@@ -180,17 +196,29 @@ class CandlestickScannerService:
             logger.warning(f"Refusing to save empty candlestick cache for {u}.")
             return
 
+        # 1. Update in-memory & Redis cache
+        with _CACHE_LOCK:
+            _CACHE[u] = data
+        try:
+            cache.set_json_sync(f"candlestick:scan:{u}", data, expire_seconds=_CACHE_TTL)
+        except Exception:
+            pass
+
+        # 2. Atomic disk write
         cache_file = cls._get_cache_file_for_universe(u)
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
-            with _CACHE_LOCK:
-                _CACHE[u] = data
-            with open(cache_file, "w", encoding="utf-8") as f:
+            tmp_file = cache_file.with_suffix(f".tmp_{time.time_ns()}")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
+            tmp_file.replace(cache_file)
+
             # If Nifty 500, also ensure CACHE_FILE is in sync for legacy callers
             if u == "NIFTY_500" and cache_file != CACHE_FILE:
-                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                tmp_legacy = CACHE_FILE.with_suffix(f".tmp_{time.time_ns()}")
+                with open(tmp_legacy, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, default=str)
+                tmp_legacy.replace(CACHE_FILE)
         except Exception as e:
             logger.warning(f"Error saving candlestick cache for {u}: {e}")
 
