@@ -57,14 +57,49 @@ ORDER_WIN_PATTERNS = [
 ]
 
 ORDER_NOISE_PATTERNS = [
+    # Legal, Tribunal, Court, SEBI, Regulatory orders
+    r"final\s+order\s+pronounced",
+    r"order\s+pronounced",
+    r"order\s+(?:passed|issued|pronounced)\s+by",
     r"court\s+order",
     r"nclt\s+order",
-    r"order\s+passed\s+by\s+(tribunal|court|sebi|itat|commissioner|authority|nclt)",
+    r"order\s+of\s+the\s+hon'?ble",
+    r"hon'?ble\s+(?:tribunal|court|bench|high\s+court|supreme\s+court|nclt)",
+    r"\bnclt\b",
+    r"\bitat\b",
     r"interim\s+order",
     r"assessment\s+order",
     r"show\s+cause",
     r"meeting\s+order",
-    r"order\s+of\s+the\s+hon'?ble",
+    r"appellate\s+tribunal",
+    r"compromise\s+and\s+arrangement",
+    # Board meetings, AGM/EGM, secretarial
+    r"meeting\s+of\s+(?:the\s+)?board\s+of\s+directors",
+    r"outcome\s+of\s+board\s+meeting",
+    r"notice\s+of\s+(?:the\s+)?(?:annual|extraordinary|extra[- ]ordinary)\s+general\s+meeting",
+    r"voting\s+results",
+    r"alter(?:ing)?\s+rights\s+and\s+interests",
+    # Corporate finance, loans, & fund raising (NOT commercial customer orders)
+    r"raising\s+(?:of\s+)?(?:additional\s+)?(?:funds|capital)",
+    r"issue\s+of\s+(?:one\s+or\s+more\s+types\s+of\s+)?(?:securities|equity|shares|warrants|debentures|ncds|preference\s+shares)",
+    r"allotment\s+of\s+(?:equity|shares|warrants|debentures|securities)",
+    r"preferential\s+allotment",
+    r"qualified\s+institutional\s+placement",
+    r"\bqip\b",
+    r"rights\s+issue",
+    r"bonus\s+issue",
+    r"inter\s+corporate\s+deposit",
+    r"repaid\s+loans?",
+    r"repayment\s+of\s+(?:loans?|borrowings?|debt)",
+    r"analysts?\s*/\s*institutional\s+investor\s+meet",
+    r"earnings\s+conference\s+call",
+    r"conference\s+call\s+updates?",
+    # Internal capex and plant implementations
+    r"implementing\s+(?:the\s+following\s+)?projects",
+    r"setting\s+up\s+(?:of\s+)?(?:a\s+)?(?:new\s+)?(?:plant|unit|facility)",
+    r"capital\s+expenditure",
+    r"capex\s+plan",
+    # Administrative & completion
     r"demat\s+remat",
     r"completion\s+certificate",
     r"provisional\s+completion\s+certificate",
@@ -1389,6 +1424,10 @@ class OrderWinIntelligenceService:
         )
         orders_by_sym = defaultdict(list)
         for o in order_filings:
+            # Skip noise / non-order announcements
+            txt = f"{o.category or ''} {o.headline or ''} {o.filing_description or ''}".lower()
+            if any(re.search(pat, txt) for pat in ORDER_NOISE_PATTERNS):
+                continue
             s = (o.symbol or "").replace(".NS", "").replace(".BO", "").strip().upper()
             if s and s not in processed_syms:
                 orders_by_sym[s].append(o)
@@ -1706,6 +1745,11 @@ class OrderWinIntelligenceService:
 
         comp_groups = {}
         for o in orders:
+            # Skip noise / non-order announcements
+            txt = f"{o.category or ''} {o.headline or ''} {o.filing_description or ''}".lower()
+            if any(re.search(pat, txt) for pat in ORDER_NOISE_PATTERNS):
+                continue
+
             sym = (o.symbol or "").replace(".NS", "").replace(".BO", "").strip().upper()
             c_obj = comp_by_clean.get(sym)
             key = sym if sym else (o.company_name or "").strip()

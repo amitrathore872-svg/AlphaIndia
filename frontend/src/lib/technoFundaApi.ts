@@ -17,6 +17,15 @@ export interface IdentifiedPatternData {
   metrics?: Record<string, any>;
 }
 
+export interface CANSLIMChecklistItem {
+  status: "PASS" | "WARN" | "FAIL";
+  title: string;
+  value: string;
+  detail: string;
+  points: number;
+  max_points: number;
+}
+
 export interface TechnoFundaItem {
   id: number;
   symbol: string;
@@ -28,15 +37,33 @@ export interface TechnoFundaItem {
   current_price: number;
   dma_50?: number;
   dma_200?: number;
+  high_52_week?: number;
+  low_52_week?: number;
+  dist_52w_high_pct?: number;
+  gain_from_52w_low_pct?: number;
   pivot_reference: number;
   distance_to_pivot_pct: number;
   is_stage_2: boolean;
   rsi_14: number;
-  vol_q: number;
-  base_q: number;
+  canslim_score: number;
+  setup_score: number;
+  funda_score: number;
+  techno_score: number;
+  sniper_alpha_score?: number;
+  is_top_1_percent?: boolean;
+  c_score: number;
+  a_score: number;
+  n_score: number;
+  s_score: number;
+  l_score: number;
+  i_score: number;
+  canslim_checklist?: Record<string, CANSLIMChecklistItem>;
+  minervini_pass_count?: number;
+  minervini_criteria?: Record<string, boolean>;
+  archetype?: string;
+  archetype_label?: string;
   pattern: string;
   pattern_tag: string;
-  setup_score: number;
   signal: string;
   signal_tier: string;
   signal_color: string;
@@ -51,14 +78,18 @@ export interface TechnoFundaItem {
   piotroski_score?: number;
   sales_growth_ttm?: number;
   profit_growth_ttm?: number;
+  quarterly_pat_yoy?: number;
+  quarterly_sales_yoy?: number;
   roce?: number;
+  roe?: number;
   stock_pe?: number;
+  vol_q?: number;
+  base_q?: number;
+  institutional_holding?: number;
+  fii_holding?: number;
+  dii_holding?: number;
   return_3m?: number;
   return_6m?: number;
-  identified_pattern?: IdentifiedPatternData | null;
-  identified_pattern_type?: string | null;
-  identified_pattern_label?: string | null;
-  identified_pattern_score?: number | null;
 }
 
 export interface TechnoFundaScreenerResponse {
@@ -84,30 +115,7 @@ export interface TechnoFundaStockAnalysis {
   risk_factors: string[];
   identified_pattern?: IdentifiedPatternData | null;
   identified_patterns?: IdentifiedPatternData[];
-  technical: {
-    current_price: number;
-    dma_50?: number;
-    dma_200?: number;
-    pivot_reference: number;
-    distance_to_pivot_pct: number;
-    is_stage_2: boolean;
-    rsi_14: number;
-    vol_q: number;
-    base_q: number;
-    pattern: string;
-    pattern_tag: string;
-    setup_score: number;
-    signal: string;
-    signal_tier: string;
-    signal_color: string;
-    downside_reference: number;
-    downside_pct: number;
-    scenario_trigger: number;
-    scenario_distance: number;
-    target_1: number;
-    target_2: number;
-    risk_reward: number;
-  };
+  technical: TechnoFundaItem;
   fundamentals: {
     health_score?: number;
     piotroski_score?: number;
@@ -130,6 +138,8 @@ export interface TechnoFundaSummary {
   total_screened: number;
   stage_2_count: number;
   stage_2_ratio_pct: number;
+  earnings_accelerator_count?: number;
+  near_52w_high_count?: number;
   top_setups: TechnoFundaItem[];
 }
 
@@ -138,10 +148,12 @@ export async function fetchTechnoFundaScreener(params: {
   limit?: number;
   search?: string;
   sector?: string;
+  preset?: string;
   signal_filter?: string;
   pattern_filter?: string;
   min_health_score?: number;
   max_pivot_distance?: number;
+  min_market_cap?: number;
   sort_by?: string;
   sort_order?: string;
 }): Promise<TechnoFundaScreenerResponse> {
@@ -150,10 +162,12 @@ export async function fetchTechnoFundaScreener(params: {
   if (params.limit) query.set("limit", params.limit.toString());
   if (params.search) query.set("search", params.search);
   if (params.sector && params.sector !== "ALL") query.set("sector", params.sector);
+  if (params.preset && params.preset !== "ALL") query.set("preset", params.preset);
   if (params.signal_filter && params.signal_filter !== "ALL") query.set("signal_filter", params.signal_filter);
   if (params.pattern_filter && params.pattern_filter !== "ALL") query.set("pattern_filter", params.pattern_filter);
   if (params.min_health_score) query.set("min_health_score", params.min_health_score.toString());
   if (params.max_pivot_distance) query.set("max_pivot_distance", params.max_pivot_distance.toString());
+  if (params.min_market_cap) query.set("min_market_cap", params.min_market_cap.toString());
   if (params.sort_by) query.set("sort_by", params.sort_by);
   if (params.sort_order) query.set("sort_order", params.sort_order);
 

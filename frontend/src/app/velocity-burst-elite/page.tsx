@@ -84,6 +84,7 @@ export default function VelocityBurstElitePage() {
   const [filterMinRvol, setFilterMinRvol] = useState<number>(0);
   const [filterMinDelivery, setFilterMinDelivery] = useState<number>(0);
   const [btstActionFilter, setBtstActionFilter] = useState<string>("ALL");
+  const [filterApexOnly, setFilterApexOnly] = useState<boolean>(false);
 
   // Explainability drawer state
   const [selectedStock, setSelectedStock] = useState<any | null>(null);
@@ -242,6 +243,17 @@ export default function VelocityBurstElitePage() {
       setLoading(false);
     }
   }, [playAlertSound, showToast]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "btst") setActiveTab("btst");
+      else if (tabParam === "live") setActiveTab("live");
+      else if (tabParam === "recommendations") setActiveTab("recommendations");
+      if (params.get("apex") === "true") setFilterApexOnly(true);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -527,6 +539,20 @@ export default function VelocityBurstElitePage() {
                 <option value={3.0}>RVOL &gt; 3.0x (Institutional)</option>
               </select>
 
+              {/* Apex 1% Filter Toggle */}
+              <button
+                onClick={() => setFilterApexOnly(!filterApexOnly)}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-black transition ${
+                  filterApexOnly
+                    ? "bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-950/40"
+                    : "border-slate-800 bg-slate-900/80 text-amber-400 hover:border-amber-500/50 hover:text-amber-300"
+                }`}
+                title="Filter to Strict Top 1% Institutional Apex Setups"
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>Apex 1% Only</span>
+              </button>
+
               {/* View Switcher: Tactical Cards vs Ultra-Dense Matrix */}
               <div className="flex items-center rounded-lg border border-slate-800 bg-slate-900/90 p-0.5">
                 <button
@@ -571,21 +597,35 @@ export default function VelocityBurstElitePage() {
               <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 mr-1">BTST Filter:</span>
               {[
                 { id: "ALL", label: "All Setups", count: uniqueBySymbol(btstCandidates).length },
+                {
+                  id: "APEX_1PCT",
+                  label: "🏆 Top 1% Apex",
+                  count: uniqueBySymbol(btstCandidates).filter((b) => b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88)).length,
+                  isApex: true,
+                },
                 { id: "BUY_BTST_ELITE", label: "Elite A+", count: btstCandidates.filter((b) => b.action_recommended === "BUY_BTST_ELITE").length },
                 { id: "BUY_BTST", label: "Standard Buy", count: btstCandidates.filter((b) => b.action_recommended === "BUY_BTST").length },
                 { id: "BTST_ACCUMULATE", label: "Accumulate", count: btstCandidates.filter((b) => b.action_recommended === "BTST_ACCUMULATE").length },
-              ].map((chip) => (
+              ].map((chip: any) => (
                 <button
                   key={chip.id}
                   onClick={() => setBtstActionFilter(chip.id)}
                   className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold transition ${
                     btstActionFilter === chip.id
-                      ? "bg-purple-500 text-white shadow-sm shadow-purple-950"
+                      ? chip.isApex
+                        ? "bg-amber-500 text-black shadow-md shadow-amber-950 font-black"
+                        : "bg-purple-500 text-white shadow-sm shadow-purple-950"
+                      : chip.isApex
+                      ? "border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
                       : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white"
                   }`}
                 >
                   <span>{chip.label}</span>
-                  <span className="rounded-full bg-slate-800 px-1 text-[9px] font-mono text-purple-300">
+                  <span
+                    className={`rounded-full px-1 text-[9px] font-mono ${
+                      chip.isApex ? "bg-amber-400/20 text-amber-200 font-bold" : "bg-slate-800 text-purple-300"
+                    }`}
+                  >
                     {chip.count}
                   </span>
                 </button>
@@ -653,6 +693,7 @@ export default function VelocityBurstElitePage() {
                 {uniqueBySymbol(liveSignals)
                   .filter((s) => !searchTerm || s.symbol.includes(searchTerm.toUpperCase()))
                   .filter((s) => filterMinRvol === 0 || (s.relative_volume || 0) >= filterMinRvol)
+                  .filter((s) => !filterApexOnly || s.is_apex_1pct || s.confidence_score >= 90 || s.ai_verdict?.includes("APEX"))
                   .map((sig) => {
                     const eq = entryQualityMap.get(sig.symbol.toUpperCase());
                     const isTriggered = (sig.relative_volume || 1.0) >= 2.0;
@@ -698,8 +739,14 @@ export default function VelocityBurstElitePage() {
                             >
                               <Send className="h-3 w-3" />
                             </button>
-                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-black text-amber-400 border border-slate-700">
-                              {sig.confidence_score}%
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-black border ${
+                                sig.is_apex_1pct || sig.confidence_score >= 90 || sig.ai_verdict?.includes("APEX")
+                                  ? "bg-gradient-to-r from-amber-500/25 to-yellow-500/30 text-amber-300 border-amber-500/60 shadow-sm shadow-amber-950"
+                                  : "bg-slate-800 text-amber-400 border-slate-700"
+                              }`}
+                            >
+                              {sig.is_apex_1pct || sig.confidence_score >= 90 ? `🏆 TOP 1% • ${sig.confidence_score}%` : `${sig.confidence_score}%`}
                             </span>
                           </div>
                         </div>
@@ -802,6 +849,7 @@ export default function VelocityBurstElitePage() {
                     {uniqueBySymbol(liveSignals)
                       .filter((s) => !searchTerm || s.symbol.includes(searchTerm.toUpperCase()))
                       .filter((s) => filterMinRvol === 0 || (s.relative_volume || 0) >= filterMinRvol)
+                      .filter((s) => !filterApexOnly || s.is_apex_1pct || s.confidence_score >= 90 || s.ai_verdict?.includes("APEX"))
                       .map((sig) => (
                         <tr key={sig.id} className="transition hover:bg-slate-800/40">
                           <td className="p-3.5 font-bold text-white">
@@ -852,8 +900,14 @@ export default function VelocityBurstElitePage() {
                           </td>
                           <td className="p-3.5 font-mono text-white font-semibold">{sig.candle_strength}%</td>
                           <td className="p-3.5">
-                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-400 border border-slate-700">
-                              {sig.confidence_score}%
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-bold border ${
+                                sig.is_apex_1pct || sig.confidence_score >= 90 || sig.ai_verdict?.includes("APEX")
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 font-black"
+                                  : "bg-slate-800 text-amber-400 border-slate-700"
+                              }`}
+                            >
+                              {sig.is_apex_1pct || sig.confidence_score >= 90 ? `🏆 TOP 1% • ${sig.confidence_score}%` : `${sig.confidence_score}%`}
                             </span>
                           </td>
                           <td className="p-3.5 text-right">
@@ -906,26 +960,47 @@ export default function VelocityBurstElitePage() {
               /* Tactical BTST Cards with Delivery Visual Meters & Position Sizer */
               <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
                 {uniqueBySymbol(btstCandidates)
-                  .filter((b) => !searchTerm || b.symbol.includes(searchTerm.toUpperCase()))
-                  .filter((b) => btstActionFilter === "ALL" || b.action_recommended === btstActionFilter)
+                  .filter((b) => !searchTerm || b.symbol.includes(searchTerm.toUpperCase()) || (b.company_name && b.company_name.toUpperCase().includes(searchTerm.toUpperCase())))
+                  .filter((b) => filterSector === "ALL" || b.sector === filterSector)
+                  .filter((b) => !filterMinRvol || (b.volume_surge_multiple || 1) >= filterMinRvol)
+                  .filter((b) => !filterApexOnly || b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88))
+                  .filter((b) => {
+                    if (btstActionFilter === "ALL") return true;
+                    if (btstActionFilter === "APEX_1PCT") return b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88);
+                    return b.action_recommended === btstActionFilter;
+                  })
                   .map((b) => {
-                    const isHighDelivery = (b.delivery_pct || 0) >= 50;
-                    const isHighSurge = (b.volume_surge_multiple || 1) >= 2.5;
-                    const cmpVal = b.current_price || 1000;
-                    const slVal = b.stop_loss || Math.round(cmpVal * 0.982);
-                    const t1Val = b.target_1 || Math.round(cmpVal * 1.025);
-                    const t2Val = b.target_2 || Math.round(cmpVal * 1.045);
+                    const isHighDelivery = (b.delivery_pct || 0) >= 60;
+                    const isApex = b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88);
+                    const cmpVal = Number(b.buy_price || b.current_price || 1000);
+                    const corridorHigh = Number(b.buy_corridor_high || (cmpVal * 1.006));
+                    const t1Val = Number(b.target_1 || (cmpVal * 1.025));
+                    const t1Pct = b.target_1_pct !== undefined ? b.target_1_pct : Number((((t1Val - cmpVal) / cmpVal) * 100).toFixed(1));
+                    const t2Val = Number(b.target_2 || (cmpVal * 1.048));
+                    const t2Pct = b.target_2_pct !== undefined ? b.target_2_pct : Number((((t2Val - cmpVal) / cmpVal) * 100).toFixed(1));
+                    const slVal = Number(b.stop_loss || (cmpVal * 0.982));
+                    const slPct = b.stop_loss_pct !== undefined ? b.stop_loss_pct : Number((((cmpVal - slVal) / cmpVal) * 100).toFixed(1));
+                    const rrVal = b.risk_reward || Number(((t1Val - cmpVal) / Math.max(0.01, cmpVal - slVal)).toFixed(1));
 
                     return (
                       <div
                         key={b.id}
-                        className="group relative overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-b from-[#0F1426] via-[#090E1E] to-[#060A16] p-3.5 shadow-xl transition-all hover:border-purple-500/50 hover:shadow-purple-950/30"
+                        className={`group relative overflow-hidden rounded-xl border p-3.5 shadow-xl transition-all ${
+                          isApex
+                            ? "border-amber-500/50 bg-gradient-to-b from-[#19150B] via-[#0E101D] to-[#060A16] shadow-amber-950/30 ring-1 ring-amber-500/30"
+                            : "border-slate-800 bg-gradient-to-b from-[#0F1426] via-[#090E1E] to-[#060A16] hover:border-purple-500/50 hover:shadow-purple-950/30"
+                        }`}
                       >
                         {/* Header */}
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-lg font-black text-white">{b.symbol}</span>
+                              {isApex && (
+                                <span className="rounded bg-gradient-to-r from-amber-500/25 to-yellow-500/25 px-1.5 py-0.5 text-[9px] font-black text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-950">
+                                  🏆 TOP 1%
+                                </span>
+                              )}
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider border ${
                                   b.action_recommended === "BUY_BTST_ELITE"
@@ -948,7 +1023,7 @@ export default function VelocityBurstElitePage() {
                               symbol={b.symbol}
                               companyName={b.company_name}
                               currentPrice={cmpVal}
-                              defaultThesis={`BTST Continuation Setup: ${b.action_recommended} (Confidence: ${b.btst_confidence}/100). Delivery: ${b.delivery_pct}%, Volume: ${b.volume_surge_multiple}x.`}
+                              defaultThesis={`BTST Continuation Setup: ${b.action_recommended} (Confidence: ${b.btst_confidence}/100). Target 1: ₹${t1Val}, SL: ₹${slVal}.`}
                               variant="icon"
                             />
                             <button
@@ -959,7 +1034,13 @@ export default function VelocityBurstElitePage() {
                             >
                               <Send className="h-3 w-3" />
                             </button>
-                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-black text-purple-300 border border-slate-700">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-black border ${
+                                isApex
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                                  : "bg-slate-800 text-purple-300 border-slate-700"
+                              }`}
+                            >
                               Score: {b.btst_confidence}
                             </span>
                           </div>
@@ -1012,19 +1093,27 @@ export default function VelocityBurstElitePage() {
                           </div>
                         </div>
 
-                        {/* Overnight Levels Matrix */}
-                        <div className="mt-2.5 grid grid-cols-3 gap-1 rounded-lg bg-black/50 p-2 border border-slate-800/80 text-center">
+                        {/* Overnight Levels Matrix: Buy Corridor, SL, Target 1, Target 2, R:R */}
+                        <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-lg bg-black/60 p-2 border border-slate-800/80 text-center">
                           <div>
-                            <span className="block text-[9px] uppercase tracking-wider text-slate-400">CMP (Closing)</span>
+                            <span className="block text-[9px] uppercase tracking-wider text-slate-400">Buy Zone (3:20)</span>
                             <span className="font-mono text-xs font-black text-white">₹{cmpVal.toFixed(2)}</span>
+                            <span className="block text-[8px] text-cyan-300 font-mono">Max: ₹{corridorHigh.toFixed(2)}</span>
                           </div>
                           <div>
-                            <span className="block text-[9px] uppercase tracking-wider text-rose-400">Invalidation SL</span>
+                            <span className="block text-[9px] uppercase tracking-wider text-rose-400">Overnight SL</span>
                             <span className="font-mono text-xs font-black text-rose-400">₹{slVal.toFixed(2)}</span>
+                            <span className="block text-[8px] text-rose-300/80 font-mono">-{slPct}%</span>
                           </div>
                           <div>
-                            <span className="block text-[9px] uppercase tracking-wider text-purple-300">Gap Target</span>
-                            <span className="font-mono text-xs font-black text-purple-300">₹{t1Val.toFixed(2)}</span>
+                            <span className="block text-[9px] uppercase tracking-wider text-emerald-400">Target 1 (Gap)</span>
+                            <span className="font-mono text-xs font-black text-emerald-400">₹{t1Val.toFixed(2)}</span>
+                            <span className="block text-[8px] text-emerald-300 font-mono">+{t1Pct}%</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] uppercase tracking-wider text-cyan-300">Target 2 (Runner)</span>
+                            <span className="font-mono text-xs font-black text-cyan-300">₹{t2Val.toFixed(2)}</span>
+                            <span className="block text-[8px] text-cyan-400 font-mono">1:{rrVal} R:R</span>
                           </div>
                         </div>
 
@@ -1032,10 +1121,10 @@ export default function VelocityBurstElitePage() {
                         <div className="mt-2 rounded-lg border border-purple-500/30 bg-purple-950/20 p-2 text-xs text-purple-200">
                           <p className="flex items-center gap-1 font-bold text-[11px]">
                             <Sun className="h-3 w-3 text-amber-400" />
-                            Morning Action Plan:
+                            Morning Action Plan (9:15–9:20 AM):
                           </p>
                           <p className="text-[10px] text-slate-300 mt-0.5 leading-relaxed">
-                            Continuation probability is <strong className="text-emerald-400">{b.continuation_probability}%</strong>. If opens with gap &gt;+1.5%, trail stop to yesterday&apos;s close. Exit weak if opens below ₹{slVal}.
+                            Continuation probability is <strong className="text-emerald-400">{b.continuation_probability}%</strong>. Enter corridor ₹{cmpVal.toFixed(2)}–₹{corridorHigh.toFixed(2)}. If opens gap-up &gt;+1.5%, book 50% at Target 1 (₹{t1Val.toFixed(2)}) and trail stop to ₹{cmpVal.toFixed(2)}.
                           </p>
                         </div>
 
@@ -1063,49 +1152,84 @@ export default function VelocityBurstElitePage() {
                   })}
               </div>
             ) : (
-              /* Ultra-Dense BTST Table */
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
-                <table className="w-full text-left text-xs">
+              /* Ultra-Dense BTST Institutional Screener Table */
+              <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="border-b border-slate-800 bg-slate-950/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     <tr>
-                      <th className="p-3.5">Symbol / Company</th>
-                      <th className="p-3.5">Action Plan</th>
-                      <th className="p-3.5">CMP (₹)</th>
-                      <th className="p-3.5">Close Near High %</th>
-                      <th className="p-3.5">Delivery %</th>
-                      <th className="p-3.5">Volume Multiple</th>
-                      <th className="p-3.5">Continuation Prob %</th>
-                      <th className="p-3.5">Morning Gap Target (₹)</th>
-                      <th className="p-3.5">Score</th>
-                      <th className="p-3.5 text-right">Actions</th>
+                      <th className="p-3">Symbol / Company</th>
+                      <th className="p-3">Action Plan</th>
+                      <th className="p-3">Buy Price / Corridor</th>
+                      <th className="p-3">Target 1 (Gap)</th>
+                      <th className="p-3">Target 2 (Runner)</th>
+                      <th className="p-3">Stop Loss</th>
+                      <th className="p-3">R:R</th>
+                      <th className="p-3">Close Near High %</th>
+                      <th className="p-3">Delivery %</th>
+                      <th className="p-3">Volume Multiple</th>
+                      <th className="p-3">Continuation Prob</th>
+                      <th className="p-3">Apex Score</th>
+                      <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {uniqueBySymbol(btstCandidates)
-                      .filter((b) => !searchTerm || b.symbol.includes(searchTerm.toUpperCase()))
-                      .filter((b) => btstActionFilter === "ALL" || b.action_recommended === btstActionFilter)
+                      .filter((b) => !searchTerm || b.symbol.includes(searchTerm.toUpperCase()) || (b.company_name && b.company_name.toUpperCase().includes(searchTerm.toUpperCase())))
+                      .filter((b) => filterSector === "ALL" || b.sector === filterSector)
+                      .filter((b) => !filterMinRvol || (b.volume_surge_multiple || 1) >= filterMinRvol)
+                      .filter((b) => !filterApexOnly || b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88))
+                      .filter((b) => {
+                        if (btstActionFilter === "ALL") return true;
+                        if (btstActionFilter === "APEX_1PCT") return b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88);
+                        return b.action_recommended === btstActionFilter;
+                      })
                       .map((b) => {
-                        const cmpVal = b.current_price || 1000;
-                        const t1Val = b.target_1 || Math.round(cmpVal * 1.025);
+                        const isApex = b.is_apex_1pct || (b.btst_confidence >= 88 && b.closing_near_high_pct >= 88);
+                        const cmpVal = Number(b.buy_price || b.current_price || 1000);
+                        const corridorHigh = Number(b.buy_corridor_high || (cmpVal * 1.006));
+                        const t1Val = Number(b.target_1 || (cmpVal * 1.025));
+                        const t1Pct = b.target_1_pct !== undefined ? b.target_1_pct : Number((((t1Val - cmpVal) / cmpVal) * 100).toFixed(1));
+                        const t2Val = Number(b.target_2 || (cmpVal * 1.048));
+                        const t2Pct = b.target_2_pct !== undefined ? b.target_2_pct : Number((((t2Val - cmpVal) / cmpVal) * 100).toFixed(1));
+                        const slVal = Number(b.stop_loss || (cmpVal * 0.982));
+                        const slPct = b.stop_loss_pct !== undefined ? b.stop_loss_pct : Number((((cmpVal - slVal) / cmpVal) * 100).toFixed(1));
+                        const rrVal = b.risk_reward || Number(((t1Val - cmpVal) / Math.max(0.01, cmpVal - slVal)).toFixed(1));
 
                         return (
-                          <tr key={b.id} className="transition hover:bg-slate-800/40">
-                            <td className="p-3.5 font-bold font-mono text-cyan-300">
+                          <tr
+                            key={b.id}
+                            className={`transition hover:bg-slate-800/40 ${
+                              isApex ? "bg-amber-500/5 hover:bg-amber-500/10" : ""
+                            }`}
+                          >
+                            {/* Symbol & Company */}
+                            <td className="p-3 font-bold font-mono">
                               <div className="flex items-center gap-2">
                                 <AddToWatchlistButton
                                   symbol={b.symbol}
                                   companyName={b.company_name}
                                   currentPrice={cmpVal}
-                                  defaultThesis={`BTST Setup: ${b.action_recommended} (${b.btst_confidence} confidence).`}
+                                  defaultThesis={`BTST Setup: ${b.action_recommended} (${b.btst_confidence} confidence). Target 1: ₹${t1Val}, SL: ₹${slVal}.`}
                                   variant="icon"
                                 />
                                 <div>
-                                  <span className="font-mono text-sm text-purple-300 font-black">{b.symbol}</span>
-                                  <p className="text-[10px] text-slate-400 truncate max-w-[130px]">{b.company_name || "NSE Equity"}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-sm text-purple-300 font-black">{b.symbol}</span>
+                                    {isApex && (
+                                      <span className="rounded bg-gradient-to-r from-amber-500/20 to-yellow-500/20 px-1.5 py-0.2 text-[9px] font-black text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-950">
+                                        🏆 TOP 1%
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                                    {b.company_name || b.sector || "NSE Equity"}
+                                  </p>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-3.5">
+
+                            {/* Action Plan */}
+                            <td className="p-3">
                               <span
                                 className={`rounded-md px-2 py-0.5 text-[10px] font-bold border ${
                                   b.action_recommended === "BUY_BTST_ELITE"
@@ -1116,19 +1240,97 @@ export default function VelocityBurstElitePage() {
                                 {b.action_recommended || "BUY_BTST"}
                               </span>
                             </td>
-                            <td className="p-3.5 font-mono text-white font-black">₹{cmpVal.toFixed(2)}</td>
-                            <td className="p-3.5 font-bold text-amber-300">{b.closing_near_high_pct}%</td>
-                            <td className="p-3.5 font-mono font-bold text-emerald-400">{b.delivery_pct}%</td>
-                            <td className="p-3.5 font-bold text-amber-400">{b.volume_surge_multiple}x</td>
-                            <td className="p-3.5 font-bold text-cyan-400">{b.continuation_probability}%</td>
-                            <td className="p-3.5 font-mono font-bold text-purple-300">₹{t1Val.toFixed(2)} (+2.5%)</td>
-                            <td className="p-3.5 font-bold text-white">{b.btst_confidence}/100</td>
-                            <td className="p-3.5 text-right">
+
+                            {/* Buy Price & Safe Entry Corridor */}
+                            <td className="p-3 font-mono">
+                              <div className="font-black text-white text-sm">₹{cmpVal.toFixed(2)}</div>
+                              <div className="text-[10px] text-slate-400 font-sans">
+                                Corridor: <span className="text-cyan-300 font-mono font-semibold">₹{cmpVal.toFixed(2)}–₹{corridorHigh.toFixed(2)}</span>
+                              </div>
+                            </td>
+
+                            {/* Target 1 (Morning Opening Gap) */}
+                            <td className="p-3 font-mono">
+                              <div className="font-black text-emerald-400 text-sm">₹{t1Val.toFixed(2)}</div>
+                              <span className="rounded bg-emerald-500/15 px-1 py-0.2 text-[9px] font-bold text-emerald-300 border border-emerald-500/30">
+                                +{t1Pct}% (Gap Open)
+                              </span>
+                            </td>
+
+                            {/* Target 2 (Continuation Runner) */}
+                            <td className="p-3 font-mono">
+                              <div className="font-black text-cyan-300 text-sm">₹{t2Val.toFixed(2)}</div>
+                              <span className="rounded bg-cyan-500/15 px-1 py-0.2 text-[9px] font-bold text-cyan-300 border border-cyan-500/30">
+                                +{t2Pct}% (Runner)
+                              </span>
+                            </td>
+
+                            {/* Overnight Stop Loss */}
+                            <td className="p-3 font-mono">
+                              <div className="font-black text-rose-400 text-sm">₹{slVal.toFixed(2)}</div>
+                              <span className="rounded bg-rose-500/15 px-1 py-0.2 text-[9px] font-bold text-rose-300 border border-rose-500/30">
+                                -{slPct}% (Overnight SL)
+                              </span>
+                            </td>
+
+                            {/* Risk / Reward */}
+                            <td className="p-3 font-mono font-bold text-cyan-300">
+                              1:{rrVal}
+                            </td>
+
+                            {/* Close Near High % */}
+                            <td className="p-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`font-mono font-black ${b.closing_near_high_pct >= 95 ? "text-emerald-400" : b.closing_near_high_pct >= 90 ? "text-amber-300" : "text-slate-300"}`}>
+                                  {b.closing_near_high_pct}%
+                                </span>
+                                {b.closing_near_high_pct >= 95 && (
+                                  <span className="text-[9px] text-emerald-400 font-black">HOD</span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Delivery % */}
+                            <td className="p-3 font-mono">
+                              <span className={`font-bold ${b.delivery_pct >= 65 ? "text-emerald-400 font-black" : "text-slate-300"}`}>
+                                {b.delivery_pct}%
+                              </span>
+                              {b.delivery_pct >= 65 && (
+                                <span className="ml-1 text-[9px] text-emerald-400 font-bold">Inst</span>
+                              )}
+                            </td>
+
+                            {/* Volume Multiple */}
+                            <td className="p-3 font-mono font-bold text-amber-400">
+                              {b.volume_surge_multiple}x
+                            </td>
+
+                            {/* Continuation Prob % */}
+                            <td className="p-3 font-mono font-black text-cyan-400">
+                              {b.continuation_probability}%
+                            </td>
+
+                            {/* Apex Confluence Score */}
+                            <td className="p-3">
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-bold border ${
+                                  isApex
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 font-black shadow-sm shadow-amber-950"
+                                    : "bg-slate-800 text-purple-300 border-slate-700"
+                                }`}
+                              >
+                                {isApex ? `🏆 TOP 1% • ${b.btst_confidence}` : `${b.btst_confidence}/100`}
+                              </span>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="p-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   onClick={() => handleSendTelegramAlert(b.symbol)}
+                                  disabled={sendingTelegramSym === b.symbol}
                                   className="rounded-lg border border-sky-500/40 bg-sky-500/15 p-1.5 text-sky-300 hover:bg-sky-500/25 transition"
-                                  title="Broadcast Telegram Alert"
+                                  title="Broadcast BTST Telegram Alert"
                                 >
                                   <Send className="h-3 w-3" />
                                 </button>

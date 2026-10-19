@@ -142,15 +142,23 @@ def classify_catalyst(text_content: str) -> Tuple[str, str, float, Optional[floa
     deal_val = extract_deal_value(text_content)
     lower = text_content.lower()
 
-    # Detect completion certificates / completed projects to avoid classifying as new order wins
+    # Detect noise / non-order announcements to avoid false positive ORDER_WIN classification
     is_completion = bool(re.search(
         r"(completion\s+certificate|provisional\s+completion|commercial\s+operation\s+date|\bcod\b|taking\s+over\s+certificate|handover\s+certificate|completion\s+of\s+(?:the\s+)?project|declared\s+fit\s+for\s+entry\s+into\s+operation)",
         lower,
     ))
+    is_legal_order = bool(re.search(
+        r"(final\s+order\s+pronounced|order\s+pronounced|court\s+order|nclt|tribunal|order\s+passed\s+by|interim\s+order|assessment\s+order|show\s+cause|hon'?ble\s+(?:tribunal|court|bench))",
+        lower,
+    ))
+    is_fund_raising = bool(re.search(
+        r"(raising\s+(?:of\s+)?(?:additional\s+)?(?:funds|capital)|issue\s+of\s+(?:one\s+or\s+more\s+types\s+of\s+)?(?:securities|equity|shares|warrants|debentures|ncds|preference\s+shares)|allotment\s+of\s+(?:equity|shares|warrants|debentures|securities)|preferential\s+allotment|qualified\s+institutional\s+placement|\bqip\b|rights\s+issue|bonus\s+issue|alter(?:ing)?\s+rights\s+and\s+interests)",
+        lower,
+    ))
 
     for cat_type, config in CATALYST_RULES.items():
-        if is_completion and cat_type == "ORDER_WIN":
-            continue  # Do not classify completion certificates as new order wins
+        if cat_type == "ORDER_WIN" and (is_completion or is_legal_order or is_fund_raising):
+            continue  # Do not classify completion certificates, legal/court orders, or fund-raising as order wins
         for pat in config["patterns"]:
             if re.search(pat, text_content, re.IGNORECASE):
                 score = config["default_score"]
@@ -162,8 +170,9 @@ def classify_catalyst(text_content: str) -> Tuple[str, str, float, Optional[floa
                         score = min(9.5, score + 0.8)
                 return cat_type, config["impact_level"], score, deal_val
 
-    # Default general material filing
-    return "GENERAL", "MEDIUM", 6.0, deal_val
+    # Default general material filing (strip deal value if fund raising or legal order)
+    clean_deal_val = None if (is_fund_raising or is_legal_order) else deal_val
+    return "GENERAL", "MEDIUM", 6.0, clean_deal_val
 
 
 # ---------------------------------------------------------------------------

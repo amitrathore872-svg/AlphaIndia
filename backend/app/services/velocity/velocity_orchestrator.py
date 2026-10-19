@@ -370,6 +370,26 @@ class VelocityBurstOrchestrator:
             if bp_item and bp_item["pattern_status"] in ("READY", "BROKEN_OUT") and news_item["verdict"] == "CLEAR_TO_TRADE":
                 breakout_sig = LiveBreakoutEngine.evaluate_live_breakout(sym, df_stock, pivot_price=bp_item["pivot_point"])
                 if breakout_sig:
+                    # Synthesize full 7-Pillar Quant-Alpha Confluence via AIConfidenceEngine!
+                    apex_eval = AIConfidenceEngine.evaluate_apex_one_percent_breakout(
+                        symbol=sym,
+                        company_rec=rec,
+                        df_stock=df_stock,
+                        base_pattern=bp_item,
+                        institution_footprint=inst_item,
+                        relative_strength=rs_item,
+                        smart_money=sm_item,
+                        breakout_signal=breakout_sig,
+                        market_regime=regime,
+                    )
+                    breakout_sig["confidence_score"] = apex_eval["apex_score"]
+                    breakout_sig["ai_verdict"] = apex_eval["ai_verdict"]
+                    breakout_sig["apex_badge"] = apex_eval["apex_badge"]
+                    breakout_sig["is_apex_1pct"] = apex_eval["is_apex_1pct"]
+                    breakout_sig["pillar_breakdown"] = apex_eval["pillar_breakdown"]
+                    breakout_sig["ai_thesis"] = apex_eval["thesis"]
+                    breakout_sig["company_name"] = name
+                    breakout_sig["sector"] = sector
                     live_signals_list.append(breakout_sig)
 
             # 8. Stage 13: BTST Scan (if closing near highs)
@@ -386,13 +406,48 @@ class VelocityBurstOrchestrator:
         sm_count = SmartMoneyEngine.batch_upsert_smart_money(db, smart_money_list)
         liq_count = LiquidityEngine.batch_upsert_liquidity(db, liquidity_list)
         news_count = NewsRiskEngine.batch_upsert_news_risk(db, news_risk_list)
+        # Sort BTST candidates descending by confidence score & continuation probability
+        btst_list.sort(key=lambda b: (b.get("btst_confidence", 0.0), b.get("continuation_probability", 0.0)), reverse=True)
+
+        # Enforce strict Top 1% Universe Quota for BTST (Max 5 apex setups per 500-equity session)
+        btst_apex_quota = max(1, min(5, int(len(records[:limit_symbols]) * 0.01)))
+        for r_idx, b in enumerate(btst_list):
+            is_btst_apex = bool(
+                r_idx < btst_apex_quota
+                and b.get("btst_confidence", 0.0) >= 88.0
+                and b.get("closing_near_high_pct", 0.0) >= 90.0
+                and b.get("delivery_pct", 0.0) >= 60.0
+            )
+            b["is_apex_1pct"] = is_btst_apex
+            b["apex_rank"] = (r_idx + 1) if is_btst_apex else None
+            if is_btst_apex:
+                b["action_recommended"] = "BUY_BTST_ELITE"
+                b["apex_badge"] = f"🏆 TOP 1% BTST (#{r_idx + 1})"
+
         btst_count = BTSTContinuationEngine.batch_upsert_btst(db, btst_list)
+
+        # Sort all live breakout signals descending by Apex confluence score
+        live_signals_list.sort(key=lambda s: s.get("confidence_score", 0.0), reverse=True)
+
+        # Enforce strict Top 1% Universe Quota:
+        # For 500 stocks scanned, exactly top 5 stocks max qualify for Apex 1% alerts
+        apex_quota = max(1, min(5, int(len(records[:limit_symbols]) * 0.01)))
 
         # Persist and broadcast live signals & alerts
         elite_count = 0
-        for sig in live_signals_list:
+        apex_count = 0
+        for rank_idx, sig in enumerate(live_signals_list):
+            is_apex = bool(rank_idx < apex_quota and sig.get("confidence_score", 0.0) >= 90.0 and sig.get("is_apex_1pct", True))
+            sig["apex_rank"] = (rank_idx + 1) if is_apex else None
+            sig["is_apex_1pct"] = is_apex
+            if is_apex:
+                sig["ai_verdict"] = "APEX 1% [ELITE A+]"
+                sig["apex_badge"] = f"🏆 TOP 1% (#{rank_idx + 1})"
+
             persisted = LiveBreakoutEngine.persist_and_broadcast_signal(db, sig)
-            if sig["ai_verdict"] in ("ELITE A+", "ELITE A"):
+
+            # Auto-register managed trade for high-conviction breakout setups
+            if sig["ai_verdict"] in ("APEX 1% [ELITE A+]", "ELITE A+", "ELITE A"):
                 elite_count += 1
                 try:
                     TradeManagementEngine.create_trade(
@@ -409,15 +464,21 @@ class VelocityBurstOrchestrator:
                 except Exception as te:
                     logger.warning(f"[VelocityOrchestrator] Error registering managed trade for {sig['symbol']}: {te}")
 
-                # Dispatch alert
+            # STRICT TOP 1% ALERT DISPATCH:
+            # Only stocks that earned the APEX 1% distinction (Top 1% quota + Score >= 90.0) trigger Telegram alerts!
+            if is_apex:
+                apex_count += 1
                 AlertIntelligenceEngine.dispatch_vbe_alert(
                     db=db,
                     symbol=sig["symbol"],
                     alert_type="BREAKOUT",
-                    title=f"🚀 VBE Breakout: {sig['symbol']} [{sig['ai_verdict']}]",
-                    message=f"Institutional volume surge at ₹{sig['entry_price']:.2f}. Pivot cleared with R:R {sig['risk_reward']}.",
+                    title=f"🏆 APEX 1% BREAKOUT: {sig['symbol']} [Rank #{rank_idx + 1}]",
+                    message=(
+                        f"Rank #{rank_idx + 1} of {len(records[:limit_symbols])} equities (Score {sig['confidence_score']:.1f}/100). "
+                        f"Institutional volume surge at ₹{sig['entry_price']:.2f}. Pivot cleared with R:R {sig['risk_reward']}:1."
+                    ),
                     data_payload=sig,
-                    severity="CRITICAL" if sig["ai_verdict"] == "ELITE A+" else "HIGH",
+                    severity="CRITICAL",
                 )
 
         # Also trigger sleeping giant alerts for top 3
@@ -435,7 +496,7 @@ class VelocityBurstOrchestrator:
                 )
 
         duration = round(time.perf_counter() - t_start, 2)
-        logger.info(f"[VelocityOrchestrator] Scan finished in {duration}s! Found {len(sleeping_giant_list)} SGs, {len(live_signals_list)} breakouts.")
+        logger.info(f"[VelocityOrchestrator] Scan finished in {duration}s! Found {len(sleeping_giant_list)} SGs, {len(live_signals_list)} breakouts, {apex_count} APEX 1% alerts.")
 
         # Stage Attrition Funnel Synthesis
         all_syms = [rec.symbol.upper() for rec in records[:limit_symbols]]
@@ -490,7 +551,12 @@ class VelocityBurstOrchestrator:
 
         ai_conviction_pass_syms = {
             sig["symbol"].upper() for sig in live_signals_list
-            if sig.get("ai_verdict") in ("ELITE A+", "ELITE A")
+            if sig.get("ai_verdict") in ("APEX 1% [ELITE A+]", "ELITE A+", "ELITE A")
+        }
+
+        apex_1pct_pass_syms = {
+            sig["symbol"].upper() for sig in live_signals_list
+            if sig.get("is_apex_1pct")
         }
 
         stage_definitions = [
@@ -506,6 +572,7 @@ class VelocityBurstOrchestrator:
             ("stage_9_breakout_trigger", "Stage 10: Pivot Breakout Trigger", "Requires price clearing pivot point with real-time volume surge", breakout_pass_syms),
             ("stage_10_entry_quality", "Stage 11: Entry Quality & Anti-Fakeout Gate", "Requires Entry Quality Score >= 70, upper wick <= 25%, low pivot slippage", entry_quality_pass_syms),
             ("stage_11_ai_conviction", "Stage 14: AI Elite Conviction Gate", "Requires multi-engine consensus >= 80/100 and ELITE A+ / ELITE A rating", ai_conviction_pass_syms),
+            ("stage_12_apex_1pct", "Stage 15: Apex 1% Institutional Gate", "Top 1% Percentile consensus >= 90/100 across 7 Quant-Alpha Pillars", apex_1pct_pass_syms),
         ]
 
         # Build sequential waterfall

@@ -543,7 +543,7 @@ class MomentumIntradayMonitor:
     @classmethod
     def get_active_watchlist(cls, db: Session) -> List[MomentumRadarWatchlist]:
         """Fetch today's active watchlist candidates."""
-        today = date.today().isoformat()
+        today = datetime.now(IST).date().isoformat()
         try:
             return (
                 db.query(MomentumRadarWatchlist)

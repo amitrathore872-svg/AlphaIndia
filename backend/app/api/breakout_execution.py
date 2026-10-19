@@ -224,7 +224,16 @@ def test_telegram_alert(
     clean_sym = symbol.strip().upper()
     candidate = db.query(BreakoutExecutionCandidate).filter(BreakoutExecutionCandidate.symbol == clean_sym).first()
     if not candidate:
-        raise HTTPException(status_code=404, detail=f"Candidate {clean_sym} not found in execution queue.")
+        try:
+            from app.api.velocity import dispatch_velocity_telegram_alert
+            v_res = dispatch_velocity_telegram_alert(symbol=clean_sym, db=db)
+            return {
+                "success": bool(v_res.get("success")),
+                "message": v_res.get("message"),
+                "details": v_res.get("details"),
+            }
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Candidate {clean_sym} not found: {e}")
 
     res = AlertDispatchService.dispatch_breakout_execution_alert(db=db, candidate=candidate)
     return {

@@ -12,7 +12,9 @@ Records telemetry and live heartbeats directly into ControlSystemService and dat
 Zero manual intervention required.
 """
 
+import copy
 from datetime import datetime, timezone, timedelta
+import json
 import logging
 import threading
 import time
@@ -23,6 +25,8 @@ from app.services.control_system_service import ControlSystemService
 
 logger = logging.getLogger("AutonomousEngineScheduler")
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
 
 class AutonomousEngineScheduler:
     _lock = threading.RLock()
@@ -30,18 +34,168 @@ class AutonomousEngineScheduler:
     _stop_event = threading.Event()
     _is_running = False
 
-    # Interval configuration (in seconds)
-    INTERVAL_WIRE_PRICES = 60         # 1 min
-    INTERVAL_DISCOVERY_ATHENA = 180   # 3 mins
-    INTERVAL_VCP_SCAN = 300           # 5 mins
-    INTERVAL_GROWTH_IMPORT = 900      # 15 mins
-    INTERVAL_CPR_SCAN = 300           # 5 mins
-    INTERVAL_MF_RADAR = 1800          # 30 mins (checks AMFI disclosure calendar & syncs)
-    INTERVAL_MOMENTUM_UNIVERSE = 3600 # 60 mins — off-market universe sweep (guards itself internally)
-    INTERVAL_MOMENTUM_INTRADAY = 60   # 60s — re-scores watchlist during market hours
-    INTERVAL_TELEGRAM_ALERTS = 120    # 2 mins — automated opportunity & sovereign telegram alert dispatcher
-    INTERVAL_INVESTOR_INTELLIGENCE = 600 # 10 mins — automated concall & investor presentation forensics
-    INTERVAL_MARKET_BREADTH = 1800    # 30 mins — automated bhavcopy sync & breadth maintenance
+    SETTING_KEY_SCHEDULES = "autonomous_scheduler_engine_schedules"
+
+    # Default Dual-Regime Interval Configurations
+    DEFAULT_ENGINE_SCHEDULES: Dict[str, Dict[str, Any]] = {
+        "wire_prices": {
+            "name": "Live Wire & CMP Refresher",
+            "market_interval_sec": 60,
+            "off_market_interval_sec": 0,
+            "market_hours_only": True,
+            "is_enabled": True,
+            "min_interval_sec": 30,
+        },
+        "discovery_athena": {
+            "name": "Results Discovery & Athena 5-Gate",
+            "market_interval_sec": 180,
+            "off_market_interval_sec": 600,
+            "market_hours_only": False,
+            "is_enabled": True,
+            "min_interval_sec": 60,
+        },
+        "vcp_engine": {
+            "name": "Minervini VCP Breakout Scanner",
+            "market_interval_sec": 300,
+            "off_market_interval_sec": 0,
+            "market_hours_only": True,
+            "is_enabled": True,
+            "min_interval_sec": 120,
+        },
+        "growth_engine": {
+            "name": "Financial Importer & Growth Engine",
+            "market_interval_sec": 900,
+            "off_market_interval_sec": 1800,
+            "market_hours_only": False,
+            "is_enabled": True,
+            "min_interval_sec": 300,
+        },
+        "cpr_engine": {
+            "name": "CPR Compression & Alert Engine",
+            "market_interval_sec": 300,
+            "off_market_interval_sec": 0,
+            "market_hours_only": True,
+            "is_enabled": True,
+            "min_interval_sec": 120,
+        },
+        "mf_radar": {
+            "name": "Mutual Fund & Institutional Radar",
+            "market_interval_sec": 1800,
+            "off_market_interval_sec": 3600,
+            "market_hours_only": False,
+            "is_enabled": True,
+            "min_interval_sec": 600,
+        },
+        "momentum_universe": {
+            "name": "Momentum Universe Off-Market Scanner",
+            "market_interval_sec": 0,
+            "off_market_interval_sec": 3600,
+            "market_hours_only": False,
+            "is_enabled": True,
+            "min_interval_sec": 1800,
+        },
+        "momentum_intraday": {
+            "name": "Momentum Intraday Breakout Monitor",
+            "market_interval_sec": 60,
+            "off_market_interval_sec": 0,
+            "market_hours_only": True,
+            "is_enabled": True,
+            "min_interval_sec": 30,
+        },
+        "telegram_auto_alerts": {
+            "name": "Auto Telegram Opportunity & Radar",
+            "market_interval_sec": 120,
+            "off_market_interval_sec": 0,
+            "market_hours_only": True,
+            "is_enabled": True,
+            "min_interval_sec": 60,
+        },
+        "investor_intelligence": {
+            "name": "Investor Concall & Presentation Forensics",
+            "market_interval_sec": 600,
+            "off_market_interval_sec": 1800,
+            "market_hours_only": False,
+            "is_enabled": True,
+            "min_interval_sec": 300,
+        },
+        "market_breadth": {
+            "name": "Market Breadth Radar & Bhavcopy",
+            "market_interval_sec": 1800,
+            "off_market_interval_sec": 3600,
+            "market_hours_only": False,
+            "is_enabled": True,
+            "min_interval_sec": 900,
+        },
+        "velocity_burst": {
+            "name": "Velocity Burst Elite Scanner",
+            "market_interval_sec": 300,
+            "off_market_interval_sec": 0,
+            "market_hours_only": True,
+            "is_enabled": True,
+            "min_interval_sec": 120,
+        },
+    }
+
+    # One-Click Performance & Scheduling Presets
+    PRESETS: Dict[str, Dict[str, Any]] = {
+        "PERFORMANCE_SAVER": {
+            "name": "Performance Saver",
+            "description": "Ultra CPU Saver: Real-time scanners pause completely off-market; relaxed cadences during market hours. Max EC2 responsiveness.",
+            "schedules": {
+                "wire_prices": {"market_interval_sec": 120, "off_market_interval_sec": 0, "is_enabled": True},
+                "discovery_athena": {"market_interval_sec": 300, "off_market_interval_sec": 900, "is_enabled": True},
+                "vcp_engine": {"market_interval_sec": 600, "off_market_interval_sec": 0, "is_enabled": True},
+                "growth_engine": {"market_interval_sec": 1800, "off_market_interval_sec": 3600, "is_enabled": True},
+                "cpr_engine": {"market_interval_sec": 600, "off_market_interval_sec": 0, "is_enabled": True},
+                "mf_radar": {"market_interval_sec": 3600, "off_market_interval_sec": 7200, "is_enabled": True},
+                "momentum_universe": {"market_interval_sec": 0, "off_market_interval_sec": 7200, "is_enabled": True},
+                "momentum_intraday": {"market_interval_sec": 120, "off_market_interval_sec": 0, "is_enabled": True},
+                "telegram_auto_alerts": {"market_interval_sec": 300, "off_market_interval_sec": 0, "is_enabled": True},
+                "investor_intelligence": {"market_interval_sec": 1200, "off_market_interval_sec": 3600, "is_enabled": True},
+                "market_breadth": {"market_interval_sec": 3600, "off_market_interval_sec": 7200, "is_enabled": True},
+                "velocity_burst": {"market_interval_sec": 600, "off_market_interval_sec": 0, "is_enabled": True},
+            },
+        },
+        "BALANCED": {
+            "name": "Balanced Enterprise",
+            "description": "Standard Institutional: Rapid market intraday scans with automated quiet off-market conservation.",
+            "schedules": {
+                "wire_prices": {"market_interval_sec": 60, "off_market_interval_sec": 0, "is_enabled": True},
+                "discovery_athena": {"market_interval_sec": 180, "off_market_interval_sec": 600, "is_enabled": True},
+                "vcp_engine": {"market_interval_sec": 300, "off_market_interval_sec": 0, "is_enabled": True},
+                "growth_engine": {"market_interval_sec": 900, "off_market_interval_sec": 1800, "is_enabled": True},
+                "cpr_engine": {"market_interval_sec": 300, "off_market_interval_sec": 0, "is_enabled": True},
+                "mf_radar": {"market_interval_sec": 1800, "off_market_interval_sec": 3600, "is_enabled": True},
+                "momentum_universe": {"market_interval_sec": 0, "off_market_interval_sec": 3600, "is_enabled": True},
+                "momentum_intraday": {"market_interval_sec": 60, "off_market_interval_sec": 0, "is_enabled": True},
+                "telegram_auto_alerts": {"market_interval_sec": 120, "off_market_interval_sec": 0, "is_enabled": True},
+                "investor_intelligence": {"market_interval_sec": 600, "off_market_interval_sec": 1800, "is_enabled": True},
+                "market_breadth": {"market_interval_sec": 1800, "off_market_interval_sec": 3600, "is_enabled": True},
+                "velocity_burst": {"market_interval_sec": 300, "off_market_interval_sec": 0, "is_enabled": True},
+            },
+        },
+        "TURBO": {
+            "name": "Turbo Ultra-Fast",
+            "description": "High Frequency Turbo: Maximum speed and minimum latency intraday scanning. Ideal during earnings weeks.",
+            "schedules": {
+                "wire_prices": {"market_interval_sec": 30, "off_market_interval_sec": 0, "is_enabled": True},
+                "discovery_athena": {"market_interval_sec": 120, "off_market_interval_sec": 300, "is_enabled": True},
+                "vcp_engine": {"market_interval_sec": 180, "off_market_interval_sec": 0, "is_enabled": True},
+                "growth_engine": {"market_interval_sec": 600, "off_market_interval_sec": 1200, "is_enabled": True},
+                "cpr_engine": {"market_interval_sec": 180, "off_market_interval_sec": 0, "is_enabled": True},
+                "mf_radar": {"market_interval_sec": 1200, "off_market_interval_sec": 1800, "is_enabled": True},
+                "momentum_universe": {"market_interval_sec": 0, "off_market_interval_sec": 1800, "is_enabled": True},
+                "momentum_intraday": {"market_interval_sec": 30, "off_market_interval_sec": 0, "is_enabled": True},
+                "telegram_auto_alerts": {"market_interval_sec": 60, "off_market_interval_sec": 0, "is_enabled": True},
+                "investor_intelligence": {"market_interval_sec": 300, "off_market_interval_sec": 900, "is_enabled": True},
+                "market_breadth": {"market_interval_sec": 1200, "off_market_interval_sec": 1800, "is_enabled": True},
+                "velocity_burst": {"market_interval_sec": 180, "off_market_interval_sec": 0, "is_enabled": True},
+            },
+        },
+    }
+
+    _engine_schedules: Dict[str, Dict[str, Any]] = copy.deepcopy(DEFAULT_ENGINE_SCHEDULES)
+    _active_preset: str = "BALANCED"
 
     # Execution telemetry state
     _engine_telemetry: Dict[str, Dict[str, Any]] = {
@@ -155,9 +309,197 @@ class AutonomousEngineScheduler:
             "last_records": 0,
             "last_error": None,
         },
+        "velocity_burst": {
+            "name": "Velocity Burst Elite Scanner",
+            "interval_sec": 300,
+            "last_run": None,
+            "next_run": None,
+            "status": "IDLE",
+            "runs_count": 0,
+            "last_records": 0,
+            "last_error": None,
+        },
     }
 
     _disabled_engines: set = set()
+
+    @classmethod
+    def is_market_hours(cls) -> bool:
+        """Returns True if current IST time is within NSE trading hours (Mon–Fri, 09:15–15:30)."""
+        now_ist = datetime.now(IST)
+        if now_ist.weekday() >= 5:  # Saturday=5, Sunday=6
+            return False
+        market_open = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
+        market_close = now_ist.replace(hour=15, minute=30, second=0, microsecond=0)
+        return market_open <= now_ist <= market_close
+
+    @classmethod
+    def get_market_status(cls) -> Dict[str, Any]:
+        now_ist = datetime.now(IST)
+        in_mkt = cls.is_market_hours()
+        return {
+            "is_market_hours": in_mkt,
+            "ist_time": now_ist.strftime("%Y-%m-%d %H:%M:%S IST"),
+            "weekday": now_ist.strftime("%A"),
+            "active_preset": cls._active_preset,
+        }
+
+    @classmethod
+    def get_effective_interval(cls, engine_key: str) -> int:
+        """
+        Returns effective interval in seconds based on current market hours vs off-market.
+        Returns 0 if the engine should be paused/skipped in the current regime.
+        """
+        with cls._lock:
+            sched = cls._engine_schedules.get(engine_key)
+            if not sched or not sched.get("is_enabled", True) or engine_key in cls._disabled_engines:
+                return 0
+            in_mkt = cls.is_market_hours()
+            if in_mkt:
+                return int(sched.get("market_interval_sec", 60))
+            else:
+                if sched.get("market_hours_only", False):
+                    return 0
+                return int(sched.get("off_market_interval_sec", 0))
+
+    @classmethod
+    def _load_schedules_from_db(cls):
+        db = SessionLocal()
+        try:
+            from app.models.system_setting import SystemSetting
+            setting = db.query(SystemSetting).filter(SystemSetting.setting_key == cls.SETTING_KEY_SCHEDULES).first()
+            if setting and setting.setting_value:
+                data = json.loads(setting.setting_value)
+                cls._active_preset = data.get("active_preset", "BALANCED")
+                saved_schedules = data.get("schedules", {})
+                for key, sched in saved_schedules.items():
+                    if key in cls._engine_schedules:
+                        cls._engine_schedules[key].update(sched)
+                        if not sched.get("is_enabled", True):
+                            cls._disabled_engines.add(key)
+                        else:
+                            cls._disabled_engines.discard(key)
+                logger.info(f"[AutonomousEngineScheduler] Loaded schedule configs from DB (preset: {cls._active_preset}).")
+        except Exception as exc:
+            logger.warning(f"[AutonomousEngineScheduler] Could not load schedules from DB: {exc}")
+        finally:
+            db.close()
+
+    @classmethod
+    def _save_schedules_to_db(cls):
+        db = SessionLocal()
+        try:
+            from app.models.system_setting import SystemSetting
+            setting = db.query(SystemSetting).filter(SystemSetting.setting_key == cls.SETTING_KEY_SCHEDULES).first()
+            payload = json.dumps({
+                "active_preset": cls._active_preset,
+                "schedules": cls._engine_schedules,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            if not setting:
+                setting = SystemSetting(
+                    setting_key=cls.SETTING_KEY_SCHEDULES,
+                    setting_value=payload,
+                    setting_type="json",
+                    description="Autonomous scheduler dual-regime interval and pause configuration",
+                )
+                db.add(setting)
+            else:
+                setting.setting_value = payload
+                setting.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            logger.info(f"[AutonomousEngineScheduler] Saved schedule configs to DB (preset: {cls._active_preset}).")
+        except Exception as exc:
+            db.rollback()
+            logger.error(f"[AutonomousEngineScheduler] Failed to save schedules to DB: {exc}")
+        finally:
+            db.close()
+
+    @classmethod
+    def get_schedule_configs(cls) -> Dict[str, Any]:
+        with cls._lock:
+            now_ist = datetime.now(IST)
+            in_mkt = cls.is_market_hours()
+            schedules_list = []
+            for key, sched in cls._engine_schedules.items():
+                eff = cls.get_effective_interval(key)
+                telemetry = cls._engine_telemetry.get(key, {})
+                schedules_list.append({
+                    "engine_key": key,
+                    "name": sched.get("name", key),
+                    "market_interval_sec": sched.get("market_interval_sec", 60),
+                    "off_market_interval_sec": sched.get("off_market_interval_sec", 0),
+                    "market_hours_only": sched.get("market_hours_only", False),
+                    "is_enabled": sched.get("is_enabled", True) and key not in cls._disabled_engines,
+                    "min_interval_sec": sched.get("min_interval_sec", 30),
+                    "effective_interval_sec": eff,
+                    "is_active_now": eff > 0 and sched.get("is_enabled", True),
+                    "status": telemetry.get("status", "IDLE"),
+                    "last_run": telemetry.get("last_run"),
+                    "next_run": telemetry.get("next_run"),
+                    "runs_count": telemetry.get("runs_count", 0),
+                })
+            return {
+                "is_market_hours": in_mkt,
+                "server_time_ist": now_ist.strftime("%Y-%m-%d %H:%M:%S IST"),
+                "weekday": now_ist.strftime("%A"),
+                "active_preset": cls._active_preset,
+                "presets_available": [
+                    {"id": k, "name": v["name"], "description": v["description"]}
+                    for k, v in cls.PRESETS.items()
+                ],
+                "schedules": schedules_list,
+            }
+
+    @classmethod
+    def update_schedule_config(cls, engine_key: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+        with cls._lock:
+            if engine_key not in cls._engine_schedules:
+                raise ValueError(f"Unknown engine key: {engine_key}")
+            sched = cls._engine_schedules[engine_key]
+            min_sec = sched.get("min_interval_sec", 30)
+
+            if "market_interval_sec" in patch:
+                val = int(patch["market_interval_sec"])
+                sched["market_interval_sec"] = max(min_sec, val) if val > 0 else 0
+            if "off_market_interval_sec" in patch:
+                val = int(patch["off_market_interval_sec"])
+                sched["off_market_interval_sec"] = max(min_sec, val) if val > 0 else 0
+            if "market_hours_only" in patch:
+                sched["market_hours_only"] = bool(patch["market_hours_only"])
+            if "is_enabled" in patch:
+                enabled = bool(patch["is_enabled"])
+                sched["is_enabled"] = enabled
+                if not enabled:
+                    cls.disable_engine(engine_key)
+                else:
+                    cls.enable_engine(engine_key)
+
+            cls._active_preset = "CUSTOM"
+            cls._save_schedules_to_db()
+            logger.info(f"[AutonomousEngineScheduler] Updated schedule for '{engine_key}': {sched}")
+            return cls.get_schedule_configs()
+
+    @classmethod
+    def apply_preset(cls, preset_name: str) -> Dict[str, Any]:
+        with cls._lock:
+            preset_name = preset_name.upper()
+            if preset_name not in cls.PRESETS:
+                raise ValueError(f"Unknown preset: {preset_name}. Available: {list(cls.PRESETS.keys())}")
+
+            preset = cls.PRESETS[preset_name]
+            for key, p_sched in preset["schedules"].items():
+                if key in cls._engine_schedules:
+                    cls._engine_schedules[key].update(p_sched)
+                    if not p_sched.get("is_enabled", True):
+                        cls.disable_engine(key)
+                    else:
+                        cls.enable_engine(key)
+
+            cls._active_preset = preset_name
+            cls._save_schedules_to_db()
+            logger.info(f"[AutonomousEngineScheduler] Applied preset '{preset_name}' successfully.")
+            return cls.get_schedule_configs()
 
     @classmethod
     def is_running(cls) -> bool:
@@ -167,12 +509,14 @@ class AutonomousEngineScheduler:
     @classmethod
     def is_engine_enabled(cls, engine_key: str) -> bool:
         with cls._lock:
-            return engine_key not in cls._disabled_engines
+            return engine_key not in cls._disabled_engines and cls._engine_schedules.get(engine_key, {}).get("is_enabled", True)
 
     @classmethod
     def enable_engine(cls, engine_key: str):
         with cls._lock:
             cls._disabled_engines.discard(engine_key)
+            if engine_key in cls._engine_schedules:
+                cls._engine_schedules[engine_key]["is_enabled"] = True
             if engine_key in cls._engine_telemetry:
                 cls._engine_telemetry[engine_key]["status"] = "IDLE"
             logger.info(f"[AutonomousEngineScheduler] Engine '{engine_key}' enabled.")
@@ -181,6 +525,8 @@ class AutonomousEngineScheduler:
     def disable_engine(cls, engine_key: str):
         with cls._lock:
             cls._disabled_engines.add(engine_key)
+            if engine_key in cls._engine_schedules:
+                cls._engine_schedules[engine_key]["is_enabled"] = False
             if engine_key in cls._engine_telemetry:
                 cls._engine_telemetry[engine_key]["status"] = "STOPPED"
             logger.info(f"[AutonomousEngineScheduler] Engine '{engine_key}' disabled.")
@@ -192,6 +538,7 @@ class AutonomousEngineScheduler:
                 logger.info("[AutonomousEngineScheduler] Already running.")
                 return
 
+            cls._load_schedules_from_db()
             cls._stop_event.clear()
             cls._is_running = True
             cls._thread = threading.Thread(
@@ -224,128 +571,64 @@ class AutonomousEngineScheduler:
 
     @classmethod
     def _supervision_loop(cls):
-        logger.info("[AutonomousEngineScheduler] Background supervision loop entered.")
+        logger.info("[AutonomousEngineScheduler] Background supervision loop entered with Dynamic Dual-Regime Orchestration.")
 
-        # Initialize schedules: execute immediate warmup cycles for wire and prices
+        # Warmup initialization
         now = time.time()
-        next_wire = now + 5               # 5s warmup
-        next_discovery = now + 15         # 15s warmup
-        next_vcp = now + 30               # 30s warmup
-        next_cpr = now + 45               # 45s warmup
-        next_growth = now + 60            # 60s warmup
-        next_mf_radar = now + 75          # 75s warmup
-        next_momentum_universe = now + 90 # 90s warmup (off-market only)
-        next_momentum_intraday = now + 45 # 45s warmup (market hours only)
-        next_telegram_alerts = now + 15   # 15s warmup (auto telegram alerts)
-        next_investor = now + 80          # 80s warmup (investor concall forensics)
-        next_breadth = now + 100          # 100s warmup (market breadth radar)
+        next_times: Dict[str, float] = {
+            "wire_prices": now + 5,
+            "discovery_athena": now + 15,
+            "vcp_engine": now + 30,
+            "cpr_engine": now + 45,
+            "growth_engine": now + 60,
+            "mf_radar": now + 75,
+            "momentum_universe": now + 90,
+            "momentum_intraday": now + 45,
+            "telegram_auto_alerts": now + 15,
+            "investor_intelligence": now + 80,
+            "market_breadth": now + 100,
+        }
+
+        cycle_handlers = {
+            "wire_prices": cls._execute_wire_prices_cycle,
+            "discovery_athena": cls._execute_discovery_athena_cycle,
+            "vcp_engine": cls._execute_vcp_cycle,
+            "cpr_engine": cls._execute_cpr_cycle,
+            "growth_engine": cls._execute_growth_cycle,
+            "mf_radar": cls._execute_mf_radar_cycle,
+            "momentum_universe": cls._execute_momentum_universe_cycle,
+            "momentum_intraday": cls._execute_momentum_intraday_cycle,
+            "telegram_auto_alerts": cls._execute_telegram_alerts_cycle,
+            "investor_intelligence": cls._execute_investor_intelligence_cycle,
+            "market_breadth": cls._execute_market_breadth_cycle,
+        }
 
         while not cls._stop_event.is_set():
             current_time = time.time()
 
-            # -------------------------------------------------------------
-            # Cycle 1: Live Exchange Wire & CMP Price Refresher
-            # -------------------------------------------------------------
-            if current_time >= next_wire:
-                if cls.is_engine_enabled("wire_prices"):
-                    cls._execute_wire_prices_cycle()
-                next_wire = time.time() + cls.INTERVAL_WIRE_PRICES
-                cls._update_next_run("wire_prices", cls.INTERVAL_WIRE_PRICES)
+            for key, handler in cycle_handlers.items():
+                if cls._stop_event.is_set():
+                    break
 
-            # -------------------------------------------------------------
-            # Cycle 2: Results Discovery & Athena Omega 5-Gate Evaluator
-            # -------------------------------------------------------------
-            if current_time >= next_discovery:
-                if cls.is_engine_enabled("discovery_athena"):
-                    cls._execute_discovery_athena_cycle()
-                next_discovery = time.time() + cls.INTERVAL_DISCOVERY_ATHENA
-                cls._update_next_run("discovery_athena", cls.INTERVAL_DISCOVERY_ATHENA)
+                eff_interval = cls.get_effective_interval(key)
+                if eff_interval > 0 and cls.is_engine_enabled(key):
+                    # Clamp next run if interval was shortened dynamically by operator
+                    if next_times[key] - current_time > eff_interval:
+                        next_times[key] = current_time + min(5, eff_interval)
 
-            # -------------------------------------------------------------
-            # Cycle 3: Minervini VCP Breakout & Volume Surge Engine
-            # -------------------------------------------------------------
-            if current_time >= next_vcp:
-                if cls.is_engine_enabled("vcp_engine"):
-                    cls._execute_vcp_cycle()
-                next_vcp = time.time() + cls.INTERVAL_VCP_SCAN
-                cls._update_next_run("vcp_engine", cls.INTERVAL_VCP_SCAN)
-
-            # -------------------------------------------------------------
-            # Cycle 4: CPR Compression Scanner & Intraday Alert Engine
-            # -------------------------------------------------------------
-            if current_time >= next_cpr:
-                if cls.is_engine_enabled("cpr_engine"):
-                    cls._execute_cpr_cycle()
-                next_cpr = time.time() + cls.INTERVAL_CPR_SCAN
-                cls._update_next_run("cpr_engine", cls.INTERVAL_CPR_SCAN)
-
-            # -------------------------------------------------------------
-            # Cycle 5: Financial Importer & Growth Calculation Engine
-            # -------------------------------------------------------------
-            if current_time >= next_growth:
-                if cls.is_engine_enabled("growth_engine"):
-                    cls._execute_growth_cycle()
-                next_growth = time.time() + cls.INTERVAL_GROWTH_IMPORT
-                cls._update_next_run("growth_engine", cls.INTERVAL_GROWTH_IMPORT)
-
-            # -------------------------------------------------------------
-            # Cycle 6: Mutual Fund & Institutional Radar Engine
-            # -------------------------------------------------------------
-            if current_time >= next_mf_radar:
-                if cls.is_engine_enabled("mf_radar"):
-                    cls._execute_mf_radar_cycle()
-                next_mf_radar = time.time() + cls.INTERVAL_MF_RADAR
-                cls._update_next_run("mf_radar", cls.INTERVAL_MF_RADAR)
-
-            # -------------------------------------------------------------
-            # Cycle 7: Momentum Universe Off-Market Full Scanner
-            # Runs during off-market window (18:00–09:00 IST) every 60 mins
-            # -------------------------------------------------------------
-            if current_time >= next_momentum_universe:
-                if cls.is_engine_enabled("momentum_universe"):
-                    cls._execute_momentum_universe_cycle()
-                next_momentum_universe = time.time() + cls.INTERVAL_MOMENTUM_UNIVERSE
-                cls._update_next_run("momentum_universe", cls.INTERVAL_MOMENTUM_UNIVERSE)
-
-            # -------------------------------------------------------------
-            # Cycle 8: Momentum Intraday Breakout Monitor
-            # Runs every 60s during market hours (09:15–15:30 IST)
-            # -------------------------------------------------------------
-            if current_time >= next_momentum_intraday:
-                if cls.is_engine_enabled("momentum_intraday"):
-                    cls._execute_momentum_intraday_cycle()
-                next_momentum_intraday = time.time() + cls.INTERVAL_MOMENTUM_INTRADAY
-                cls._update_next_run("momentum_intraday", cls.INTERVAL_MOMENTUM_INTRADAY)
-
-            # -------------------------------------------------------------
-            # Cycle 9: Automated Telegram Opportunity & Sovereign Apex Alerts
-            # Runs every 120s autonomously
-            # -------------------------------------------------------------
-            if current_time >= next_telegram_alerts:
-                if cls.is_engine_enabled("telegram_auto_alerts"):
-                    cls._execute_telegram_alerts_cycle()
-                next_telegram_alerts = time.time() + cls.INTERVAL_TELEGRAM_ALERTS
-                cls._update_next_run("telegram_auto_alerts", cls.INTERVAL_TELEGRAM_ALERTS)
-
-            # -------------------------------------------------------------
-            # Cycle 10: Investor Concall & Presentation Forensics
-            # Automatically polls exchange wires for concalls & interrogates pending docs
-            # -------------------------------------------------------------
-            if current_time >= next_investor:
-                if cls.is_engine_enabled("investor_intelligence"):
-                    cls._execute_investor_intelligence_cycle()
-                next_investor = time.time() + cls.INTERVAL_INVESTOR_INTELLIGENCE
-                cls._update_next_run("investor_intelligence", cls.INTERVAL_INVESTOR_INTELLIGENCE)
-
-            # -------------------------------------------------------------
-            # Cycle 11: Market Breadth Radar & Bhavcopy Maintenance
-            # Automatically syncs daily EOD bhavcopies & recalculates breadth
-            # -------------------------------------------------------------
-            if current_time >= next_breadth:
-                if cls.is_engine_enabled("market_breadth"):
-                    cls._execute_market_breadth_cycle()
-                next_breadth = time.time() + cls.INTERVAL_MARKET_BREADTH
-                cls._update_next_run("market_breadth", cls.INTERVAL_MARKET_BREADTH)
+                    if current_time >= next_times[key]:
+                        try:
+                            handler()
+                        except Exception as cycle_err:
+                            logger.error(f"[AutonomousEngineScheduler] Uncaught error in engine '{key}': {cycle_err}", exc_info=True)
+                        next_times[key] = time.time() + eff_interval
+                        cls._update_next_run(key, eff_interval)
+                else:
+                    # Engine is off-market, paused, or disabled.
+                    # Preserves CPU: zero heavy queries or external fetches executed.
+                    if current_time >= next_times[key]:
+                        next_times[key] = time.time() + 30
+                        cls._update_next_run(key, 30)
 
             # Sleep in 2-second increments for responsive teardown
             for _ in range(2):

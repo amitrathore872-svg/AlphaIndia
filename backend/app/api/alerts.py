@@ -744,6 +744,31 @@ def trigger_pead_scan_alerts(
     }
 
 
+@router.post("/trigger-multibagger-scan-alerts", summary="Trigger Alerts for Top Transformational Multibagger Radar Setups")
+def trigger_multibagger_scan_alerts(
+    force_broadcast: bool = Query(True, description="Broadcast to enabled external channels"),
+    min_score: float = Query(80.0, description="Minimum growth conviction score (0-100)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Scans Investor Intelligence concall & presentation analyses and broadcasts top active multibaggers
+    to Telegram, WhatsApp, and in-app System Notifications.
+    """
+    rules = OpportunityAlertService.get_opportunity_thresholds(db)
+    rules["transformational_multibaggers_enabled"] = True
+    rules["transformational_min_conviction"] = min_score
+    if not force_broadcast:
+        rules["auto_broadcast_telegram"] = False
+        rules["auto_broadcast_whatsapp"] = False
+
+    dispatched = OpportunityAlertService.scan_transformational_multibaggers_alerts(db=db, rules=rules)
+    return {
+        "status": "ok",
+        "count": len(dispatched),
+        "alerts": dispatched,
+    }
+
+
 # ==========================================================
 # 6. High-Conviction Opportunity Radar Alerts Engine
 # ==========================================================
@@ -789,6 +814,8 @@ class OpportunityRuleUpdateRequest(BaseModel):
     ipo_radar_enabled: Optional[bool] = None
     ipo_min_conviction: Optional[float] = None
     ipo_blue_sky_only: Optional[bool] = None
+    transformational_multibaggers_enabled: Optional[bool] = None
+    transformational_min_conviction: Optional[float] = None
     # Tab 2 backwards-compatibility aliases
     pead_enabled: Optional[bool] = None
     pead_min_conviction: Optional[int] = None

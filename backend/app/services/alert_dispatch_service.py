@@ -23,6 +23,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.notification import SystemNotification, AlertChannelConfig, AlertDispatchLog
+from app.models.company import Company
 
 logger = logging.getLogger("alpha_india.alerts")
 
@@ -1060,6 +1061,203 @@ class AlertDispatchService:
             f"📡 *Live Radar:* {action_url}"
         )
 
+    @classmethod
+    def format_velocity_breakout_alert(
+        cls,
+        symbol: str,
+        company_name: str,
+        ai_verdict: str,
+        confidence_score: float,
+        entry_price: float,
+        stop_loss: float,
+        target_1: float,
+        target_2: float,
+        target_3: Optional[float] = None,
+        risk_reward: float = 2.5,
+        relative_volume: float = 2.5,
+        candle_strength: float = 85.0,
+        vwap_confirmed: bool = True,
+        rsi_momentum: Optional[float] = None,
+        sector: Optional[str] = None,
+        apex_rank: Optional[int] = None,
+        is_apex_1pct: bool = False,
+        pat_growth: Optional[float] = None,
+        rev_growth: Optional[float] = None,
+        delivery_pct: Optional[float] = None,
+        base_pattern_name: Optional[str] = None,
+        action_url: str = "http://localhost:3000/velocity-burst-elite",
+    ) -> str:
+        clean_sym = (symbol or "").strip().upper()
+        for sfx in [".NS", ".BO"]:
+            if clean_sym.endswith(sfx):
+                clean_sym = clean_sym[:-len(sfx)]
+
+        is_apex = is_apex_1pct or ("APEX" in (ai_verdict or "").upper())
+        verdict_icon = "🏆" if is_apex else ("🚀" if "A+" in (ai_verdict or "") else "⚡")
+        sector_str = f" • {sector}" if sector and sector != "Unknown" else ""
+        t1_pct = round(((target_1 - entry_price) / max(0.01, entry_price)) * 100, 1) if (target_1 and entry_price) else 8.5
+        t2_pct = round(((target_2 - entry_price) / max(0.01, entry_price)) * 100, 1) if (target_2 and entry_price) else 15.0
+        sl_pct = round(((entry_price - stop_loss) / max(0.01, entry_price)) * 100, 1) if (stop_loss and entry_price) else 4.0
+        t3_str = f"🚀 *Target 3:* ₹{target_3:,.2f} (+{round(((target_3 - entry_price) / max(0.01, entry_price)) * 100, 1)}%) [Apex Runner]\n" if target_3 else ""
+        vwap_str = "HELD (Bullish Confirmation)" if vwap_confirmed else "Below Intraday VWAP"
+        rsi_str = f"• RSI Momentum: {rsi_momentum:.1f}\n" if rsi_momentum else ""
+
+        header_title = f"{verdict_icon} *ALPHA INDIA | APEX 1% INSTITUTIONAL BREAKOUT*" if is_apex else f"{verdict_icon} *ALPHA INDIA | VELOCITY BURST ELITE BREAKOUT*"
+        rank_line = f"⭐ *Apex Rank:* #{apex_rank or 1} OF UNIVERSE (TOP 1% APEX)\n" if (is_apex or apex_rank) else ""
+
+        funda_block = ""
+        if pat_growth is not None or rev_growth is not None or delivery_pct is not None or base_pattern_name:
+            pat_str = f"+{pat_growth:.1f}% YoY" if (pat_growth and pat_growth != 0) else "Accelerating"
+            rev_str = f"+{rev_growth:.1f}% YoY" if (rev_growth and rev_growth != 0) else "Positive"
+            deliv_str = f"{delivery_pct:.1f}% Float" if delivery_pct else "High Accumulation"
+            base_str = f"• Base Archetype: {base_pattern_name}\n" if base_pattern_name else ""
+            funda_block = (
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🏛️ *Quant-Alpha Convergence:*\n"
+                f"• Earnings PAT: {pat_str} | Revenue: {rev_str}\n"
+                f"• Authentic Delivery: {deliv_str}\n"
+                f"{base_str}"
+            )
+
+        return (
+            f"{header_title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or clean_sym}* (`{clean_sym}` | NSE){sector_str}\n"
+            f"{rank_line}"
+            f"🔥 *Institutional Verdict:* {ai_verdict} ({confidence_score:.1f}/100)\n"
+            f"🎯 *Signal:* INSTITUTIONAL VOLUME BREAKOUT TRIGGER\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live Breakout Price:* ₹{entry_price:,.2f}\n"
+            f"🚪 *Suggested Entry:* ₹{entry_price:,.2f} (Corridor: ₹{entry_price:,.2f} – ₹{entry_price*1.015:,.2f})\n"
+            f"🚀 *Target 1:* ₹{target_1:,.2f} (+{t1_pct}%) [Book 40%]\n"
+            f"🚀 *Target 2:* ₹{target_2:,.2f} (+{t2_pct}%) [Runner]\n"
+            f"{t3_str}"
+            f"🛑 *Stop Loss:* ₹{stop_loss:,.2f} (-{sl_pct}%)\n"
+            f"⚖️ *Risk/Reward:* 1:{risk_reward:.1f} | *RVOL:* {relative_volume:.2f}x 20DMA\n"
+            f"{funda_block}"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *Execution Quality Gates:*\n"
+            f"• Candle Power: {candle_strength:.1f}%\n"
+            f"• Intraday VWAP: {vwap_str}\n"
+            f"{rsi_str}"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ *Execution Protocol:*\n"
+            f"Never chase beyond 1.5% of pivot. Book 40% at Target 1, immediately move Stop Loss to Breakeven, and trail runner on 9-EMA.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(clean_sym)}\n"
+            f"📡 *Velocity Cockpit:* {action_url}?symbol={clean_sym}"
+        )
+
+    @classmethod
+    def format_velocity_sleeping_giant_alert(
+        cls,
+        symbol: str,
+        company_name: str,
+        compression_score: float,
+        squeeze_duration_bars: int,
+        cmp: float,
+        trigger_price: Optional[float] = None,
+        stop_loss: Optional[float] = None,
+        target_1: Optional[float] = None,
+        target_2: Optional[float] = None,
+        keltner_width_pct: Optional[float] = None,
+        sector: Optional[str] = None,
+        action_url: str = "http://localhost:3000/velocity-burst-elite",
+    ) -> str:
+        clean_sym = (symbol or "").strip().upper()
+        for sfx in [".NS", ".BO"]:
+            if clean_sym.endswith(sfx):
+                clean_sym = clean_sym[:-len(sfx)]
+
+        sector_str = f" • {sector}" if sector and sector != "Unknown" else ""
+        trig_val = trigger_price or cmp
+        sl_val = stop_loss or round(cmp * 0.95, 2)
+        t1_val = target_1 or round(cmp * 1.08, 2)
+        t2_val = target_2 or round(cmp * 1.15, 2)
+        kw_str = f"• Keltner Band Width: {keltner_width_pct:.2f}% (Extreme Contraction)\n" if keltner_width_pct else ""
+
+        return (
+            f"⚡ *ALPHA INDIA | VELOCITY SLEEPING GIANT*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or clean_sym}* (`{clean_sym}` | NSE){sector_str}\n"
+            f"⭐ *Compression Score:* {compression_score:.0f}/100 (HIGH COILING)\n"
+            f"🌀 *TTM Squeeze:* ACTIVE ({squeeze_duration_bars} Bars Squeezed)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Live CMP:* ₹{cmp:,.2f}\n"
+            f"🎯 *Breakout Trigger:* ₹{trig_val:,.2f}\n"
+            f"🚀 *Target 1:* ₹{t1_val:,.2f} | *Target 2:* ₹{t2_val:,.2f}\n"
+            f"🛑 *Invalidation SL:* ₹{sl_val:,.2f}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *Volatility Contraction Profile:*\n"
+            f"{kw_str}"
+            f"• Energy buildup detected inside narrow volatility bands. Kinetic expansion imminent.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(clean_sym)}\n"
+            f"📡 *Velocity Cockpit:* {action_url}?symbol={clean_sym}"
+        )
+
+    @classmethod
+    def format_velocity_btst_alert(
+        cls,
+        symbol: str,
+        company_name: str,
+        ai_verdict: str,
+        confidence_score: float,
+        buy_price: float,
+        buy_corridor_high: float,
+        target_1: float,
+        target_2: float,
+        stop_loss: float,
+        risk_reward: float,
+        closing_near_high_pct: float,
+        delivery_pct: float,
+        volume_surge_multiple: float,
+        continuation_probability: float,
+        sector: Optional[str] = None,
+        is_apex_1pct: bool = False,
+        apex_rank: Optional[str] = None,
+        action_url: str = "http://localhost:3000/velocity-burst-elite?tab=btst",
+    ) -> str:
+        clean_sym = (symbol or "").strip().upper()
+        for sfx in [".NS", ".BO"]:
+            if clean_sym.endswith(sfx):
+                clean_sym = clean_sym[:-len(sfx)]
+
+        sector_str = f" • {sector}" if sector and sector != "Unknown" else ""
+        t1_pct = round(((target_1 - buy_price) / buy_price) * 100.0, 1) if buy_price else 2.5
+        t2_pct = round(((target_2 - buy_price) / buy_price) * 100.0, 1) if buy_price else 4.8
+        sl_pct = round(((buy_price - stop_loss) / buy_price) * 100.0, 1) if buy_price else 1.8
+
+        header = "🏆 *ALPHA INDIA | APEX 1% BTST OVERNIGHT RADAR*" if is_apex_1pct else "🌙 *ALPHA INDIA | BTST OVERNIGHT CONTINUATION*"
+        rank_line = f"🎖️ *Universe Rank:* `{apex_rank or '#1 TOP 1% BTST'}`\n" if is_apex_1pct else ""
+
+        return (
+            f"{header}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{company_name or clean_sym}* (`{clean_sym}` | NSE){sector_str}\n"
+            f"{rank_line}"
+            f"🔥 *Action Plan:* {ai_verdict} (Score: {confidence_score:.1f}/100)\n"
+            f"🎯 *Continuation Probability:* {continuation_probability:.1f}%\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Recommended Buy Price:* ₹{buy_price:,.2f}\n"
+            f"🚪 *Execution Corridor:* ₹{buy_price:,.2f} – ₹{buy_corridor_high:,.2f} (Enter 3:15–3:25 PM)\n"
+            f"🚀 *Target 1 (Gap Open):* ₹{target_1:,.2f} (+{t1_pct}%) [Book 50% at 9:15-9:20 AM]\n"
+            f"🚀 *Target 2 (Runner):* ₹{target_2:,.2f} (+{t2_pct}%) [Trail with 9-EMA]\n"
+            f"🛑 *Overnight Invalidation SL:* ₹{stop_loss:,.2f} (-{sl_pct}%)\n"
+            f"⚖️ *Risk/Reward:* 1:{risk_reward:.1f} | *Volume Surge:* {volume_surge_multiple:.2f}x 20DMA\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *Overnight Momentum Footprint:*\n"
+            f"• Close Near High: {closing_near_high_pct:.1f}% (Extreme Late Buying Pressure)\n"
+            f"• Authentic Delivery: {delivery_pct:.1f}% (Institutional Delivery Holding)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"☀️ *Morning Execution Playbook:*\n"
+            f"• If opens with gap-up >= +1.5%, book 50% at Target 1 and immediately move stop to yesterday's close (₹{buy_price:,.2f}).\n"
+            f"• If opens below ₹{stop_loss:,.2f}, exit immediately at 9:16 AM without holding.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{cls.get_stock_links(clean_sym)}\n"
+            f"📡 *BTST Cockpit:* {action_url}&symbol={clean_sym}"
+        )
+
     # ==========================================================
     # 4. In-App Notification & Audit Logging
     # ==========================================================
@@ -1565,6 +1763,243 @@ class AlertDispatchService:
         except Exception as e:
             logger.error(f"Error dispatching multibagger telegram alert for {symbol}: {e}", exc_info=True)
             results["telegram"] = {"success": False, "error": str(e)}
+
+        return results
+
+    @classmethod
+    def trigger_velocity_alert(
+        cls,
+        db: Session,
+        symbol: str,
+        alert_type: str,
+        title: str,
+        message: str,
+        data_payload: Optional[Dict[str, Any]] = None,
+        severity: str = "HIGH",
+        auto_broadcast: bool = True,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Dispatches institutional in-app notification and Telegram broadcast for Velocity Burst Elite
+        breakouts and high-compression setups.
+        """
+        clean_sym = (symbol or "").strip().upper()
+        for sfx in [".NS", ".BO"]:
+            if clean_sym.endswith(sfx):
+                clean_sym = clean_sym[:-len(sfx)]
+        if not clean_sym:
+            return {"success": False, "error": "No symbol provided"}
+
+        # Lookup company details
+        comp = db.query(Company).filter(Company.symbol == clean_sym).first()
+        company_name = comp.company if (comp and comp.company) else clean_sym
+        sector = comp.sector if (comp and comp.sector) else "NSE Equity"
+
+        payload = data_payload or {}
+        now_ts = time.time()
+        cache_key = f"VBE:{clean_sym}:{alert_type}"
+
+        # In-memory dedup check unless forced
+        if not force:
+            with cls._dispatch_lock:
+                cls._recent_dispatches = {k: v for k, v in cls._recent_dispatches.items() if now_ts - v < 14400}
+                last_ts = cls._recent_dispatches.get(cache_key)
+                if last_ts and (now_ts - last_ts < 14400):
+                    logger.info(f"VBE alert for {clean_sym} ({alert_type}) throttled in-memory ({int(now_ts - last_ts)}s ago).")
+                    return {"success": False, "throttled": True}
+
+        # 1. In-App SystemNotification
+        cutoff_time = cls.get_dedup_cutoff(hours=4)
+        notif = None
+        if not force:
+            existing_notif = (
+                db.query(SystemNotification)
+                .filter(
+                    SystemNotification.category == "VELOCITY_BURST_ELITE",
+                    SystemNotification.created_at >= cutoff_time,
+                    SystemNotification.title.like(f"%{clean_sym}%"),
+                )
+                .first()
+            )
+            if existing_notif:
+                notif = existing_notif
+
+        if not notif:
+            notif = cls.create_in_app_notification(
+                db=db,
+                title=title,
+                message=message,
+                category="VELOCITY_BURST_ELITE",
+                severity="critical" if severity in ("CRITICAL", "HIGH") else "warning",
+                action_url=f"/velocity-burst-elite?symbol={clean_sym}",
+                metadata={
+                    "symbol": clean_sym,
+                    "company_name": company_name,
+                    "alert_type": alert_type,
+                    "payload": payload,
+                },
+            )
+
+        with cls._dispatch_lock:
+            cls._recent_dispatches[cache_key] = now_ts
+
+        results = {
+            "success": True,
+            "symbol": clean_sym,
+            "notification_id": notif.id if notif else None,
+            "telegram_success": False,
+            "telegram_res": None,
+        }
+
+        # 2. Automated Telegram Broadcast
+        if auto_broadcast:
+            # Check DB deduplication for Telegram
+            if not force and cls.is_duplicate_dispatch(db, channel="TELEGRAM", symbol=clean_sym, cooldown_hours=4.0, trigger_tag="VELOCITY"):
+                logger.info(f"Telegram alert for {clean_sym} already dispatched within cooldown.")
+                results["telegram_throttled"] = True
+                return results
+
+            # Format institutional memo
+            if alert_type == "BREAKOUT":
+                cmp_val = float(payload.get("entry_price") or payload.get("cmp") or 0.0)
+                sl_val = float(payload.get("stop_loss") or round(cmp_val * 0.96, 2))
+                t1_val = float(payload.get("target_1") or round(cmp_val * 1.08, 2))
+                t2_val = float(payload.get("target_2") or round(cmp_val * 1.15, 2))
+                t3_val = float(payload.get("target_3")) if payload.get("target_3") else None
+                ai_verdict = str(payload.get("ai_verdict") or "ELITE A")
+                confidence_score = float(payload.get("confidence_score") or 90.0)
+                risk_reward = float(payload.get("risk_reward") or 2.5)
+                relative_volume = float(payload.get("relative_volume_rvol") or payload.get("relative_volume") or 2.5)
+                candle_strength = float(payload.get("breakout_candle_strength") or payload.get("candle_strength") or 85.0)
+                vwap_confirmed = bool(payload.get("vwap_confirmed", True))
+                rsi_momentum = float(payload.get("rsi_momentum")) if payload.get("rsi_momentum") else None
+
+                is_apex_1pct = bool(payload.get("is_apex_1pct", False))
+                apex_rank = payload.get("apex_rank")
+                pb = payload.get("pillar_breakdown", {})
+                p1_f = pb.get("p1_fundamentals", {}) if isinstance(pb, dict) else {}
+                p2_b = pb.get("p2_base_dna", {}) if isinstance(pb, dict) else {}
+                p3_sm = pb.get("p3_smart_money", {}) if isinstance(pb, dict) else {}
+                pat_g = float(p1_f.get("pat_growth") or payload.get("pat_growth") or 0.0)
+                rev_g = float(p1_f.get("rev_growth") or payload.get("revenue_growth") or 0.0)
+                deliv_p = float(p3_sm.get("delivery_pct") or payload.get("delivery_pct") or 0.0)
+                base_pat = str(p2_b.get("pattern") or payload.get("pattern_tag") or "")
+
+                memo = cls.format_velocity_breakout_alert(
+                    symbol=clean_sym,
+                    company_name=company_name,
+                    ai_verdict=ai_verdict,
+                    confidence_score=confidence_score,
+                    entry_price=cmp_val,
+                    stop_loss=sl_val,
+                    target_1=t1_val,
+                    target_2=t2_val,
+                    target_3=t3_val,
+                    risk_reward=risk_reward,
+                    relative_volume=relative_volume,
+                    candle_strength=candle_strength,
+                    vwap_confirmed=vwap_confirmed,
+                    rsi_momentum=rsi_momentum,
+                    sector=sector,
+                    apex_rank=apex_rank,
+                    is_apex_1pct=is_apex_1pct,
+                    pat_growth=pat_g,
+                    rev_growth=rev_g,
+                    delivery_pct=deliv_p,
+                    base_pattern_name=base_pat,
+                    action_url="http://localhost:3000/velocity-burst-elite",
+                )
+            elif alert_type == "SLEEPING_GIANT":
+                cmp_val = float(payload.get("current_close") or payload.get("current_price") or payload.get("cmp") or 0.0)
+                comp_score = float(payload.get("compression_score") or 85.0)
+                sq_bars = int(payload.get("squeeze_duration_bars") or payload.get("squeeze_bars") or 5)
+                kw_pct = float(payload.get("keltner_width_pct")) if payload.get("keltner_width_pct") else None
+                trig_val = float(payload.get("trigger_price") or cmp_val)
+                sl_val = float(payload.get("stop_loss") or round(cmp_val * 0.95, 2))
+                t1_val = float(payload.get("target_1") or round(cmp_val * 1.08, 2))
+                t2_val = float(payload.get("target_2") or round(cmp_val * 1.15, 2))
+
+                memo = cls.format_velocity_sleeping_giant_alert(
+                    symbol=clean_sym,
+                    company_name=company_name,
+                    compression_score=comp_score,
+                    squeeze_duration_bars=sq_bars,
+                    cmp=cmp_val,
+                    trigger_price=trig_val,
+                    stop_loss=sl_val,
+                    target_1=t1_val,
+                    target_2=t2_val,
+                    keltner_width_pct=kw_pct,
+                    sector=sector,
+                    action_url="http://localhost:3000/velocity-burst-elite",
+                )
+            elif alert_type == "BTST":
+                buy_p = float(payload.get("buy_price") or payload.get("current_price") or payload.get("cmp") or 0.0)
+                corridor_h = float(payload.get("buy_corridor_high") or round(buy_p * 1.006, 2))
+                sl_val = float(payload.get("stop_loss") or round(buy_p * 0.982, 2))
+                t1_val = float(payload.get("target_1") or round(buy_p * 1.025, 2))
+                t2_val = float(payload.get("target_2") or round(buy_p * 1.048, 2))
+                rr_val = float(payload.get("risk_reward") or 2.2)
+                ai_verdict = str(payload.get("ai_verdict") or payload.get("action_recommended") or "BUY_BTST_ELITE")
+                confidence_score = float(payload.get("confidence_score") or payload.get("btst_confidence") or 90.0)
+                continuation_prob = float(payload.get("continuation_probability") or 85.0)
+                close_near_high = float(payload.get("closing_near_high_pct") or 92.0)
+                delivery_pct = float(payload.get("delivery_pct") or 68.0)
+                vol_surge = float(payload.get("volume_surge_multiple") or payload.get("relative_volume_rvol") or 2.5)
+                is_apex = bool(payload.get("is_apex_1pct", False))
+                apex_rank = payload.get("apex_rank")
+
+                memo = cls.format_velocity_btst_alert(
+                    symbol=clean_sym,
+                    company_name=company_name,
+                    ai_verdict=ai_verdict,
+                    confidence_score=confidence_score,
+                    buy_price=buy_p,
+                    buy_corridor_high=corridor_h,
+                    target_1=t1_val,
+                    target_2=t2_val,
+                    stop_loss=sl_val,
+                    risk_reward=rr_val,
+                    closing_near_high_pct=close_near_high,
+                    delivery_pct=delivery_pct,
+                    volume_surge_multiple=vol_surge,
+                    continuation_probability=continuation_prob,
+                    sector=sector,
+                    is_apex_1pct=is_apex,
+                    apex_rank=apex_rank,
+                    action_url="http://localhost:3000/velocity-burst-elite?tab=btst",
+                )
+            else:
+                memo = (
+                    f"🚀 *ALPHA INDIA | VELOCITY BURST ELITE*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🏢 *{company_name or clean_sym}* (`{clean_sym}` | NSE)\n"
+                    f"⚡ *Alert:* {title}\n"
+                    f"📋 *Summary:* {message}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"{cls.get_stock_links(clean_sym)}\n"
+                    f"📡 *Velocity Cockpit:* http://localhost:3000/velocity-burst-elite?symbol={clean_sym}"
+                )
+
+            tg_cfg_dict = cls.get_telegram_config(db)
+            if tg_cfg_dict and tg_cfg_dict.get("is_enabled", True):
+                tg_res = cls.dispatch_telegram(
+                    bot_token=tg_cfg_dict["bot_token"],
+                    chat_id=tg_cfg_dict["chat_id"],
+                    text=memo,
+                )
+                cls.log_dispatch(
+                    db=db,
+                    channel="TELEGRAM",
+                    recipient=tg_cfg_dict["chat_id"],
+                    symbol=clean_sym,
+                    payload_preview=memo,
+                    status="SUCCESS" if tg_res.get("success") else "FAILED",
+                    error_message=tg_res.get("error"),
+                )
+                results["telegram_success"] = bool(tg_res.get("success"))
+                results["telegram_res"] = tg_res
+                logger.info(f"Broadcast Velocity Burst Elite alert for {clean_sym} to Telegram: {tg_res.get('success')}")
 
         return results
 

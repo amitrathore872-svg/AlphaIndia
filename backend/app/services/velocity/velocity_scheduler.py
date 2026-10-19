@@ -89,38 +89,56 @@ class VelocityBurstScheduler:
     @classmethod
     def _worker_loop(cls):
         """
-        Internal loop ticking every 30 seconds to evaluate scheduled jobs.
+        Internal loop ticking every 15 seconds to evaluate scheduled jobs.
+        Respects market hours and dual-regime intervals configured in AutonomousEngineScheduler.
         """
-        logger.info("[VelocityBurstScheduler] Worker loop initialized.")
-        last_hourly_scan = 0.0
+        logger.info("[VelocityBurstScheduler] Worker loop initialized with Dynamic Dual-Regime Orchestration.")
+        last_scan_epoch = 0.0
 
         while not cls._stop_event.is_set():
             try:
                 cls._heartbeat_time = datetime.now(timezone.utc)
                 now_epoch = time.time()
 
-                # Periodic routine scan every 5 minutes in background
-                if now_epoch - last_hourly_scan > 300:
-                    last_hourly_scan = now_epoch
-                    cls._run_cycle()
+                # Get dynamic interval from AutonomousEngineScheduler
+                from app.services.autonomous_scheduler import AutonomousEngineScheduler
+                eff_interval = AutonomousEngineScheduler.get_effective_interval("velocity_burst")
+                is_enabled = AutonomousEngineScheduler.is_engine_enabled("velocity_burst")
+
+                if eff_interval > 0 and is_enabled and not VelocityBurstOrchestrator.is_paused():
+                    if now_epoch - last_scan_epoch >= eff_interval:
+                        last_scan_epoch = now_epoch
+                        cls._run_cycle()
+                else:
+                    # Off-market, disabled, or paused: skip heavy CPU scan
+                    pass
 
             except Exception as e:
                 cls._last_error = str(e)
                 logger.error(f"[VelocityBurstScheduler] Error in cycle: {e}")
 
             # Sleep in small slices to allow fast shutdown
-            for _ in range(30):
+            for _ in range(15):
                 if cls._stop_event.is_set():
                     break
                 time.sleep(1.0)
 
     @classmethod
     def _run_cycle(cls):
+        from app.services.autonomous_scheduler import AutonomousEngineScheduler
+        AutonomousEngineScheduler._set_engine_status("velocity_burst", "RUNNING")
         db = SessionLocal()
+        records_count = 0
+        error_msg = None
         try:
             # Check market regime & run light universe scan
             MarketRegimeEngine.evaluate_regime(db)
-            VelocityBurstOrchestrator.execute_universe_scan(db, limit_symbols=100)
+            scan_res = VelocityBurstOrchestrator.execute_universe_scan(db, limit_symbols=100)
+            records_count = len(scan_res) if isinstance(scan_res, list) else 100
             cls._jobs_executed_count += 1
+        except Exception as exc:
+            error_msg = str(exc)
+            raise
         finally:
             db.close()
+            AutonomousEngineScheduler._record_engine_finish("velocity_burst", records_count, error_msg)

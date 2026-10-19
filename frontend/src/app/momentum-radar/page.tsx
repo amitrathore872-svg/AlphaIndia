@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
@@ -33,6 +33,9 @@ import {
   AlertCircle,
   Gauge,
   Eye,
+  Copy,
+  Check,
+  Download,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
@@ -85,10 +88,10 @@ const INITIAL_RULES: RuleToggle[] = [
 ];
 
 export default function MomentumRadarPage() {
-  // â”€â”€ Mode switcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Mode switcher
   const [pageMode, setPageMode] = useState<PageMode>("screener");
 
-  // â”€â”€ F&O Screener state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // F&O Screener state
   const [opportunities, setOpportunities] = useState<MomentumOpportunity[]>([]);
   const [metadata, setMetadata] = useState<MomentumRadarMetadata | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -112,25 +115,90 @@ export default function MomentumRadarPage() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [copiedSymbols, setCopiedSymbols] = useState<boolean>(false);
 
-  // â”€â”€ Universe Scan state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Universe Scan state
   const [universeStatus, setUniverseStatus] = useState<any>(null);
   const [universeScanLoading, setUniverseScanLoading] = useState(false);
   const [universeResults, setUniverseResults] = useState<MomentumOpportunity[]>([]);
   const [universeResultsMeta, setUniverseResultsMeta] = useState<UniverseScanMetadata | null>(null);
   const [universeMinMatches, setUniverseMinMatches] = useState(7);
   const [universeSearchTerm, setUniverseSearchTerm] = useState("");
+  const [universeSortBy, setUniverseSortBy] = useState<string>("match_count");
+  const [universeSortOrder, setUniverseSortOrder] = useState<"asc" | "desc">("desc");
   const [universePage, setUniversePage] = useState(1);
   const [universeTotalPages, setUniverseTotalPages] = useState(1);
   const [universeTotalCount, setUniverseTotalCount] = useState(0);
   const [universeScanTriggering, setUniverseScanTriggering] = useState(false);
 
-  // â”€â”€ Intraday Breakout state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Intraday Breakout state
   const [watchlistData, setWatchlistData] = useState<any>(null);
   const [intradayData, setIntradayData] = useState<any>(null);
   const [intradayLoading, setIntradayLoading] = useState(false);
   const [intradayRefreshing, setIntradayRefreshing] = useState(false);
   const intradayIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sorting handlers
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortOrder("desc");
+    }
+    setPage(1);
+  };
+
+  const handleUniverseSort = (field: string) => {
+    if (universeSortBy === field) {
+      setUniverseSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setUniverseSortBy(field);
+      setUniverseSortOrder("desc");
+    }
+    setUniversePage(1);
+  };
+
+  // Clipboard & CSV export helpers
+  const handleCopySymbols = (items: MomentumOpportunity[]) => {
+    if (!items || items.length === 0) return;
+    const symbols = items.map((x) => x.symbol).join(", ");
+    navigator.clipboard.writeText(symbols);
+    setCopiedSymbols(true);
+    setTimeout(() => setCopiedSymbols(false), 2000);
+  };
+
+  const handleExportCSV = (items: MomentumOpportunity[], filename = "momentum_radar_candidates.csv") => {
+    if (!items || items.length === 0) return;
+    const headers = [
+      "Symbol", "Company", "Sector", "CMP", "DayChangePct", "MatchScore", "ConvictionScore",
+      "VolSurge", "DailyRSI", "WeeklyRSI", "MonthlyRSI", "EntryTrigger", "StopLoss", "Target1"
+    ];
+    const rows = items.map((x) => [
+      x.symbol,
+      `"${(x.company_name || "").replace(/"/g, '""')}"`,
+      `"${(x.sector || "").replace(/"/g, '""')}"`,
+      x.cmp,
+      x.day_change_pct,
+      x.match_count,
+      x.conviction_score ?? "",
+      x.indicators?.volume_surge_ratio ?? "",
+      x.indicators?.daily_rsi ?? "",
+      x.indicators?.weekly_rsi ?? "",
+      x.indicators?.monthly_rsi ?? "",
+      x.trade_blueprint?.entry_trigger ?? "",
+      x.trade_blueprint?.stop_loss ?? "",
+      x.trade_blueprint?.target_1 ?? "",
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Toggle single rule
   const handleToggleRule = (id: string) => {
@@ -219,7 +287,7 @@ export default function MomentumRadarPage() {
     return list;
   }, [opportunities, rules, conviction79Only]);
 
-  // â”€â”€ Universe Scan handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Universe Scan handlers ─────────────────────────────────────
   const loadUniverseStatus = useCallback(async () => {
     try {
       const data = await fetchUniverseScanStatus();
@@ -234,6 +302,9 @@ export default function MomentumRadarPage() {
     try {
       const data = await fetchUniverseScanResults({
         min_matches: universeMinMatches,
+        search: universeSearchTerm.trim() || undefined,
+        sort_by: universeSortBy,
+        sort_order: universeSortOrder,
         min_mcap: 1000,
         min_price: 20,
         min_turnover_lakhs: 50,
@@ -249,7 +320,7 @@ export default function MomentumRadarPage() {
     } finally {
       setUniverseScanLoading(false);
     }
-  }, [universeMinMatches, universePage]);
+  }, [universeMinMatches, universeSearchTerm, universeSortBy, universeSortOrder, universePage]);
 
   const handleTriggerUniverseScan = async () => {
     setUniverseScanTriggering(true);
@@ -280,18 +351,9 @@ export default function MomentumRadarPage() {
     if (pageMode === "universe") {
       loadUniverseResults();
     }
-  }, [pageMode, universeMinMatches, universePage, loadUniverseResults]);
+  }, [pageMode, universeMinMatches, universeSearchTerm, universeSortBy, universeSortOrder, universePage, loadUniverseResults]);
 
-  const filteredUniverseResults = useMemo(() => {
-    if (!universeSearchTerm.trim()) return universeResults;
-    const term = universeSearchTerm.trim().toLowerCase();
-    return universeResults.filter(
-      (s) =>
-        s.symbol.toLowerCase().includes(term) ||
-        (s.company_name && s.company_name.toLowerCase().includes(term)) ||
-        (s.sector && s.sector.toLowerCase().includes(term))
-    );
-  }, [universeResults, universeSearchTerm]);
+  const filteredUniverseResults = universeResults;
 
   // â”€â”€ Intraday Breakout handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const loadIntradayBreakouts = useCallback(async () => {
@@ -356,6 +418,23 @@ export default function MomentumRadarPage() {
           subtitle="Multi-Timeframe institutional momentum scanner targeting stocks with Volume Expansion, Daily &amp; Weekly Upper Bollinger Band breakouts, Triple RSI (Daily/Weekly/Monthly &gt; 60), and Weekly WMA 30/50 Golden Cross."
           actions={
             <>
+              <ActionButton
+                variant="secondary"
+                onClick={() => handleCopySymbols(pageMode === "screener" ? processedOpportunities : filteredUniverseResults)}
+                title="Copy matching stock symbols to clipboard for TradingView/Sensibull"
+              >
+                {copiedSymbols ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-cyan-400" />}
+                {copiedSymbols ? "Copied Symbols!" : "Copy Symbols"}
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                onClick={() => handleExportCSV(pageMode === "screener" ? processedOpportunities : filteredUniverseResults, `momentum_${pageMode}_candidates.csv`)}
+                title="Export filtered opportunities to CSV"
+              >
+                <Download className="h-4 w-4 text-slate-400" />
+                Export CSV
+              </ActionButton>
+
               {pageMode === "screener" && (
                 <>
                   <ActionButton variant="primary" onClick={handleTriggerScan} disabled={scanning}>
@@ -390,7 +469,7 @@ export default function MomentumRadarPage() {
           }
         />
 
-        {/* â”€â”€ MODE SWITCHER TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── MODE SWITCHER TABS ────────────────────────────────────────── */}
         <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-100 dark:bg-[#060D1A] border border-slate-200 dark:border-slate-800/80">
           {/* Tab 1: F&O Screener */}
           <button
@@ -424,7 +503,7 @@ export default function MomentumRadarPage() {
             <Globe className="h-3.5 w-3.5" />
             Full Universe Scan
             <span className="ml-1 px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-800 dark:text-purple-300 text-[10px] font-bold">
-              {universeTotalCount > 0 ? universeTotalCount : (universeResultsMeta?.near_breakout_count ?? 61)}
+              {universeTotalCount > 0 ? universeTotalCount : (universeResultsMeta?.near_breakout_count ?? 0)}
             </span>
           </button>
 
@@ -442,7 +521,7 @@ export default function MomentumRadarPage() {
             Live Breakout Monitor
             {watchlistData && watchlistData.breakout_triggered_count > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] animate-pulse">
-                {watchlistData.breakout_triggered_count} ”¥
+                {watchlistData.breakout_triggered_count} ⚡
               </span>
             )}
             {watchlistData && watchlistData.total_watchlist > 0 && watchlistData.breakout_triggered_count === 0 && (
@@ -888,6 +967,35 @@ export default function MomentumRadarPage() {
               </select>
             </div>
 
+            {/* Sort Selector */}
+            <div className="flex items-center gap-1.5 text-xs font-mono text-slate-700 dark:text-slate-400 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 shadow-xs">
+              <span>Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-transparent text-slate-900 dark:text-white font-bold focus:outline-none cursor-pointer"
+              >
+                <option value="match_count">Match Score</option>
+                <option value="conviction_score">Conviction (0-100)</option>
+                <option value="volume_surge_ratio">Volume Surge (x DMA)</option>
+                <option value="daily_rsi">Daily RSI</option>
+                <option value="weekly_rsi">Weekly RSI</option>
+                <option value="day_change_pct">Day Return %</option>
+                <option value="cmp">CMP (Price)</option>
+                <option value="symbol">Symbol (A-Z)</option>
+              </select>
+              <button
+                onClick={() => setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
+                className="ml-1 text-cyan-600 dark:text-cyan-400 hover:text-cyan-300 font-bold px-1"
+                title={`Order: ${sortOrder.toUpperCase()} (Click to toggle)`}
+              >
+                {sortOrder === "desc" ? "↓" : "↑"}
+              </button>
+            </div>
+
             {/* Quick 79+ Conviction Filter Button */}
             <button
               onClick={() => setConviction79Only((prev) => !prev)}
@@ -956,15 +1064,60 @@ export default function MomentumRadarPage() {
               <table className="w-full text-left text-xs font-mono">
                 <thead className="bg-slate-100 dark:bg-slate-950/90 text-[10px] uppercase text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Symbol & Sector</th>
-                    <th className="py-3 px-3">Price & Return</th>
+                    <th className="py-3 px-4 cursor-pointer hover:text-cyan-400 transition-colors select-none" onClick={() => handleSort("symbol")}>
+                      <div className="flex items-center gap-1">
+                        <span>Symbol &amp; Sector</span>
+                        {sortBy === "symbol" ? (
+                          <span className="text-cyan-400">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 opacity-40" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-3 px-3 cursor-pointer hover:text-cyan-400 transition-colors select-none" onClick={() => handleSort("cmp")}>
+                      <div className="flex items-center gap-1">
+                        <span>Price &amp; Return</span>
+                        {sortBy === "cmp" ? (
+                          <span className="text-cyan-400">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 opacity-40" />
+                        )}
+                      </div>
+                    </th>
                     <th className="py-3 px-3">Trend (90D)</th>
                     <th className="py-3 px-3">Current Stage</th>
-                    <th className="py-3 px-3">Match Score</th>
-                    <th className="py-3 px-3 text-center">Vol &gt; SMA</th>
+                    <th className="py-3 px-3 cursor-pointer hover:text-cyan-400 transition-colors select-none" onClick={() => handleSort("match_count")}>
+                      <div className="flex items-center gap-1">
+                        <span>Match Score</span>
+                        {sortBy === "match_count" ? (
+                          <span className="text-cyan-400">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 opacity-40" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-3 px-3 text-center cursor-pointer hover:text-cyan-400 transition-colors select-none" onClick={() => handleSort("volume_surge_ratio")}>
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Vol &gt; SMA</span>
+                        {sortBy === "volume_surge_ratio" ? (
+                          <span className="text-cyan-400">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 opacity-40" />
+                        )}
+                      </div>
+                    </th>
                     <th className="py-3 px-3 text-center">Daily BB+</th>
                     <th className="py-3 px-3 text-center">Weekly BB+</th>
-                    <th className="py-3 px-3 text-center">RSI D / W / M</th>
+                    <th className="py-3 px-3 text-center cursor-pointer hover:text-cyan-400 transition-colors select-none" onClick={() => handleSort("daily_rsi")}>
+                      <div className="flex items-center justify-center gap-1">
+                        <span>RSI D / W / M</span>
+                        {sortBy === "daily_rsi" ? (
+                          <span className="text-cyan-400">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 opacity-40" />
+                        )}
+                      </div>
+                    </th>
                     <th className="py-3 px-3 text-center">WMA 30/50</th>
                     <th className="py-3 px-3">Setup Trigger</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -992,8 +1145,18 @@ export default function MomentumRadarPage() {
                                 {opp.symbol}
                               </Link>
                               {opp.is_perfect_match && (
-                                <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                                <span className="p-0.5 rounded bg-emerald-500/20 text-emerald-400" title="10/10 Perfect Breakout">
                                   <Sparkles className="h-3 w-3" />
+                                </span>
+                              )}
+                              {opp.indicators?.is_bb_expansion && (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold" title="Bollinger Bands actively expanding into breakout">
+                                  BB EXPAND
+                                </span>
+                              )}
+                              {opp.indicators?.is_bb_squeeze && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-bold" title="Bollinger Bands tight squeeze coiling before explosion">
+                                  BB SQUEEZE
                                 </span>
                               )}
                             </div>
@@ -1052,7 +1215,9 @@ export default function MomentumRadarPage() {
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${opp.tier_badge}`}
                             >
-                              {opp.match_count}/10 MATCH
+                              {(opp as any).customMatchCount !== undefined && rules.some((r) => !r.active)
+                                ? `${(opp as any).customMatchCount}/${(opp as any).activeRulesCount} ACTIVE`
+                                : `${opp.match_count}/10 MATCH`}
                             </span>
                             {opp.conviction_score !== undefined && (
                               <span
@@ -1539,9 +1704,7 @@ export default function MomentumRadarPage() {
         {/* END of screener mode content */}
         </>)}
 
-        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {/* MODE: FULL UNIVERSE SCAN                                         */}
-        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* ── MODE: FULL UNIVERSE SCAN ──────────────────────────────────── */}
         {pageMode === "universe" && (
           <div className="space-y-5">
             {/* Universe Status Cards */}
@@ -1559,7 +1722,7 @@ export default function MomentumRadarPage() {
                 color="cyan"
               />
               <KpiCard
-                label="â‰¥7/10 Near-Breakout"
+                label="≥ 7/10 Near-Breakout"
                 value={universeResultsMeta?.near_breakout_count ?? universeStatus?.last_universe_scan?.near_breakout_count ?? "—"}
                 sub="Watchlist Promoted"
                 color="amber"
@@ -1567,7 +1730,7 @@ export default function MomentumRadarPage() {
               <KpiCard
                 label="High Conviction"
                 value={universeResultsMeta?.high_conviction_count ?? "—"}
-                sub="â‰¥8/10 Conditions"
+                sub="≥ 8/10 Conditions"
                 color="emerald"
               />
               <KpiCard
@@ -1603,8 +1766,8 @@ export default function MomentumRadarPage() {
               <Clock className="h-4 w-4 flex-shrink-0" />
               <div>
                 {universeStatus?.is_off_market_window
-                  ? "âœ… Off-market window active — Autonomous scheduler will trigger full universe scan every 60 minutes. You can also trigger manually above."
-                  : "• Market hours active — Universe scanner paused. Intraday breakout monitor is watching your watchlist candidates live. Switch to the Live Breakout Monitor tab."}
+                  ? "✅ Off-market window active — Autonomous scheduler will trigger full universe scan every 60 minutes. You can also trigger manually above."
+                  : "⚫ Market hours active — Universe scanner paused. Intraday breakout monitor is watching your watchlist candidates live. Switch to the Live Breakout Monitor tab."}
               </div>
             </div>
 
@@ -1625,7 +1788,7 @@ export default function MomentumRadarPage() {
                             : "bg-white dark:bg-slate-900/60 border-slate-300 dark:border-slate-700/50 text-slate-700 dark:text-slate-400 hover:border-purple-500/30 hover:text-slate-900 dark:hover:text-slate-200"
                         }`}
                       >
-                        {n === 10 ? "10/10 Perfect" : `â‰¥${n}/10`}
+                        {n === 10 ? "10/10 Perfect" : `≥ ${n}/10`}
                       </button>
                     ))}
                   </div>
@@ -1636,15 +1799,21 @@ export default function MomentumRadarPage() {
                       type="text"
                       placeholder="Search symbol, company, sector..."
                       value={universeSearchTerm}
-                      onChange={(e) => setUniverseSearchTerm(e.target.value)}
+                      onChange={(e) => {
+                        setUniverseSearchTerm(e.target.value);
+                        setUniversePage(1);
+                      }}
                       className="w-full bg-white dark:bg-[#081324] border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-500/60 shadow-xs"
                     />
                     {universeSearchTerm && (
                       <button
-                        onClick={() => setUniverseSearchTerm("")}
+                        onClick={() => {
+                          setUniverseSearchTerm("");
+                          setUniversePage(1);
+                        }}
                         className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-xs"
                       >
-                        âœ•
+                        ✕
                       </button>
                     )}
                   </div>
@@ -1654,13 +1823,13 @@ export default function MomentumRadarPage() {
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/60 text-[11px] font-mono flex-wrap">
                   <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Active Institutional Gates:</span>
                   <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                    âœ“ Market Cap â‰¥ ₹1,000 Cr
+                    ✓ Market Cap ≥ ₹1,000 Cr
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30 font-bold">
-                    âœ“ Non-Penny (CMP â‰¥ ₹20)
+                    ✓ Non-Penny (CMP ≥ ₹20)
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold">
-                    âœ“ Liquid (Turnover â‰¥ ₹50L &amp; Vol â‰¥ 25k)
+                    ✓ Liquid (Turnover ≥ ₹50L &amp; Vol ≥ 25k)
                   </span>
                   <span className="text-slate-600 dark:text-slate-400 ml-auto font-bold">
                     {filteredUniverseResults.length} / {universeTotalCount} stocks showing
@@ -1696,18 +1865,90 @@ export default function MomentumRadarPage() {
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-[#07111F]/90">
                         <th className="text-left px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider w-10">#</th>
-                        <th className="text-left px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Symbol</th>
+                        <th className="text-left px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider cursor-pointer hover:text-purple-400 transition-colors select-none" onClick={() => handleUniverseSort("symbol")}>
+                          <div className="flex items-center gap-1">
+                            <span>Symbol</span>
+                            {universeSortBy === "symbol" ? (
+                              <span className="text-purple-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
                         <th className="text-left px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Sector</th>
-                        <th className="text-right px-3 py-3 text-emerald-700 dark:text-emerald-400 font-bold uppercase tracking-wider">Mcap (Cr)</th>
-                        <th className="text-right px-3 py-3 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider">CMP</th>
+                        <th className="text-right px-3 py-3 text-emerald-700 dark:text-emerald-400 font-bold uppercase tracking-wider cursor-pointer hover:text-emerald-300 transition-colors select-none" onClick={() => handleUniverseSort("market_cap_cr")}>
+                          <div className="flex items-center justify-end gap-1">
+                            <span>Mcap (Cr)</span>
+                            {universeSortBy === "market_cap_cr" ? (
+                              <span className="text-emerald-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th className="text-right px-3 py-3 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider cursor-pointer hover:text-purple-400 transition-colors select-none" onClick={() => handleUniverseSort("cmp")}>
+                          <div className="flex items-center justify-end gap-1">
+                            <span>CMP</span>
+                            {universeSortBy === "cmp" ? (
+                              <span className="text-purple-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
                         <th className="text-center px-3 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Trend (90D)</th>
                         <th className="text-center px-3 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Stage</th>
-                        <th className="text-right px-3 py-3 text-cyan-700 dark:text-cyan-400 font-bold uppercase tracking-wider">20D Turnover</th>
-                        <th className="text-center px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Score</th>
+                        <th className="text-right px-3 py-3 text-cyan-700 dark:text-cyan-400 font-bold uppercase tracking-wider cursor-pointer hover:text-cyan-300 transition-colors select-none" onClick={() => handleUniverseSort("turnover_lakhs")}>
+                          <div className="flex items-center justify-end gap-1">
+                            <span>20D Turnover</span>
+                            {universeSortBy === "turnover_lakhs" ? (
+                              <span className="text-cyan-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th className="text-center px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider cursor-pointer hover:text-purple-400 transition-colors select-none" onClick={() => handleUniverseSort("match_count")}>
+                          <div className="flex items-center justify-center gap-1">
+                            <span>Score</span>
+                            {universeSortBy === "match_count" ? (
+                              <span className="text-purple-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
                         <th className="text-center px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">10 Conditions</th>
-                        <th className="text-right px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Daily RSI</th>
-                        <th className="text-right px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Wkly RSI</th>
-                        <th className="text-right px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Vol Surge</th>
+                        <th className="text-right px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider cursor-pointer hover:text-purple-400 transition-colors select-none" onClick={() => handleUniverseSort("daily_rsi")}>
+                          <div className="flex items-center justify-end gap-1">
+                            <span>Daily RSI</span>
+                            {universeSortBy === "daily_rsi" ? (
+                              <span className="text-purple-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th className="text-right px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider cursor-pointer hover:text-purple-400 transition-colors select-none" onClick={() => handleUniverseSort("weekly_rsi")}>
+                          <div className="flex items-center justify-end gap-1">
+                            <span>Wkly RSI</span>
+                            {universeSortBy === "weekly_rsi" ? (
+                              <span className="text-purple-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
+                        <th className="text-right px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider cursor-pointer hover:text-purple-400 transition-colors select-none" onClick={() => handleUniverseSort("volume_surge_ratio")}>
+                          <div className="flex items-center justify-end gap-1">
+                            <span>Vol Surge</span>
+                            {universeSortBy === "volume_surge_ratio" ? (
+                              <span className="text-purple-400">{universeSortOrder === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-40" />
+                            )}
+                          </div>
+                        </th>
                         <th className="text-center px-4 py-3 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
@@ -1739,7 +1980,7 @@ export default function MomentumRadarPage() {
                             </td>
                             <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{stock.sector}</td>
                             <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                              {stock.market_cap_cr ? `₹${Math.round(stock.market_cap_cr).toLocaleString()} Cr` : "â‰¥ ₹1,000 Cr"}
+                              {stock.market_cap_cr ? `₹${Math.round(stock.market_cap_cr).toLocaleString()} Cr` : "≥ ₹1,000 Cr"}
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900 dark:text-white">
                               ₹{stock.cmp?.toLocaleString()}
@@ -1800,7 +2041,7 @@ export default function MomentumRadarPage() {
                             </td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`font-bold ${(stock.indicators?.volume_surge_ratio ?? 0) >= 2 ? "text-amber-600 dark:text-amber-400" : "text-slate-600 dark:text-slate-400"}`}>
-                                {stock.indicators?.volume_surge_ratio?.toFixed(2) ?? "—"}Ã—
+                                {stock.indicators?.volume_surge_ratio?.toFixed(2) ?? "—"}×
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-center">
@@ -1850,7 +2091,7 @@ export default function MomentumRadarPage() {
         )}
 
         {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {/* MODE: LIVE INTRADAY BREAKOUT MONITOR                             */}
+        {/* MODE: LIVE INTRADAY⚡ BREAKOUT MONITOR                             */}
         {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {pageMode === "intraday" && (
           <div className="space-y-5">
@@ -1872,8 +2113,8 @@ export default function MomentumRadarPage() {
                   <Radio className={`h-4 w-4 flex-shrink-0 ${intradayData?.is_market_hours ? "text-emerald-400 animate-pulse" : "text-slate-500"}`} />
                   <div className="flex-1">
                     {intradayData?.is_market_hours
-                      ? `Ÿ¢ MARKET HOURS ACTIVE — Auto-polling every 60s. Watchlist: ${intradayData?.metadata?.watchlist_size ?? 0} stocks being monitored. Last scan: ${intradayData?.metadata?.last_scan_time ?? "—"}`
-                      : `âš« MARKET CLOSED — Live monitoring paused. Run the Full Universe Scan tonight to build tomorrow's watchlist. Watchlist: ${watchlistData?.total_watchlist ?? 0} candidates from last scan.`}
+                      ? `🟢 MARKET HOURS ACTIVE — Auto-polling every 60s. Watchlist: ${intradayData?.metadata?.watchlist_size ?? 0} stocks being monitored. Last scan: ${intradayData?.metadata?.last_scan_time ?? "—"}`
+                      : `⚫ MARKET CLOSED — Live monitoring paused. Run the Full Universe Scan tonight to build tomorrow's watchlist. Watchlist: ${watchlistData?.total_watchlist ?? 0} candidates from last scan.`}
                   </div>
                 </div>
 
@@ -1882,7 +2123,7 @@ export default function MomentumRadarPage() {
                   <div className="space-y-2">
                     <h3 className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-2 uppercase tracking-wider">
                       <Zap className="h-4 w-4" />
-                      ”¥ LIVE BREAKOUTS DETECTED ({intradayData.breakouts.length})
+                      ⚡ LIVE⚡ BREAKOUTS DETECTED ({intradayData.breakouts.length})
                     </h3>
                     {intradayData.breakouts.map((stock: any) => (
                       <div key={stock.symbol} className="flex items-center gap-4 p-4 rounded-xl border border-emerald-500/40 bg-emerald-950/15 hover:border-emerald-400/60 transition-all">
@@ -1904,7 +2145,7 @@ export default function MomentumRadarPage() {
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono">BREAKOUT</span>
                           </div>
                           <div className="text-slate-400 text-[11px] font-mono mt-0.5">
-                            {stock.company_name} Â· {stock.sector} Â· Prior: {stock.prior_match_count}/10 â†’ Now: {stock.match_count}/10
+                            {stock.company_name} · {stock.sector} · Prior: {stock.prior_match_count}/10 → Now: {stock.match_count}/10
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
@@ -1933,7 +2174,7 @@ export default function MomentumRadarPage() {
                       <h3 className="text-xs font-mono font-bold text-slate-800 dark:text-slate-300 flex items-center gap-2">
                         <Eye className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
                         Watchlist Monitor ({watchlistData.total_watchlist} candidates)
-                        <span className="text-slate-500 font-normal">— Stocks promoted from last night's â‰¥7/10 universe scan</span>
+                        <span className="text-slate-500 font-normal">— Stocks promoted from last night's ≥ 7/10 universe scan</span>
                       </h3>
                     </div>
                     <div className="overflow-x-auto">
@@ -1971,7 +2212,7 @@ export default function MomentumRadarPage() {
                                   <div className="text-slate-500 text-[10px] truncate max-w-[100px]">{cand.company_name}</div>
                                 </td>
                                 <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                                  {cand.market_cap_cr ? `₹${Math.round(cand.market_cap_cr).toLocaleString()} Cr` : "â‰¥ ₹1,000 Cr"}
+                                  {cand.market_cap_cr ? `₹${Math.round(cand.market_cap_cr).toLocaleString()} Cr` : "≥ ₹1,000 Cr"}
                                 </td>
                                 <td className="px-4 py-2.5 text-center">
                                   <span className={`font-bold ${cand.match_count >= 8 ? "text-amber-700 dark:text-amber-400" : "text-slate-600 dark:text-slate-400"}`}>
@@ -2000,11 +2241,11 @@ export default function MomentumRadarPage() {
                                 <td className="px-4 py-2.5 text-center">
                                   {isBreakout ? (
                                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] border border-emerald-500/30 font-bold">
-                                      ”¥ BREAKOUT
+                                      ”¥⚡ BREAKOUT
                                     </span>
                                   ) : (
                                     <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 text-[10px] border border-cyan-500/20">
-                                      ‘ WATCHING
+                                      ‘👁 WATCHING
                                     </span>
                                   )}
                                 </td>
@@ -2031,7 +2272,7 @@ export default function MomentumRadarPage() {
                     <p className="text-sm font-mono font-bold text-slate-700 dark:text-slate-400">No watchlist candidates yet</p>
                     <p className="text-xs font-mono text-slate-500 dark:text-slate-600 mt-1">
                       Switch to the <span className="text-purple-600 dark:text-purple-400">Full Universe Scan</span> tab and trigger an off-market scan.
-                      Stocks passing â‰¥7/10 conditions will be automatically promoted here for live monitoring.
+                      Stocks passing ≥ 7/10 conditions will be automatically promoted here for live monitoring.
                     </p>
                   </div>
                 )}

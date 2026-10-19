@@ -25,6 +25,10 @@ export interface IndicatorValues {
   volume_surge_ratio: number;
   daily_bb_upper: number;
   daily_bb_mid: number;
+  daily_bb_width?: number;
+  is_bb_squeeze?: boolean;
+  is_bb_expansion?: boolean;
+  weekly_close_gt_wma30?: boolean;
   daily_rsi: number;
   weekly_close: number;
   weekly_bb_upper: number;
@@ -282,6 +286,9 @@ export async function triggerUniverseScan(): Promise<any> {
 export async function fetchUniverseScanResults(params: {
   min_matches?: number;
   sector?: string;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
   min_mcap?: number;
   min_price?: number;
   min_turnover_lakhs?: number;
@@ -291,6 +298,9 @@ export async function fetchUniverseScanResults(params: {
   const query = new URLSearchParams();
   if (params.min_matches !== undefined) query.set("min_matches", String(params.min_matches));
   if (params.sector) query.set("sector", params.sector);
+  if (params.search) query.set("search", params.search);
+  if (params.sort_by) query.set("sort_by", params.sort_by);
+  if (params.sort_order) query.set("sort_order", params.sort_order);
   if (params.min_mcap !== undefined) query.set("min_mcap", String(params.min_mcap));
   if (params.min_price !== undefined) query.set("min_price", String(params.min_price));
   if (params.min_turnover_lakhs !== undefined) query.set("min_turnover_lakhs", String(params.min_turnover_lakhs));

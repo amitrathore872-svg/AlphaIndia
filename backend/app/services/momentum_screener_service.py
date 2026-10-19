@@ -268,7 +268,8 @@ class MomentumScreenerService:
             c2_daily_bb = bool(cur_cmp >= cur_d_bb_upper)
 
             # 3. Weekly Close > Weekly Upper Bollinger band (20, 2)
-            c3_weekly_bb = bool(cur_w_close >= cur_w_bb_upper)
+            # Enhanced: true breakout or near breakout within 1.0% of upper weekly band
+            c3_weekly_bb = bool(cur_w_close >= cur_w_bb_upper or cur_cmp >= cur_w_bb_upper * 0.99)
 
             # 4. Daily RSI (14) > 60
             c4_daily_rsi = bool(cur_d_rsi > 60.0)
@@ -405,6 +406,9 @@ class MomentumScreenerService:
                     "volume_surge_ratio": vol_ratio,
                     "daily_bb_upper": cur_d_bb_upper,
                     "daily_bb_mid": cur_d_bb_mid,
+                    "daily_bb_width": round(float(d_bb_width.iloc[-1]), 2) if not pd.isna(d_bb_width.iloc[-1]) else 0.0,
+                    "is_bb_squeeze": bool(not pd.isna(d_bb_width.iloc[-1]) and float(d_bb_width.iloc[-1]) <= 8.0),
+                    "is_bb_expansion": bool(not pd.isna(d_bb_width.iloc[-1]) and float(d_bb_width.iloc[-1]) > 12.0 and cur_cmp >= cur_d_bb_upper),
                     "daily_rsi": cur_d_rsi,
                     "weekly_close": cur_w_close,
                     "weekly_bb_upper": cur_w_bb_upper,
@@ -412,6 +416,7 @@ class MomentumScreenerService:
                     "monthly_rsi": cur_m_rsi,
                     "weekly_wma30": cur_w_wma30,
                     "weekly_wma50": cur_w_wma50,
+                    "weekly_close_gt_wma30": bool(cur_w_close >= cur_w_wma30),
                     "daily_open": cur_open,
                     "daily_high": cur_high,
                     "daily_low": cur_low,

@@ -78,7 +78,9 @@ def get_momentum_opportunities(
     # 4. Sorting
     reverse = (sort_order.lower() == "desc")
     if sort_by == "match_count":
-        filtered.sort(key=lambda x: (x.get("match_count", 0), x["indicators"].get("daily_rsi", 0)), reverse=reverse)
+        filtered.sort(key=lambda x: (x.get("match_count", 0), x.get("conviction_score", 0), x["indicators"].get("daily_rsi", 0)), reverse=reverse)
+    elif sort_by == "conviction_score":
+        filtered.sort(key=lambda x: (x.get("conviction_score", 0), x.get("match_count", 0)), reverse=reverse)
     elif sort_by == "daily_rsi":
         filtered.sort(key=lambda x: x["indicators"].get("daily_rsi", 0), reverse=reverse)
     elif sort_by == "weekly_rsi":
@@ -91,8 +93,10 @@ def get_momentum_opportunities(
         filtered.sort(key=lambda x: x.get("day_change_pct", 0), reverse=reverse)
     elif sort_by == "volume_surge_ratio":
         filtered.sort(key=lambda x: x["indicators"].get("volume_surge_ratio", 0), reverse=reverse)
+    elif sort_by == "symbol":
+        filtered.sort(key=lambda x: x.get("symbol", ""), reverse=reverse)
     else:
-        filtered.sort(key=lambda x: x.get("match_count", 0), reverse=reverse)
+        filtered.sort(key=lambda x: (x.get("match_count", 0), x.get("conviction_score", 0)), reverse=reverse)
 
     # 5. Pagination
     total_count = len(filtered)
@@ -228,6 +232,9 @@ def trigger_universe_scan(db: Session = Depends(get_db)):
 def get_universe_scan_results(
     min_matches: int = Query(default=7, ge=1, le=10, description="Minimum conditions matched"),
     sector: Optional[str] = Query(default=None, description="Filter by sector"),
+    search: Optional[str] = Query(default=None, description="Filter by symbol or company name"),
+    sort_by: str = Query(default="match_count", description="Sort by field: match_count, conviction_score, cmp, day_change_pct, daily_rsi, weekly_rsi, volume_surge_ratio, market_cap_cr, turnover_lakhs, symbol"),
+    sort_order: str = Query(default="desc", description="Sort order: asc or desc"),
     min_mcap: float = Query(default=1000.0, ge=0.0, description="Minimum market cap in Rs Cr"),
     min_price: float = Query(default=20.0, ge=0.0, description="Minimum CMP (penny stock filter)"),
     min_turnover_lakhs: float = Query(default=50.0, ge=0.0, description="Minimum 20d turnover in Rs Lakhs"),
@@ -237,7 +244,8 @@ def get_universe_scan_results(
 ):
     """
     Returns the last full-universe scan results filtered by minimum match count,
-    market cap (>= 1,000 Cr), non-penny price (>= Rs 20), and liquidity (turnover >= Rs 50L).
+    search term, market cap (>= 1,000 Cr), non-penny price (>= Rs 20), and liquidity (turnover >= Rs 50L),
+    with full server-side global sorting prior to pagination.
     """
     cache_data = MomentumUniverseScanner.load_universe_cache()
     if not cache_data:
@@ -255,6 +263,8 @@ def get_universe_scan_results(
 
     # Apply institutional filters
     filtered = []
+    search_clean = search.strip().lower() if search else None
+
     for r in results:
         if r.get("match_count", 0) < min_matches:
             continue
@@ -271,7 +281,38 @@ def get_universe_scan_results(
             sec_lower = sector.strip().lower()
             if sec_lower not in (r.get("sector") or "").lower():
                 continue
+        if search_clean:
+            sym_match = search_clean in (r.get("symbol") or "").lower()
+            comp_match = search_clean in (r.get("company_name") or "").lower()
+            sec_match = search_clean in (r.get("sector") or "").lower()
+            if not (sym_match or comp_match or sec_match):
+                continue
         filtered.append(r)
+
+    # Global Server-Side Sorting
+    reverse = (sort_order.lower() == "desc")
+    if sort_by == "match_count":
+        filtered.sort(key=lambda x: (x.get("match_count", 0), x.get("conviction_score", 0), (x.get("indicators") or {}).get("daily_rsi", 0)), reverse=reverse)
+    elif sort_by == "conviction_score":
+        filtered.sort(key=lambda x: (x.get("conviction_score", 0), x.get("match_count", 0)), reverse=reverse)
+    elif sort_by == "cmp":
+        filtered.sort(key=lambda x: x.get("cmp", 0) or 0, reverse=reverse)
+    elif sort_by == "day_change_pct":
+        filtered.sort(key=lambda x: x.get("day_change_pct", 0) or 0, reverse=reverse)
+    elif sort_by == "market_cap_cr":
+        filtered.sort(key=lambda x: x.get("market_cap_cr", 0) or 0, reverse=reverse)
+    elif sort_by == "turnover_lakhs":
+        filtered.sort(key=lambda x: x.get("turnover_lakhs", 0) or 0, reverse=reverse)
+    elif sort_by == "daily_rsi":
+        filtered.sort(key=lambda x: (x.get("indicators") or {}).get("daily_rsi", 0) or 0, reverse=reverse)
+    elif sort_by == "weekly_rsi":
+        filtered.sort(key=lambda x: (x.get("indicators") or {}).get("weekly_rsi", 0) or 0, reverse=reverse)
+    elif sort_by == "volume_surge_ratio":
+        filtered.sort(key=lambda x: (x.get("indicators") or {}).get("volume_surge_ratio", 0) or 0, reverse=reverse)
+    elif sort_by == "symbol":
+        filtered.sort(key=lambda x: x.get("symbol", ""), reverse=reverse)
+    else:
+        filtered.sort(key=lambda x: (x.get("match_count", 0), x.get("conviction_score", 0)), reverse=reverse)
 
     total_count = len(filtered)
     total_pages = max(1, (total_count + limit - 1) // limit)

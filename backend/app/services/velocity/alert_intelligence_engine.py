@@ -96,6 +96,27 @@ class AlertIntelligenceEngine:
         except Exception as e:
             logger.debug(f"[AlertIntelligence] WS push note: {e}")
 
+        # 4. In-App Notification drawer & automated Telegram broadcast
+        try:
+            v_res = AlertDispatchService.trigger_velocity_alert(
+                db=db,
+                symbol=clean_sym,
+                alert_type=alert_type,
+                title=title,
+                message=message,
+                data_payload=data_payload,
+                severity=severity,
+                auto_broadcast=True,
+            )
+            channels_dispatched.append("IN_APP")
+            if v_res and v_res.get("telegram_success"):
+                channels_dispatched.append("TELEGRAM")
+            alert.channels_dispatched = list(set(channels_dispatched))
+            db.commit()
+            db.refresh(alert)
+        except Exception as te:
+            logger.error(f"[AlertIntelligence] Failed to dispatch multi-channel alert for {clean_sym}: {te}", exc_info=True)
+
         return alert
 
     @classmethod

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   BellRing,
@@ -10,6 +11,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Zap,
+  Gauge,
   Radio,
   TrendingUp,
   Sliders,
@@ -126,6 +128,9 @@ export default function AlertCenterPage() {
     ipo_radar_enabled: true,
     ipo_min_conviction: 85,
     ipo_blue_sky_only: false,
+    // 15. Transformational Multibagger Radar
+    transformational_multibaggers_enabled: true,
+    transformational_min_conviction: 80,
     // Multi-Channel External Broadcast
     auto_broadcast_telegram: true,
     auto_broadcast_whatsapp: true,
@@ -135,6 +140,7 @@ export default function AlertCenterPage() {
   const [orderWinScanning, setOrderWinScanning] = useState(false);
   const [ipoScanning, setIpoScanning] = useState(false);
   const [peadScanning, setPeadScanning] = useState(false);
+  const [multibaggerScanning, setMultibaggerScanning] = useState(false);
   const [oppScanResult, setOppScanResult] = useState<OpportunityScanResult | null>(null);
   const [recentOpportunities, setRecentOpportunities] = useState<SystemNotificationItem[]>([]);
 
@@ -252,7 +258,7 @@ export default function AlertCenterPage() {
       setRecentOpportunities(recent || []);
       showNotification(
         "success",
-        `13-Engine Scan complete! Dispatched ${res.new_alerts_count} new opportunity alert(s). Skipped ${res.skipped_duplicates_count} daily duplicate(s).`
+        `15-Engine Scan complete! Dispatched ${res.new_alerts_count} new opportunity alert(s). Skipped ${res.skipped_duplicates_count} daily duplicate(s).`
       );
     } catch (err: unknown) {
       showNotification("error", `Opportunity scan failed: ${(err as Error).message}`);
@@ -689,6 +695,21 @@ export default function AlertCenterPage() {
     }
   };
 
+  const handleTriggerMultibaggerScanAlerts = async () => {
+    try {
+      setMultibaggerScanning(true);
+      const res = await notificationsApi.triggerMultibaggerScanAlerts(true, oppRules.transformational_min_conviction || 80);
+      showNotification("success", `Processed ${res.count} institutional Multibagger alert(s) dispatched to external channels!`);
+      const recent = await notificationsApi.getRecentOpportunities(35);
+      setRecentOpportunities(recent || []);
+      if (activeTab === "logs") loadLogs();
+    } catch (err: unknown) {
+      showNotification("error", `Failed to trigger Multibagger scan alerts: ${(err as Error).message}`);
+    } finally {
+      setMultibaggerScanning(false);
+    }
+  };
+
   const handleOpenWhatsAppWeb = () => {
     const cleanPhone = waRecipient ? waRecipient.replace(/[^0-9]/g, "") : "";
     const url = cleanPhone
@@ -727,6 +748,9 @@ export default function AlertCenterPage() {
         return { label: "EXECUTION COCKPIT", color: "bg-red-500/20 text-red-300 border-red-500/30", icon: Flame };
       case "IPO_RADAR":
         return { label: "MAINBOARD IPO RADAR", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", icon: Rocket };
+      case "TRANSFORMATIONAL_CATALYST":
+      case "MULTIBAGGER_OPPORTUNITY":
+        return { label: "MULTIBAGGER RADAR", color: "bg-purple-500/20 text-purple-300 border-purple-500/30", icon: Flame };
       default:
         return { label: category.replace("_", " "), color: "bg-slate-500/20 text-slate-300 border-slate-500/30", icon: BellRing };
     }
@@ -745,7 +769,7 @@ export default function AlertCenterPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
               External Alert Center
               <span className="text-xs px-2.5 py-0.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-mono font-semibold">
-                14-ENGINE RADAR
+                15-ENGINE RADAR
               </span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -754,7 +778,16 @@ export default function AlertCenterPage() {
           </div>
 
           {/* Live Channel Status Badges */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Link
+              href="/monitoring/control"
+              className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/50 transition cursor-pointer"
+              title="Configure Dual-Regime Schedules and CPU Performance Presets"
+            >
+              <Gauge size={13} className="text-cyan-400" />
+              <span>Engine Cadence: Auto-Regime</span>
+            </Link>
+
             <div
               className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold ${
                 configs.TELEGRAM?.is_enabled && configs.TELEGRAM?.bot_token
@@ -877,7 +910,7 @@ export default function AlertCenterPage() {
         </div>
 
         {/* ========================================================= */}
-        {/* TAB 0: 13-Engine Opportunity Radar Alerts & Thresholds */}
+        {/* TAB 0: 15-Engine Opportunity Radar Alerts & Thresholds */}
         {/* ========================================================= */}
         {activeTab === "opportunities" && (
           <div className="space-y-6">
@@ -1044,11 +1077,11 @@ export default function AlertCenterPage() {
                     Institutional Opportunity Radar Alerts
                   </h2>
                   <span className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-bold text-cyan-300 font-mono">
-                    14-ENGINE ACTIVE RADAR
+                    15-ENGINE ACTIVE RADAR
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
-                  Continuous multi-engine scanning across Minervini VCP, Pre-Breakout Coils, Multi-Timeframe Momentum, Tomorrow 5%+ Movers, Order Wins, Corporate Catalysts, Athena PEAD, Techno-Funda Pivots, Delivery Surges, Institutional MF Flows, Growth Acceleration, and Mainboard IPO Radar. Alerts auto-deduplicate daily and dispatch directly to Telegram &amp; WhatsApp.
+                  Continuous multi-engine scanning across Minervini VCP, Pre-Breakout Coils, Multi-Timeframe Momentum, Tomorrow 5%+ Movers, Order Wins, Corporate Catalysts, Athena PEAD, Techno-Funda Pivots, Delivery Surges, Institutional MF Flows, Growth Acceleration, Mainboard IPO Radar, and Transformational Multibagger Catalysts. Alerts auto-deduplicate daily and dispatch directly to Telegram &amp; WhatsApp.
                 </p>
               </div>
 
@@ -1059,7 +1092,16 @@ export default function AlertCenterPage() {
                   className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 px-4 py-2.5 text-xs font-bold text-black transition shadow-md cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw size={14} className={oppScanning ? "animate-spin" : ""} />
-                  {oppScanning ? "Scanning 14 Engines..." : "Run 14-Engine Opportunity Scan Now"}
+                  {oppScanning ? "Scanning 15 Engines..." : "Run 15-Engine Opportunity Scan Now"}
+                </button>
+
+                <button
+                  onClick={handleTriggerMultibaggerScanAlerts}
+                  disabled={multibaggerScanning}
+                  className="flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 px-4 py-2.5 text-xs font-semibold text-purple-300 transition cursor-pointer disabled:opacity-50"
+                >
+                  <Flame size={14} className={multibaggerScanning ? "animate-spin" : ""} />
+                  {multibaggerScanning ? "Scanning Multibaggers..." : "Dispatch Multibagger Radar"}
                 </button>
 
                 <button
@@ -1106,10 +1148,10 @@ export default function AlertCenterPage() {
                 <Filter size={12} /> Filter:
               </span>
               {[
-                { id: "ALL", label: "All 14 Engines" },
+                { id: "ALL", label: "All 15 Engines" },
                 { id: "BREAKOUT", label: "Breakout & Base Patterns (5)" },
                 { id: "MOMENTUM", label: "Momentum & Volatility (4)" },
-                { id: "INSTITUTIONAL", label: "Smart Money & Catalysts (3)" },
+                { id: "INSTITUTIONAL", label: "Smart Money & Catalysts (4)" },
                 { id: "FUNDAMENTAL", label: "Growth & Earnings Surprise (2)" },
               ].map((tab) => (
                 <button
@@ -1424,11 +1466,101 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
+              {/* Engine 5: Mainboard IPO Radar (Blue-Sky & Base Cheats) */}
+              {(clusterFilter === "ALL" || clusterFilter === "BREAKOUT") && (
+                <div
+                  className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
+                    oppRules.ipo_radar_enabled ? "border-cyan-500/40 bg-[#071824]" : "border-slate-800 bg-[#060c18] opacity-60"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                        <Rocket size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          5. Mainboard IPO Radar
+                          <span className="text-[10px] text-cyan-400 font-mono font-normal">/ipo-radar</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-400">Blue-Sky LDH, Base Cheats &amp; SEBI 30D/90D Anchor Lock-in Exhaustion (Zero SME)</p>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <span className="text-[11px] font-semibold text-slate-300">
+                        {oppRules.ipo_radar_enabled ? "Active" : "Disabled"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={oppRules.ipo_radar_enabled ?? true}
+                        onChange={(e) => setOppRules({ ...oppRules, ipo_radar_enabled: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-cyan-500 h-4 w-4 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="text-xs text-slate-300 space-y-2">
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Monitors all Mainboard NSE/BSE IPOs listed in the last 2.5 years. Dispatches alerts when price breaches Day-1 High (Blue-Sky), completes institutional VCP supply contraction, or rebounds after Anchor lock-in expiry.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <div className="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
+                          <span>Min Conviction:</span>
+                          <span className="text-cyan-400 font-bold">{oppRules.ipo_min_conviction ?? 85} / 100</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="70"
+                          max="95"
+                          step="5"
+                          value={oppRules.ipo_min_conviction ?? 85}
+                          onChange={(e) => setOppRules({ ...oppRules, ipo_min_conviction: Number(e.target.value) })}
+                          className="w-full accent-cyan-400 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center pt-4">
+                        <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={oppRules.ipo_blue_sky_only ?? false}
+                            onChange={(e) => setOppRules({ ...oppRules, ipo_blue_sky_only: e.target.checked })}
+                            className="rounded border-slate-700 bg-slate-900 text-cyan-500 h-4 w-4 cursor-pointer"
+                          />
+                          <span>Blue-Sky LDH Only (Day 1 Breakouts)</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <button
+                      onClick={handleTriggerIpoScanAlerts}
+                      disabled={ipoScanning}
+                      className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/30 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      <Rocket size={12} className={ipoScanning ? "animate-spin" : ""} />
+                      {ipoScanning ? "Dispatching..." : "Test & Dispatch IPO Alert"}
+                    </button>
+                    <a
+                      href="/ipo-radar"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
+                    >
+                      <span>Open IPO Radar</span>
+                      <ArrowUpRight size={13} />
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* ========================================================= */}
               {/* CLUSTER B: MOMENTUM & VOLATILITY */}
               {/* ========================================================= */}
 
-              {/* Engine 5: Momentum Radar (Match Score >= 9) */}
+              {/* Engine 6: Momentum Radar (Match Score >= 9) */}
               {(clusterFilter === "ALL" || clusterFilter === "MOMENTUM") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1442,7 +1574,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          5. Momentum Radar (Match ≥ 9)
+                          6. Momentum Radar (Match ≥ 9)
                           <span className="text-[10px] text-purple-400 font-mono font-normal">/momentum</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Multi-timeframe Bollinger Band &amp; RSI confluence</p>
@@ -1519,7 +1651,7 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
-              {/* Engine 6: Momentum Radar (Conviction 79+) */}
+              {/* Engine 7: Momentum Radar (Conviction 79+) */}
               {(clusterFilter === "ALL" || clusterFilter === "MOMENTUM") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1533,7 +1665,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          6. Momentum Radar (Conviction 79+)
+                          7. Momentum Radar (Conviction 79+)
                           <span className="text-[10px] text-amber-400 font-mono font-normal">/momentum</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Composite multi-timeframe conviction score (0–100)</p>
@@ -1589,7 +1721,7 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
-              {/* Engine 7: Tomorrow 5%+ Move Radar */}
+              {/* Engine 8: Tomorrow 5%+ Move Radar */}
               {(clusterFilter === "ALL" || clusterFilter === "MOMENTUM") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1603,7 +1735,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          7. Tomorrow 5%+ Move Radar
+                          8. Tomorrow 5%+ Move Radar
                           <span className="text-[10px] text-rose-400 font-mono font-normal">/intraday-radar</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">High-probability pre-market squeeze &amp; NR7 coils</p>
@@ -1659,7 +1791,7 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
-              {/* Engine 8: Delivery Breakout & Flow Radar */}
+              {/* Engine 9: Delivery Breakout & Flow Radar */}
               {(clusterFilter === "ALL" || clusterFilter === "MOMENTUM") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1673,7 +1805,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          8. Delivery Surge & Net Flow
+                          9. Delivery Surge & Net Flow
                           <span className="text-[10px] text-indigo-400 font-mono font-normal">/delivery-radar</span>
                           <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-300">
                             70% APEX / 62% SWING
@@ -1797,7 +1929,7 @@ export default function AlertCenterPage() {
               {/* CLUSTER C: SMART MONEY & CATALYSTS */}
               {/* ========================================================= */}
 
-              {/* Engine 9: Order Win Radar */}
+              {/* Engine 10: Order Win Radar */}
               {(clusterFilter === "ALL" || clusterFilter === "INSTITUTIONAL") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1811,7 +1943,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          9. Order Win Radar
+                          10. Order Win Radar
                           <span className="text-[10px] text-amber-400 font-mono font-normal">/order-wins</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Transformational commercial &amp; sovereign contract wins</p>
@@ -1884,7 +2016,7 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
-              {/* Engine 10: Corporate Catalyst Announcements */}
+              {/* Engine 11: Corporate Catalyst Announcements */}
               {(clusterFilter === "ALL" || clusterFilter === "INSTITUTIONAL") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1898,7 +2030,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          10. Corporate Catalysts
+                          11. Corporate Catalysts
                           <span className="text-[10px] text-yellow-400 font-mono font-normal">/announcements</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Acquisitions, demergers, capex, and defense filings</p>
@@ -1954,7 +2086,7 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
-              {/* Engine 11: Mutual Fund Smart Money & Fresh Entries */}
+              {/* Engine 12: Mutual Fund Smart Money & Fresh Entries */}
               {(clusterFilter === "ALL" || clusterFilter === "INSTITUTIONAL") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -1968,7 +2100,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          11. Mutual Fund Smart Money
+                          12. Mutual Fund Smart Money
                           <span className="text-[10px] text-violet-400 font-mono font-normal">/institutional</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Fresh AMC initiations &amp; institutional block accumulation</p>
@@ -2041,11 +2173,93 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
+              {/* Engine 13: Transformational Multibagger Radar (/investor-intelligence) */}
+              {(clusterFilter === "ALL" || clusterFilter === "INSTITUTIONAL") && (
+                <div
+                  className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
+                    oppRules.transformational_multibaggers_enabled ? "border-purple-500/40 bg-[#160829]" : "border-slate-800 bg-[#060c18] opacity-60"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-400">
+                        <Flame size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          13. Multibagger Radar
+                          <span className="text-[10px] text-purple-400 font-mono font-normal">/investor-intelligence</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-400">Transformational Catalysts, Capex Multipliers &amp; Concall Guidance</p>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <span className="text-[11px] font-semibold text-slate-300">
+                        {oppRules.transformational_multibaggers_enabled ? "Active" : "Disabled"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={oppRules.transformational_multibaggers_enabled ?? true}
+                        onChange={(e) => setOppRules({ ...oppRules, transformational_multibaggers_enabled: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-purple-500 h-4 w-4 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="text-xs text-slate-300 space-y-2">
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Scans institutional investor concalls, 2x–5x capex multipliers, PLI monopolies, and upward guidance revisions. Enforces Stage 2 Uptrend (CMP ≥ 50-DMA ≥ 200-DMA) or base inflection gating.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <div className="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
+                          <span>Min Conviction:</span>
+                          <span className="text-purple-400 font-bold">{oppRules.transformational_min_conviction ?? 80} / 100</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="70"
+                          max="95"
+                          step="5"
+                          value={oppRules.transformational_min_conviction ?? 80}
+                          onChange={(e) => setOppRules({ ...oppRules, transformational_min_conviction: Number(e.target.value) })}
+                          className="w-full accent-purple-400 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center pt-2">
+                        <button
+                          onClick={handleTriggerMultibaggerScanAlerts}
+                          disabled={multibaggerScanning}
+                          className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                        >
+                          <Flame size={13} className={multibaggerScanning ? "animate-spin" : ""} />
+                          {multibaggerScanning ? "Evaluating..." : "Dispatch Multibagger"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-mono">Stage 2 Uptrend Gate • 18h Dedup</span>
+                    <a
+                      href="/investor-intelligence"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 font-semibold"
+                    >
+                      <span>Open Investor Radar</span>
+                      <ArrowUpRight size={13} />
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* ========================================================= */}
               {/* CLUSTER D: FUNDAMENTAL ACCELERATION & EARNINGS SURPRISE */}
               {/* ========================================================= */}
 
-              {/* Engine 12: PEAD Drift Radar */}
+              {/* Engine 14: PEAD Drift Radar */}
               {(clusterFilter === "ALL" || clusterFilter === "FUNDAMENTAL") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -2059,7 +2273,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          12. PEAD Drift Radar
+                          14. PEAD Drift Radar
                           <span className="text-[10px] text-blue-400 font-mono font-normal">/pead-drift-screener</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Instant post-earnings announcement drift flashes &amp; buy zones</p>
@@ -2122,7 +2336,7 @@ export default function AlertCenterPage() {
                 </div>
               )}
 
-              {/* Engine 13: Growth Screener PRO Breakout */}
+              {/* Engine 15: Growth Screener PRO Breakout */}
               {(clusterFilter === "ALL" || clusterFilter === "FUNDAMENTAL") && (
                 <div
                   className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
@@ -2136,7 +2350,7 @@ export default function AlertCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          13. Growth Screener PRO
+                          15. Growth Screener PRO
                           <span className="text-[10px] text-emerald-400 font-mono font-normal">/growth-screener</span>
                         </h3>
                         <p className="text-[11px] text-slate-400">Quarterly profit acceleration with healthy ROCE &amp; margins</p>
@@ -2208,89 +2422,6 @@ export default function AlertCenterPage() {
                   </div>
                 </div>
               )}
-
-              {/* Engine 14: Mainboard IPO Radar (Blue-Sky & Base Cheats) */}
-              {(clusterFilter === "ALL" || clusterFilter === "BREAKOUT") && (
-                <div
-                  className={`rounded-2xl border p-5 shadow-lg transition space-y-4 ${
-                    oppRules.ipo_radar_enabled ? "border-cyan-500/40 bg-[#071824]" : "border-slate-800 bg-[#060c18] opacity-60"
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
-                        <Rocket size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          14. Mainboard IPO Radar
-                          <span className="text-[10px] text-cyan-400 font-mono font-normal">/ipo-radar</span>
-                        </h3>
-                        <p className="text-[11px] text-slate-400">Blue-Sky LDH, Base Cheats &amp; SEBI 30D/90D Anchor Lock-in Exhaustion (Zero SME)</p>
-                      </div>
-                    </div>
-
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <span className="text-[11px] font-semibold text-slate-300">
-                        {oppRules.ipo_radar_enabled ? "Active" : "Disabled"}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={oppRules.ipo_radar_enabled ?? true}
-                        onChange={(e) => setOppRules({ ...oppRules, ipo_radar_enabled: e.target.checked })}
-                        className="rounded border-slate-700 bg-slate-900 text-cyan-500 h-4 w-4 cursor-pointer"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="text-xs text-slate-300 space-y-2">
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Monitors all Mainboard NSE/BSE IPOs listed in the last 2.5 years. Dispatches alerts when price breaches Day-1 High (Blue-Sky), completes institutional VCP supply contraction, or rebounds after Anchor lock-in expiry.
-                    </p>
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <div className="flex justify-between text-[11px] font-mono text-slate-300 mb-1">
-                          <span>Min Conviction:</span>
-                          <span className="text-cyan-400 font-bold">{oppRules.ipo_min_conviction ?? 85} / 100</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="70"
-                          max="95"
-                          step="5"
-                          value={oppRules.ipo_min_conviction ?? 85}
-                          onChange={(e) => setOppRules({ ...oppRules, ipo_min_conviction: Number(e.target.value) })}
-                          className="w-full accent-cyan-400 cursor-pointer"
-                        />
-                      </div>
-                      <div className="flex items-center pt-4">
-                        <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300">
-                          <input
-                            type="checkbox"
-                            checked={oppRules.ipo_blue_sky_only ?? false}
-                            onChange={(e) => setOppRules({ ...oppRules, ipo_blue_sky_only: e.target.checked })}
-                            className="rounded border-slate-700 bg-slate-900 text-cyan-500 h-4 w-4 cursor-pointer"
-                          />
-                          <span>Blue-Sky LDH Only (Day 1 Breakouts)</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500 font-mono">Mainboard Only • 2R Rule (+15%)</span>
-                    <a
-                      href="/ipo-radar"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
-                    >
-                      <span>Open IPO Radar</span>
-                      <ArrowUpRight size={13} />
-                    </a>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* External Broadcast Auto-Dispatch Toggles */}
@@ -2301,7 +2432,7 @@ export default function AlertCenterPage() {
                   Auto-Dispatch Multi-Channel Broadcaster
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  When new opportunities trigger in any of the 13 active radar engines above, automatically dispatch formatted memos to enabled desks:
+                  When new opportunities trigger in any of the 15 active radar engines above, automatically dispatch formatted memos to enabled desks:
                 </p>
               </div>
               <div className="flex items-center gap-6">
@@ -2340,7 +2471,7 @@ export default function AlertCenterPage() {
 
               {recentOpportunities.length === 0 ? (
                 <div className="text-center py-8 text-xs text-slate-500">
-                  No opportunity alerts generated yet today. Click &quot;Run 13-Engine Opportunity Scan Now&quot; above to evaluate all engines.
+                  No opportunity alerts generated yet today. Click &quot;Run 15-Engine Opportunity Scan Now&quot; above to evaluate all engines.
                 </div>
               ) : (
                 <div className="space-y-2.5">

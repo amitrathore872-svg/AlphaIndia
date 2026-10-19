@@ -89,6 +89,7 @@ interface ActionButtonProps {
   children: React.ReactNode;
   className?: string;
   type?: "button" | "submit" | "reset";
+  title?: string;
 }
 
 const variantMap = {
@@ -107,12 +108,14 @@ export function ActionButton({
   children,
   className = "",
   type = "button",
+  title,
 }: ActionButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${variantMap[variant]} ${className}`}
     >
       {children}

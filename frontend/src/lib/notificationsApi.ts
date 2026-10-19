@@ -274,6 +274,16 @@ export const notificationsApi = {
     });
   },
 
+  async triggerMultibaggerScanAlerts(forceBroadcast: boolean = true, minScore: number = 80): Promise<{
+    status: string;
+    count: number;
+    alerts: Array<{ engine: string; symbol: string; title: string; notif_id: number }>;
+  }> {
+    return fetchJson(`${API_BASE}/alerts/trigger-multibagger-scan-alerts?force_broadcast=${forceBroadcast}&min_score=${minScore}`, {
+      method: "POST",
+    });
+  },
+
   async triggerStockVCPAlert(symbol: string, autoBroadcast: boolean = true): Promise<{
     status: string;
     symbol: string;
@@ -348,6 +358,8 @@ export interface OpportunityThresholds {
   ipo_radar_enabled?: boolean;
   ipo_min_conviction?: number;
   ipo_blue_sky_only?: boolean;
+  transformational_multibaggers_enabled?: boolean;
+  transformational_min_conviction?: number;
   // Legacy Tab 2 aliases for backward compatibility
   pead_enabled?: boolean;
   pead_min_conviction?: number;

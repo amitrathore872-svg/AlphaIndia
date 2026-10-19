@@ -202,15 +202,16 @@ class VelocityCacheManager:
         return max(count, local_count)
 
     def clear_prefix_sync(self, prefix: str) -> int:
+        local_count = self._local_cache.clear_prefix_sync(prefix)
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.run_coroutine_threadsafe(self.clear_prefix(prefix), loop)
             else:
-                return loop.run_until_complete(self.clear_prefix(prefix))
+                return max(local_count, loop.run_until_complete(self.clear_prefix(prefix)))
         except Exception:
             pass
-        return 0
+        return local_count
 
     def get_sync(self, key: str) -> Optional[str]:
         return self._local_cache.get_sync(key)

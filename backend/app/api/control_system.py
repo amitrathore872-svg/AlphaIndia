@@ -126,3 +126,55 @@ def trigger_all_services(background_tasks: BackgroundTasks) -> Dict[str, Any]:
         "success": True,
         "message": "All data fetching services triggered in parallel background tasks.",
     }
+
+
+class UpdateScheduleRequest(BaseModel):
+    market_interval_sec: Optional[int] = None
+    off_market_interval_sec: Optional[int] = None
+    market_hours_only: Optional[bool] = None
+    is_enabled: Optional[bool] = None
+
+
+class ApplyPresetRequest(BaseModel):
+    preset: str
+
+
+@router.get("/schedules")
+def get_engine_schedules() -> Dict[str, Any]:
+    """
+    Returns dual-regime intervals, active presets, market hours regime status,
+    and individual engine telemetry.
+    """
+    from app.services.autonomous_scheduler import AutonomousEngineScheduler
+    return AutonomousEngineScheduler.get_schedule_configs()
+
+
+@router.put("/schedules/{engine_key}")
+def update_engine_schedule(engine_key: str, request: UpdateScheduleRequest) -> Dict[str, Any]:
+    """
+    Dynamically reconfigures market and off-market intervals for any specific engine.
+    Hot-reloads instantly in memory and persists to database.
+    """
+    from app.services.autonomous_scheduler import AutonomousEngineScheduler
+    from fastapi import HTTPException
+    try:
+        patch = request.model_dump(exclude_unset=True) if hasattr(request, "model_dump") else request.dict(exclude_unset=True)
+        return AutonomousEngineScheduler.update_schedule_config(engine_key, patch)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/schedules/preset")
+def apply_schedule_preset(request: ApplyPresetRequest) -> Dict[str, Any]:
+    """
+    Applies one-click performance presets:
+    - PERFORMANCE_SAVER (Off-market paused, relaxed market cadences for lowest CPU)
+    - BALANCED (Standard institutional dual-regime)
+    - TURBO (High frequency intraday scanning)
+    """
+    from app.services.autonomous_scheduler import AutonomousEngineScheduler
+    from fastapi import HTTPException
+    try:
+        return AutonomousEngineScheduler.apply_preset(request.preset)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

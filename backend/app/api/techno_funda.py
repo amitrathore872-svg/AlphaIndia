@@ -13,17 +13,19 @@ from app.services.techno_funda_service import TechnoFundaService
 router = APIRouter(prefix="/techno-funda", tags=["Techno-Funda Radar"])
 
 
-@router.get("/screener", summary="Get Techno-Funda Pre-Breakout Screener Results")
+@router.get("/screener", summary="Get CANSLIM & Techno-Funda Institutional Screener Results")
 def get_techno_funda_screener(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
     search: Optional[str] = Query(None),
     sector: Optional[str] = Query(None),
+    preset: Optional[str] = Query(None, description="ALL, CANSLIM_TITANS, EARNINGS_ACCELERATORS, INSTITUTIONAL_FAVORITES, NEW_HIGHS_52W, VALUE_GROWTH, STAGE_2_LEADERS"),
     signal_filter: Optional[str] = Query(None, description="ALL, STRONG_BUY, PRE_BREAKOUT, MOMENTUM, PULLBACK, etc."),
-    pattern_filter: Optional[str] = Query(None, description="ALL, VCP, NEAR_PIVOT, PULLBACK, STAGE_2, etc."),
+    pattern_filter: Optional[str] = Query(None, description="Legacy pattern filter"),
     min_health_score: Optional[float] = Query(None),
     max_pivot_distance: Optional[float] = Query(None),
-    sort_by: str = Query("setup_score"),
+    min_market_cap: Optional[float] = Query(None, description="Minimum Market Cap in Rs. Cr, default 150"),
+    sort_by: str = Query("canslim_score"),
     sort_order: str = Query("desc"),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -33,10 +35,12 @@ def get_techno_funda_screener(
         limit=limit,
         search=search,
         sector=sector,
+        preset=preset,
         signal_filter=signal_filter,
         pattern_filter=pattern_filter,
         min_health_score=min_health_score,
         max_pivot_distance=max_pivot_distance,
+        min_market_cap=min_market_cap,
         sort_by=sort_by,
         sort_order=sort_order,
     )

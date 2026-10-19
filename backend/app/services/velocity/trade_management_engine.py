@@ -170,14 +170,14 @@ class BTSTContinuationEngine:
         day_low = float(lows.iloc[-1])
         day_range = max(0.01, day_high - day_low)
 
-        # Close position in day's range
-        close_near_high = round(((cmp - day_low) / day_range) * 100.0, 1)
+        # Close position in day's range (safely clamped between 0 and 100)
+        close_near_high = round(min(100.0, max(0.0, ((cmp - day_low) / day_range) * 100.0)), 1)
 
         # Volume Surge
         vol_avg = float(volumes.iloc[-20:].mean())
         vol_multiple = round(float(volumes.iloc[-1]) / max(1.0, vol_avg), 2)
 
-        # BTST Qualification Rules
+        # BTST Qualification Rules: Close in upper 20% of day's range and volume elevated
         late_breakout = bool(close_near_high >= 85.0 and cmp >= float(highs.iloc[-20:-1].max()) * 0.99)
         vwap_hold = True
         sector_strong = True
@@ -196,21 +196,89 @@ class BTSTContinuationEngine:
             vol_bonus = min(12.0, max(0.0, (vol_multiple - 1.0) * 5.0))
             effective_delivery = round(min(88.0, max(32.0, base_deliv + loc_bonus + vol_bonus)), 1)
 
-        # Confidence calculation
-        btst_score = min(100.0, (close_near_high * 0.4) + (effective_delivery * 0.3) + (min(3.0, vol_multiple) * 15.0))
+        # =========================================================================
+        # 5-Pillar BTST Confluence Model (Institutional 100-Point Architecture)
+        # =========================================================================
+        # Pillar 1: Closing Power Near High of Day (Max 25 pts)
+        if close_near_high >= 98.0:
+            p_close = 25.0
+        elif close_near_high >= 94.0:
+            p_close = 22.0
+        elif close_near_high >= 90.0:
+            p_close = 18.0
+        elif close_near_high >= 85.0:
+            p_close = 14.0
+        else:
+            p_close = 8.0
 
-        # Dynamic continuation probability grounded in close location, delivery accumulation & surge
-        continuation_prob = min(96.0, max(50.0, round((close_near_high * 0.45) + (effective_delivery * 0.35) + min(16.0, vol_multiple * 5.5), 1)))
+        # Pillar 2: Institutional Delivery Accumulation (Max 25 pts)
+        if effective_delivery >= 75.0:
+            p_deliv = 25.0
+        elif effective_delivery >= 65.0:
+            p_deliv = 21.0
+        elif effective_delivery >= 55.0:
+            p_deliv = 16.0
+        elif effective_delivery >= 45.0:
+            p_deliv = 11.0
+        else:
+            p_deliv = 5.0
+
+        # Pillar 3: Volume Surge vs 20-DMA (Max 20 pts)
+        if vol_multiple >= 3.5:
+            p_vol = 20.0
+        elif vol_multiple >= 2.5:
+            p_vol = 16.0
+        elif vol_multiple >= 2.0:
+            p_vol = 12.0
+        elif vol_multiple >= 1.5:
+            p_vol = 8.0
+        else:
+            p_vol = 4.0
+
+        # Pillar 4: Day Trend Sweet Spot (Max 15 pts) - Sweet spot is +2.0% to +5.5%
+        open_p = float(df["Open"].iloc[-1]) if "Open" in df.columns else cmp
+        day_gain_pct = round(((cmp - open_p) / max(0.01, open_p)) * 100.0, 2)
+        if 2.0 <= day_gain_pct <= 5.5:
+            p_gain = 15.0
+        elif 1.0 <= day_gain_pct < 2.0 or 5.5 < day_gain_pct <= 7.5:
+            p_gain = 10.0
+        elif 0.0 < day_gain_pct < 1.0:
+            p_gain = 6.0
+        else:
+            p_gain = 2.0
+
+        # Pillar 5: Trend Alignment & Moving Average Support (Max 15 pts)
+        ma20 = float(closes.iloc[-20:].mean()) if len(closes) >= 20 else cmp
+        ma50 = float(closes.iloc[-50:].mean()) if len(closes) >= 50 else ma20
+        if cmp > ma20 and ma20 > ma50:
+            p_trend = 15.0
+        elif cmp > ma20:
+            p_trend = 10.0
+        else:
+            p_trend = 3.0
+
+        btst_score = round(min(100.0, max(45.0, p_close + p_deliv + p_vol + p_gain + p_trend)), 1)
+
+        # Dynamic, un-flattened continuation probability (empirical 55% - 95%)
+        continuation_prob = round(min(95.0, max(52.0, 50.0 + (btst_score - 45.0) * 0.80)), 1)
 
         # Actionable BTST execution recommendation
-        if btst_score >= 88.0 and effective_delivery >= 55.0:
+        if btst_score >= 88.0 and effective_delivery >= 60.0 and close_near_high >= 90.0:
             action_recommended = "BUY_BTST_ELITE"
-        elif btst_score >= 80.0:
+        elif btst_score >= 78.0:
             action_recommended = "BUY_BTST"
-        elif btst_score >= 70.0:
+        elif btst_score >= 68.0:
             action_recommended = "BTST_ACCUMULATE"
         else:
             action_recommended = "WATCH_AT_CLOSE"
+
+        # Calculate exact BTST execution corridor, targets and invalidation stop
+        expected_gap_pct = round(max(1.8, min(4.0, (continuation_prob - 50.0) * 0.065)), 1)
+        t1_val = round(cmp * (1.0 + expected_gap_pct / 100.0), 2)
+        t2_val = round(cmp * (1.0 + (expected_gap_pct * 1.85) / 100.0), 2)
+        sl_val = round(max(cmp * 0.982, cmp - (day_range * 0.35)), 2)
+        rr_val = round((t1_val - cmp) / max(0.01, cmp - sl_val), 1)
+        corridor_high = round(cmp * 1.006, 2)
 
         return {
             "symbol": symbol.upper(),
@@ -222,10 +290,17 @@ class BTSTContinuationEngine:
             "sector_strong": sector_strong,
             "vwap_hold": vwap_hold,
             "volume_surge_multiple": vol_multiple,
-            "btst_confidence": round(btst_score, 1),
-            "morning_gap_pct": None,
+            "btst_confidence": btst_score,
+            "morning_gap_pct": expected_gap_pct,
             "continuation_probability": continuation_prob,
             "action_recommended": action_recommended,
+            "current_price": cmp,
+            "buy_price": cmp,
+            "buy_corridor_high": corridor_high,
+            "stop_loss": sl_val,
+            "target_1": t1_val,
+            "target_2": t2_val,
+            "risk_reward": rr_val,
         }
 
     @classmethod

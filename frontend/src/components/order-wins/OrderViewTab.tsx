@@ -16,6 +16,7 @@ import {
   LayoutGrid,
   Table as TableIcon,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 import {
   fetchAnnouncements,
@@ -26,19 +27,22 @@ import {
 import OrderWinCard from "@/components/announcements/OrderWinCard";
 
 interface OrderViewTabProps {
+  initialSearch?: string;
   onSelectOrder: (order: AnnouncementRadarItem) => void;
   onInspectHistory?: (symbol: string, companyName?: string) => void;
   onShowNotification?: (type: "success" | "error" | "info", message: string) => void;
 }
 
 export default function OrderViewTab({
+  initialSearch = "",
   onSelectOrder,
   onInspectHistory,
   onShowNotification,
 }: OrderViewTabProps) {
   const [items, setItems] = useState<AnnouncementRadarItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [search, setSearch] = useState<string>("");
+  const [search, setSearch] = useState<string>(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(initialSearch);
   const [selectedTier, setSelectedTier] = useState<OrderSignificanceTier | "">("");
   const [preset, setPreset] = useState<string>("ALL");
   const [minDealCr, setMinDealCr] = useState<number | undefined>(undefined);
@@ -46,6 +50,24 @@ export default function OrderViewTab({
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [page, setPage] = useState<number>(1);
   const pageSize = 40;
+
+  // Sync initialSearch if prop changes
+  useEffect(() => {
+    if (initialSearch !== undefined) {
+      setSearch(initialSearch);
+      setDebouncedSearch(initialSearch);
+      setPage(1);
+    }
+  }, [initialSearch]);
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -55,7 +77,7 @@ export default function OrderViewTab({
         order_tier: selectedTier || undefined,
         deal_value_min: minDealCr,
         rev_pct_min: minRevPct,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         sort_by: "announcement_date",
         sort_order: "desc",
         page,
@@ -68,7 +90,7 @@ export default function OrderViewTab({
     } finally {
       setLoading(false);
     }
-  }, [selectedTier, minDealCr, minRevPct, search, page, onShowNotification]);
+  }, [selectedTier, minDealCr, minRevPct, debouncedSearch, page, onShowNotification]);
 
   useEffect(() => {
     loadOrders();
@@ -107,6 +129,41 @@ export default function OrderViewTab({
     }
   };
 
+  const handleExportCSV = () => {
+    if (!items.length) return;
+    const headers = [
+      "ID",
+      "Symbol",
+      "Company",
+      "Date",
+      "Deal Value (Cr)",
+      "Revenue Lift %",
+      "Counterparty",
+      "Runway (Months)",
+      "Headline",
+    ];
+    const rows = items.map((it) => [
+      it.id,
+      it.symbol || "",
+      `"${(it.company_name || "").replace(/"/g, '""')}"`,
+      `"${it.announcement_date || it.published_at || ""}"`,
+      it.deal_value_cr ?? "",
+      it.synergy_rev_pct_ttm ?? "",
+      `"${(it.order_client_counterparty || "").replace(/"/g, '""')}"`,
+      it.order_execution_months ?? "",
+      `"${(it.headline || "").replace(/"/g, '""')}"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Order_Wins_Stream_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       {/* ── TOP FILTER BAR ────────────────────────────────────────────── */}
@@ -141,17 +198,23 @@ export default function OrderViewTab({
               type="text"
               placeholder="Search ticker, client, or headline..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 w-52 sm:w-64 font-mono"
             />
           </div>
         </div>
 
-        {/* View Mode & Refresh */}
+        {/* View Mode, Export & Refresh */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            title="Export order filings to CSV"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-400" />
+            <span>CSV</span>
+          </button>
+
           <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
             <button
               onClick={() => setViewMode("table")}
@@ -261,7 +324,9 @@ export default function OrderViewTab({
 
                       {/* Deal Value */}
                       <td className="py-3.5 px-3 font-semibold text-emerald-400 text-sm">
-                        {it.deal_value_cr ? `₹${it.deal_value_cr.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Cr` : "—"}
+                        {it.deal_value_cr != null && it.deal_value_cr > 0
+                          ? `₹${it.deal_value_cr.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Cr`
+                          : "—"}
                       </td>
 
                       {/* % Sales Lift */}

@@ -28,6 +28,7 @@ import {
   Activity,
   Rocket,
   FlaskConical,
+  Moon,
   LucideIcon,
 } from "lucide-react";
 
@@ -110,12 +111,22 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         description: "Institutional 18-stage breakout engine: contraction intelligence, base patterns, smart money, and automated trade management.",
       },
       {
+        id: "btst-overnight-radar",
+        name: "BTST Overnight Radar",
+        href: "/velocity-burst-elite?tab=btst",
+        icon: Moon,
+        badge: "BTST",
+        section: "BREAKOUT & SWING ENGINES",
+        description: "Late-day closing strength & high-delivery radar with morning gap targets and Top 1% Apex optimization.",
+      },
+      {
         id: "techno-funda",
-        name: "Techno-Funda Radar",
+        name: "CANSLIM Growth Radar",
         href: "/techno-funda",
         icon: Target,
+        badge: "CANSLIM",
         section: "BREAKOUT & SWING ENGINES",
-        description: "High-conviction fusion of quarterly growth acceleration with technical momentum.",
+        description: "Institutional fusion of quarterly earnings acceleration (PAT YoY > 25%), capital efficiency, and Stage-2 momentum.",
       },
       {
         id: "vcp-discovery",

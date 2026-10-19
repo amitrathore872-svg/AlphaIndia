@@ -139,8 +139,15 @@ export async function fetchBreakoutStats(): Promise<BreakoutExecutionStats> {
 }
 
 export async function testBreakoutTelegramAlert(symbol: string): Promise<any> {
-  return fetchJson(`/api/v1/breakout-execution/test-telegram/${symbol}`, {
-    method: "POST",
-    timeoutMs: 25000,
-  });
+  try {
+    return await fetchJson(`/api/v4/velocity/alerts/dispatch-telegram/${symbol}`, {
+      method: "POST",
+      timeoutMs: 25000,
+    });
+  } catch (err) {
+    return fetchJson(`/api/v1/breakout-execution/test-telegram/${symbol}`, {
+      method: "POST",
+      timeoutMs: 25000,
+    });
+  }
 }

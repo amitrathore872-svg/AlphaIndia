@@ -73,6 +73,11 @@ export interface DeliveryOpportunity {
   decision_archetype?: "CIRCUIT_LOCK" | "PRE_CIRCUIT" | "STEALTH_FLOAT_LOCK" | "HIGH_BUYER_DOMINANCE" | "SUPPORT_DEFENDER" | "MOMENTUM_BREAKOUT" | "BASE_ACCUMULATION" | string;
   archetype_label?: string;
   institutional_verdict?: string;
+  sparkline?: number[];
+  return_90d_pct?: number;
+  current_stage?: string;
+  stage_code?: string;
+  stage_badge?: string;
   blueprint: TradeBlueprint;
 }
 

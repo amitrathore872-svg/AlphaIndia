@@ -13,6 +13,8 @@ import {
   FileText,
   AlertCircle,
   Building2,
+  Download,
+  Zap,
 } from "lucide-react";
 import {
   fetchCompanyView,
@@ -24,13 +26,15 @@ const MCAP_STEPS = [0, 100, 500, 2000, 10000, 100000];
 
 interface CompanyViewTabProps {
   onInspectHistory?: (symbol: string, companyName?: string) => void;
+  onSelectOrder?: (order: any) => void;
 }
 
-export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps) {
+export default function CompanyViewTab({ onInspectHistory, onSelectOrder }: CompanyViewTabProps) {
   const [timeframe, setTimeframe] = useState<string>("6M");
   const [minRevenuePct, setMinRevenuePct] = useState<number>(0);
   const [mcapSliderIndex, setMcapSliderIndex] = useState<number>(2); // 500 Cr default
   const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [page, setPage] = useState<number>(1);
   const pageSize = 50;
 
@@ -40,6 +44,15 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
 
   const currentMinMcap = MCAP_STEPS[mcapSliderIndex];
 
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -47,7 +60,7 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
         timeframe,
         min_revenue_pct: minRevenuePct,
         min_market_cap_cr: currentMinMcap,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         page,
         limit: pageSize,
       });
@@ -57,7 +70,7 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
     } finally {
       setLoading(false);
     }
-  }, [timeframe, minRevenuePct, currentMinMcap, search, page]);
+  }, [timeframe, minRevenuePct, currentMinMcap, debouncedSearch, page]);
 
   useEffect(() => {
     loadData();
@@ -81,11 +94,42 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
     return `Over ₹${val} cr`;
   };
 
+  const handleExportCSV = () => {
+    if (!data?.items?.length) return;
+    const headers = [
+      "Symbol",
+      "Company",
+      "Orders as % of Revenue",
+      "Order Count",
+      "Total Order Value (Cr)",
+      "Company Revenue (Cr)",
+      "Market Cap (Cr)",
+    ];
+    const rows = data.items.map((r) => [
+      r.symbol,
+      `"${(r.company_name || "").replace(/"/g, '""')}"`,
+      r.orders_as_pct_of_revenue,
+      r.order_count,
+      r.total_order_value,
+      r.company_revenue,
+      r.market_cap,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Company_Orders_to_Revenue_${timeframe}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       {/* ── TOP DISCLAIMER ────────────────────────────────────────────── */}
       <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 text-xs text-slate-400 leading-relaxed font-mono">
-        <span className="text-amber-400 font-semibold">Note:</span> Order details are extracted using AI and may contain errors. Please verify the information by checking the PDF documents before making any business decisions.
+        <span className="text-amber-400 font-semibold">Note:</span> Order backlog figures are derived from Exchange disclosures and verified company filings. Click individual orders to inspect quarterly revenue realization models.
       </div>
 
       {/* ── FILTER CONTROLS (MATCHING SCREENSHOT 3) ───────────────────── */}
@@ -96,12 +140,9 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
             <input
               type="text"
-              placeholder="Search company..."
+              placeholder="Search company or ticker..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 w-48 sm:w-60 font-mono"
             />
           </div>
@@ -129,9 +170,10 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
             <span className="text-slate-400">Min Revenue %</span>
             <input
               type="number"
-              value={minRevenuePct}
+              value={minRevenuePct === 0 ? "" : minRevenuePct}
               onChange={(e) => {
-                setMinRevenuePct(Number(e.target.value) || 0);
+                const val = e.target.value === "" ? 0 : Number(e.target.value);
+                setMinRevenuePct(isNaN(val) ? 0 : val);
                 setPage(1);
               }}
               className="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-center font-bold text-emerald-400 focus:outline-none focus:border-cyan-400"
@@ -166,14 +208,25 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
           </div>
         </div>
 
-        {/* Refresh Button */}
-        <button
-          onClick={loadData}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan-400" : ""}`} />
-          REFRESH
-        </button>
+        {/* Export & Refresh */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            title="Export rankings to CSV"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-400" />
+            <span>CSV</span>
+          </button>
+
+          <button
+            onClick={loadData}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-cyan-400" : ""}`} />
+            REFRESH
+          </button>
+        </div>
       </div>
 
       {/* ── TABLE SUBTITLE ────────────────────────────────────────────── */}
@@ -265,7 +318,7 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
 
                         {/* Order Count */}
                         <td className="py-3.5 px-4 text-slate-300">
-                          {row.order_count} {row.order_count === 1 ? "orders" : "orders"}
+                          {row.order_count} {row.order_count === 1 ? "order" : "orders"}
                         </td>
 
                         {/* Total Order Value */}
@@ -292,9 +345,14 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
                         <tr className="bg-[#070d18]">
                           <td colSpan={7} className="p-5 pl-10 border-b border-slate-800">
                             <div className="space-y-3">
-                              <h4 className="text-sm md:text-base font-bold text-white font-sans tracking-tight">
-                                Individual Orders
-                              </h4>
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-white font-sans tracking-tight flex items-center gap-2">
+                                  <span>Individual Order Disclosures</span>
+                                  <span className="text-xs text-slate-400 font-normal">
+                                    (click any row to view revenue realization waterfall)
+                                  </span>
+                                </h4>
+                              </div>
 
                               <div className="overflow-x-auto rounded-lg border border-slate-800 bg-[#090f1e]">
                                 <table className="w-full text-left text-xs border-collapse font-mono">
@@ -307,14 +365,32 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
                                       <th className="py-2.5 px-3.5 font-medium">Duration</th>
                                       <th className="py-2.5 px-3.5 font-medium">Annual Value</th>
                                       <th className="py-2.5 px-3.5 font-medium">Revenue %</th>
-                                      <th className="py-2.5 px-3.5 text-right font-medium">PDF</th>
+                                      <th className="py-2.5 px-3.5 text-right font-medium">Actions</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-800/60">
                                     {row.orders.map((ord) => (
                                       <tr
                                         key={ord.id}
-                                        className="hover:bg-slate-800/40 transition-colors"
+                                        onClick={() => {
+                                          if (onSelectOrder) {
+                                            onSelectOrder({
+                                              id: ord.id,
+                                              symbol: row.symbol,
+                                              company_name: row.company_name,
+                                              headline: ord.headline,
+                                              deal_value_cr: ord.contract_value_cr,
+                                              order_execution_months: ord.duration_months,
+                                              synergy_rev_pct_ttm: ord.revenue_pct,
+                                              order_client_counterparty: ord.customer !== "Not mentioned" ? ord.customer : null,
+                                              catalyst_type: "ORDER_WIN",
+                                              ai_insight: ord.ai_insight,
+                                              pdf_url: ord.pdf_url,
+                                              announcement_date: ord.date,
+                                            });
+                                          }
+                                        }}
+                                        className="hover:bg-slate-800/50 cursor-pointer transition-colors group"
                                       >
                                         <td className="py-2.5 px-3.5 text-slate-300 whitespace-nowrap">
                                           {ord.date}
@@ -326,13 +402,17 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
                                           {ord.order_type}
                                         </td>
                                         <td className="py-2.5 px-3.5 text-emerald-400 font-semibold whitespace-nowrap">
-                                          ₹{ord.contract_value_cr.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Cr
+                                          {ord.contract_value_cr > 0
+                                            ? `₹${ord.contract_value_cr.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Cr`
+                                            : "—"}
                                         </td>
                                         <td className="py-2.5 px-3.5 text-slate-300 whitespace-nowrap">
                                           {ord.duration}
                                         </td>
                                         <td className="py-2.5 px-3.5 text-slate-200 whitespace-nowrap">
-                                          ₹{ord.annual_value_cr.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Cr
+                                          {ord.annual_value_cr > 0
+                                            ? `₹${ord.annual_value_cr.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Cr`
+                                            : "—"}
                                         </td>
                                         <td className="py-2.5 px-3.5 whitespace-nowrap">
                                           <span
@@ -346,7 +426,35 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
                                           </span>
                                         </td>
                                         <td className="py-2.5 px-3.5 text-right whitespace-nowrap">
-                                          <div className="flex items-center justify-end gap-1.5">
+                                          <div
+                                            className="flex items-center justify-end gap-1.5"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            {onSelectOrder && (
+                                              <button
+                                                onClick={() => {
+                                                  onSelectOrder({
+                                                    id: ord.id,
+                                                    symbol: row.symbol,
+                                                    company_name: row.company_name,
+                                                    headline: ord.headline,
+                                                    deal_value_cr: ord.contract_value_cr,
+                                                    order_execution_months: ord.duration_months,
+                                                    synergy_rev_pct_ttm: ord.revenue_pct,
+                                                    order_client_counterparty: ord.customer !== "Not mentioned" ? ord.customer : null,
+                                                    catalyst_type: "ORDER_WIN",
+                                                    ai_insight: ord.ai_insight,
+                                                    pdf_url: ord.pdf_url,
+                                                    announcement_date: ord.date,
+                                                  });
+                                                }}
+                                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950/80 text-cyan-400 border border-cyan-800/40 hover:bg-cyan-900 transition-colors inline-flex items-center gap-1"
+                                                title="Open execution waterfall drawer"
+                                              >
+                                                <Zap className="w-2.5 h-2.5" />
+                                                Waterfall
+                                              </button>
+                                            )}
                                             {ord.pdf_url && ord.pdf_url !== "-" ? (
                                               <a
                                                 href={ord.pdf_url}
@@ -368,7 +476,7 @@ export default function CompanyViewTab({ onInspectHistory }: CompanyViewTabProps
                                                 className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-slate-700 transition-colors"
                                                 title="View quarterly backlog history"
                                               >
-                                                His
+                                                Chart
                                               </button>
                                             )}
                                           </div>

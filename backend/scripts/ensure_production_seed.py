@@ -79,9 +79,13 @@ def ensure_production_database():
                 ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS weights_used JSON;
                 ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS summary_verdict TEXT;
                 ALTER TABLE velocity_market_regime ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+                -- Ensure filing_registry feed_type column and index exists
+                ALTER TABLE filing_registry ADD COLUMN IF NOT EXISTS feed_type VARCHAR(30);
+                CREATE INDEX IF NOT EXISTS idx_fr_feed_type ON filing_registry (feed_type);
             """))
             conn.commit()
-        logger.info("      Schema tables and custom velocity extensions verified.")
+        logger.info("      Schema tables, filing_registry extensions, and custom velocity verified.")
     except Exception as e:
         logger.warning(f"      Schema notice: {e}")
 

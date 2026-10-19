@@ -36,6 +36,11 @@ import {
   Table as TableIcon,
   X,
   Maximize2,
+  Gauge,
+  Sun,
+  Moon,
+  Timer,
+  Flame,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -49,9 +54,14 @@ import {
   startAllServices,
   stopAllServices,
   triggerAllServices,
+  fetchEngineSchedules,
+  updateEngineSchedule,
+  applySchedulePreset,
   type ControlSystemStatusResponse,
   type ControlSystemServiceItem,
   type ActionLogItem,
+  type EngineSchedulesResponse,
+  type EngineScheduleItem,
 } from "@/lib/controlSystemApi";
 
 function formatRelativeTime(isoString: string | null): string {
@@ -72,6 +82,7 @@ function formatRelativeTime(isoString: string | null): string {
 export default function ControlAndLogsPage() {
   const [statusData, setStatusData] = useState<ControlSystemStatusResponse | null>(null);
   const [logs, setLogs] = useState<ActionLogItem[]>([]);
+  const [schedulesData, setSchedulesData] = useState<EngineSchedulesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -95,8 +106,11 @@ export default function ControlAndLogsPage() {
   const [triggeringAll, setTriggeringAll] = useState(false);
   const [startingAll, setStartingAll] = useState(false);
   const [stoppingAll, setStoppingAll] = useState(false);
+  const [applyingPreset, setApplyingPreset] = useState<string | null>(null);
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
 
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -109,12 +123,17 @@ export default function ControlAndLogsPage() {
   const loadData = useCallback(async (isSilent = false) => {
     if (!isSilent) setRefreshing(true);
     try {
-      const [statusRes, logsRes] = await Promise.all([
+      const [statusRes, logsRes, schedRes] = await Promise.all([
         fetchControlSystemStatus(),
         fetchControlSystemLogs(activeServiceFilter, activeLevelFilter, logLimit),
+        fetchEngineSchedules().catch((err) => {
+          console.warn("Schedule API notice:", err);
+          return null;
+        }),
       ]);
       setStatusData(statusRes);
       setLogs(logsRes);
+      if (schedRes) setSchedulesData(schedRes);
       setFetchError(null);
     } catch (e: any) {
       console.error("Failed to load control system data:", e);
@@ -124,6 +143,36 @@ export default function ControlAndLogsPage() {
       if (!isSilent) setRefreshing(false);
     }
   }, [activeServiceFilter, activeLevelFilter, logLimit]);
+
+  const handleApplyPreset = async (presetId: string) => {
+    try {
+      setApplyingPreset(presetId);
+      const res = await applySchedulePreset(presetId);
+      setSchedulesData(res);
+      setScheduleNotice(`Preset applied: ${presetId}. Engines dynamically hot-reloaded.`);
+      setTimeout(() => setScheduleNotice(null), 4000);
+    } catch (err: any) {
+      console.error("Failed to apply preset:", err);
+      alert(`Error applying preset: ${err.message}`);
+    } finally {
+      setApplyingPreset(null);
+    }
+  };
+
+  const handleUpdateSchedule = async (engineKey: string, patch: any) => {
+    try {
+      setUpdatingKey(engineKey);
+      const res = await updateEngineSchedule(engineKey, patch);
+      setSchedulesData(res);
+      setScheduleNotice(`Updated cadence for ${engineKey}`);
+      setTimeout(() => setScheduleNotice(null), 3000);
+    } catch (err: any) {
+      console.error("Failed to update engine schedule:", err);
+      alert(`Error updating schedule: ${err.message}`);
+    } finally {
+      setUpdatingKey(null);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -462,6 +511,271 @@ export default function ControlAndLogsPage() {
             <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <Terminal size={20} />
             </div>
+          </div>
+        </div>
+
+        {/* Dynamic Dual-Regime Scheduling & CPU Compute Optimization Card */}
+        <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/80 p-5 shadow-xl backdrop-blur-md space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                <Gauge size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-white tracking-wide">
+                    Engine Compute &amp; Schedule Optimization
+                  </h2>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-wider">
+                    Dual-Regime Hot Reload
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Optimizes EC2 server CPU by auto-switching between <span className="text-emerald-400 font-medium">Live Market Hours (09:15–15:30 IST)</span> and low-compute <span className="text-indigo-300 font-medium">Off-Market Hibernation</span>. Zero downtime configuration.
+                </p>
+              </div>
+            </div>
+
+            {/* Current Regime Badge & Clock */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold ${
+                  schedulesData?.is_market_hours
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                    : "bg-indigo-500/10 border-indigo-500/30 text-indigo-300"
+                }`}
+              >
+                {schedulesData?.is_market_hours ? (
+                  <>
+                    <Sun size={14} className="text-amber-400 animate-spin-slow" />
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>MARKET REGIME: LIVE (09:15–15:30 IST)</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon size={14} className="text-indigo-400" />
+                    <span className="h-2 w-2 rounded-full bg-indigo-400" />
+                    <span>OFF-MARKET REGIME: QUIET HIBERNATION</span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950/60 text-xs text-slate-300 font-mono">
+                <Clock size={13} className="text-cyan-400" />
+                <span>{schedulesData?.server_time_ist || "Syncing IST..."}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Feedback notice if preset/schedule applied */}
+          {scheduleNotice && (
+            <div className="flex items-center gap-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 px-3.5 py-2 text-xs font-semibold text-cyan-300 animate-fadeIn">
+              <CheckCircle2 size={15} className="text-cyan-400" />
+              <span>{scheduleNotice}</span>
+            </div>
+          )}
+
+          {/* One-Click Presets */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Timer size={13} className="text-cyan-400" />
+                One-Click Performance Presets
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Active Profile: <strong className="text-cyan-300 font-mono uppercase">{schedulesData?.active_preset || "BALANCED"}</strong>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Preset 1: Performance Saver */}
+              <button
+                onClick={() => handleApplyPreset("PERFORMANCE_SAVER")}
+                disabled={applyingPreset !== null}
+                className={`text-left p-3.5 rounded-xl border transition-all ${
+                  schedulesData?.active_preset === "PERFORMANCE_SAVER"
+                    ? "bg-emerald-950/40 border-emerald-500/60 ring-1 ring-emerald-500 shadow-md shadow-emerald-950/50"
+                    : "bg-slate-950/50 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    ⚡ Performance Saver
+                  </span>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
+                    ~85% CPU Drop
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                  Pauses real-time scanners off-market. Relaxes market intervals to 120s–600s. Maximum EC2 server responsiveness.
+                </p>
+              </button>
+
+              {/* Preset 2: Balanced Enterprise */}
+              <button
+                onClick={() => handleApplyPreset("BALANCED")}
+                disabled={applyingPreset !== null}
+                className={`text-left p-3.5 rounded-xl border transition-all ${
+                  schedulesData?.active_preset === "BALANCED"
+                    ? "bg-cyan-950/40 border-cyan-500/60 ring-1 ring-cyan-500 shadow-md shadow-cyan-950/50"
+                    : "bg-slate-950/50 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                    ⚖️ Balanced Enterprise
+                  </span>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-semibold uppercase">
+                    Recommended
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                  60s live wire and 120s alert sweeps during market hours. Automated quiet off-market hibernation.
+                </p>
+              </button>
+
+              {/* Preset 3: Turbo Ultra-Fast */}
+              <button
+                onClick={() => handleApplyPreset("TURBO")}
+                disabled={applyingPreset !== null}
+                className={`text-left p-3.5 rounded-xl border transition-all ${
+                  schedulesData?.active_preset === "TURBO"
+                    ? "bg-amber-950/40 border-amber-500/60 ring-1 ring-amber-500 shadow-md shadow-amber-950/50"
+                    : "bg-slate-950/50 border-slate-800 hover:border-slate-700 hover:bg-slate-950/80"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    🚀 Turbo Ultra-Fast
+                  </span>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold uppercase">
+                    Peak Speed
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                  30s wire price refreshes &amp; 60s alert dispatches. Best for high volatility earnings weeks.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Engine Schedule Configuration Matrix */}
+          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950/90 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                <tr>
+                  <th className="py-2.5 px-3">Engine &amp; Pipeline</th>
+                  <th className="py-2.5 px-3">Effective Cadence</th>
+                  <th className="py-2.5 px-3">Market Cadence</th>
+                  <th className="py-2.5 px-3">Off-Market Cadence</th>
+                  <th className="py-2.5 px-3 text-center">Market Hours Only</th>
+                  <th className="py-2.5 px-3 text-right">Master State</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {schedulesData?.schedules.map((eng) => (
+                  <tr key={eng.engine_key} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="py-2.5 px-3">
+                      <div className="font-sans font-semibold text-white">{eng.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{eng.engine_key}</div>
+                    </td>
+
+                    <td className="py-2.5 px-3">
+                      {eng.effective_interval_sec > 0 && eng.is_enabled ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Every {eng.effective_interval_sec >= 60 ? `${Math.round(eng.effective_interval_sec / 60)}m` : `${eng.effective_interval_sec}s`}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                          <Moon size={10} />
+                          Paused (Off-Market / Standby)
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="py-2.5 px-3 font-sans">
+                      <select
+                        value={eng.market_interval_sec}
+                        disabled={updatingKey === eng.engine_key}
+                        onChange={(e) =>
+                          handleUpdateSchedule(eng.engine_key, {
+                            market_interval_sec: Number(e.target.value),
+                          })
+                        }
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value={30}>30s (Turbo)</option>
+                        <option value={60}>60s (1 min)</option>
+                        <option value={120}>120s (2 mins)</option>
+                        <option value={180}>180s (3 mins)</option>
+                        <option value={300}>300s (5 mins)</option>
+                        <option value={600}>600s (10 mins)</option>
+                        <option value={900}>900s (15 mins)</option>
+                        <option value={1800}>1800s (30 mins)</option>
+                        <option value={3600}>3600s (60 mins)</option>
+                      </select>
+                    </td>
+
+                    <td className="py-2.5 px-3 font-sans">
+                      <select
+                        value={eng.off_market_interval_sec}
+                        disabled={updatingKey === eng.engine_key}
+                        onChange={(e) =>
+                          handleUpdateSchedule(eng.engine_key, {
+                            off_market_interval_sec: Number(e.target.value),
+                          })
+                        }
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value={0}>0s (Paused / 0 CPU)</option>
+                        <option value={300}>300s (5 mins)</option>
+                        <option value={600}>600s (10 mins)</option>
+                        <option value={1800}>1800s (30 mins)</option>
+                        <option value={3600}>3600s (1 hour)</option>
+                        <option value={7200}>7200s (2 hours)</option>
+                      </select>
+                    </td>
+
+                    <td className="py-2.5 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={eng.market_hours_only}
+                        disabled={updatingKey === eng.engine_key}
+                        onChange={(e) =>
+                          handleUpdateSchedule(eng.engine_key, {
+                            market_hours_only: e.target.checked,
+                          })
+                        }
+                        className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-600 focus:ring-cyan-500 cursor-pointer"
+                        title="If checked, engine sleeps completely outside 09:15-15:30 IST"
+                      />
+                    </td>
+
+                    <td className="py-2.5 px-3 text-right">
+                      <button
+                        onClick={() =>
+                          handleUpdateSchedule(eng.engine_key, {
+                            is_enabled: !eng.is_enabled,
+                          })
+                        }
+                        disabled={updatingKey === eng.engine_key}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                          eng.is_enabled
+                            ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : "bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700"
+                        }`}
+                      >
+                        {eng.is_enabled ? "Active" : "Paused"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

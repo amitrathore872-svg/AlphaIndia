@@ -12,6 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  Download,
+  ListFilter,
 } from "lucide-react";
 import {
   fetchOrderbookView,
@@ -23,13 +25,15 @@ import OrderBookSparkline from "./OrderBookSparkline";
 
 interface OrderbookViewTabProps {
   onSelectCompany: (symbol: string, companyName?: string) => void;
+  onViewOrders?: (symbol: string) => void;
 }
 
-export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabProps) {
+export default function OrderbookViewTab({ onSelectCompany, onViewOrders }: OrderbookViewTabProps) {
   const [timeframe, setTimeframe] = useState<"1Y" | "6M" | "3M">("1Y");
   const [minOrderBook, setMinOrderBook] = useState<number>(0);
   const [minMarketCap, setMinMarketCap] = useState<number>(0);
   const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("growth_pct");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState<number>(1);
@@ -38,6 +42,15 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
   const [data, setData] = useState<OrderbookViewResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -45,7 +58,7 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
         timeframe,
         min_order_book_cr: minOrderBook,
         min_market_cap_cr: minMarketCap,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
         page,
@@ -57,7 +70,7 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
     } finally {
       setLoading(false);
     }
-  }, [timeframe, minOrderBook, minMarketCap, search, sortBy, sortOrder, page]);
+  }, [timeframe, minOrderBook, minMarketCap, debouncedSearch, sortBy, sortOrder, page]);
 
   useEffect(() => {
     loadData();
@@ -71,6 +84,41 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
       setSortOrder("desc");
     }
     setPage(1);
+  };
+
+  const handleExportCSV = () => {
+    if (!data?.items?.length) return;
+    const headers = [
+      "Symbol",
+      "Company",
+      "Growth %",
+      "Order Book (Cr)",
+      "Revenue (Cr)",
+      "Book to Revenue",
+      "Market Cap (Cr)",
+      "As of Date",
+      "Last Updated",
+    ];
+    const rows = data.items.map((r) => [
+      r.symbol,
+      `"${(r.company_name || "").replace(/"/g, '""')}"`,
+      r.growth_pct != null ? r.growth_pct : "",
+      r.order_book_cr,
+      r.revenue_cr,
+      r.book_to_revenue,
+      r.market_cap_cr,
+      `"${r.as_of_date || ""}"`,
+      `"${r.last_updated || ""}"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `OrderBook_Radar_${timeframe}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -133,12 +181,21 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
           </div>
         </div>
 
-        {/* Right Disclaimer & Refresh */}
+        {/* Right Disclaimer, Export & Refresh */}
         <div className="flex items-center gap-3">
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-950/20 border border-amber-600/30 text-[11px] text-amber-300 font-mono">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span>Important: AI-extracted, may contain errors. Verify against the source PDF.</span>
+            <span>AI-extracted backlog data. Cross-verify against official Exchange filings.</span>
           </div>
+
+          <button
+            onClick={handleExportCSV}
+            title="Export filtered records to CSV"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-400" />
+            <span>CSV</span>
+          </button>
 
           <button
             onClick={loadData}
@@ -164,7 +221,7 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
             <div
               key={g.symbol}
               onClick={() => onSelectCompany(g.symbol, g.company_name)}
-              className="flex-shrink-0 w-64 p-3.5 rounded-xl bg-[#0a1120] border border-slate-800/90 hover:border-cyan-500/50 hover:bg-[#0d162b] cursor-pointer transition-all duration-200 group"
+              className="flex-shrink-0 w-64 p-3.5 rounded-xl bg-[#0a1120] border border-slate-800/90 hover:border-cyan-500/50 hover:bg-[#0d162b] cursor-pointer transition-all duration-200 group relative"
             >
               <div className="flex items-start justify-between">
                 <span className="text-[11px] font-mono text-slate-400">#{g.rank}</span>
@@ -177,7 +234,21 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
                 <h4 className="text-sm font-semibold text-white truncate group-hover:text-cyan-300 transition-colors">
                   {g.company_name}
                 </h4>
-                <p className="text-[11px] font-mono text-slate-500">{g.exchange}: {g.symbol}</p>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className="text-[11px] font-mono text-slate-500">{g.exchange}: {g.symbol}</p>
+                  {onViewOrders && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewOrders(g.symbol);
+                      }}
+                      className="text-[10px] font-mono text-cyan-400 hover:underline inline-flex items-center gap-0.5"
+                      title="Inspect order filings"
+                    >
+                      Orders <ExternalLink className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="mt-2.5 flex items-end justify-between">
@@ -220,13 +291,10 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
             <input
               type="text"
-              placeholder="Search company..."
+              placeholder="Search company or ticker..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 w-48 sm:w-60 font-mono"
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 w-48 sm:w-64 font-mono"
             />
           </div>
         </div>
@@ -295,19 +363,20 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
                   </div>
                 </th>
                 <th className="py-3 px-4">Order Book History</th>
+                <th className="py-3 px-3 text-right">Actions</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-800/60 font-mono">
               {loading && (!data || data.items.length === 0) ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center text-slate-500">
+                  <td colSpan={10} className="py-16 text-center text-slate-500">
                     Loading verified order books...
                   </td>
                 </tr>
               ) : !data || data.items.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center text-slate-500">
+                  <td colSpan={10} className="py-16 text-center text-slate-500">
                     No companies matched current filter thresholds.
                   </td>
                 </tr>
@@ -328,13 +397,13 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
                           {row.company_name}
                         </div>
                         <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                          {row.exchange}: {row.symbol} · BSE: {row.bse_code}
+                          {row.exchange}: {row.symbol} {row.bse_code ? `· BSE: ${row.bse_code}` : ""}
                         </div>
                       </td>
 
                       {/* Growth % */}
                       <td className="py-3.5 px-3">
-                        {row.growth_pct !== null ? (
+                        {row.growth_pct !== null && !isNaN(row.growth_pct) ? (
                           <span
                             className={`font-bold ${
                               isPositiveGrowth ? "text-emerald-400" : "text-rose-400"
@@ -379,12 +448,12 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
 
                       {/* As of Date */}
                       <td className="py-3.5 px-3 text-slate-400 text-[11px]">
-                        {row.as_of_date}
+                        {row.as_of_date || "—"}
                       </td>
 
                       {/* Last Updated */}
                       <td className="py-3.5 px-3 text-slate-400 text-[11px]">
-                        {row.last_updated}
+                        {row.last_updated || "—"}
                       </td>
 
                       {/* Order Book History Sparkline */}
@@ -395,6 +464,28 @@ export default function OrderbookViewTab({ onSelectCompany }: OrderbookViewTabPr
                           latestFormatted={row.sparkline_meta.latest_formatted}
                           changePct={row.sparkline_meta.change_pct}
                         />
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          {onViewOrders && (
+                            <button
+                              onClick={() => onViewOrders(row.symbol)}
+                              className="px-2 py-1 rounded bg-slate-800 text-[11px] text-cyan-400 hover:bg-cyan-950 border border-slate-700 transition-colors"
+                              title="Filter individual order stream for this symbol"
+                            >
+                              Orders
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onSelectCompany(row.symbol, row.company_name)}
+                            className="px-2 py-1 rounded bg-slate-800 text-[11px] text-slate-300 hover:bg-slate-700 border border-slate-700 transition-colors"
+                            title="View quarterly backlog chart"
+                          >
+                            Chart
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
