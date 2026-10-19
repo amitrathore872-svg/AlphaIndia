@@ -178,6 +178,35 @@ def ensure_production_database():
         else:
             logger.info(f"      Brokerage feed is healthy & live (Newest: {b_status.get('newest_report_date')}, Total: {b_status.get('total_reports')}).")
 
+        # 8. Verify NSE Delivery Bhavcopies & Market Breadth (20, 50, 200 DMA)
+        logger.info("[8/8] Verifying NSE Bhavcopy Data & Market Breadth Cache...")
+        import glob
+        from scripts.download_2y_delivery_data import download_2y_data
+        from app.services.report_breadth_service import ReportBreadthService, BHAVCOPY_DIR, CACHE_FILE
+
+        bhav_count = len(glob.glob(str(BHAVCOPY_DIR / "sec_bhavdata_full_*.csv")))
+        logger.info(f"      NSE Bhavcopy Sessions: {bhav_count} on disk.")
+        if bhav_count < 200:
+            logger.info("      Fewer than 200 bhavcopies found on disk. Initiating 2-year delivery archive download...")
+            try:
+                download_2y_data()
+                bhav_count = len(glob.glob(str(BHAVCOPY_DIR / "sec_bhavdata_full_*.csv")))
+                logger.info(f"      Bhavcopy download completed. Total sessions: {bhav_count}")
+                logger.info("      Building initial Market Breadth 20/50/200 DMA cache...")
+                ReportBreadthService.build_breadth_cache()
+                logger.info("      Market Breadth cache built successfully.")
+            except Exception as e:
+                logger.warning(f"      Bhavcopy sync notice: {e}")
+        elif not CACHE_FILE.exists():
+            logger.info("      Building initial Market Breadth cache...")
+            try:
+                ReportBreadthService.build_breadth_cache()
+                logger.info("      Market Breadth cache built successfully.")
+            except Exception as e:
+                logger.warning(f"      Breadth cache build notice: {e}")
+        else:
+            logger.info(f"      Market Breadth cache is present and valid.")
+
     except Exception as exc:
         logger.error(f"Error during production seed verification: {exc}", exc_info=True)
         raise exc
