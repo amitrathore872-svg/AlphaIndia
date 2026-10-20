@@ -359,6 +359,10 @@ class MFAnalyticsService:
             "net_value_flow_mom_cr": MFStockMonthlyAggregate.net_value_flow_mom_cr,
             "float_absorption_pct": MFStockMonthlyAggregate.float_absorption_pct,
             "active_alpha_schemes_holding": MFStockMonthlyAggregate.active_alpha_schemes_holding,
+            "symbol": Company.symbol,
+            "company_name": Company.company,
+            "sector": Company.sector,
+            "market_cap_category": Company.market_cap_category,
         }
         sort_col = sort_column_map.get(sort_by, MFStockMonthlyAggregate.smart_money_score)
         if sort_order.lower() == "asc":
@@ -374,8 +378,18 @@ class MFAnalyticsService:
         for agg, comp, signal in results:
             est_price = round(agg.total_value_cr * 10000000 / agg.total_shares_held, 2) if agg.total_shares_held > 0 else 1000.0
 
-            action_text = signal.action_recommendation if signal else ("STRONG BUY" if agg.smart_money_score >= 80 else ("ACCUMULATE" if agg.smart_money_score >= 65 else "HOLD"))
-            target_price = signal.target_price if signal else round(est_price * 1.22, 2)
+            if agg.net_shares_flow_mom and agg.net_shares_flow_mom < 0:
+                default_action = "TRIM" if agg.smart_money_score < 48 else "HOLD"
+                default_target = round(est_price * 1.02, 2)
+                default_signal = "INSTITUTIONAL_DISTRIBUTION"
+            else:
+                default_action = "STRONG BUY" if agg.smart_money_score >= 80 else ("ACCUMULATE" if agg.smart_money_score >= 65 else "HOLD")
+                default_target = round(est_price * (1.22 if default_action == "STRONG BUY" else 1.10), 2)
+                default_signal = "STEALTH_ACCUMULATION" if agg.is_stealth_accumulation else ("CONSENSUS_BET" if agg.is_consensus_bet else "BASE_ACCUMULATION")
+
+            action_text = signal.action_recommendation if signal else default_action
+            target_price = signal.target_price if signal else default_target
+            signal_type_val = signal.signal_type if signal else default_signal
 
             items.append({
                 "company_id": comp.id,
@@ -398,7 +412,7 @@ class MFAnalyticsService:
                 "current_price": est_price,
                 "action_recommendation": action_text,
                 "target_price": target_price,
-                "signal_type": signal.signal_type if signal else ("STEALTH_ACCUMULATION" if agg.is_stealth_accumulation else "BASE_ACCUMULATION"),
+                "signal_type": signal_type_val,
             })
 
         total_pages = math.ceil(total_records / limit) if limit > 0 else 1
@@ -788,6 +802,7 @@ class MFAnalyticsService:
                 "shares_held": h.shares_held or 0,
                 "market_value_cr": round(h.market_value_cr or 0.0, 2),
                 "weight_pct": round(h.weight_pct or 0.0, 2),
+                "holding_status": h.holding_status or "NEW_ENTRY",
                 "report_date": str(h.report_date),
             })
 

@@ -213,6 +213,15 @@ class MFEngineService:
 
                 target_date = date(next_y, next_m, last_d)
 
+        today = date.today()
+        if target_date > today:
+            logger.warning(f"[MFEngineService] Cannot ingest future target_date {target_date} (today is {today}).")
+            return {
+                "status": "AWAITING_MONTH_CLOSE",
+                "target_date": str(target_date),
+                "message": f"Period {target_date} has not yet closed (current date is {today}). Under SEBI Reg 59A, monthly portfolio disclosures begin posting on the 1st of the subsequent month.",
+            }
+
         # Check if target_date already exists
         existing_count = db.query(MFSchemeHolding).filter(MFSchemeHolding.report_date == target_date).count()
         if existing_count > 0 and not force:
@@ -399,12 +408,16 @@ class MFEngineService:
             # Stock aggregate
             net_shares_delta = month_total_shares - prev_total_shares
             net_val_delta = round((net_shares_delta * cur_price) / 10000000.0, 2)
-            float_abs = round(abs(net_shares_delta) / max(total_equity_shares * 0.5, 1) * 100.0, 2)
             eq_pct = round((month_total_shares / max(total_equity_shares, 1)) * 100.0, 2)
             free_float_pct = round(eq_pct * 2.1, 2)
 
-            base_score = 78.0 if is_consensus else (72.0 if is_stealth else 60.0)
-            score = round(min(98.5, max(38.0, base_score + (float_abs * 2.2) + random.uniform(-3.0, 5.0))), 1)
+            if net_shares_delta <= 0:
+                float_abs = 0.0
+                score = round(max(25.0, min(52.0, 48.0 + (net_shares_delta / max(prev_total_shares, 1)) * 30.0)), 1)
+            else:
+                float_abs = round((net_shares_delta / max(total_equity_shares * 0.5, 1)) * 100.0, 2)
+                base_score = 78.0 if is_consensus else (72.0 if is_stealth else 60.0)
+                score = round(min(98.5, max(58.0, base_score + (float_abs * 2.2) + random.uniform(-2.0, 3.0))), 1)
 
             agg = (
                 db.query(MFStockMonthlyAggregate)
@@ -449,8 +462,11 @@ class MFEngineService:
 
             total_aggregates_upserted += 1
 
-            # Trigger AI Conviction Signal for high-score / fresh entry candidates
-            if score >= 75.0 or is_fresh_stock:
+            # Flush session so evaluate_and_generate_signal can query the aggregate
+            db.flush()
+
+            # Trigger AI Conviction Signal for high-score, fresh entry, or distribution candidates
+            if score >= 75.0 or is_fresh_stock or net_shares_delta < 0:
                 sig = MFSignalService.evaluate_and_generate_signal(db, comp.id, target_date, cur_price)
                 if sig:
                     signals_created += 1

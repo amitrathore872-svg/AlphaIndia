@@ -165,10 +165,12 @@ class StockTrendEnricher:
             rec = growth_records.get(sym)
 
             # Determine CMP
-            cmp_val = it.get(cmp_key) or it.get("current_price") or it.get("close")
-            if not cmp_val or cmp_val <= 0:
-                cmp_val = rec.current_price if rec and rec.current_price else 100.0
+            if rec and rec.current_price and float(rec.current_price) > 0:
+                cmp_val = float(rec.current_price)
+            else:
+                cmp_val = it.get(cmp_key) or it.get("current_price") or it.get("close")
             cmp_val = float(cmp_val or 100.0)
+            it["current_price"] = round(cmp_val, 2)
 
             dma_50 = float(rec.dma_50) if rec and rec.dma_50 else None
             dma_200 = float(rec.dma_200) if rec and rec.dma_200 else None

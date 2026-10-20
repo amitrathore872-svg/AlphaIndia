@@ -183,6 +183,7 @@ def get_brokerage_metrics(
 @router.post("/api/v1/brokerage/ingest")
 def trigger_brokerage_ingestion(
     days_back: int = Query(7, ge=1, le=30, description="Number of days to scan for fresh calls"),
+    async_mode: bool = Query(True, description="Run scan in background thread to avoid gateway timeout"),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
@@ -191,11 +192,19 @@ def trigger_brokerage_ingestion(
     """
     from app.services.brokerage_ingestion_service import BrokerageIngestionService
     try:
+        if async_mode:
+            BrokerageIngestionService.run_ingestion_in_background(days_back=days_back)
+            return {
+                "status": "started",
+                "message": f"Institutional brokerage radar live scan initiated in background (window: {days_back} days).",
+                "scan_window_days": days_back,
+            }
         result = BrokerageIngestionService.ingest_live_brokerage_reports(db=db, days_back=days_back)
         return result
     except Exception as e:
         logger.error(f"[BrokerageAPI] Error running brokerage ingestion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.get("/brokerage/ingestion/status")

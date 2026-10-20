@@ -199,19 +199,24 @@ export async function fetchBrokerageMetrics(): Promise<{ status: string; data: B
 
 export async function triggerBrokerageIngestion(daysBack: number = 7): Promise<{
   status: string;
-  total_discovered: number;
-  new_reports: number;
-  updated_reports: number;
+  message?: string;
+  total_discovered?: number;
+  new_reports?: number;
+  updated_reports?: number;
+  scan_window_days?: number;
 }> {
   return fetchJson<{
     status: string;
-    total_discovered: number;
-    new_reports: number;
-    updated_reports: number;
-  }>(`/api/v1/brokerage/ingest?days_back=${daysBack}`, {
+    message?: string;
+    total_discovered?: number;
+    new_reports?: number;
+    updated_reports?: number;
+    scan_window_days?: number;
+  }>(`/api/v1/brokerage/ingest?days_back=${daysBack}&async_mode=true`, {
     method: "POST",
   });
 }
+
 
 export async function fetchBrokerageIngestionStatus(): Promise<{
   status: string;

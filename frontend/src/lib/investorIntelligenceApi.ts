@@ -62,6 +62,16 @@ export function formatGuidanceChanges(gc: GuidanceChangesObj | string | null | u
   return String(gc);
 }
 
+export interface RelatedFilingItem {
+  id: number;
+  doc_type: string;
+  pdf_url: string | null;
+  status: string;
+  announcement_date?: string | null;
+  headline?: string | null;
+  is_primary?: boolean;
+}
+
 export interface InvestorInsightItem {
   id: number;
   document_id: number;
@@ -81,6 +91,8 @@ export interface InvestorInsightItem {
   ai_analysis_status?: "ANALYZED" | "PENDING" | "FAILED" | string;
   analysis_completed_at?: string | null;
   processing_error?: string | null;
+  related_filings?: RelatedFilingItem[];
+  related_filings_count?: number;
 
   // Stance & Thesis Impact
   institutional_stance:
@@ -254,6 +266,10 @@ export interface AvailableQuarterItem {
   financial_year: number;
   financial_quarter: number;
   count: number;
+  analyzed_count?: number;
+  completion_rate?: number;
+  companies_covered?: number;
+  commitments_count?: number;
 }
 
 export interface QuarterlyCoverageResponse {
@@ -323,6 +339,7 @@ export async function fetchInvestorFeed(params?: {
   sector?: string;
   min_score?: number;
   transformational_only?: boolean;
+  deduplicate_stocks?: boolean;
   page?: number;
   limit?: number;
 }): Promise<InvestorFeedResponse> {
@@ -336,6 +353,7 @@ export async function fetchInvestorFeed(params?: {
   if (params?.sector && params.sector !== "ALL") query.append("sector", params.sector);
   if (params?.min_score !== undefined) query.append("min_score", params.min_score.toString());
   if (params?.transformational_only) query.append("transformational_only", "true");
+  if (params?.deduplicate_stocks !== undefined) query.append("deduplicate_stocks", params.deduplicate_stocks.toString());
   if (params?.page) query.append("page", params.page.toString());
   if (params?.limit) query.append("limit", params.limit.toString());
 

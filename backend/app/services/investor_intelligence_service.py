@@ -1699,12 +1699,24 @@ class InvestorIntelligenceService:
         """
         Returns paginated management commitment records across quarters.
         """
-        query = db.query(ManagementCommitment)
+        query = db.query(
+            ManagementCommitment,
+            InvestorDocument.company_name.label("doc_company_name"),
+        ).outerjoin(
+            InvestorDocument, ManagementCommitment.document_id == InvestorDocument.id
+        )
 
         if symbol:
             query = query.filter(ManagementCommitment.symbol == symbol.strip().upper())
-        if quarter:
-            query = query.filter(ManagementCommitment.target_period.ilike(f"%{quarter.strip()}%"))
+        if quarter and quarter != "ALL":
+            q_clean = quarter.strip()
+            query = query.filter(
+                or_(
+                    InvestorDocument.fiscal_period == q_clean,
+                    ManagementCommitment.target_period == q_clean,
+                    ManagementCommitment.target_period.ilike(f"%{q_clean}%"),
+                )
+            )
         if status and status != "ALL":
             query = query.filter(ManagementCommitment.status == status.strip().upper())
         if category and category != "ALL":
@@ -1713,7 +1725,7 @@ class InvestorIntelligenceService:
             query = query.filter(ManagementCommitment.is_financial_target == is_financial_target)
 
         total = query.count()
-        commitments = (
+        commitments_rows = (
             query.order_by(
                 desc(ManagementCommitment.published_date).nullslast(),
                 desc(ManagementCommitment.id),
@@ -1724,11 +1736,19 @@ class InvestorIntelligenceService:
         )
 
         items = []
-        for c in commitments:
+        for row in commitments_rows:
+            try:
+                c = row[0]
+                doc_comp_name = row[1]
+            except Exception:
+                c = row
+                doc_comp_name = None
             items.append({
                 "id": c.id,
+                "commitment_id": str(c.id),
                 "company_id": c.company_id,
                 "symbol": c.symbol,
+                "company_name": doc_comp_name or c.symbol,
                 "document_id": c.document_id,
                 "statement": c.statement,
                 "exact_quote": c.exact_quote,
@@ -1843,20 +1863,48 @@ class InvestorIntelligenceService:
             .all()
         )
 
+        # Fast precomputation of historical quarter statistics for comparison table
+        analyzed_by_q = dict(
+            db.query(InvestorDocument.fiscal_period, func.count(InvestorDocument.id))
+            .filter(or_(InvestorDocument.ai_analysis_status == "ANALYZED", InvestorDocument.status == "ANALYZED"))
+            .group_by(InvestorDocument.fiscal_period)
+            .all()
+        )
+        companies_by_q = dict(
+            db.query(InvestorDocument.fiscal_period, func.count(func.distinct(InvestorDocument.symbol)))
+            .group_by(InvestorDocument.fiscal_period)
+            .all()
+        )
+        comms_by_q = dict(
+            db.query(InvestorDocument.fiscal_period, func.count(ManagementCommitment.id))
+            .join(ManagementCommitment, ManagementCommitment.document_id == InvestorDocument.id)
+            .group_by(InvestorDocument.fiscal_period)
+            .all()
+        )
+
         available_quarters = []
         for fp, fy, fq, count in quarters_query:
             if fp and fp != "Current":
+                q_analyzed = analyzed_by_q.get(fp, 0)
+                q_comp_rate = round((q_analyzed / count) * 100.0, 1) if count > 0 else 0.0
+                q_companies = companies_by_q.get(fp, 0)
+                q_comms_count = comms_by_q.get(fp, 0)
                 available_quarters.append({
                     "fiscal_period": fp,
                     "financial_year": fy,
                     "financial_quarter": fq,
                     "count": count,
+                    "analyzed_count": q_analyzed,
+                    "completion_rate": q_comp_rate,
+                    "companies_covered": q_companies,
+                    "commitments_count": q_comms_count,
                 })
 
-        # Default to latest quarter with data if not selected
+        # Default to latest quarter with substantial data (>= 10 filings) if not selected
         current_sel = selected_quarter
         if not current_sel and available_quarters:
-            current_sel = available_quarters[0]["fiscal_period"]
+            substantial_quarters = [q for q in available_quarters if q["count"] >= 10]
+            current_sel = substantial_quarters[0]["fiscal_period"] if substantial_quarters else available_quarters[0]["fiscal_period"]
         elif not current_sel:
             current_sel = "ALL"
 
@@ -1877,7 +1925,14 @@ class InvestorIntelligenceService:
             )
             q_comms = (
                 db.query(ManagementCommitment)
-                .filter(ManagementCommitment.target_period == current_sel)
+                .join(InvestorDocument, ManagementCommitment.document_id == InvestorDocument.id)
+                .filter(
+                    or_(
+                        InvestorDocument.fiscal_period == current_sel,
+                        ManagementCommitment.target_period == current_sel,
+                        ManagementCommitment.target_period.ilike(f"%{current_sel}%"),
+                    )
+                )
                 .all()
             )
 

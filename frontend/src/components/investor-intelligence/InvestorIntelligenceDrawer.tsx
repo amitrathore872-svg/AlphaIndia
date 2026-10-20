@@ -22,6 +22,11 @@ import {
   Scale,
   AlertCircle,
   Check,
+  Maximize2,
+  Minimize2,
+  ChevronsDown,
+  ChevronsUp,
+  Search,
 } from "lucide-react";
 import {
   fetchCompanyInvestorIntelligence,
@@ -48,6 +53,25 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
   const [loading, setLoading] = useState<boolean>(false);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Drawer sizing: Mini (sidebar), Standard (default), Max (full-width modal)
+  type DrawerSize = "MINI" | "STANDARD" | "MAX";
+  const [drawerSize, setDrawerSize] = useState<DrawerSize>("STANDARD");
+
+  // Record Mini vs Max view modes
+  const [docsViewMode, setDocsViewMode] = useState<"MINI" | "MAX">("MINI");
+  const [commitmentsViewMode, setCommitmentsViewMode] = useState<"MINI" | "MAX">("MINI");
+  const [discrepanciesViewMode, setDiscrepanciesViewMode] = useState<"MINI" | "MAX">("MINI");
+  const [docsSearch, setDocsSearch] = useState<string>("");
+  const [commitmentsSearch, setCommitmentsSearch] = useState<string>("");
+
+  const isAllMax = docsViewMode === "MAX" && commitmentsViewMode === "MAX" && discrepanciesViewMode === "MAX";
+  const toggleAllRecordsMode = () => {
+    const nextMode = isAllMax ? "MINI" : "MAX";
+    setDocsViewMode(nextMode);
+    setCommitmentsViewMode(nextMode);
+    setDiscrepanciesViewMode(nextMode);
+  };
 
   useEffect(() => {
     if (!isOpen || !symbol) return;
@@ -136,48 +160,129 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-sm flex justify-end transition-opacity">
-      <div className="w-full max-w-4xl bg-[#070D18] border-l border-cyan-900/40 shadow-2xl h-full flex flex-col text-slate-200">
-        {/* Drawer Header */}
-        <div className="p-5 border-b border-cyan-900/30 bg-[#0A1222] flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold tracking-tight text-white">{symbol}</h2>
-                <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 font-mono">
-                  {selectedInsight?.fiscal_period || "Current"}
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono">
-                  {selectedInsight?.doc_type?.replace("_", " ") || "FILING"}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Senior Buy-Side Analyst & Concall Intelligence Radar
-              </p>
-            </div>
-          </div>
+    const drawerWidthClass =
+      drawerSize === "MINI"
+        ? "max-w-2xl"
+        : drawerSize === "MAX"
+        ? "max-w-[96vw]"
+        : "max-w-4xl";
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleReanalyze}
-              disabled={analyzing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-950/80 border border-cyan-600/40 text-cyan-300 hover:bg-cyan-900/50 transition"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? "animate-spin" : ""}`} />
-              {analyzing ? "Interrogating..." : "Analyze with Senior AI"}
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
+    return (
+      <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-sm flex justify-end transition-opacity">
+        <div className={`w-full ${drawerWidthClass} bg-[#070D18] border-l border-cyan-900/40 shadow-2xl h-full flex flex-col text-slate-200 transition-all duration-300`}>
+          {/* Drawer Header */}
+          <div className="p-4 sm:p-5 border-b border-cyan-900/30 bg-[#0A1222] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl font-bold tracking-tight text-white">{symbol}</h2>
+                  <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 font-mono">
+                    {selectedInsight?.fiscal_period || "Current"}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono">
+                    {selectedInsight?.doc_type?.replace("_", " ") || "FILING"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Senior Buy-Side Analyst & Concall Intelligence Radar
+                </p>
+              </div>
+            </div>
+
+            {/* Header Controls: Sizing, Records Toggle, Action, Close */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Drawer Size Selector */}
+              <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-[11px] font-mono">
+                <button
+                  type="button"
+                  onClick={() => setDrawerSize("MINI")}
+                  className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                    drawerSize === "MINI"
+                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Mini Drawer (Compact Sidebar)"
+                >
+                  Mini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerSize("STANDARD")}
+                  className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                    drawerSize === "STANDARD"
+                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Standard Drawer"
+                >
+                  Standard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerSize("MAX")}
+                  className={`px-2 py-0.5 rounded transition cursor-pointer ${
+                    drawerSize === "MAX"
+                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Max Drawer (Full Institutional Terminal)"
+                >
+                  Max
+                </button>
+              </div>
+
+              {/* Quick Maximize / Minimize Icon Button */}
+              <button
+                type="button"
+                onClick={() => setDrawerSize(drawerSize === "MAX" ? "STANDARD" : "MAX")}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 border border-slate-800 transition cursor-pointer"
+                title={drawerSize === "MAX" ? "Restore Standard Width" : "Maximize Drawer to Full Width"}
+              >
+                {drawerSize === "MAX" ? (
+                  <Minimize2 className="w-4 h-4 text-cyan-400" />
+                ) : (
+                  <Maximize2 className="w-4 h-4 text-slate-300" />
+                )}
+              </button>
+
+              {/* Master Mini/Max Records View Toggle */}
+              <button
+                type="button"
+                onClick={toggleAllRecordsMode}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-medium rounded-lg border transition cursor-pointer ${
+                  isAllMax
+                    ? "bg-cyan-950/90 border-cyan-600/60 text-cyan-300"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                }`}
+                title={isAllMax ? "Collapse all lists into compact mini summaries" : "Expand all lists to show exhaustive records"}
+              >
+                {isAllMax ? (
+                  <ChevronsUp className="w-3.5 h-3.5 text-cyan-400" />
+                ) : (
+                  <ChevronsDown className="w-3.5 h-3.5 text-slate-400" />
+                )}
+                <span>Records: {isAllMax ? "Max" : "Mini"}</span>
+              </button>
+
+              <button
+                onClick={handleReanalyze}
+                disabled={analyzing}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-cyan-950/80 border border-cyan-600/40 text-cyan-300 hover:bg-cyan-900/50 transition cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? "animate-spin" : ""}`} />
+                {analyzing ? "Interrogating..." : "Analyze"}
+              </button>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        </div>
 
         {/* Drawer Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -190,28 +295,32 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
             <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-300 text-sm">
               {error}
             </div>
-          ) : !selectedInsight ? (
-            <div className="text-center py-16 space-y-4">
-              <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
-              <h3 className="text-lg font-semibold text-white">No Analyzed Filings Found Yet</h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                No analyzed concall notes or investor presentations found for {symbol}. Click below to automatically harvest and analyze the latest exchange filing.
-              </p>
-              <button
-                onClick={handleReanalyze}
-                disabled={analyzing}
-                className="px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition inline-flex items-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                {analyzing ? "Extracting & Interrogating..." : "Harvest & Analyze Now"}
-              </button>
-            </div>
           ) : (
             <>
-              {/* Senior Analyst Stance Banner */}
-              <div
-                className={`p-4 rounded-xl border ${stanceStyle.border} ${stanceStyle.bg} flex flex-col md:flex-row md:items-center justify-between gap-4`}
-              >
+              {!selectedInsight && (
+                <div className="text-center py-10 px-4 rounded-xl bg-[#08101E] border border-cyan-950 space-y-3">
+                  <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
+                  <h3 className="text-base font-semibold text-white">No Analyzed Filings Found Yet</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    No analyzed concall notes or investor presentations found for {symbol}. Click below to automatically harvest and analyze the latest exchange filing, or select a filing from the list below to analyze.
+                  </p>
+                  <button
+                    onClick={handleReanalyze}
+                    disabled={analyzing}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {analyzing ? "Extracting & Interrogating..." : "Harvest & Analyze Now"}
+                  </button>
+                </div>
+              )}
+
+              {selectedInsight && (
+                <>
+                  {/* Senior Analyst Stance Banner */}
+                  <div
+                    className={`p-4 rounded-xl border ${stanceStyle.border} ${stanceStyle.bg} flex flex-col md:flex-row md:items-center justify-between gap-4`}
+                  >
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs uppercase font-mono tracking-wider text-slate-400">
@@ -768,16 +877,32 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                     <div className="flex items-center gap-2">
                       <Scale className="w-4 h-4 text-cyan-400" />
                       <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-300">
-                        Balance Sheet & P&L Cross-Verification Radar
+                        Balance Sheet & P&L Cross-Verification Radar ({selectedInsight.forensic_discrepancies.length})
                       </h4>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-400">
-                      Comparing spoken concall claims directly with audited financial records
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                        Comparing spoken concall claims directly with audited financial records
+                      </span>
+                      {selectedInsight.forensic_discrepancies.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setDiscrepanciesViewMode(discrepanciesViewMode === "MINI" ? "MAX" : "MINI")}
+                          className="px-2 py-0.5 rounded bg-slate-900 border border-cyan-800 text-cyan-300 hover:text-white text-[10px] font-mono transition cursor-pointer"
+                        >
+                          {discrepanciesViewMode === "MINI"
+                            ? `Max View (All ${selectedInsight.forensic_discrepancies.length})`
+                            : "Mini View (Top 2)"}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
-                    {selectedInsight.forensic_discrepancies.map((disc, idx) => {
+                    {(discrepanciesViewMode === "MINI"
+                      ? selectedInsight.forensic_discrepancies.slice(0, 2)
+                      : selectedInsight.forensic_discrepancies
+                    ).map((disc, idx) => {
                       const sevBadge = getDiscrepancySeverityBadge(disc.severity);
                       return (
                         <div
@@ -842,141 +967,255 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                   </ul>
                 </div>
               )}
+            </>
+          )}
 
-              {/* Management Commitment Ledger & Delivery Verification */}
-              {commitments && commitments.length > 0 && (
-                <div className="p-4 rounded-xl bg-[#09101E] border border-cyan-900/60 shadow-lg space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-950 pb-2">
-                    <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-300 flex items-center gap-1.5">
-                      <Target className="w-4 h-4 text-amber-400" />
-                      Quarterly Management Commitments & Delivery Scorecard ({commitments.length})
-                    </h4>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      Cross-Quarter Verification
-                    </span>
-                  </div>
+          {/* Management Commitment Ledger & Delivery Verification */}
+          {commitments && commitments.length > 0 && (() => {
+            const filteredComms = commitments.filter((c) => {
+              if (!commitmentsSearch) return true;
+              const q = commitmentsSearch.toLowerCase();
+              return (
+                c.statement.toLowerCase().includes(q) ||
+                c.category.toLowerCase().includes(q) ||
+                (c.target_period && c.target_period.toLowerCase().includes(q))
+              );
+            });
+            const visibleComms = commitmentsViewMode === "MINI" ? filteredComms.slice(0, 3) : filteredComms;
 
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {commitments.map((c) => {
-                      const isMet = c.status === "MET";
-                      const isMissed = c.status === "MISSED";
-                      const isPart = c.status === "PARTIALLY_MET";
-                      const statusColor = isMet
-                        ? "text-emerald-400 bg-emerald-950/80 border-emerald-500/50"
-                        : isMissed
-                        ? "text-rose-400 bg-rose-950/80 border-rose-500/50"
-                        : isPart
-                        ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/50"
-                        : "text-amber-400 bg-amber-950/80 border-amber-500/50";
-
-                      return (
-                        <div
-                          key={c.commitment_id}
-                          className="p-3 rounded-lg bg-black/50 border border-slate-800 text-xs space-y-2"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-mono text-[11px] font-bold text-white flex items-center gap-1">
-                              <span className="text-cyan-400">[{c.target_period || "Quarter Target"}]</span>
-                              <span>{c.category.replace(/_/g, " ")}</span>
-                            </span>
-                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${statusColor}`}>
-                              {c.status.replace(/_/g, " ")}
-                            </span>
-                          </div>
-
-                          <p className="text-slate-200 text-xs leading-relaxed">{c.statement}</p>
-
-                          {c.exact_quote && (
-                            <p className="text-[11px] italic text-slate-400 bg-slate-950 p-2 rounded border border-slate-900">
-                              &ldquo;{c.exact_quote}&rdquo;
-                              {c.page_or_slide && (
-                                <span className="text-slate-500 font-mono not-italic ml-2">
-                                  [{c.page_or_slide}]
-                                </span>
-                              )}
-                            </p>
-                          )}
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-mono pt-1">
-                            <div className="p-2 rounded bg-slate-950 border border-slate-900">
-                              <span className="text-slate-500 block uppercase text-[9px]">Target:</span>
-                              <span className="text-cyan-300 font-bold">{c.target_value || "Milestone Target"}</span>
-                            </div>
-                            <div className="p-2 rounded bg-slate-950 border border-slate-900">
-                              <span className="text-emerald-500 block uppercase text-[9px]">Audited Outcome:</span>
-                              <span className="text-white font-bold">{c.actual_result || "Pending Verification"}</span>
-                            </div>
-                          </div>
-
-                          {c.evidence_quote && (
-                            <p className="text-[10px] font-mono text-slate-400 pt-1 flex items-start gap-1">
-                              <Check className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
-                              <span>{c.evidence_quote}</span>
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
+            return (
+              <div className="p-4 rounded-xl bg-[#09101E] border border-cyan-900/60 shadow-lg space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-950 pb-2">
+                  <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-300 flex items-center gap-1.5">
+                    <Target className="w-4 h-4 text-amber-400" />
+                    Quarterly Management Commitments & Delivery Scorecard ({commitments.length})
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCommitmentsViewMode(commitmentsViewMode === "MINI" ? "MAX" : "MINI")}
+                      className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-cyan-800 text-cyan-300 text-xs font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      {commitmentsViewMode === "MINI" ? (
+                        <>
+                          <ChevronsDown className="w-3 h-3" />
+                          <span>Max Records (All {commitments.length})</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsUp className="w-3 h-3" />
+                          <span>Mini Records (Top 3)</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* Historical Documents & Transcripts List */}
-              {data?.documents && data.documents.length > 0 && (
-                <div className="pt-4 border-t border-slate-800">
-                  <h4 className="text-xs uppercase font-mono tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
+                {commitmentsViewMode === "MAX" && (
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Filter commitments by target or statement..."
+                      value={commitmentsSearch}
+                      onChange={(e) => setCommitmentsSearch(e.target.value)}
+                      className="w-full bg-[#050A14] border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
+                    />
+                  </div>
+                )}
+
+                <div className={`space-y-3 ${commitmentsViewMode === "MAX" ? "max-h-[520px]" : "max-h-96"} overflow-y-auto pr-1`}>
+                  {visibleComms.map((c) => {
+                    const isMet = c.status === "MET";
+                    const isMissed = c.status === "MISSED";
+                    const isPart = c.status === "PARTIALLY_MET";
+                    const statusColor = isMet
+                      ? "text-emerald-400 bg-emerald-950/80 border-emerald-500/50"
+                      : isMissed
+                      ? "text-rose-400 bg-rose-950/80 border-rose-500/50"
+                      : isPart
+                      ? "text-cyan-400 bg-cyan-950/80 border-cyan-500/50"
+                      : "text-amber-400 bg-amber-950/80 border-amber-500/50";
+
+                    return (
+                      <div
+                        key={c.commitment_id || c.id}
+                        className="p-3 rounded-lg bg-black/50 border border-slate-800 text-xs space-y-2 hover:border-slate-700 transition"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] font-bold text-white flex items-center gap-1">
+                            <span className="text-cyan-400">[{c.target_period || "Quarter Target"}]</span>
+                            <span>{c.category.replace(/_/g, " ")}</span>
+                          </span>
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${statusColor}`}>
+                            {c.status.replace(/_/g, " ")}
+                          </span>
+                        </div>
+
+                        <p className="text-slate-200 text-xs leading-relaxed">{c.statement}</p>
+
+                        {c.exact_quote && (
+                          <p className="text-[11px] italic text-slate-400 bg-slate-950 p-2 rounded border border-slate-900">
+                            &ldquo;{c.exact_quote}&rdquo;
+                            {c.page_or_slide && (
+                              <span className="text-slate-500 font-mono not-italic ml-2">
+                                [{c.page_or_slide}]
+                              </span>
+                            )}
+                          </p>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-mono pt-1">
+                          <div className="p-2 rounded bg-slate-950 border border-slate-900">
+                            <span className="text-slate-500 block uppercase text-[9px]">Target:</span>
+                            <span className="text-cyan-300 font-bold">{c.target_value || "Milestone Target"}</span>
+                          </div>
+                          <div className="p-2 rounded bg-slate-950 border border-slate-900">
+                            <span className="text-emerald-500 block uppercase text-[9px]">Audited Outcome:</span>
+                            <span className="text-white font-bold">{c.actual_result || "Pending Verification"}</span>
+                          </div>
+                        </div>
+
+                        {c.evidence_quote && (
+                          <p className="text-[10px] font-mono text-slate-400 pt-1 flex items-start gap-1">
+                            <Check className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
+                            <span>{c.evidence_quote}</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {commitmentsViewMode === "MINI" && commitments.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setCommitmentsViewMode("MAX")}
+                    className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-300 text-xs font-mono transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span>Showing top 3 of {commitments.length} commitments · Maximize All Records</span>
+                    <ChevronsDown className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Historical Documents & Transcripts List */}
+          {data?.documents && data.documents.length > 0 && (() => {
+            const filteredDocs = data.documents.filter((d) => {
+              if (!docsSearch) return true;
+              const q = docsSearch.toLowerCase();
+              return (
+                d.fiscal_period.toLowerCase().includes(q) ||
+                d.doc_type.toLowerCase().includes(q) ||
+                (d.headline && d.headline.toLowerCase().includes(q))
+              );
+            });
+            const visibleDocs = docsViewMode === "MINI" ? filteredDocs.slice(0, 4) : filteredDocs;
+
+            return (
+              <div className="pt-4 border-t border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs uppercase font-mono tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-cyan-400" />
                     Historical Presentations & Concalls ({data.documents.length} Files)
                   </h4>
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {data.documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 flex items-center justify-between hover:border-cyan-800/50 transition text-xs"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono text-[10px]">
-                            {doc.fiscal_period}
-                          </span>
-                          <span className="text-slate-300 font-medium">
-                            {doc.doc_type.replace(/_/g, " ")}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {doc.announcement_date || ""}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {doc.pdf_url && (
-                            <a
-                              href={doc.pdf_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1 text-[11px]"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              PDF
-                            </a>
-                          )}
-                          <button
-                            onClick={async () => {
-                              try {
-                                await triggerAnalyzeDocument(doc.id);
-                                if (symbol) loadData(symbol);
-                              } catch (e: any) {
-                                alert(e.message);
-                              }
-                            }}
-                            className="px-2 py-0.5 text-[10px] rounded bg-slate-800 hover:bg-cyan-900/60 text-slate-300 hover:text-cyan-300 transition"
-                          >
-                            Analyze
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDocsViewMode(docsViewMode === "MINI" ? "MAX" : "MINI")}
+                      className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-cyan-800 text-cyan-300 text-xs font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      {docsViewMode === "MINI" ? (
+                        <>
+                          <ChevronsDown className="w-3 h-3" />
+                          <span>Max Records (All {data.documents.length})</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsUp className="w-3 h-3" />
+                          <span>Mini Records (Top 4)</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-              )}
+
+                {docsViewMode === "MAX" && (
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Filter historical filings by quarter or type..."
+                      value={docsSearch}
+                      onChange={(e) => setDocsSearch(e.target.value)}
+                      className="w-full bg-[#050A14] border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
+                    />
+                  </div>
+                )}
+
+                <div className={`space-y-2 ${docsViewMode === "MAX" ? "max-h-96" : "max-h-56"} overflow-y-auto pr-1`}>
+                  {visibleDocs.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 flex items-center justify-between hover:border-cyan-800/50 transition text-xs"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono text-[10px]">
+                          {doc.fiscal_period}
+                        </span>
+                        <span className="text-slate-300 font-medium">
+                          {doc.doc_type.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {doc.announcement_date || ""}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {doc.pdf_url && (
+                          <a
+                            href={doc.pdf_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1 text-[11px]"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            PDF
+                          </a>
+                        )}
+                        <button
+                          onClick={async () => {
+                            try {
+                              await triggerAnalyzeDocument(doc.id);
+                              if (symbol) loadData(symbol);
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          }}
+                          className="px-2 py-0.5 text-[10px] rounded bg-slate-800 hover:bg-cyan-900/60 text-slate-300 hover:text-cyan-300 transition cursor-pointer"
+                        >
+                          Analyze
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {docsViewMode === "MINI" && data.documents.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setDocsViewMode("MAX")}
+                    className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-300 text-xs font-mono transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span>Showing latest 4 of {data.documents.length} files · Maximize All Records</span>
+                    <ChevronsDown className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })()}
             </>
           )}
         </div>

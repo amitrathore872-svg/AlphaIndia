@@ -54,8 +54,15 @@ export default function BrokerageRadarPage() {
   const [scorecards, setScorecards] = useState<BrokerScorecardItem[]>([]);
   const [metrics, setMetrics] = useState<BrokerageMetricsRibbon | null>(null);
 
-  // Consensus by Stock State
+  // Pagination for Research Feed
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Consensus by Stock State & Pagination
   const [consensusStocks, setConsensusStocks] = useState<StockConsensusGroupItem[]>([]);
+  const [consensusPage, setConsensusPage] = useState(1);
+  const [consensusPageSize, setConsensusPageSize] = useState(25);
   const [minBrokersFilter, setMinBrokersFilter] = useState<number>(1);
   const [consensusSortBy, setConsensusSortBy] = useState<string>("broker_count");
   const [consensusSortOrder, setConsensusSortOrder] = useState<"asc" | "desc">("desc");
@@ -66,7 +73,6 @@ export default function BrokerageRadarPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [ingestBanner, setIngestBanner] = useState<string | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
 
   // Filters & State
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,11 +83,33 @@ export default function BrokerageRadarPage() {
   const [minConviction, setMinConviction] = useState<number>(0);
   const [sortBy, setSortBy] = useState("report_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
   const [activeView, setActiveView] = useState<"feed" | "consensus" | "league">("feed");
 
   // Selected report for side drawer / modal
   const [selectedReport, setSelectedReport] = useState<BrokerageReportItem | null>(null);
+
+  const isFilterActive =
+    Boolean(searchQuery) ||
+    selectedBroker !== "ALL" ||
+    selectedAction !== "ALL" ||
+    selectedCap !== "ALL" ||
+    selectedHorizon !== "ALL" ||
+    minConviction > 0 ||
+    minBrokersFilter > 1;
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setSelectedBroker("ALL");
+    setSelectedAction("ALL");
+    setSelectedCap("ALL");
+    setSelectedHorizon("ALL");
+    setMinConviction(0);
+    setMinBrokersFilter(1);
+    setSortBy("report_date");
+    setSortOrder("desc");
+    setPage(1);
+    setConsensusPage(1);
+  };
 
   const toggleStockExpanded = (symbol: string) => {
     setExpandedStocks((prev) => {
@@ -101,7 +129,7 @@ export default function BrokerageRadarPage() {
       const [feedRes, hotRes, scoreRes, metricsRes, consensusRes] = await Promise.all([
         fetchBrokerageFeed({
           page,
-          limit: 50,
+          limit: pageSize,
           search: searchQuery || undefined,
           brokerage_house: selectedBroker !== "ALL" ? selectedBroker : undefined,
           action: selectedAction !== "ALL" ? selectedAction : undefined,
@@ -142,10 +170,17 @@ export default function BrokerageRadarPage() {
       setIsIngesting(true);
       setIngestBanner(null);
       const res = await triggerBrokerageIngestion(7);
-      setIngestBanner(
-        `Live Scan Completed: ${res.total_discovered} institutional calls discovered (${res.new_reports} new, ${res.updated_reports} updated). Feed is now live up to today!`
-      );
-      await loadData();
+      if (res.status === "started") {
+        setIngestBanner(res.message || "Live feed scan initiated in background. Updating telemetry...");
+        setTimeout(() => {
+          loadData();
+        }, 3500);
+      } else {
+        setIngestBanner(
+          `Live Scan Completed: ${res.total_discovered ?? 0} institutional calls discovered (${res.new_reports ?? 0} new, ${res.updated_reports ?? 0} updated). Feed is now live up to today!`
+        );
+        await loadData();
+      }
     } catch (err: any) {
       console.error("Live scan failed:", err);
       setIngestBanner(`Scan Notice: ${err?.message || "Failed to complete live feed scan"}`);
@@ -158,6 +193,7 @@ export default function BrokerageRadarPage() {
     loadData();
   }, [
     page,
+    pageSize,
     selectedBroker,
     selectedAction,
     selectedCap,
@@ -173,6 +209,8 @@ export default function BrokerageRadarPage() {
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
+      setPage(1);
+      setConsensusPage(1);
       loadData();
     }, 350);
     return () => clearTimeout(timer);
@@ -307,16 +345,14 @@ export default function BrokerageRadarPage() {
                 {metrics.total_active_calls} Tracked
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">Across NSE/BSE Universe</p>
-            </div>
-
-            <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-[#060D19] to-[#040812] p-4 shadow-md">
+            </div>            <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-[#060D19] to-[#040812] p-4 shadow-md">
               <div className="text-[10px] text-emerald-400 uppercase font-mono font-bold flex items-center gap-1">
                 <Flame size={12} className="text-amber-400" /> Hot Picks
               </div>
               <div className="text-xl font-black text-emerald-400 font-mono mt-1">
                 {metrics.hot_picks_count} High Conviction
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">Conviction Score â‰¥ 85</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Conviction Score ≥ 85</p>
             </div>
 
             <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/20 via-[#060D19] to-[#040812] p-4 shadow-md">
@@ -348,7 +384,7 @@ export default function BrokerageRadarPage() {
         )}
 
         {/* ===================================================================== */}
-        {/* 3. ”¥ HOT PICKS CLUSTERS CAROUSEL                                     */}
+        {/* 3. 🔥 HOT PICKS CLUSTERS CAROUSEL                                     */}
         {/* ===================================================================== */}
         {hotPicks.length > 0 && activeView === "feed" && (
           <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/20 via-[#071325] to-[#050C17] p-5 shadow-xl space-y-3">
@@ -456,7 +492,7 @@ export default function BrokerageRadarPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>›ï¸ Large Cap</span>
+                <span>🏛️ Large Cap</span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                   selectedCap === "LARGE_CAP" ? "bg-slate-950/40 text-slate-900" : "bg-slate-800 text-slate-400"
                 }`}>
@@ -475,7 +511,7 @@ export default function BrokerageRadarPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>âš¡ Mid Cap</span>
+                <span>⚡ Mid Cap</span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                   selectedCap === "MID_CAP" ? "bg-slate-950/40 text-slate-900" : "bg-slate-800 text-slate-400"
                 }`}>
@@ -494,7 +530,7 @@ export default function BrokerageRadarPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <span>š€ Small / Micro Cap</span>
+                <span>🚀 Small / Micro Cap</span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                   selectedCap === "SMALL_CAP" ? "bg-slate-950/40 text-slate-900" : "bg-slate-800 text-slate-400"
                 }`}>
@@ -577,12 +613,23 @@ export default function BrokerageRadarPage() {
                   className="rounded-xl border border-slate-800 bg-[#081224] px-3 py-2 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
                 >
                   <option value="ALL">All Horizons (1M - 24M)</option>
-                  <option value="1_MONTH">â±ï¸ 1 Month (Tactical)</option>
-                  <option value="3_MONTHS">â±ï¸ 3 Months (Short Term)</option>
-                  <option value="6_MONTHS">â±ï¸ 6 Months (Medium Term)</option>
-                  <option value="12_MONTHS">â±ï¸ 12 Months (Street Standard)</option>
-                  <option value="LONG">â±ï¸ 18M+ (Long-Term Capex)</option>
+                  <option value="1_MONTH">⏱️ 1 Month (Tactical)</option>
+                  <option value="3_MONTHS">⏱️ 3 Months (Short Term)</option>
+                  <option value="6_MONTHS">⏱️ 6 Months (Medium Term)</option>
+                  <option value="12_MONTHS">⏱️ 12 Months (Street Standard)</option>
+                  <option value="LONG">⏱️ 18M+ (Long-Term Capex)</option>
                 </select>
+
+                {isFilterActive && (
+                  <button
+                    onClick={resetFilters}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono font-semibold transition"
+                    title="Reset all active filters"
+                  >
+                    <X size={13} />
+                    <span>Clear</span>
+                  </button>
+                )}
               </div>
 
               {/* Sort By Dropdown */}
@@ -613,8 +660,16 @@ export default function BrokerageRadarPage() {
                   <span className="text-xs text-slate-400 font-mono">LOADING INSTITUTIONAL RESEARCH CALLS...</span>
                 </div>
               ) : reports.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 font-mono text-xs">
-                  No brokerage reports matched your filter criteria. Try clearing search filters.
+                <div className="p-12 text-center text-slate-400 font-mono text-xs space-y-3">
+                  <p>No brokerage reports matched your filter criteria. Try clearing search filters.</p>
+                  {isFilterActive && (
+                    <button
+                      onClick={resetFilters}
+                      className="px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 text-xs font-bold transition"
+                    >
+                      Reset All Filters
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -626,7 +681,7 @@ export default function BrokerageRadarPage() {
                         <th className="py-3.5 px-4">Market Cap</th>
                         <th className="py-3.5 px-4">Broker House & Rating</th>
                         <th className="py-3.5 px-4">Action</th>
-                        <th className="py-3.5 px-4">CMP âž” Target Price</th>
+                        <th className="py-3.5 px-4">CMP ➔ Target Price</th>
                         <th className="py-3.5 px-4">Target Horizon</th>
                         <th className="py-3.5 px-4">Target Rev %</th>
                         <th className="py-3.5 px-4">Conviction Score</th>
@@ -712,8 +767,8 @@ export default function BrokerageRadarPage() {
                               </div>
                               <div className="text-[10px] text-cyan-400 flex items-center gap-1">
                                 <Star size={10} className="fill-cyan-400 text-cyan-400" />
-                                <span>{r.broker_star_rating}â˜…</span>
-                                <span className="text-slate-400">Â· {r.broker_hit_rate_pct}% Hit Rate</span>
+                                <span>{r.broker_star_rating}★</span>
+                                <span className="text-slate-400">· {r.broker_hit_rate_pct}% Hit Rate</span>
                               </div>
                             </td>
 
@@ -735,7 +790,7 @@ export default function BrokerageRadarPage() {
 
                             <td className="py-3.5 px-4 whitespace-nowrap">
                               <div className="text-white font-bold">
-                                ₹{r.price_at_reco.toLocaleString()} âž” ₹{r.target_price.toLocaleString()}
+                                ₹{r.price_at_reco.toLocaleString()} ➔ ₹{r.target_price.toLocaleString()}
                               </div>
                               <div
                                 className={`text-[11px] font-bold ${
@@ -814,6 +869,93 @@ export default function BrokerageRadarPage() {
                 </div>
               )}
             </div>
+
+            {/* Master Table Pagination Footer */}
+            {reports.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border border-slate-800 bg-[#060D19] shadow-lg font-mono text-xs">
+                <div className="flex flex-wrap items-center gap-3 text-slate-400">
+                  <span>
+                    Showing <span className="font-bold text-white">{(page - 1) * pageSize + 1}</span> to{" "}
+                    <span className="font-bold text-white">{Math.min(page * pageSize, totalCount)}</span> of{" "}
+                    <span className="font-bold text-cyan-300">{totalCount}</span> institutional calls
+                  </span>
+
+                  <div className="flex items-center gap-1.5 ml-0 sm:ml-4">
+                    <span className="text-slate-500">Per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="rounded-lg border border-slate-800 bg-[#081224] px-2 py-1 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    onClick={() => setPage(1)}
+                    disabled={page <= 1 || loading}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    title="First Page"
+                  >
+                    «
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1 || loading}
+                    className="px-3 py-1.5 rounded-lg border border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    Prev
+                  </button>
+
+                  {/* Page numbers */}
+                  {Array.from({ length: Math.ceil(totalCount / pageSize) || 1 }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === Math.ceil(totalCount / pageSize) || Math.abs(p - page) <= 1)
+                    .map((p, idx, arr) => {
+                      const prevPage = arr[idx - 1];
+                      const showEllipsis = prevPage && p - prevPage > 1;
+                      return (
+                        <React.Fragment key={p}>
+                          {showEllipsis && <span className="px-1 text-slate-600">...</span>}
+                          <button
+                            onClick={() => setPage(p)}
+                            disabled={loading}
+                            className={`min-w-[32px] px-2.5 py-1.5 rounded-lg border text-xs font-bold transition ${
+                              page === p
+                                ? "bg-cyan-500 text-slate-950 border-cyan-400 shadow-md"
+                                : "border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <button
+                    onClick={() => setPage((p) => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+                    disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+                    className="px-3 py-1.5 rounded-lg border border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setPage(Math.ceil(totalCount / pageSize))}
+                    disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    title="Last Page"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -883,6 +1025,17 @@ export default function BrokerageRadarPage() {
                   <option value={2}>🔥 Multi-Broker Only (2+ Desks)</option>
                   <option value={3}>⭐ Heavy Coverage (3+ Desks)</option>
                 </select>
+
+                {isFilterActive && (
+                  <button
+                    onClick={resetFilters}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono font-semibold transition"
+                    title="Reset all active filters"
+                  >
+                    <X size={13} />
+                    <span>Clear</span>
+                  </button>
+                )}
               </div>
 
               {/* Sort Dropdown */}
@@ -909,12 +1062,22 @@ export default function BrokerageRadarPage() {
             {/* Stocks Consensus Table */}
             <div className="rounded-2xl border border-slate-800 bg-[#060D19] shadow-2xl overflow-hidden">
               {consensusStocks.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 font-mono text-xs">
-                  No stocks match the consensus filters. Try selecting "All Covered Stocks".
+                <div className="p-12 text-center text-slate-400 font-mono text-xs space-y-3">
+                  <p>No stocks match the consensus filters. Try selecting "All Covered Stocks".</p>
+                  {isFilterActive && (
+                    <button
+                      onClick={resetFilters}
+                      className="px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 text-xs font-bold transition"
+                    >
+                      Reset All Filters
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y divide-slate-800/80">
-                  {consensusStocks.map((stock) => {
+                  {consensusStocks
+                    .slice((consensusPage - 1) * consensusPageSize, consensusPage * consensusPageSize)
+                    .map((stock) => {
                     const isExpanded = expandedStocks.has(stock.symbol);
 
                     return (
@@ -1160,6 +1323,55 @@ export default function BrokerageRadarPage() {
                 </div>
               )}
             </div>
+
+            {/* Consensus Pagination Footer */}
+            {consensusStocks.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border border-slate-800 bg-[#060D19] shadow-lg font-mono text-xs">
+                <div className="flex flex-wrap items-center gap-3 text-slate-400">
+                  <span>
+                    Showing <span className="font-bold text-white">{(consensusPage - 1) * consensusPageSize + 1}</span> to{" "}
+                    <span className="font-bold text-white">{Math.min(consensusPage * consensusPageSize, consensusStocks.length)}</span> of{" "}
+                    <span className="font-bold text-cyan-300">{consensusStocks.length}</span> Covered Equities
+                  </span>
+                  <div className="flex items-center gap-1.5 ml-0 sm:ml-4">
+                    <span className="text-slate-500">Per page:</span>
+                    <select
+                      value={consensusPageSize}
+                      onChange={(e) => {
+                        setConsensusPageSize(Number(e.target.value));
+                        setConsensusPage(1);
+                      }}
+                      className="rounded-lg border border-slate-800 bg-[#081224] px-2 py-1 text-xs text-slate-300 font-mono focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <button
+                    onClick={() => setConsensusPage((p) => Math.max(1, p - 1))}
+                    disabled={consensusPage <= 1}
+                    className="px-3 py-1.5 rounded-lg border border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-2 text-slate-400">
+                    Page <span className="font-bold text-white">{consensusPage}</span> of{" "}
+                    <span className="font-bold text-white">{Math.ceil(consensusStocks.length / consensusPageSize) || 1}</span>
+                  </span>
+                  <button
+                    onClick={() => setConsensusPage((p) => Math.min(Math.ceil(consensusStocks.length / consensusPageSize), p + 1))}
+                    disabled={consensusPage >= Math.ceil(consensusStocks.length / consensusPageSize)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-800 bg-[#081224] text-slate-400 hover:text-white hover:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

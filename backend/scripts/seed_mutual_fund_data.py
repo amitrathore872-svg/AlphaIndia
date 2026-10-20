@@ -99,6 +99,7 @@ MONTH_DATES = [
     date(2026, 6, 30),
     date(2026, 7, 31),
     date(2026, 8, 31),
+    date(2026, 9, 30),
 ]
 
 
@@ -110,6 +111,14 @@ def seed_mutual_fund_intelligence():
     print("=" * 70)
 
     try:
+        # Clean wipe existing mutual fund holdings and aggregates to eliminate any orphan or inconsistent data
+        print("Cleaning previous mutual fund records...")
+        db.query(MFAccumulationSignal).delete()
+        db.query(MFStockMonthlyAggregate).delete()
+        db.query(MFSchemeHolding).delete()
+        db.query(MFSectorFlow).delete()
+        db.commit()
+        print("Previous records wiped successfully.")
         # -------------------------------------------------------------
         # 1. Seed or Update 32 Flagship Schemes across 16 AMCs
         # -------------------------------------------------------------
@@ -277,6 +286,10 @@ def seed_mutual_fund_intelligence():
 
             is_stealth = (cat in ["MID", "SMALL", "MICRO"]) and (hash(comp.symbol) % 7 == 0)
             is_consensus = (cat in ["LARGE", "MID"]) and (hash(comp.symbol) % 5 == 0)
+            is_trimming = (not is_stealth and not is_consensus) and (
+                (comp.sector in ["Information Tech", "FMCG & Staples", "Metals & Mining", "Textiles"])
+                or (hash(comp.symbol) % 4 == 0)
+            )
 
             # Month-by-month evolution
             prev_total_shares = 0
@@ -287,7 +300,14 @@ def seed_mutual_fund_intelligence():
                 cur_price = round(max(5.0, base_price * price_trend), 2)
 
                 # Institutional growth factor
-                inst_factor = 1.0 + (m_idx * 0.04) if is_stealth or is_consensus else 1.0 + ((m_idx - 2) * 0.015)
+                if is_trimming:
+                    # In recent months, funds trim or take profit
+                    inst_factor = 1.0 + (m_idx * 0.01) if m_idx < 4 else 1.04 - ((m_idx - 3) * 0.04)
+                elif is_stealth or is_consensus:
+                    inst_factor = 1.0 + (m_idx * 0.04)
+                else:
+                    inst_factor = 1.0 + ((m_idx - 2) * 0.015)
+
                 cur_inst_shares = int(base_inst_shares * inst_factor)
 
                 month_total_shares = 0
@@ -376,13 +396,16 @@ def seed_mutual_fund_intelligence():
                 net_val_delta = round((net_shares_delta * cur_price) / 10000000.0, 2)
                 prev_total_shares = month_total_shares
 
-                float_abs = round(abs(net_shares_delta) / max(total_equity_shares * 0.5, 1) * 100.0, 2)
+                if net_shares_delta <= 0:
+                    float_abs = 0.0
+                    score = round(max(25.0, min(52.0, 48.0 + (net_shares_delta / max(prev_total_shares, 1)) * 30.0)), 1)
+                else:
+                    float_abs = round((net_shares_delta / max(total_equity_shares * 0.5, 1)) * 100.0, 2)
+                    base_score = 75.0 if is_consensus else (70.0 if is_stealth else 58.0)
+                    score = round(min(98.0, max(55.0, base_score + (m_idx * 1.5) + (float_abs * 2.0))), 1)
+
                 eq_pct = round((month_total_shares / max(total_equity_shares, 1)) * 100.0, 2)
                 free_float_pct = round(eq_pct * 2.1, 2)
-
-                # Smart Money Score (0 to 100)
-                base_score = 75.0 if is_consensus else (70.0 if is_stealth else 58.0)
-                score = round(min(98.0, max(35.0, base_score + (m_idx * 2.5) + (float_abs * 2.0))), 1)
 
                 agg = (
                     db.query(MFStockMonthlyAggregate)
@@ -427,8 +450,11 @@ def seed_mutual_fund_intelligence():
 
                 total_aggregates_created += 1
 
+                # Flush session so evaluate_and_generate_signal can query the aggregate
+                db.flush()
+
                 # Generate signals for latest month
-                if m_idx == len(MONTH_DATES) - 1 and (score >= 75.0 or comp in fresh_entry_stocks):
+                if m_idx == len(MONTH_DATES) - 1 and (score >= 75.0 or comp in fresh_entry_stocks or net_shares_delta < 0):
                     MFSignalService.evaluate_and_generate_signal(db, comp.id, report_date, cur_price)
 
             if (c_idx + 1) % 100 == 0 or (c_idx + 1) == len(universe_companies):

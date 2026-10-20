@@ -126,6 +126,7 @@ export interface FreshEntryItem {
   shares_held: number;
   market_value_cr: number;
   weight_pct: number;
+  holding_status?: string;
   report_date: string;
   current_stage?: string;
   stage_code?: string;

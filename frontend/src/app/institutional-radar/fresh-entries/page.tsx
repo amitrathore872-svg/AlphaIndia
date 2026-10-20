@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
@@ -281,10 +281,10 @@ export default function FreshPortfolioEntriesPage() {
               aria-label="Filter by Market Cap"
             >
               <option value="ALL">Market Cap: All Caps ({capCounts.ALL})</option>
-              <option value="LARGE">Large Cap ({capCounts.LARGE}) â€¢ &gt; ₹20k Cr</option>
-              <option value="MID">Mid Cap ({capCounts.MID}) â€¢ ₹5k - ₹20k Cr</option>
-              <option value="SMALL">Small Cap ({capCounts.SMALL}) â€¢ ₹1k - ₹5k Cr</option>
-              <option value="MICRO">Micro Cap ({capCounts.MICRO}) â€¢ &lt; ₹1k Cr</option>
+              <option value="LARGE">Large Cap ({capCounts.LARGE}) • &gt; ₹20k Cr</option>
+              <option value="MID">Mid Cap ({capCounts.MID}) • ₹5k - ₹20k Cr</option>
+              <option value="SMALL">Small Cap ({capCounts.SMALL}) • ₹1k - ₹5k Cr</option>
+              <option value="MICRO">Micro Cap ({capCounts.MICRO}) • &lt; ₹1k Cr</option>
             </select>
 
             <select
@@ -478,7 +478,7 @@ export default function FreshPortfolioEntriesPage() {
                         {/* Scheme Weight % */}
                         <td className="px-4 py-3.5 text-right">
                           <div className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-xs font-black text-emerald-700 dark:text-emerald-400">
-                            <span>â˜…</span>
+                            <span>★</span>
                             <span>{item.weight_pct.toFixed(2)}%</span>
                           </div>
                         </td>

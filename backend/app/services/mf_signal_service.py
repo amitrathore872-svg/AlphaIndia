@@ -43,7 +43,16 @@ class MFSignalService:
         pat_growth = company.pat_growth or (latest_quarter.net_profit if latest_quarter else 0.0)
         roce = company.roce or 18.5
 
-        if aggregate.is_stealth_accumulation:
+        if aggregate.net_shares_flow_mom and aggregate.net_shares_flow_mom < 0:
+            primary_driver = "Institutional Profit Taking & Net Position Trimming"
+            shares_abs = abs(aggregate.net_shares_flow_mom)
+            val_abs = abs(aggregate.net_value_flow_mom_cr)
+            thesis = (
+                f"Active mutual funds reduced exposure with net MoM trimming of {shares_abs:,d} shares "
+                f"(₹{val_abs:.1f} Cr outflow) across domestic schemes. Institutional desks are de-risking "
+                f"or rotating capital into higher operating-leverage sectors within {sector}."
+            )
+        elif aggregate.is_stealth_accumulation:
             primary_driver = "Stealth Float Consolidation Ahead of Margin Inflection"
             thesis = (
                 f"Smart money institutions have quietly absorbed {float_abs:.1f}% of the tradeable free float "
@@ -112,30 +121,48 @@ class MFSignalService:
         ai_data = cls.generate_ai_thesis(company, aggregate, latest_quarter)
 
         # Determine signal type
-        if aggregate.is_stealth_accumulation:
+        if aggregate.net_shares_flow_mom and aggregate.net_shares_flow_mom < 0:
+            signal_type = "INSTITUTIONAL_DISTRIBUTION"
+            action = "TRIM" if aggregate.smart_money_score < 48 else "HOLD"
+            entry_low = round(current_price * 0.90, 2)
+            entry_high = round(current_price * 0.95, 2)
+            target_price = round(current_price * 1.02, 2)
+            stop_loss = round(current_price * 0.91, 2)
+        elif aggregate.is_stealth_accumulation:
             signal_type = "STEALTH_ACCUMULATION"
             action = "STRONG BUY"
+            entry_low = round(current_price * 0.97, 2)
+            entry_high = round(current_price * 1.03, 2)
+            target_price = round(current_price * (1.15 + (aggregate.smart_money_score / 100.0) * 0.25), 2)
+            stop_loss = round(current_price * 0.94, 2)
         elif aggregate.is_consensus_bet:
             signal_type = "CONSENSUS_BET"
             action = "STRONG BUY"
+            entry_low = round(current_price * 0.97, 2)
+            entry_high = round(current_price * 1.03, 2)
+            target_price = round(current_price * (1.15 + (aggregate.smart_money_score / 100.0) * 0.25), 2)
+            stop_loss = round(current_price * 0.94, 2)
         elif aggregate.smart_money_score >= 80:
             signal_type = "AGGRESSIVE_ADD"
             action = "STRONG BUY"
+            entry_low = round(current_price * 0.97, 2)
+            entry_high = round(current_price * 1.03, 2)
+            target_price = round(current_price * (1.15 + (aggregate.smart_money_score / 100.0) * 0.25), 2)
+            stop_loss = round(current_price * 0.94, 2)
         elif aggregate.smart_money_score >= 65:
             signal_type = "ACCUMULATION_BASE"
             action = "ACCUMULATE"
+            entry_low = round(current_price * 0.97, 2)
+            entry_high = round(current_price * 1.03, 2)
+            target_price = round(current_price * (1.12 + (aggregate.smart_money_score / 100.0) * 0.20), 2)
+            stop_loss = round(current_price * 0.94, 2)
         else:
             signal_type = "BASE_HOLD"
             action = "HOLD"
-
-        # Price Levels
-        if current_price <= 0:
-            current_price = 1000.0
-
-        entry_low = round(current_price * 0.97, 2)
-        entry_high = round(current_price * 1.03, 2)
-        target_price = round(current_price * (1.15 + (aggregate.smart_money_score / 100.0) * 0.25), 2)
-        stop_loss = round(current_price * 0.94, 2)
+            entry_low = round(current_price * 0.96, 2)
+            entry_high = round(current_price * 1.02, 2)
+            target_price = round(current_price * 1.08, 2)
+            stop_loss = round(current_price * 0.93, 2)
 
         # Upsert signal
         signal = (

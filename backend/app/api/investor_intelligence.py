@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, and_, or_
+from sqlalchemy import desc, func, and_, or_, case
 
 from app.db.database import get_db
 from app.models.company import Company
@@ -185,6 +185,7 @@ def get_insights_feed(
     sector: Optional[str] = Query(default=None, description="Filter by industry sector"),
     min_score: Optional[float] = Query(default=None, description="Minimum growth conviction score"),
     transformational_only: Optional[bool] = Query(default=None, description="Filter for only exponential / transformational catalysts"),
+    deduplicate_stocks: bool = Query(default=True, description="Collapse duplicate filings for the same stock into one card with related filings"),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -192,57 +193,129 @@ def get_insights_feed(
     """
     Returns latest quarterly investor intelligence feed, sorted primarily by actual publication date
     in descending order. Displays both newly discovered pending presentations and fully analyzed insights.
+    When deduplicate_stocks is True, collapses multiple filings for the same stock into one primary card with related filings attached.
     """
-    query = (
-        db.query(InvestorDocument, InvestorIntelligenceInsight, Company.sector)
-        .outerjoin(
-            InvestorIntelligenceInsight,
-            InvestorIntelligenceInsight.document_id == InvestorDocument.id,
-        )
-        .outerjoin(Company, Company.id == InvestorDocument.company_id)
-    )
-
-    if quarter and isinstance(quarter, str) and quarter != "ALL":
-        query = query.filter(InvestorDocument.fiscal_period == quarter.strip())
-
-    if doc_type and isinstance(doc_type, str) and doc_type != "ALL":
-        query = query.filter(InvestorDocument.doc_type == doc_type.upper().strip())
-
-    if symbol and isinstance(symbol, str):
-        query = query.filter(InvestorDocument.symbol.ilike(f"%{symbol.strip()}%"))
-
-    if sector and isinstance(sector, str) and sector != "ALL":
-        query = query.filter(Company.sector.ilike(f"%{sector.strip()}%"))
-
-    if analysis_status and analysis_status != "ALL":
-        stat = analysis_status.upper().strip()
-        if stat == "ANALYZED":
-            query = query.filter(or_(InvestorDocument.ai_analysis_status == "ANALYZED", InvestorDocument.status == "ANALYZED"))
-        elif stat == "PENDING":
-            query = query.filter(and_(InvestorDocument.ai_analysis_status == "PENDING", InvestorDocument.status != "FAILED"))
-        elif stat == "FAILED":
-            query = query.filter(or_(InvestorDocument.ai_analysis_status == "FAILED", InvestorDocument.status == "FAILED"))
-
-    if stance and isinstance(stance, str) and stance != "ALL":
-        query = query.filter(InvestorIntelligenceInsight.institutional_stance == stance.upper().strip())
-
-    if thesis_impact and isinstance(thesis_impact, str) and thesis_impact != "ALL":
-        query = query.filter(InvestorIntelligenceInsight.thesis_impact == thesis_impact.upper().strip())
-
-    if min_score is not None and isinstance(min_score, (int, float)):
-        query = query.filter(InvestorIntelligenceInsight.growth_conviction_score >= min_score)
-
-    if transformational_only is True:
-        query = query.filter(InvestorIntelligenceInsight.is_transformational_catalyst == True)
-
     page_val = page if isinstance(page, int) else 1
     limit_val = limit if isinstance(limit, int) else 20
 
-    total = query.count()
+    if deduplicate_stocks:
+        partition_cols = (
+            (InvestorDocument.symbol, InvestorDocument.fiscal_period)
+            if (quarter and quarter != "ALL")
+            else (InvestorDocument.symbol,)
+        )
+
+        rn_col = func.row_number().over(
+            partition_by=partition_cols,
+            order_by=(
+                case((InvestorIntelligenceInsight.id.isnot(None), 0), else_=1),
+                case((or_(InvestorDocument.ai_analysis_status == "ANALYZED", InvestorDocument.status == "ANALYZED"), 0), else_=1),
+                case(
+                    (InvestorDocument.doc_type == "INVESTOR_PRESENTATION", 0),
+                    (InvestorDocument.doc_type == "CONCALL_TRANSCRIPT", 1),
+                    else_=2,
+                ),
+                desc(InvestorDocument.announcement_date).nullslast(),
+                desc(InvestorDocument.id),
+            ),
+        ).label("rn")
+
+        base_filter_q = (
+            db.query(InvestorDocument.id.label("sub_doc_id"), rn_col)
+            .outerjoin(InvestorIntelligenceInsight, InvestorIntelligenceInsight.document_id == InvestorDocument.id)
+            .outerjoin(Company, Company.id == InvestorDocument.company_id)
+        )
+
+        if quarter and isinstance(quarter, str) and quarter != "ALL":
+            base_filter_q = base_filter_q.filter(InvestorDocument.fiscal_period == quarter.strip())
+
+        if doc_type and isinstance(doc_type, str) and doc_type != "ALL":
+            base_filter_q = base_filter_q.filter(InvestorDocument.doc_type == doc_type.upper().strip())
+
+        if symbol and isinstance(symbol, str):
+            base_filter_q = base_filter_q.filter(InvestorDocument.symbol.ilike(f"%{symbol.strip()}%"))
+
+        if sector and isinstance(sector, str) and sector != "ALL":
+            base_filter_q = base_filter_q.filter(Company.sector.ilike(f"%{sector.strip()}%"))
+
+        if analysis_status and isinstance(analysis_status, str) and analysis_status != "ALL":
+            stat = analysis_status.upper().strip()
+            if stat == "ANALYZED":
+                base_filter_q = base_filter_q.filter(or_(InvestorDocument.ai_analysis_status == "ANALYZED", InvestorDocument.status == "ANALYZED"))
+            elif stat == "PENDING":
+                base_filter_q = base_filter_q.filter(and_(InvestorDocument.ai_analysis_status == "PENDING", InvestorDocument.status != "FAILED"))
+            elif stat == "FAILED":
+                base_filter_q = base_filter_q.filter(or_(InvestorDocument.ai_analysis_status == "FAILED", InvestorDocument.status == "FAILED"))
+
+        if stance and isinstance(stance, str) and stance != "ALL":
+            base_filter_q = base_filter_q.filter(InvestorIntelligenceInsight.institutional_stance == stance.upper().strip())
+
+        if thesis_impact and isinstance(thesis_impact, str) and thesis_impact != "ALL":
+            base_filter_q = base_filter_q.filter(InvestorIntelligenceInsight.thesis_impact == thesis_impact.upper().strip())
+
+        if min_score is not None and isinstance(min_score, (int, float)):
+            base_filter_q = base_filter_q.filter(InvestorIntelligenceInsight.growth_conviction_score >= min_score)
+
+        if transformational_only is True:
+            base_filter_q = base_filter_q.filter(InvestorIntelligenceInsight.is_transformational_catalyst == True)
+
+        subq = base_filter_q.subquery()
+
+        main_query = (
+            db.query(InvestorDocument, InvestorIntelligenceInsight, Company.sector)
+            .join(subq, subq.c.sub_doc_id == InvestorDocument.id)
+            .filter(subq.c.rn == 1)
+            .outerjoin(InvestorIntelligenceInsight, InvestorIntelligenceInsight.document_id == InvestorDocument.id)
+            .outerjoin(Company, Company.id == InvestorDocument.company_id)
+        )
+    else:
+        main_query = (
+            db.query(InvestorDocument, InvestorIntelligenceInsight, Company.sector)
+            .outerjoin(
+                InvestorIntelligenceInsight,
+                InvestorIntelligenceInsight.document_id == InvestorDocument.id,
+            )
+            .outerjoin(Company, Company.id == InvestorDocument.company_id)
+        )
+
+        if quarter and isinstance(quarter, str) and quarter != "ALL":
+            main_query = main_query.filter(InvestorDocument.fiscal_period == quarter.strip())
+
+        if doc_type and isinstance(doc_type, str) and doc_type != "ALL":
+            main_query = main_query.filter(InvestorDocument.doc_type == doc_type.upper().strip())
+
+        if symbol and isinstance(symbol, str):
+            main_query = main_query.filter(InvestorDocument.symbol.ilike(f"%{symbol.strip()}%"))
+
+        if sector and isinstance(sector, str) and sector != "ALL":
+            main_query = main_query.filter(Company.sector.ilike(f"%{sector.strip()}%"))
+
+        if analysis_status and isinstance(analysis_status, str) and analysis_status != "ALL":
+            stat = analysis_status.upper().strip()
+            if stat == "ANALYZED":
+                main_query = main_query.filter(or_(InvestorDocument.ai_analysis_status == "ANALYZED", InvestorDocument.status == "ANALYZED"))
+            elif stat == "PENDING":
+                main_query = main_query.filter(and_(InvestorDocument.ai_analysis_status == "PENDING", InvestorDocument.status != "FAILED"))
+            elif stat == "FAILED":
+                main_query = main_query.filter(or_(InvestorDocument.ai_analysis_status == "FAILED", InvestorDocument.status == "FAILED"))
+
+        if stance and isinstance(stance, str) and stance != "ALL":
+            main_query = main_query.filter(InvestorIntelligenceInsight.institutional_stance == stance.upper().strip())
+
+        if thesis_impact and isinstance(thesis_impact, str) and thesis_impact != "ALL":
+            main_query = main_query.filter(InvestorIntelligenceInsight.thesis_impact == thesis_impact.upper().strip())
+
+        if min_score is not None and isinstance(min_score, (int, float)):
+            main_query = main_query.filter(InvestorIntelligenceInsight.growth_conviction_score >= min_score)
+
+        if transformational_only is True:
+            main_query = main_query.filter(InvestorIntelligenceInsight.is_transformational_catalyst == True)
+
+    total = main_query.count()
 
     # Primary sort: actual presentation publication date descending, secondary sort: document ID descending
     records = (
-        query.order_by(
+        main_query.order_by(
             desc(InvestorDocument.announcement_date).nullslast(),
             desc(InvestorDocument.id),
         )
@@ -251,6 +324,34 @@ def get_insights_feed(
         .all()
     )
 
+    # Collect related filings for symbols present on this page
+    related_filings_map: Dict[tuple, List[Dict[str, Any]]] = {}
+    if records:
+        symbols_on_page = list({doc.symbol for doc, _, _ in records})
+        rel_q = db.query(InvestorDocument).filter(InvestorDocument.symbol.in_(symbols_on_page))
+        if quarter and quarter != "ALL":
+            rel_q = rel_q.filter(InvestorDocument.fiscal_period == quarter.strip())
+
+        all_related = (
+            rel_q.order_by(
+                desc(InvestorDocument.announcement_date).nullslast(),
+                desc(InvestorDocument.id),
+            ).all()
+        )
+
+        for r_doc in all_related:
+            r_key = (r_doc.symbol, r_doc.fiscal_period)
+            if r_key not in related_filings_map:
+                related_filings_map[r_key] = []
+            related_filings_map[r_key].append({
+                "id": r_doc.id,
+                "doc_type": r_doc.doc_type,
+                "pdf_url": r_doc.pdf_url,
+                "status": r_doc.ai_analysis_status or r_doc.status or "PENDING",
+                "announcement_date": r_doc.announcement_date.isoformat() if r_doc.announcement_date else None,
+                "headline": r_doc.headline,
+            })
+
     items = []
     for doc, ins, comp_sector in records:
         is_analyzed = bool(ins and (doc.ai_analysis_status == "ANALYZED" or doc.status == "ANALYZED"))
@@ -258,6 +359,16 @@ def get_insights_feed(
 
         # Count commitments linked to document
         comms_count = db.query(ManagementCommitment).filter(ManagementCommitment.document_id == doc.id).count()
+
+        # Related filings attached to this stock card
+        raw_related = related_filings_map.get((doc.symbol, doc.fiscal_period), [])
+        related_filings = [
+            {
+                **rf,
+                "is_primary": (rf["id"] == doc.id),
+            }
+            for rf in raw_related
+        ]
 
         items.append({
             "id": ins.id if ins else doc.id,
@@ -278,6 +389,8 @@ def get_insights_feed(
             "ai_analysis_status": effective_status,
             "analysis_completed_at": doc.analysis_completed_at.isoformat() if doc.analysis_completed_at else (ins.analyzed_at.isoformat() if ins and ins.analyzed_at else None),
             "processing_error": doc.processing_error or doc.error_message,
+            "related_filings": related_filings,
+            "related_filings_count": len(related_filings),
 
             # Analysis Stance & Thesis Impact
             "institutional_stance": ins.institutional_stance if ins else "PENDING_ANALYSIS",

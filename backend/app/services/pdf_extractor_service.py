@@ -169,6 +169,17 @@ class PDFExtractorService:
         """
         Full pipeline: Downloads, extracts text, and segments document.
         """
+        url_lower = pdf_url.lower() if pdf_url else ""
+        if url_lower.endswith(".mp3") or ".mp3?" in url_lower or url_lower.endswith(".wav") or url_lower.endswith(".m4a") or "audio-recording" in url_lower:
+            return {
+                "success": False,
+                "error": "Audio recording/webcast file (.mp3) - Audio transcription pipeline required",
+                "raw_text": "",
+                "num_pages": 0,
+                "management_speech": "",
+                "analyst_qa": "",
+            }
+
         pdf_bytes = cls.download_pdf(pdf_url, symbol, doc_name)
         if not pdf_bytes:
             return {

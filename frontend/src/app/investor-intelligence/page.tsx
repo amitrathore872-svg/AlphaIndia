@@ -37,6 +37,9 @@ import {
   HelpCircle,
   ArrowUpRight,
   ChevronDown,
+  ChevronUp,
+  LayoutList,
+  LayoutGrid,
   Building2,
   PieChart,
 } from "lucide-react";
@@ -89,7 +92,7 @@ export default function InvestorIntelligencePage() {
 
   // Global Quarter Selection
   const [coverageData, setCoverageData] = useState<QuarterlyCoverageResponse | null>(null);
-  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  const [selectedQuarter, setSelectedQuarter] = useState<string>("ALL");
   const [coverageLoading, setCoverageLoading] = useState<boolean>(false);
 
   // Latest Intelligence Feed State
@@ -97,7 +100,10 @@ export default function InvestorIntelligencePage() {
   const [feedTotal, setFeedTotal] = useState<number>(0);
   const [feedLoading, setFeedLoading] = useState<boolean>(true);
   const [feedPage, setFeedPage] = useState<number>(1);
-  const feedLimit = 15;
+  const [feedLimit, setFeedLimit] = useState<number>(30);
+  const [feedViewMode, setFeedViewMode] = useState<"COMPACT" | "DETAILED">("COMPACT");
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+  const [deduplicateStocks, setDeduplicateStocks] = useState<boolean>(true);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -138,8 +144,8 @@ export default function InvestorIntelligencePage() {
       const qParam = quarter && quarter !== "ALL" ? quarter : undefined;
       const data = await fetchQuarterlyCoverage(qParam);
       setCoverageData(data);
-      if (!quarter && data.selected_quarter) {
-        setSelectedQuarter(data.selected_quarter);
+      if (quarter && quarter !== "ALL") {
+        setSelectedQuarter(quarter);
       }
     } catch (err) {
       console.error("Error fetching quarterly coverage:", err);
@@ -159,6 +165,7 @@ export default function InvestorIntelligencePage() {
         analysis_status: selectedStatus === "ALL" ? undefined : selectedStatus,
         doc_type: selectedDocType === "ALL" ? undefined : selectedDocType,
         symbol: searchQuery ? searchQuery.trim().toUpperCase() : undefined,
+        deduplicate_stocks: deduplicateStocks,
         page: feedPage,
         limit: feedLimit,
       });
@@ -169,7 +176,7 @@ export default function InvestorIntelligencePage() {
     } finally {
       setFeedLoading(false);
     }
-  }, [selectedQuarter, selectedStance, selectedThesis, selectedStatus, selectedDocType, searchQuery, feedPage]);
+  }, [selectedQuarter, selectedStance, selectedThesis, selectedStatus, selectedDocType, searchQuery, deduplicateStocks, feedPage, feedLimit]);
 
   // 3. Load Commitments Ledger
   const loadCommitments = useCallback(async () => {
@@ -301,6 +308,46 @@ export default function InvestorIntelligencePage() {
     }
   };
 
+  const getStanceBadge = (stance?: string | null) => {
+    switch (stance?.toUpperCase()) {
+      case "STRONG_GROWTH_LEADER":
+        return {
+          bg: "bg-emerald-950/80 text-emerald-300 border-emerald-500/50",
+          label: "Strong Growth Leader",
+        };
+      case "ACCUMULATE_ON_DIPS":
+        return {
+          bg: "bg-cyan-950/80 text-cyan-300 border-cyan-500/50",
+          label: "Accumulate on Dips",
+        };
+      case "STEADY_COMPOUNDER":
+        return {
+          bg: "bg-blue-950/80 text-blue-300 border-blue-500/50",
+          label: "Steady Compounder",
+        };
+      case "TURNAROUND_CANDIDATE":
+        return {
+          bg: "bg-amber-950/80 text-amber-300 border-amber-500/50",
+          label: "Turnaround Candidate",
+        };
+      case "CYCLICAL_PEAK":
+        return {
+          bg: "bg-purple-950/80 text-purple-300 border-purple-500/50",
+          label: "Cyclical Peak",
+        };
+      case "AVOID_OR_HEADWINDS":
+        return {
+          bg: "bg-rose-950/80 text-rose-300 border-rose-500/50",
+          label: "Avoid / Headwinds",
+        };
+      default:
+        return {
+          bg: "bg-slate-900/80 border-slate-700 text-slate-300",
+          label: stance ? stance.replace(/_/g, " ") : "Pending Analysis",
+        };
+    }
+  };
+
   const getCommitmentStatusBadge = (status: string) => {
     switch (status) {
       case "MET":
@@ -353,7 +400,7 @@ export default function InvestorIntelligencePage() {
               <span className="text-xs font-mono text-slate-400">Quarter:</span>
               <select
                 aria-label="Quarter Selector"
-                value={selectedQuarter || (coverageData?.selected_quarter ?? "")}
+                value={selectedQuarter}
                 onChange={(e) => {
                   const val = e.target.value;
                   setSelectedQuarter(val);
@@ -363,14 +410,14 @@ export default function InvestorIntelligencePage() {
                 }}
                 className="bg-transparent text-sm font-mono font-bold text-cyan-300 focus:outline-hidden cursor-pointer"
               >
+                <option value="ALL" className="bg-[#070D18] text-slate-200">
+                  ALL Quarters (Market-Wide)
+                </option>
                 {coverageData?.available_quarters?.map((q) => (
                   <option key={q.fiscal_period} value={q.fiscal_period} className="bg-[#070D18] text-slate-200">
                     {q.fiscal_period} ({q.count})
                   </option>
                 ))}
-                <option value="ALL" className="bg-[#070D18] text-slate-200">
-                  ALL Quarters
-                </option>
               </select>
             </div>
 
@@ -554,6 +601,73 @@ export default function InvestorIntelligencePage() {
                     <option value="INVESTOR_PRESENTATION">Investor Presentations</option>
                     <option value="CONCALL_TRANSCRIPT">Concall Transcripts</option>
                   </select>
+
+                  {/* Deduplicate Stocks Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeduplicateStocks(!deduplicateStocks);
+                      setFeedPage(1);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono transition cursor-pointer ${
+                      deduplicateStocks
+                        ? "bg-cyan-950/90 border-cyan-500/60 text-cyan-300 font-bold shadow-xs shadow-cyan-950"
+                        : "bg-[#050B14] border-slate-800 text-slate-400 hover:text-slate-200"
+                    }`}
+                    title={deduplicateStocks ? "Currently showing 1 unified card per stock" : "Currently showing raw filings"}
+                  >
+                    <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>{deduplicateStocks ? "1 Card / Stock" : "All Filings"}</span>
+                  </button>
+
+                  {/* View Mode Switcher */}
+                  <div className="flex items-center rounded-lg bg-[#050B14] border border-slate-800 p-0.5 text-xs font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setFeedViewMode("COMPACT")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition cursor-pointer ${
+                        feedViewMode === "COMPACT"
+                          ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60 shadow-xs"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                      title="Row-by-Row High-Density Compact View"
+                    >
+                      <LayoutList className="w-3.5 h-3.5" />
+                      <span>Compact Rows</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeedViewMode("DETAILED")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition cursor-pointer ${
+                        feedViewMode === "DETAILED"
+                          ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60 shadow-xs"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                      title="Detailed Multi-Section Card View"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>Detailed Cards</span>
+                    </button>
+                  </div>
+
+                  {/* Rows per page selector */}
+                  <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400">
+                    <span className="hidden sm:inline">Rows:</span>
+                    <select
+                      aria-label="Rows per page"
+                      value={feedLimit}
+                      onChange={(e) => {
+                        setFeedLimit(Number(e.target.value));
+                        setFeedPage(1);
+                      }}
+                      className="bg-[#050B14] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-hidden focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value={15}>15 / page</option>
+                      <option value={30}>30 / page</option>
+                      <option value={50}>50 / page</option>
+                      <option value={100}>100 / page</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -561,15 +675,15 @@ export default function InvestorIntelligencePage() {
               <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 border-t border-slate-900 pt-2">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                  Primary Ordering: <strong>Actual Publication Date (Newest First)</strong>
+                  Primary Ordering: <strong>Actual Publication Date (Newest First)</strong> · View: <strong className="text-cyan-300">{feedViewMode === "COMPACT" ? "Compact Row-by-Row" : "Detailed Cards"}</strong>
                 </span>
                 <span>
-                  Showing {feedItems.length} of {feedTotal} presentations
+                  Showing {feedItems.length} of {feedTotal} {deduplicateStocks ? "unique companies" : "presentations"}
                 </span>
               </div>
             </div>
 
-            {/* Presentation Cards List */}
+            {/* Presentation Feed Content */}
             {feedLoading ? (
               <div className="py-20 flex flex-col items-center justify-center space-y-3">
                 <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
@@ -582,6 +696,263 @@ export default function InvestorIntelligencePage() {
               />
             ) : (
               <div className="space-y-4">
+                {/* COMPACT ROW-BY-ROW VIEW */}
+                {feedViewMode === "COMPACT" ? (
+                  <div className="rounded-xl border border-cyan-950/80 bg-[#070D18] overflow-hidden shadow-2xl">
+                    {/* Header Row */}
+                    <div className="hidden lg:grid lg:grid-cols-12 gap-3 px-4 py-3 bg-[#0A1222] border-b border-cyan-950 text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                      <div className="col-span-3">Company & Available Filings</div>
+                      <div className="col-span-2">Stance & Thesis</div>
+                      <div className="col-span-2">Execution & Conviction</div>
+                      <div className="col-span-3">Executive Thesis & Catalyst</div>
+                      <div className="col-span-2 text-right">Commitments & Actions</div>
+                    </div>
+
+                    {/* High-Density Rows */}
+                    <div className="divide-y divide-cyan-950/60">
+                      {feedItems.map((item) => {
+                        const isAnalyzed = item.ai_analysis_status === "ANALYZED";
+                        const isPending = item.ai_analysis_status === "PENDING";
+                        const isFailed = item.ai_analysis_status === "FAILED";
+                        const thesisStyle = getThesisBadge(item.thesis_impact);
+                        const stanceStyle = getStanceBadge(item.institutional_stance);
+                        const isRowExpanded = expandedRowId === item.document_id;
+
+                        return (
+                          <div
+                            key={`feed-compact-${item.document_id}`}
+                            className="hover:bg-[#0A1426] transition-colors duration-150"
+                          >
+                            {/* Main Compact Row */}
+                            <div className="p-3 sm:px-4 sm:py-2.5 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+                              {/* Col 1: Company, Symbol & Filings (col-span-3) */}
+                              <div className="col-span-3 space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    onClick={() => {
+                                      setActiveSymbolForDrawer(item.symbol);
+                                      setIsDrawerOpen(true);
+                                    }}
+                                    className="text-sm font-black font-mono text-white hover:text-cyan-300 transition flex items-center gap-1 cursor-pointer"
+                                  >
+                                    {item.symbol}
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-cyan-400 opacity-60" />
+                                  </button>
+                                  <span className="text-[11px] text-slate-400 truncate max-w-[140px]" title={item.company_name || ""}>
+                                    {item.company_name}
+                                  </span>
+                                  {item.sector && (
+                                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 shrink-0">
+                                      {item.sector}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Filings Pills */}
+                                <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono">
+                                  <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800/60 text-cyan-300 font-bold">
+                                    {item.fiscal_period || "Current"}
+                                  </span>
+                                  {item.related_filings && item.related_filings.length > 0 ? (
+                                    item.related_filings.map((rf) => (
+                                      <span
+                                        key={`rf-comp-${rf.id}`}
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                                          rf.is_primary
+                                            ? "bg-cyan-950/80 border-cyan-600/50 text-cyan-200"
+                                            : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                        }`}
+                                      >
+                                        <span className={`w-1.5 h-1.5 rounded-full ${rf.status === "ANALYZED" ? "bg-emerald-400" : "bg-amber-400"}`} />
+                                        <span>{rf.doc_type === "INVESTOR_PRESENTATION" ? "PPT" : rf.doc_type === "CONCALL_TRANSCRIPT" ? "Concall" : "Audio"}</span>
+                                        {rf.pdf_url && (
+                                          <a href={rf.pdf_url} target="_blank" rel="noreferrer" className="text-cyan-400 hover:text-cyan-200">
+                                            <ExternalLink className="w-2.5 h-2.5" />
+                                          </a>
+                                        )}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                                      {item.doc_type?.replace(/_/g, " ")}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Col 2: Stance & Thesis (col-span-2) */}
+                              <div className="col-span-2 space-y-1">
+                                {isAnalyzed ? (
+                                  <>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border font-mono truncate max-w-[170px] ${stanceStyle.bg}`} title={stanceStyle.label}>
+                                        {stanceStyle.label}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-[10px] font-mono">
+                                      <span className={`px-1.5 py-0.5 rounded border flex items-center gap-1 ${thesisStyle.bg}`}>
+                                        {thesisStyle.icon}
+                                        <span>{item.thesis_impact}</span>
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : isPending ? (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 font-bold flex items-center gap-1 w-fit">
+                                    <Clock className="w-3 h-3 animate-spin text-amber-400" />
+                                    PENDING AI
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 font-bold flex items-center gap-1 w-fit">
+                                    <AlertCircle className="w-3 h-3 text-rose-400" />
+                                    FAILED
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Col 3: Execution & Conviction (col-span-2) */}
+                              <div className="col-span-2 space-y-1 text-xs font-mono">
+                                {isAnalyzed ? (
+                                  <>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-400 text-[10px]">Conviction:</span>
+                                      <span className="font-bold text-white text-[11px]">
+                                        {item.growth_conviction_score !== null && item.growth_conviction_score !== undefined
+                                          ? `${item.growth_conviction_score}/100`
+                                          : "—"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                      <span className="text-slate-500">Tone:</span>
+                                      <span className="text-cyan-300 font-semibold truncate">
+                                        {item.management_tone ? item.management_tone.replace(/_/g, " ") : "NEUTRAL"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] text-slate-500 italic">Analysis queued</span>
+                                )}
+                              </div>
+
+                              {/* Col 4: Executive Thesis & Catalyst (col-span-3) */}
+                              <div className="col-span-3 text-xs leading-relaxed">
+                                {item.is_transformational_catalyst && item.catalyst_headline ? (
+                                  <div className="space-y-0.5">
+                                    <span className="text-[9px] font-mono font-bold text-amber-400 uppercase flex items-center gap-1">
+                                      <Sparkles className="w-2.5 h-2.5" />
+                                      Catalyst:
+                                    </span>
+                                    <p className="text-[11px] font-medium text-amber-200 line-clamp-1" title={item.catalyst_headline}>
+                                      {item.catalyst_headline}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-[11px] text-slate-300 line-clamp-2" title={item.executive_thesis || ""}>
+                                    {item.executive_thesis || "Awaiting AI synthesis extraction..."}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Col 5: Commitments & Quick Actions (col-span-2) */}
+                              <div className="col-span-2 flex items-center justify-between lg:justify-end gap-2 text-right">
+                                <div className="text-left lg:text-right space-y-0.5">
+                                  <div className="text-[10px] font-mono text-amber-400 flex items-center lg:justify-end gap-1 font-bold">
+                                    <Target className="w-3 h-3 text-amber-400" />
+                                    <span>{item.commitments_count || 0} Targets</span>
+                                  </div>
+                                  <div className="text-[10px] font-mono text-slate-500">
+                                    {item.announcement_date
+                                      ? new Date(item.announcement_date).toLocaleDateString("en-IN", {
+                                          month: "short",
+                                          day: "numeric",
+                                        })
+                                      : "Pending"}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => {
+                                      setActiveSymbolForDrawer(item.symbol);
+                                      setIsDrawerOpen(true);
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-600/40 text-cyan-300 text-xs font-mono font-medium transition cursor-pointer flex items-center gap-1"
+                                    title="Open Full Intelligence Terminal Drawer"
+                                  >
+                                    <span>Inspect</span>
+                                    <ArrowUpRight className="w-3 h-3" />
+                                  </button>
+
+                                  {/* Inline Toggle Chevron */}
+                                  <button
+                                    onClick={() => setExpandedRowId(isRowExpanded ? null : item.document_id)}
+                                    className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition cursor-pointer"
+                                    title={isRowExpanded ? "Collapse inline preview" : "Expand inline preview"}
+                                  >
+                                    {isRowExpanded ? <ChevronUp className="w-3.5 h-3.5 text-cyan-400" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expandable Inline Details Tray */}
+                            {isRowExpanded && (
+                              <div className="px-4 py-3 bg-[#050B14] border-t border-cyan-950/80 space-y-3 text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {/* Positives */}
+                                  <div className="p-2.5 rounded bg-emerald-950/20 border border-emerald-900/40 space-y-1">
+                                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
+                                      <TrendingUp className="w-3 h-3" /> Major Positives:
+                                    </span>
+                                    <ul className="space-y-1 text-slate-300 text-[11px]">
+                                      {item.positive_developments && item.positive_developments.length > 0 ? (
+                                        item.positive_developments.slice(0, 3).map((p, idx) => (
+                                          <li key={idx} className="flex items-start gap-1.5">
+                                            <span className="text-emerald-400 font-mono">•</span>
+                                            <span>{p}</span>
+                                          </li>
+                                        ))
+                                      ) : (
+                                        <li className="text-slate-500 italic">No specific positive triggers logged</li>
+                                      )}
+                                    </ul>
+                                  </div>
+
+                                  {/* Negatives */}
+                                  <div className="p-2.5 rounded bg-rose-950/20 border border-rose-900/40 space-y-1">
+                                    <span className="text-[10px] font-mono font-bold text-rose-400 uppercase flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3" /> Material Risks & Headwinds:
+                                    </span>
+                                    <ul className="space-y-1 text-slate-300 text-[11px]">
+                                      {item.negative_developments && item.negative_developments.length > 0 ? (
+                                        item.negative_developments.slice(0, 3).map((n, idx) => (
+                                          <li key={idx} className="flex items-start gap-1.5">
+                                            <span className="text-rose-400 font-mono">•</span>
+                                            <span>{n}</span>
+                                          </li>
+                                        ))
+                                      ) : (
+                                        <li className="text-slate-500 italic">No critical headwinds logged</li>
+                                      )}
+                                    </ul>
+                                  </div>
+                                </div>
+
+                                {item.guidance_changes && formatGuidanceChanges(item.guidance_changes) && (
+                                  <div className="text-[11px] font-mono p-2 rounded bg-cyan-950/40 border border-cyan-900/60 text-cyan-200">
+                                    <strong className="text-cyan-300">Guidance Revision: </strong>
+                                    {formatGuidanceChanges(item.guidance_changes)}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  /* DETAILED CARDS VIEW */
+                  <div className="space-y-4">
                 {feedItems.map((item) => {
                   const isAnalyzed = item.ai_analysis_status === "ANALYZED";
                   const isPending = item.ai_analysis_status === "PENDING";
@@ -591,7 +962,7 @@ export default function InvestorIntelligencePage() {
                   return (
                     <div
                       key={`feed-doc-${item.document_id}`}
-                      className="rounded-xl border border-cyan-950 hover:border-cyan-800/60 bg-gradient-to-r from-[#070D18] to-[#0A1222] p-5 transition shadow-lg space-y-4"
+                      className="rounded-xl border border-cyan-950 hover:border-cyan-800/60 bg-gradient-to-r from-[#070D18] to-[#0A1222] p-5 transition shadow-lg space-y-3.5"
                     >
                       {/* Top Header Row */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-cyan-950 pb-3">
@@ -601,7 +972,7 @@ export default function InvestorIntelligencePage() {
                               setActiveSymbolForDrawer(item.symbol);
                               setIsDrawerOpen(true);
                             }}
-                            className="text-lg font-black font-mono text-white hover:text-cyan-300 transition flex items-center gap-1.5"
+                            className="text-lg font-black font-mono text-white hover:text-cyan-300 transition flex items-center gap-1.5 cursor-pointer"
                           >
                             {item.symbol}
                             <ArrowUpRight className="w-4 h-4 text-cyan-400 opacity-60" />
@@ -664,6 +1035,50 @@ export default function InvestorIntelligencePage() {
                           )}
                         </div>
                       </div>
+
+                      {/* Unified Filings Pills Row (When stock has multiple filings in this period) */}
+                      {item.related_filings && item.related_filings.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-black/40 border border-cyan-950/80 text-xs font-mono">
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1 shrink-0">
+                            <Layers className="w-3 h-3 text-cyan-400" />
+                            All Filings ({item.related_filings.length}):
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {item.related_filings.map((rf) => (
+                              <div
+                                key={`rf-${rf.id}`}
+                                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] border transition ${
+                                  rf.is_primary
+                                    ? "bg-cyan-950/90 border-cyan-600/70 text-cyan-200 font-semibold"
+                                    : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-cyan-800"
+                                }`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    rf.status === "ANALYZED"
+                                      ? "bg-emerald-400"
+                                      : rf.status === "FAILED"
+                                      ? "bg-rose-400"
+                                      : "bg-amber-400"
+                                  }`}
+                                />
+                                <span>{rf.doc_type.replace(/_/g, " ")}</span>
+                                {rf.pdf_url && (
+                                  <a
+                                    href={rf.pdf_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-cyan-400 hover:text-cyan-200 ml-0.5 inline-flex items-center"
+                                    title="Open filing source PDF"
+                                  >
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Content Body */}
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -807,6 +1222,8 @@ export default function InvestorIntelligencePage() {
                     </div>
                   );
                 })}
+                  </div>
+                )}
 
                 {/* Pagination Controls */}
                 <div className="flex items-center justify-between border-t border-cyan-950 pt-4 text-xs font-mono">
@@ -1118,24 +1535,46 @@ export default function InvestorIntelligencePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-900">
-                    {coverageData.available_quarters?.map((q) => (
-                      <tr key={q.fiscal_period} className="hover:bg-slate-900/50">
-                        <td className="py-2 px-3 font-bold text-cyan-300">{q.fiscal_period}</td>
-                        <td className="py-2 px-3 text-slate-200">{q.count}</td>
-                        <td className="py-2 px-3 text-emerald-400">
-                          {q.fiscal_period === selectedQuarter ? coverageData.analyzed_count : "—"}
-                        </td>
-                        <td className="py-2 px-3 text-slate-300">
-                          {q.fiscal_period === selectedQuarter ? `${coverageData.analyzed_percentage}%` : "—"}
-                        </td>
-                        <td className="py-2 px-3 text-white">
-                          {q.fiscal_period === selectedQuarter ? coverageData.companies_covered : "—"}
-                        </td>
-                        <td className="py-2 px-3 text-amber-400">
-                          {q.fiscal_period === selectedQuarter ? coverageData.commitments_extracted : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {coverageData.available_quarters?.map((q) => {
+                      const isCurrentActive = q.fiscal_period === selectedQuarter;
+                      return (
+                        <tr
+                          key={q.fiscal_period}
+                          onClick={() => {
+                            setSelectedQuarter(q.fiscal_period);
+                            loadCoverage(q.fiscal_period);
+                          }}
+                          className={`hover:bg-slate-900/60 cursor-pointer transition ${
+                            isCurrentActive ? "bg-cyan-950/30 font-bold" : ""
+                          }`}
+                          title={`Click to filter radar to ${q.fiscal_period}`}
+                        >
+                          <td className="py-2 px-3 font-bold text-cyan-300 flex items-center gap-1.5">
+                            {q.fiscal_period}
+                            {isCurrentActive && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-900/80 text-cyan-300 border border-cyan-700/60 font-mono">
+                                ACTIVE
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-slate-200">{q.count}</td>
+                          <td className="py-2 px-3 text-emerald-400">
+                            {q.analyzed_count !== undefined ? q.analyzed_count : (isCurrentActive ? coverageData.analyzed_count : "—")}
+                          </td>
+                          <td className="py-2 px-3 text-slate-300">
+                            {q.completion_rate !== undefined
+                              ? `${q.completion_rate}%`
+                              : (isCurrentActive ? `${coverageData.analyzed_percentage}%` : "—")}
+                          </td>
+                          <td className="py-2 px-3 text-white">
+                            {q.companies_covered !== undefined ? q.companies_covered : (isCurrentActive ? coverageData.companies_covered : "—")}
+                          </td>
+                          <td className="py-2 px-3 text-amber-400">
+                            {q.commitments_count !== undefined ? q.commitments_count : (isCurrentActive ? coverageData.commitments_extracted : "—")}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1303,7 +1742,7 @@ export default function InvestorIntelligencePage() {
 
                   return (
                     <div
-                      key={c.commitment_id}
+                      key={c.commitment_id || c.id}
                       className="p-4 rounded-xl border border-cyan-950 bg-[#070D18] hover:border-cyan-800/60 transition space-y-3 shadow-md"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-950 pb-2.5">
@@ -1317,7 +1756,7 @@ export default function InvestorIntelligencePage() {
                           >
                             {c.symbol}
                           </button>
-                          <span className="text-xs text-slate-400">{c.company_name}</span>
+                          <span className="text-xs text-slate-400">{c.company_name || c.symbol}</span>
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
                             {c.category.replace(/_/g, " ")}
                           </span>

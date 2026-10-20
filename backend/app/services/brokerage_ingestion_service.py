@@ -6,21 +6,35 @@ Extracts target prices, rating actions, upside potentials, investment theses,
 and computes institutional conviction scores.
 """
 
+import html
 import logging
 import re
+import threading
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import feedparser
+import requests
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models.brokerage_intelligence import BrokerageReport, BrokerScorecard
 from app.models.company import Company
+from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.brokerage_service import BrokerageService
 
 logger = logging.getLogger("alpha_india.brokerage_ingestion")
+
+# Ingestion state tracking for async scans
+_ingestion_lock = threading.Lock()
+_ingestion_state: Dict[str, Any] = {
+    "is_running": False,
+    "last_run_at": None,
+    "last_result": None,
+    "last_error": None,
+}
+
 
 # ---------------------------------------------------------------------------
 # Canonical Brokerage Registry & Aliases
@@ -202,9 +216,10 @@ class BrokerageIngestionService:
         return None
 
     @classmethod
-    def _extract_financial_metrics(cls, text: str, comp: Company) -> Dict[str, Any]:
+    def _extract_financial_metrics(cls, text: str, comp: Company, db: Optional[Session] = None) -> Dict[str, Any]:
         """
         Extracts Target Price, Action, Rating, Price at Reco, and Implied Upside.
+        Cross-checks CMP against ScreenerGrowthRecord to prevent multi-stock target contamination.
         """
         text_lower = text.lower()
 
@@ -257,6 +272,25 @@ class BrokerageIngestionService:
             except ValueError:
                 pass
 
+        # Fetch actual CMP from database
+        real_cmp = None
+        if db:
+            try:
+                s_rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == comp.symbol).first()
+                if s_rec and s_rec.current_price and s_rec.current_price > 0:
+                    real_cmp = float(s_rec.current_price)
+            except Exception:
+                pass
+
+        # Sanity check: If extracted target price is wildly divergent from real CMP (>3x or <0.3x),
+        # the article mentioned multiple stocks and the number belongs to another company!
+        if target_price and real_cmp and real_cmp > 0:
+            if target_price < real_cmp * 0.35 or target_price > real_cmp * 3.0:
+                logger.warning(
+                    f"[BrokerageRadar] Target price {target_price} for {comp.symbol} conflicts with CMP {real_cmp}. Discarding anomalous target."
+                )
+                target_price = None
+
         # Compute price at recommendation
         price_at_reco = 100.0
         if target_price and upside_pct:
@@ -265,20 +299,6 @@ class BrokerageIngestionService:
             price_at_reco = round(target_price * 0.85, 1) # Default 15% upside
             upside_pct = round(((target_price - price_at_reco) / price_at_reco) * 100, 1)
         else:
-            # Fallback: obtain actual real CMP for the company rather than static numbers!
-            from app.models.screener_growth_record import ScreenerGrowthRecord
-            from app.db.database import SessionLocal
-            
-            real_cmp = None
-            try:
-                temp_db = SessionLocal()
-                s_rec = temp_db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == comp.symbol).first()
-                if s_rec and s_rec.current_price and s_rec.current_price > 0:
-                    real_cmp = s_rec.current_price
-                temp_db.close()
-            except Exception:
-                pass
-            
             if not real_cmp or real_cmp <= 0:
                 real_cmp = 450.0
 
@@ -320,179 +340,234 @@ class BrokerageIngestionService:
     ) -> Dict[str, Any]:
         """
         Executes live ingestion across all targeted RSS feeds.
-        Extracts, normalizes, scores, and updates institutional research reports in PostgreSQL.
+        Uses resilient HTTP requests with strict 6s timeouts to prevent gateway hangs.
+        Extracts, sanitizes HTML, normalizes, scores, and updates institutional research reports in PostgreSQL.
         """
+        global _ingestion_state
         logger.info(f"[BrokerageRadar] Starting live ingestion pipeline (scan window: last {days_back} days)...")
-        sym_map, name_map = cls._build_company_lookup(db)
-        scorecards = {sc.brokerage_house: sc for sc in db.query(BrokerScorecard).all()}
+        _ingestion_state["is_running"] = True
+        _ingestion_state["last_error"] = None
 
-        earliest_cutoff = date.today() - timedelta(days=days_back)
-        total_discovered = 0
-        new_reports_count = 0
-        updated_reports_count = 0
-        processed_items: List[Dict[str, Any]] = []
+        try:
+            sym_map, name_map = cls._build_company_lookup(db)
+            scorecards = {sc.brokerage_house: sc for sc in db.query(BrokerScorecard).all()}
 
-        all_entries = []
-        for feed_url in LIVE_RADAR_FEEDS:
-            try:
-                feed = feedparser.parse(feed_url)
-                if feed.entries:
-                    all_entries.extend(feed.entries)
-                    logger.info(f"[BrokerageRadar] Fetched {len(feed.entries)} articles from {feed_url[:50]}...")
-            except Exception as e:
-                logger.warning(f"[BrokerageRadar] Failed to parse feed {feed_url}: {e}")
+            earliest_cutoff = date.today() - timedelta(days=days_back)
+            total_discovered = 0
+            new_reports_count = 0
+            updated_reports_count = 0
+            processed_items: List[Dict[str, Any]] = []
 
-        # Deduplicate feed entries by link
-        seen_links = set()
-        unique_entries = []
-        for e in all_entries:
-            link = getattr(e, "link", "")
-            if link and link not in seen_links:
-                seen_links.add(link)
-                unique_entries.append(e)
-
-        logger.info(f"[BrokerageRadar] Total unique media articles to analyze: {len(unique_entries)}")
-
-        for entry in unique_entries:
-            title = getattr(entry, "title", "").strip()
-            summary = getattr(entry, "summary", "").strip()
-            link = getattr(entry, "link", "")
-            
-            # Clean title
-            headline = re.sub(r"\s*-\s*[A-Za-z0-9\s]+$", "", title).strip() # Strip news outlet suffix
-            full_text = f"{title} {summary}"
-
-            # 1. Parse Publication Date
-            report_date = date.today()
-            if hasattr(entry, "published"):
-                try:
-                    dt = parsedate_to_datetime(entry.published)
-                    report_date = dt.date()
-                except Exception:
-                    pass
-
-            if report_date < earliest_cutoff:
-                continue
-
-            # 2. Extract Broker
-            broker_match = cls._extract_broker(full_text)
-            if not broker_match:
-                continue
-            broker_house, broker_tier = broker_match
-
-            # 3. Extract Company
-            comp = cls._extract_company(full_text, headline, sym_map, name_map, broker_house)
-            if not comp:
-                continue
-
-            # 4. Extract Financial Revisions & Targets
-            fin = cls._extract_financial_metrics(full_text, comp)
-
-            # 5. Compute Conviction Score
-            sc = scorecards.get(broker_house)
-            broker_hit_rate = sc.hit_rate_pct if sc else 65.0
-            conviction_score = BrokerageService.calculate_conviction_score(
-                broker_hit_rate=broker_hit_rate,
-                target_revision_pct=fin["upside_pct"],
-                eps_revision_pct=8.0 if fin["action"] in ["UPGRADE", "TARGET_UP"] else 0.0,
-                smart_money_score=78.0,
-                mgmt_clarity="HIGH",
-            )
-
-            is_hot_pick = (
-                conviction_score >= 85.0
-                or (fin["action"] in ["UPGRADE", "TARGET_UP"] and fin["upside_pct"] >= 20.0)
-            )
-
-            # 6. Qualitative Thesis Synthesis
-            thesis = summary if summary and len(summary) > 20 else f"{broker_house} initiates positive stance on {comp.company} noting operational execution and market share gains."
-            # Clean HTML tags if present in summary
-            thesis = re.sub(r"<[^>]+>", "", thesis).strip()
-            if len(thesis) > 400:
-                thesis = thesis[:397] + "..."
-
-            # 7. Upsert into database
-            existing = (
-                db.query(BrokerageReport)
-                .filter(
-                    BrokerageReport.symbol == comp.symbol,
-                    BrokerageReport.brokerage_house == broker_house,
-                    BrokerageReport.report_date == report_date,
-                )
-                .first()
-            )
-
-            def _safe_float(v: Any) -> Optional[float]:
-                if v is None:
-                    return None
-                try:
-                    return float(str(v).replace(",", "").strip())
-                except (ValueError, TypeError):
-                    return None
-
-            report_payload = {
-                "company_id": comp.id,
-                "symbol": comp.symbol,
-                "company_name": comp.company,
-                "sector": comp.sector or "Diversified",
-                "market_cap_category": (comp.market_cap_category or "MID_CAP").upper(),
-                "market_cap": _safe_float(comp.market_cap),
-                "brokerage_house": broker_house,
-                "broker_tier": broker_tier,
-                "report_date": report_date,
-                "report_type": "RESULT_UPDATE" if "q2" in full_text.lower() or "result" in full_text.lower() else "THEMATIC",
-                "action": fin["action"],
-                "previous_rating": "NEUTRAL" if fin["action"] == "UPGRADE" else "BUY",
-                "current_rating": fin["current_rating"],
-                "price_at_reco": fin["price_at_reco"],
-                "previous_target_price": round(fin["target_price"] * 0.9, 1),
-                "target_price": fin["target_price"],
-                "upside_pct": fin["upside_pct"],
-                "target_revision_pct": round(fin["upside_pct"] * 0.4, 1),
-                "target_horizon": fin["target_horizon"],
-                "horizon_months": fin["horizon_months"],
-                "conviction_score": conviction_score,
-                "is_hot_pick": is_hot_pick,
-                "headline": headline,
-                "investment_thesis": thesis,
-                "key_catalysts": ["Operational earnings momentum", "Valuation multiple expansion"],
-                "key_risks": ["Broader equity drawdown risk", "Raw material margin contraction"],
-                "source_url_or_pdf": link,
+            all_entries = []
+            feed_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/rss+xml, application/xml, text/xml, */*",
             }
 
-            if existing:
-                for k, v in report_payload.items():
-                    setattr(existing, k, v)
-                updated_reports_count += 1
-            else:
-                db.add(BrokerageReport(**report_payload))
-                new_reports_count += 1
-            db.flush()
+            for feed_url in LIVE_RADAR_FEEDS:
+                try:
+                    # Use requests with strict 5-second timeout to prevent thread blocks
+                    resp = requests.get(feed_url, headers=feed_headers, timeout=5.0)
+                    if resp.status_code == 200:
+                        feed = feedparser.parse(resp.content)
+                        if feed.entries:
+                            all_entries.extend(feed.entries)
+                            logger.info(f"[BrokerageRadar] Fetched {len(feed.entries)} articles from {feed_url[:50]}...")
+                except Exception as e:
+                    logger.warning(f"[BrokerageRadar] Failed to parse feed {feed_url}: {e}")
 
-            total_discovered += 1
-            processed_items.append({
-                "symbol": comp.symbol,
-                "brokerage_house": broker_house,
-                "date": report_date.isoformat(),
-                "target": fin["target_price"],
-                "upside": fin["upside_pct"],
-                "conviction": conviction_score,
-            })
+            # Deduplicate feed entries by link
+            seen_links = set()
+            unique_entries = []
+            for e in all_entries:
+                link = getattr(e, "link", "")
+                if link and link not in seen_links:
+                    seen_links.add(link)
+                    unique_entries.append(e)
 
-        db.commit()
-        logger.info(
-            f"[BrokerageRadar] Ingestion complete. "
-            f"Discovered: {total_discovered}, New: {new_reports_count}, Updated: {updated_reports_count}"
-        )
+            logger.info(f"[BrokerageRadar] Total unique media articles to analyze: {len(unique_entries)}")
 
-        return {
-            "status": "success",
-            "total_discovered": total_discovered,
-            "new_reports": new_reports_count,
-            "updated_reports": updated_reports_count,
-            "scan_window_days": days_back,
-            "items": processed_items[:20],
-        }
+            for entry in unique_entries:
+                title = getattr(entry, "title", "").strip()
+                summary = getattr(entry, "summary", "").strip()
+                link = getattr(entry, "link", "")
+
+                # Clean and unescape title
+                headline = re.sub(r"\s*-\s*[A-Za-z0-9\s]+$", "", title).strip() # Strip news outlet suffix
+                headline = html.unescape(headline).replace("\xa0", " ").replace("&nbsp;", " ")
+                headline = re.sub(r"<[^>]+>", "", headline)
+                headline = re.sub(r"\s+", " ", headline).strip()
+
+                summary_clean = html.unescape(summary).replace("\xa0", " ").replace("&nbsp;", " ")
+                summary_clean = re.sub(r"<[^>]+>", "", summary_clean)
+                summary_clean = re.sub(r"\s+", " ", summary_clean).strip()
+                full_text = f"{headline} {summary_clean}"
+
+                # 1. Parse Publication Date
+                report_date = date.today()
+                if hasattr(entry, "published"):
+                    try:
+                        dt = parsedate_to_datetime(entry.published)
+                        report_date = dt.date()
+                    except Exception:
+                        pass
+
+                if report_date < earliest_cutoff:
+                    continue
+
+                # 2. Extract Broker
+                broker_match = cls._extract_broker(full_text)
+                if not broker_match:
+                    continue
+                broker_house, broker_tier = broker_match
+
+                # 3. Extract Company
+                comp = cls._extract_company(full_text, headline, sym_map, name_map, broker_house)
+                if not comp:
+                    continue
+
+                # 4. Extract Financial Revisions & Targets
+                fin = cls._extract_financial_metrics(full_text, comp, db=db)
+
+                # 5. Compute Conviction Score
+                sc = scorecards.get(broker_house)
+                broker_hit_rate = sc.hit_rate_pct if sc else 65.0
+                conviction_score = BrokerageService.calculate_conviction_score(
+                    broker_hit_rate=broker_hit_rate,
+                    target_revision_pct=fin["upside_pct"],
+                    eps_revision_pct=8.0 if fin["action"] in ["UPGRADE", "TARGET_UP"] else 0.0,
+                    smart_money_score=78.0,
+                    mgmt_clarity="HIGH",
+                )
+
+                is_hot_pick = (
+                    conviction_score >= 85.0
+                    or (fin["action"] in ["UPGRADE", "TARGET_UP"] and fin["upside_pct"] >= 20.0)
+                )
+
+                # 6. Qualitative Thesis Synthesis (sanitized)
+                thesis = summary_clean if summary_clean and len(summary_clean) > 20 else f"{broker_house} initiates positive stance on {comp.company} noting operational execution and market share gains."
+                if len(thesis) > 400:
+                    thesis = thesis[:397] + "..."
+
+                # 7. Upsert into database
+                existing = (
+                    db.query(BrokerageReport)
+                    .filter(
+                        BrokerageReport.symbol == comp.symbol,
+                        BrokerageReport.brokerage_house == broker_house,
+                        BrokerageReport.report_date == report_date,
+                    )
+                    .first()
+                )
+
+                def _safe_float(v: Any) -> Optional[float]:
+                    if v is None:
+                        return None
+                    try:
+                        return float(str(v).replace(",", "").strip())
+                    except (ValueError, TypeError):
+                        return None
+
+                # Market cap fallback from ScreenerGrowthRecord if company record is empty
+                mkt_cap = _safe_float(comp.market_cap)
+                if not mkt_cap or mkt_cap <= 0:
+                    s_rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == comp.symbol).first()
+                    if s_rec and s_rec.market_cap and s_rec.market_cap > 0:
+                        mkt_cap = round(float(s_rec.market_cap), 1)
+
+                report_payload = {
+                    "company_id": comp.id,
+                    "symbol": comp.symbol,
+                    "company_name": comp.company,
+                    "sector": comp.sector or "Diversified",
+                    "market_cap_category": (comp.market_cap_category or "MID_CAP").upper(),
+                    "market_cap": mkt_cap,
+                    "brokerage_house": broker_house,
+                    "broker_tier": broker_tier,
+                    "report_date": report_date,
+                    "report_type": "RESULT_UPDATE" if "q2" in full_text.lower() or "result" in full_text.lower() else "THEMATIC",
+                    "action": fin["action"],
+                    "previous_rating": "NEUTRAL" if fin["action"] == "UPGRADE" else "BUY",
+                    "current_rating": fin["current_rating"],
+                    "price_at_reco": fin["price_at_reco"],
+                    "previous_target_price": round(fin["target_price"] * 0.9, 1),
+                    "target_price": fin["target_price"],
+                    "upside_pct": fin["upside_pct"],
+                    "target_revision_pct": round(fin["upside_pct"] * 0.4, 1),
+                    "target_horizon": fin["target_horizon"],
+                    "horizon_months": fin["horizon_months"],
+                    "conviction_score": conviction_score,
+                    "is_hot_pick": is_hot_pick,
+                    "headline": headline,
+                    "investment_thesis": thesis,
+                    "key_catalysts": ["Operational earnings momentum", "Valuation multiple expansion"],
+                    "key_risks": ["Broader equity drawdown risk", "Raw material margin contraction"],
+                    "source_url_or_pdf": link,
+                }
+
+                if existing:
+                    for k, v in report_payload.items():
+                        setattr(existing, k, v)
+                    updated_reports_count += 1
+                else:
+                    db.add(BrokerageReport(**report_payload))
+                    new_reports_count += 1
+                db.flush()
+
+                total_discovered += 1
+                processed_items.append({
+                    "symbol": comp.symbol,
+                    "brokerage_house": broker_house,
+                    "date": report_date.isoformat(),
+                    "target": fin["target_price"],
+                    "upside": fin["upside_pct"],
+                    "conviction": conviction_score,
+                })
+
+            db.commit()
+            result_payload = {
+                "status": "success",
+                "total_discovered": total_discovered,
+                "new_reports": new_reports_count,
+                "updated_reports": updated_reports_count,
+                "scan_window_days": days_back,
+                "items": processed_items[:20],
+            }
+            _ingestion_state["last_run_at"] = datetime.now(timezone.utc).isoformat()
+            _ingestion_state["last_result"] = result_payload
+            logger.info(
+                f"[BrokerageRadar] Ingestion complete. "
+                f"Discovered: {total_discovered}, New: {new_reports_count}, Updated: {updated_reports_count}"
+            )
+            return result_payload
+
+        except Exception as e:
+            db.rollback()
+            _ingestion_state["last_error"] = str(e)
+            logger.error(f"[BrokerageRadar] Ingestion error: {e}", exc_info=True)
+            raise e
+        finally:
+            _ingestion_state["is_running"] = False
+
+    @classmethod
+    def run_ingestion_in_background(cls, days_back: int = 7) -> None:
+        """
+        Fires live brokerage ingestion asynchronously in a background worker thread.
+        """
+        def _worker():
+            from app.db.database import SessionLocal
+            with _ingestion_lock:
+                db = SessionLocal()
+                try:
+                    cls.ingest_live_brokerage_reports(db=db, days_back=days_back)
+                except Exception as ex:
+                    logger.error(f"[BrokerageRadar Background Worker] Error: {ex}", exc_info=True)
+                finally:
+                    db.close()
+
+        thread = threading.Thread(target=_worker, daemon=True, name="brokerage-live-scanner")
+        thread.start()
 
     @classmethod
     def get_ingestion_status(cls, db: Session) -> Dict[str, Any]:
@@ -514,5 +589,8 @@ class BrokerageIngestionService:
             "oldest_report_date": oldest_date.isoformat() if oldest_date else None,
             "reports_last_3_days": recent_reports,
             "is_feed_live": bool(newest_date and newest_date >= today - timedelta(days=2)),
-            "last_ingested_at": datetime.now(timezone.utc).isoformat(),
+            "is_scan_in_progress": _ingestion_state.get("is_running", False),
+            "last_scan_result": _ingestion_state.get("last_result"),
+            "last_ingested_at": _ingestion_state.get("last_run_at") or datetime.now(timezone.utc).isoformat(),
         }
+

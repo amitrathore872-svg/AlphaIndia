@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
@@ -21,6 +21,9 @@ import {
   Flame,
   ArrowUpDown,
   TableProperties,
+  Eye,
+  TrendingDown,
+  Coins,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { SparklineChart } from "@/components/common";
@@ -173,6 +176,73 @@ export default function InstitutionalRadarPage() {
           </div>
         </div>
 
+        {/* INSTITUTIONAL MACRO TELEMETRY 4-CARD RIBBON */}
+        {telemetry && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#080E1A]/90 p-3.5 shadow-xs transition hover:border-cyan-500/30">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                <span>Smart Money Avg</span>
+                <ShieldCheck size={14} className="text-cyan-600 dark:text-cyan-400" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl sm:text-2xl font-black text-cyan-700 dark:text-cyan-400">
+                  {telemetry.smart_money_avg.toFixed(1)}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400">/ 100</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 truncate">
+                Universe Accumulation Score
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#080E1A]/90 p-3.5 shadow-xs transition hover:border-emerald-500/30">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                <span>Total Net Inflows</span>
+                <Coins size={14} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  ₹{telemetry.total_inflows_cr >= 1000 ? `${(telemetry.total_inflows_cr / 1000).toFixed(1)}k` : telemetry.total_inflows_cr.toFixed(0)} Cr
+                </span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 truncate">
+                Net Monthly Institutional Additions
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#080E1A]/90 p-3.5 shadow-xs transition hover:border-cyan-500/30">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                <span>Active Alpha Flow</span>
+                <Sparkles size={14} className="text-cyan-600 dark:text-cyan-300" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl sm:text-2xl font-black text-cyan-600 dark:text-cyan-300">
+                  ₹{telemetry.active_schemes_inflow_cr >= 1000 ? `${(telemetry.active_schemes_inflow_cr / 1000).toFixed(1)}k` : telemetry.active_schemes_inflow_cr.toFixed(0)} Cr
+                </span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 truncate">
+                Tier-1 Flexi, Mid & Small Schemes
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#080E1A]/90 p-3.5 shadow-xs transition hover:border-amber-500/30">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                <span>Stealth Base Alerts</span>
+                <Target size={14} className="text-amber-500" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="font-mono text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
+                  {telemetry.stealth_alerts_count}
+                </span>
+                <span className="text-[10px] font-bold text-amber-500">Setups</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 truncate">
+                Tight Volatility Base Consolidation
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* EXPANDABLE SECTOR ROTATION & FUND MANAGER RADAR */}
         {showMacro && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-300">
@@ -281,13 +351,24 @@ export default function InstitutionalRadarPage() {
               className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/80 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
             >
               <option value="ALL">All Sectors</option>
-              <option value="Electronics EMS">Electronics EMS</option>
+              <option value="Automobile">Automobile</option>
+              <option value="Banking">Banking</option>
+              <option value="Cables & Infra">Cables & Infra</option>
               <option value="Capital Goods">Capital Goods</option>
+              <option value="Chemicals">Chemicals</option>
+              <option value="Defence & Rail">Defence & Rail</option>
+              <option value="Electronics EMS">Electronics EMS</option>
+              <option value="Energy & Power">Energy & Power</option>
+              <option value="Financial Services">Financial Services</option>
+              <option value="Healthcare">Healthcare & Pharma</option>
+              <option value="Industrials">Industrials</option>
+              <option value="Information Technology">Information Technology</option>
+              <option value="Metals & Mining">Metals & Mining</option>
+              <option value="Real Estate">Real Estate & Realty</option>
               <option value="Renewable Power">Renewable Power</option>
-              <option value="Private Banks">Private Banks</option>
-              <option value="Retail">Retail & Consumer</option>
-              <option value="Defence">Defence & Rail</option>
-              <option value="Cables">Cables & Infra</option>
+              <option value="Retail & Consumer">Retail & Consumer</option>
+              <option value="Technology">Technology</option>
+              <option value="Textiles">Textiles</option>
             </select>
           </div>
         </div>
@@ -298,8 +379,24 @@ export default function InstitutionalRadarPage() {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400">
-                  <th className="py-3.5 px-3 text-center">Cap Tier</th>
-                  <th className="py-3.5 pl-4 pr-4 font-semibold">Ticker & Company Name</th>
+                  <th
+                    onClick={() => handleSort("market_cap_category")}
+                    className="cursor-pointer py-3.5 px-3 text-center hover:text-slate-900 dark:hover:text-white transition"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      Cap Tier
+                      <ArrowUpDown size={11} />
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort("symbol")}
+                    className="cursor-pointer py-3.5 pl-4 pr-4 font-semibold hover:text-slate-900 dark:hover:text-white transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      Ticker & Company Name
+                      <ArrowUpDown size={11} />
+                    </div>
+                  </th>
                   <th className="py-3.5 px-3 text-center font-semibold">Current Stage</th>
                   <th className="py-3.5 px-3 text-center font-semibold">Trend (90D)</th>
                   <th
@@ -520,7 +617,7 @@ export default function InstitutionalRadarPage() {
                               item.net_value_flow_mom_cr > 0
                                 ? "text-emerald-600 dark:text-emerald-400"
                                 : item.net_value_flow_mom_cr < 0
-                                ? "text-red-600 dark:text-red-400"
+                                ? "text-rose-600 dark:text-rose-400"
                                 : "text-slate-500 dark:text-slate-400"
                             }`}
                           >
@@ -535,10 +632,16 @@ export default function InstitutionalRadarPage() {
 
                         {/* FLOAT ABSORPTION */}
                         <td className="py-3.5 px-4 text-right font-mono">
-                          <div className="flex items-center justify-end gap-1 font-bold text-cyan-700 dark:text-cyan-300">
-                            <span>{item.float_absorption_pct}%</span>
-                            {item.float_absorption_pct >= 2.0 && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-ping" />
+                          <div className="flex items-center justify-end gap-1 font-bold">
+                            {item.float_absorption_pct > 0 ? (
+                              <div className="flex items-center gap-1 text-cyan-700 dark:text-cyan-300">
+                                <span>{item.float_absorption_pct}%</span>
+                                {item.float_absorption_pct >= 2.0 && item.net_shares_flow_mom > 0 && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-ping" />
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 dark:text-slate-500 font-normal">0.0%</span>
                             )}
                           </div>
                           <div className="text-[10px] text-slate-500">
@@ -568,11 +671,21 @@ export default function InstitutionalRadarPage() {
                                     ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
                                     : item.action_recommendation === "ACCUMULATE"
                                     ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-800 dark:text-cyan-300"
+                                    : item.action_recommendation === "TRIM" || item.action_recommendation === "EXIT"
+                                    ? "border-rose-500/40 bg-rose-500/15 text-rose-800 dark:text-rose-300"
                                     : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                                 }`}
                               >
                                 {item.action_recommendation}
                               </span>
+                              <button
+                                onClick={() => setSelectedSymbol(item.symbol)}
+                                className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition shadow-xs inline-flex items-center gap-0.5"
+                                title={`View 5-Question Institutional Breakdown for ${item.symbol}`}
+                              >
+                                <span>Funds</span>
+                                <Eye size={10} />
+                              </button>
                               <Link
                                 href={`/stocks/${encodeURIComponent(item.symbol)}?from=/institutional-radar`}
                                 className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 transition shadow-xs inline-flex items-center gap-0.5"
