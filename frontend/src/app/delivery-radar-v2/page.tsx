@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
+  Target,
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -602,6 +603,38 @@ export default function DeliveryRadarV2Page() {
                             ? "⚠️ CLIMAX TRAP"
                             : "🟡 COILING (WATCH)"}
                         </span>
+                        {opp.ignition_price !== undefined && opp.ignition_price > 0 && (
+                          <div className="mt-1 text-[10px] flex items-center gap-1 font-mono">
+                            <span className="text-slate-500">Ignition:</span>
+                            <span className="text-slate-300 font-semibold">₹{opp.ignition_price}</span>
+                            {opp.move_since_ignition_pct !== undefined && (
+                              <span className={`font-bold ${
+                                opp.move_since_ignition_pct > 8.0 
+                                  ? "text-rose-400" 
+                                  : opp.move_since_ignition_pct > 4.0 
+                                  ? "text-amber-400" 
+                                  : "text-emerald-400"
+                              }`}>
+                                ({opp.move_since_ignition_pct > 0 ? "+" : ""}{opp.move_since_ignition_pct}%)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {opp.worth_taking_now && (
+                          <div className="mt-0.5">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border font-sans tracking-tight inline-flex items-center gap-1 ${
+                              opp.worth_taking_now === "YES_PRIME"
+                                ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
+                                : opp.worth_taking_now === "CAUTION_EXTENDED"
+                                ? "bg-amber-950/80 text-amber-300 border-amber-500/40"
+                                : "bg-rose-950/80 text-rose-300 border-rose-500/40"
+                            }`}>
+                              {opp.worth_taking_now === "YES_PRIME" && "🟢 Worth Taking (Prime)"}
+                              {opp.worth_taking_now === "CAUTION_EXTENDED" && "🟡 Extended (Half Size)"}
+                              {opp.worth_taking_now === "NO_UNVIABLE" && "🔴 Late (Do Not Chase)"}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* CMP & Recommended Buy Price */}
@@ -927,6 +960,113 @@ export default function DeliveryRadarV2Page() {
                       This stock has already undergone an explosive institutional expansion. Buying at CMP (₹{selectedStock.current_price}) exposes you to an immediate <strong>-{selectedStock.dist_to_ema20_pct}% pullback drawdown</strong>. 
                       Place a patient GTT Buy Limit order at the <strong>Recommended Pullback Level: ₹{selectedStock.blueprint?.recommended_buy_price || selectedStock.recommended_buy_price}</strong> (Corridor: ₹{selectedStock.blueprint?.entry_corridor_min} - ₹{selectedStock.blueprint?.entry_corridor_max}) to capture high-probability asymmetry.
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Discovery Price & Trade Worthiness Analysis */}
+              {selectedStock.ignition_price !== undefined && selectedStock.ignition_price > 0 && (
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wide">
+                        Discovery Price & Trade Worthiness
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                      selectedStock.worth_taking_now === "YES_PRIME"
+                        ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/50"
+                        : selectedStock.worth_taking_now === "CAUTION_EXTENDED"
+                        ? "bg-amber-950/80 text-amber-300 border-amber-500/50"
+                        : "bg-rose-950/80 text-rose-300 border-rose-500/50"
+                    }`}>
+                      {selectedStock.viability_label || (
+                        selectedStock.worth_taking_now === "YES_PRIME" 
+                          ? "🟢 PRIME IGNITION (WORTH TRADING)" 
+                          : selectedStock.worth_taking_now === "CAUTION_EXTENDED"
+                          ? "🟡 EXTENDED (LATE ENTRY)"
+                          : "🔴 UNVIABLE / LATE (DO NOT CHASE)"
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Discovery Price vs CMP Comparison Grid */}
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                    <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                      <div className="text-[9px] text-slate-400 uppercase">Initial Discovery Price</div>
+                      <div className="font-bold text-emerald-400 text-sm mt-0.5">
+                        ₹{selectedStock.ignition_price}
+                      </div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">
+                        {selectedStock.ignition_date ? `Ignited: ${selectedStock.ignition_date}` : "Day-1 Ignition"}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                      <div className="text-[9px] text-slate-400 uppercase">Current Price (CMP)</div>
+                      <div className="font-bold text-slate-200 text-sm mt-0.5">
+                        ₹{selectedStock.current_price}
+                      </div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">
+                        {selectedStock.dist_to_ema20_pct !== undefined ? `${selectedStock.dist_to_ema20_pct > 0 ? "+" : ""}${selectedStock.dist_to_ema20_pct}% vs 20-EMA` : "Latest Session"}
+                      </div>
+                    </div>
+
+                    <div className={`p-2.5 rounded border ${
+                      (selectedStock.move_since_ignition_pct || 0) > 8.0
+                        ? "bg-rose-950/30 border-rose-500/30"
+                        : (selectedStock.move_since_ignition_pct || 0) > 4.0
+                        ? "bg-amber-950/30 border-amber-500/30"
+                        : "bg-emerald-950/30 border-emerald-500/30"
+                    }`}>
+                      <div className="text-[9px] text-slate-400 uppercase">Move Since Ignition</div>
+                      <div className={`font-bold text-sm mt-0.5 ${
+                        (selectedStock.move_since_ignition_pct || 0) > 8.0
+                          ? "text-rose-400"
+                          : (selectedStock.move_since_ignition_pct || 0) > 4.0
+                          ? "text-amber-400"
+                          : "text-emerald-400"
+                      }`}>
+                        {(selectedStock.move_since_ignition_pct || 0) > 0 ? "+" : ""}
+                        {selectedStock.move_since_ignition_pct}%
+                      </div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">
+                        {(selectedStock.move_since_ignition_pct || 0) > 8.0 ? "Late-Stage Chasing" : "Tight Entry Window"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Institutional Expectancy Analysis */}
+                  <div className="space-y-2 text-xs bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[11px] font-bold text-emerald-400 shrink-0">Was it worth taking at Discovery?</span>
+                      <span className="text-[11px] text-slate-300">
+                        {selectedStock.worth_taking_at_discovery 
+                          ? `✅ YES — Initial breakout at ₹${selectedStock.ignition_price} offered tight base risk (-3.5% to -5.5%) with strong delivery absorption (${selectedStock.discovery_rr_ratio || "2.8:1"} R:R).`
+                          : `⚠️ MARGINAL — Ignition bar was wide-range, requiring waiting for confirmation.`}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2 pt-1 border-t border-slate-800/60">
+                      <span className={`text-[11px] font-bold shrink-0 ${
+                        selectedStock.worth_taking_now === "YES_PRIME"
+                          ? "text-emerald-400"
+                          : selectedStock.worth_taking_now === "CAUTION_EXTENDED"
+                          ? "text-amber-400"
+                          : "text-rose-400"
+                      }`}>
+                        Is it worth taking today at CMP?
+                      </span>
+                      <span className="text-[11px] text-slate-300">
+                        {selectedStock.viability_analysis || (
+                          selectedStock.worth_taking_now === "YES_PRIME"
+                            ? `✅ YES — Trading within +${selectedStock.move_since_ignition_pct}% of ignition with tight downside risk.`
+                            : selectedStock.worth_taking_now === "CAUTION_EXTENDED"
+                            ? `🟡 REDUCED SIZE — Already +${selectedStock.move_since_ignition_pct}% from ignition. Downside risk is elevated; cut size by 50%.`
+                            : `❌ NO — Stock has already completed a +${selectedStock.move_since_ignition_pct}% run and is extended ${selectedStock.dist_to_ema20_pct}% above 20-EMA. Negative expectancy at CMP.`
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}

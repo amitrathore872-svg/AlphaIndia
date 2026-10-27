@@ -23,6 +23,16 @@ export interface TradeBlueprint {
   rr_ratio: string;
   suggested_holding_days: string;
   execution_protocol: string;
+  ignition_date?: string;
+  ignition_price?: number;
+  move_since_ignition_pct?: number;
+  worth_taking_at_discovery?: boolean;
+  discovery_rr_ratio?: string;
+  worth_taking_now?: "YES_PRIME" | "CAUTION_EXTENDED" | "NO_UNVIABLE" | string;
+  viability_label?: string;
+  viability_badge_color?: string;
+  viability_score?: number;
+  viability_analysis?: string;
 }
 
 export interface MarketRegime {
@@ -70,6 +80,16 @@ export interface DeliveryV2Opportunity {
   is_multi_day_expansion?: boolean;
   is_extended?: boolean;
   recommended_buy_price?: number;
+  ignition_date?: string;
+  ignition_price?: number;
+  move_since_ignition_pct?: number;
+  worth_taking_at_discovery?: boolean;
+  discovery_rr_ratio?: string;
+  worth_taking_now?: "YES_PRIME" | "CAUTION_EXTENDED" | "NO_UNVIABLE" | string;
+  viability_label?: string;
+  viability_badge_color?: string;
+  viability_score?: number;
+  viability_analysis?: string;
   archetype: "VOLUME_EXPANSION_SURGE" | "ASYMMETRIC_COIL" | "STEALTH_FLOAT_LOCK" | "COIL_SUPPLY_EXHAUSTION" | "BREAKOUT_EXPANSION" | "CLIMAX_SHOCK_WARNING" | "MULTI_DAY_ACCUMULATION" | string;
   archetype_label: string;
   badge_color: string;

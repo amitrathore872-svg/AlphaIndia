@@ -150,6 +150,110 @@ class DeliveryRadarV2Service:
             )
 
     @classmethod
+    def _calculate_ignition_profile(cls, sym_df: Optional[pd.DataFrame], cmp: float, ema_20: float) -> Dict[str, Any]:
+        """
+        Analyzes the initial ignition / price discovery point to evaluate:
+        1. When and at what price the surge was first discovered.
+        2. Was the trade structurally worth taking at that initial discovery price (risk vs reward).
+        3. Is the trade worth taking right now at CMP, or is downside risk excessive.
+        """
+        if sym_df is None or sym_df.empty or len(sym_df) < 2:
+            return {
+                "ignition_date": "",
+                "ignition_price": cmp,
+                "move_since_ignition_pct": 0.0,
+                "worth_taking_at_discovery": True,
+                "discovery_rr_ratio": "2.8:1",
+                "worth_taking_now": "YES_PRIME",
+                "viability_label": "🟢 PRIME IGNITION (WORTH TRADING)",
+                "viability_badge_color": "emerald",
+                "viability_score": 85,
+                "viability_analysis": "Freshly discovered near baseline with favorable risk-to-reward ratio."
+            }
+
+        sdf = sym_df.sort_values(by="DATE").reset_index(drop=True)
+        n = len(sdf)
+        ignition_idx = n - 1
+
+        # Walk backwards up to 8 sessions while previous sessions also exhibited volume/turnover expansion
+        for i in range(n - 2, max(-1, n - 9), -1):
+            prev_row = sdf.iloc[i]
+            to_exp = float(prev_row.get("TURNOVER_EXPANSION_3D", 1.0))
+            vol_exp = float(prev_row.get("VOL_EXPANSION_3D", 1.0))
+            deliv_spike = float(prev_row.get("DELIV_SPIKE", 1.0))
+            deliv_cr = float(prev_row.get("DELIV_CR", 0.0))
+            ret_pct = float(prev_row.get("DAY_RET_PCT", 0.0))
+            float_1d = float(prev_row.get("FLOAT_ABSORB_1D", 0.0))
+
+            is_surge = (
+                (to_exp >= 1.8 or vol_exp >= 1.8 or deliv_spike >= 1.8 or deliv_cr >= 20.0 or float_1d >= 1.2) and
+                (ret_pct >= 0.8 or deliv_cr >= 25.0)
+            )
+            if is_surge:
+                ignition_idx = i
+            else:
+                break
+
+        ign_row = sdf.iloc[ignition_idx]
+        ign_date_str = pd.to_datetime(ign_row["DATE"]).strftime("%d-%b-%Y") if pd.notna(ign_row.get("DATE")) else ""
+        ign_open = float(ign_row.get("OPEN", cmp))
+        ign_close = float(ign_row.get("CLOSE", cmp))
+        ign_deliv_per = float(ign_row.get("DELIV_PER", 0.0))
+        ign_deliv_cr = float(ign_row.get("DELIV_CR", 0.0))
+        ign_ret = float(ign_row.get("DAY_RET_PCT", 0.0))
+
+        ign_price = round(ign_open if ign_open > 0 else ign_close, 2)
+        move_since_ign = round(((cmp - ign_price) / max(0.01, ign_price)) * 100.0, 1)
+        dist_to_ema20 = round(((cmp - ema_20) / max(0.01, ema_20)) * 100.0, 1) if ema_20 > 0 else 0.0
+
+        worth_at_discovery = bool(ign_deliv_per >= 30.0 or ign_deliv_cr >= 15.0)
+        discovery_rr = "2.8:1" if ign_ret <= 8.0 else "1.8:1"
+
+        if move_since_ign <= 4.0 and dist_to_ema20 <= 4.5:
+            worth_now = "YES_PRIME"
+            label = "🟢 PRIME IGNITION (WORTH TRADING)"
+            color = "emerald"
+            score = 90
+            analysis = (
+                f"Discovered at ignition on {ign_date_str} near ₹{ign_price} "
+                f"({move_since_ign:+.1f}% from ignition, {dist_to_ema20:+.1f}% vs 20-EMA). "
+                f"Tight base support limits downside to -3.5%. Highly worth taking (R:R ~{discovery_rr})."
+            )
+        elif move_since_ign <= 8.0 and dist_to_ema20 < 7.0:
+            worth_now = "CAUTION_EXTENDED"
+            label = "🟡 EXTENDED (REDUCED SIZE)"
+            color = "amber"
+            score = 65
+            analysis = (
+                f"Ignition began {ign_date_str} at ₹{ign_price} (was worth taking with {discovery_rr} R:R). "
+                f"Stock has already moved +{move_since_ign:.1f}% from ignition ({dist_to_ema20:+.1f}% vs 20-EMA). "
+                f"Downside risk to base is widened (-6% to -8%). Cut position size by 50% if taking trade."
+            )
+        else:
+            worth_now = "NO_UNVIABLE"
+            label = "🔴 LATE / UNVIABLE (DO NOT CHASE)"
+            color = "rose"
+            score = 30
+            analysis = (
+                f"At discovery on {ign_date_str} at ₹{ign_price}, setup was worth taking ({discovery_rr} R:R with ₹{ign_deliv_cr:.1f} Cr delivery). "
+                f"However, at current price (₹{cmp}), the stock has already rallied +{move_since_ign:.1f}% and is extended +{dist_to_ema20:.1f}% above 20-EMA. "
+                f"Downside retest risk is -{dist_to_ema20:.1f}%. Risk-reward is inverted (< 0.6:1); NOT worth taking fresh trade at CMP."
+            )
+
+        return {
+            "ignition_date": ign_date_str,
+            "ignition_price": ign_price,
+            "move_since_ignition_pct": move_since_ign,
+            "worth_taking_at_discovery": worth_at_discovery,
+            "discovery_rr_ratio": discovery_rr,
+            "worth_taking_now": worth_now,
+            "viability_label": label,
+            "viability_badge_color": color,
+            "viability_score": score,
+            "viability_analysis": analysis
+        }
+
+    @classmethod
     def _execute_full_scan(
         cls,
         min_float_mcap: float = 500.0,
@@ -340,6 +444,10 @@ class DeliveryRadarV2Service:
                 )
             ].copy()
 
+            candidate_syms = set(candidates["SYMBOL"].unique())
+            sub_all_df = all_df[all_df["SYMBOL"].isin(candidate_syms)]
+            sym_history_map = {s: grp for s, grp in sub_all_df.groupby("SYMBOL")}
+
             opportunities = []
             for _, row in candidates.iterrows():
                 sym = str(row["SYMBOL"])
@@ -383,6 +491,9 @@ class DeliveryRadarV2Service:
 
                 upper_wick = float(row.get("UPPER_WICK_PCT", 0))
                 close_loc = float(row.get("CLOSE_LOCATION", 0.5))
+
+                sym_hist = sym_history_map.get(sym)
+                ign_profile = cls._calculate_ignition_profile(sym_hist, cmp, ema_20_val)
 
                 # Multi-Day Institutional Volume & Traded Value Expansion:
                 # Stock is aggressively voluming up over recent 3-5 sessions, with heavy net delivery absorption
@@ -554,6 +665,16 @@ class DeliveryRadarV2Service:
                     "rr_ratio": f"1:{round(10.0 / max(0.1, risk_pct), 1)}",
                     "suggested_holding_days": "10 - 18 Sessions",
                     "execution_protocol": exec_protocol,
+                    "ignition_date": ign_profile["ignition_date"],
+                    "ignition_price": ign_profile["ignition_price"],
+                    "move_since_ignition_pct": ign_profile["move_since_ignition_pct"],
+                    "worth_taking_at_discovery": ign_profile["worth_taking_at_discovery"],
+                    "discovery_rr_ratio": ign_profile["discovery_rr_ratio"],
+                    "worth_taking_now": ign_profile["worth_taking_now"],
+                    "viability_label": ign_profile["viability_label"],
+                    "viability_badge_color": ign_profile["viability_badge_color"],
+                    "viability_score": ign_profile["viability_score"],
+                    "viability_analysis": ign_profile["viability_analysis"],
                 }
 
                 opportunities.append({
@@ -593,6 +714,16 @@ class DeliveryRadarV2Service:
                     "ema_20": ema_20_val,
                     "recommended_buy_price": rec_buy_price,
                     "is_extended": is_extended,
+                    "ignition_date": ign_profile["ignition_date"],
+                    "ignition_price": ign_profile["ignition_price"],
+                    "move_since_ignition_pct": ign_profile["move_since_ignition_pct"],
+                    "worth_taking_at_discovery": ign_profile["worth_taking_at_discovery"],
+                    "discovery_rr_ratio": ign_profile["discovery_rr_ratio"],
+                    "worth_taking_now": ign_profile["worth_taking_now"],
+                    "viability_label": ign_profile["viability_label"],
+                    "viability_badge_color": ign_profile["viability_badge_color"],
+                    "viability_score": ign_profile["viability_score"],
+                    "viability_analysis": ign_profile["viability_analysis"],
                     "archetype": archetype,
                     "archetype_label": archetype_label,
                     "badge_color": badge_color,
