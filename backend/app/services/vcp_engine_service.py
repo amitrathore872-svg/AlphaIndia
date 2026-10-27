@@ -817,7 +817,7 @@ class VCPEngineService:
     def run_discovery_scan(
         cls,
         db: Session,
-        limit_candidates: int = 150,
+        limit_candidates: int = 300,
         filter_mode: str = "TODAY_BREAKOUT",  # "TODAY_BREAKOUT" or "BEFORE_BREAKOUT"
         persist: bool = True,
     ) -> Dict[str, Any]:
@@ -825,7 +825,7 @@ class VCPEngineService:
         Executes sequential 8-gate scan across liquid equities.
         Enforces strict institutional threshold:
         - Total Score >= 90.0
-        - Returns MAXIMUM 3 stocks
+        - Returns top qualified institutional breakout stocks (up to 10)
         - Every rejection is logged with exact gate failure reason.
         """
         scan_date = date.today()
@@ -836,9 +836,9 @@ class VCPEngineService:
             db.query(ScreenerGrowthRecord)
             .filter(
                 ScreenerGrowthRecord.current_price != None,
-                ScreenerGrowthRecord.current_price >= 50.0,
+                ScreenerGrowthRecord.current_price >= 100.0,
                 ScreenerGrowthRecord.market_cap != None,
-                ScreenerGrowthRecord.market_cap >= 500.0,
+                ScreenerGrowthRecord.market_cap >= 2000.0,
                 ScreenerGrowthRecord.dma_50 != None,
                 ScreenerGrowthRecord.high_52_week != None,
                 ScreenerGrowthRecord.high_52_week > 0,
@@ -1062,8 +1062,8 @@ class VCPEngineService:
                 seen_res.add(s_res)
                 unique_results.append(res)
 
-        # STRICT TARGET OUTPUT: 0 to 3 STOCKS ONLY
-        final_top_picks = unique_results[:3]
+        # INSTITUTIONAL TARGET OUTPUT: Return top qualifying stocks (up to 10)
+        final_top_picks = unique_results[:10]
 
         # Persist qualified candidates into PostgreSQL tables
         if persist:
@@ -1429,11 +1429,11 @@ class VCPEngineService:
 
         try:
             from app.services.market_data_service import MarketDataService
-            cached_df = MarketDataService.get_symbol_ohlcv(clean_sym, period=period, interval=interval)
+            cached_df = MarketDataService.get_symbol_ohlcv(clean_sym, period=period, interval="1d")
             if cached_df is not None and not cached_df.empty and len(cached_df) >= 15:
                 return cached_df
-        except Exception:
-            pass
+        except Exception as cache_err:
+            logger.debug(f"MarketDataService OHLCV cache lookup error for {clean_sym}: {cache_err}")
 
         try:
             df = pd.DataFrame()

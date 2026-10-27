@@ -143,11 +143,16 @@ class NSEAnnouncementCollector:
 
         return filings
 
-    def fetch_global_announcements(self, from_date: Optional[str] = None, to_date: Optional[str] = None):
+    def fetch_global_announcements(
+        self,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        days_back: int = 8,
+    ):
         """
         Fetches live market-wide announcements across all listed equities.
         """
-        data = self.client.global_announcements(from_date=from_date, to_date=to_date)
+        data = self.client.global_announcements(from_date=from_date, to_date=to_date, days_back=days_back)
         filings = []
 
         for item in data:

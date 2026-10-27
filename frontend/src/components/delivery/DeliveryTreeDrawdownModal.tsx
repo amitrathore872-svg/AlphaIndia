@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import {
   ChevronDown,
   ChevronRight,
@@ -134,6 +135,15 @@ export default function DeliveryTreeDrawdownModal({
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href={`/delivery-radar/${encodeURIComponent(symbol)}`}
+              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500 hover:text-slate-950 transition shadow-xs"
+              title={`Open full dedicated delivery radar page for ${symbol}`}
+            >
+              <Maximize2 size={13} />
+              <span className="hidden sm:inline">Dedicated Page</span>
+            </Link>
+
             <button
               onClick={onClose}
               className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
@@ -270,11 +280,13 @@ export default function DeliveryTreeDrawdownModal({
               <div className="space-y-3 font-sans">
                 {data.weeks.map((week) => {
                   const isExpanded = !!expandedWeeks[week.week_key];
-                  const filteredDays = week.days.filter((d) => {
-                    if (dayFilter === "GREEN") return d.is_green;
-                    if (dayFilter === "HIGH_DELIV") return d.delivery_per >= 55.0;
-                    return true;
-                  });
+                  const filteredDays = week.days
+                    .filter((d) => {
+                      if (dayFilter === "GREEN") return d.is_green;
+                      if (dayFilter === "HIGH_DELIV") return d.delivery_per >= 55.0;
+                      return true;
+                    })
+                    .sort((a, b) => b.date.localeCompare(a.date));
 
                   return (
                     <div

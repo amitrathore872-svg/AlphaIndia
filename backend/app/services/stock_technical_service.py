@@ -55,7 +55,12 @@ class StockTechnicalService:
 
         sector, industry = cls._resolve_sector_and_industry(clean_sym, company_name, raw_sector, raw_industry)
         exchange = (record.exchange if record and record.exchange else None) or (comp.exchange if comp else "NSE")
-        market_cap = (record.market_cap if record and record.market_cap else None) or (comp.market_cap if comp else 0.0)
+        raw_mcap = (record.market_cap if record and record.market_cap else None) or (comp.market_cap if comp else None)
+        try:
+            market_cap = float(raw_mcap) if raw_mcap is not None and str(raw_mcap).strip().lower() not in ("unknown", "none", "") else 0.0
+        except (ValueError, TypeError):
+            market_cap = 0.0
+
         market_cap_category = (record.market_cap_category if record and record.market_cap_category else None) or (
             "LARGE" if market_cap >= 20000 else ("MID" if market_cap >= 5000 else "SMALL")
         )
@@ -79,10 +84,29 @@ class StockTechnicalService:
         day_change = yf_info.get("day_change") or (record.day_change if hasattr(record, "day_change") and record.day_change else 0.0)
         day_change_pct = yf_info.get("day_change_pct") or (record.day_change_pct if hasattr(record, "day_change_pct") and record.day_change_pct else 0.0)
 
-        health_score = (record.health_score if record and record.health_score else None) or (comp.health_score if comp and comp.health_score else 65.0)
-        sales_growth_ttm = record.sales_growth_ttm if record and record.sales_growth_ttm is not None else (comp.revenue_growth if comp and comp.revenue_growth is not None else 0.0)
-        profit_growth_ttm = record.profit_growth_ttm if record and record.profit_growth_ttm is not None else (comp.pat_growth if comp and comp.pat_growth is not None else 0.0)
-        roce = record.roce if record and record.roce is not None else (comp.roce if comp and comp.roce is not None else 0.0)
+        raw_health = (record.health_score if record and record.health_score else None) or getattr(comp, "ai_score", None) or 65.0
+        try:
+            health_score = float(raw_health)
+        except (ValueError, TypeError):
+            health_score = 65.0
+
+        raw_sales_growth = (record.sales_growth_ttm if record and record.sales_growth_ttm is not None else None) or getattr(comp, "revenue_growth", None) or 0.0
+        try:
+            sales_growth_ttm = float(raw_sales_growth)
+        except (ValueError, TypeError):
+            sales_growth_ttm = 0.0
+
+        raw_profit_growth = (record.profit_growth_ttm if record and record.profit_growth_ttm is not None else None) or getattr(comp, "pat_growth", None) or 0.0
+        try:
+            profit_growth_ttm = float(raw_profit_growth)
+        except (ValueError, TypeError):
+            profit_growth_ttm = 0.0
+
+        raw_roce = (record.roce if record and record.roce is not None else None) or getattr(comp, "roce", None) or 0.0
+        try:
+            roce = float(raw_roce)
+        except (ValueError, TypeError):
+            roce = 0.0
 
         # 3. Authentic Scenario Price References (52W High Pivot & Consolidations)
         # Base depth %: Real drawdown from 52-week high
@@ -340,12 +364,23 @@ class StockTechnicalService:
 
         # Authentic Multi-Model Confluence Ratings & P/E Calculation
         pe_ratio = None
-        if hasattr(record, "pe") and record.pe and float(record.pe) > 0:
-            pe_ratio = round(float(record.pe), 1)
-        elif yf_info.get("trailing_pe") and float(yf_info.get("trailing_pe")) > 0:
-            pe_ratio = round(float(yf_info.get("trailing_pe")), 1)
-        elif comp and hasattr(comp, "pe") and comp.pe and float(comp.pe) > 0:
-            pe_ratio = round(float(comp.pe), 1)
+        raw_pe = None
+        if hasattr(record, "stock_pe") and record.stock_pe:
+            raw_pe = record.stock_pe
+        elif hasattr(record, "pe") and record.pe:
+            raw_pe = record.pe
+        elif yf_info.get("trailing_pe"):
+            raw_pe = yf_info.get("trailing_pe")
+        elif comp and hasattr(comp, "pe") and comp.pe:
+            raw_pe = comp.pe
+
+        if raw_pe is not None:
+            try:
+                val_pe = float(raw_pe)
+                if val_pe > 0:
+                    pe_ratio = round(val_pe, 1)
+            except (ValueError, TypeError):
+                pe_ratio = None
 
         # Minervini 8-Criteria Check:
         m_c1 = bool(cmp > dma_50)
@@ -613,6 +648,11 @@ class StockTechnicalService:
             "RELIANCE": ("Energy", "Oil Refining, Telecom & Retail"),
             "LT": ("Capital Goods", "Engineering & Construction"),
             "PIDILITIND": ("Chemicals", "Adhesives & Specialty Chemicals"),
+            "INDHOTEL": ("Consumer Services", "Hotels & Resorts"),
+            "EIHOTEL": ("Consumer Services", "Hotels & Resorts"),
+            "CHALET": ("Consumer Services", "Hotels & Resorts"),
+            "LEMONONTREE": ("Consumer Services", "Hotels & Resorts"),
+            "TAJGVK": ("Consumer Services", "Hotels & Resorts"),
         }
         if sym in known:
             return known[sym]
@@ -638,6 +678,8 @@ class StockTechnicalService:
             return ("Energy & Power", "Energy, Oil & Power Utilities")
         if any(k in text for k in ("CHEM", "CHEMICAL", "CHEMICALS", "FERTILIZER", "FERTILIZERS", "POLYMER", "ORGANICS", "PESTICIDES", "PAINTS")):
             return ("Chemicals", "Specialty Chemicals & Fertilizers")
+        if any(k in text for k in ("HOTEL", "HOTELS", "RESORT", "RESORTS", "HOSPITALITY", "RESTAURANT", "RESTAURANTS", "TOURISM")):
+            return ("Consumer Services", "Hotels & Hospitality")
         if any(k in text for k in ("FOOD", "BEVERAGE", "CONSUMER", "DAIRY", "BREWERIES", "SUGAR", "AGRO", "TEA", "COFFEE", "DISTILLERIES", "FMCG")):
             return ("Consumer Staples", "FMCG, Foods & Agro")
         if any(k in text for k in ("INFRA", "CONSTRUCTION", "ENGINEERING", "PROJECTS", "DEVELOPERS", "REALTY", "HOUSING", "CEMENT", "PIPES", "CABLES")):
@@ -691,6 +733,12 @@ class StockTechnicalService:
             "CHEMICALS": [
                 "PIDILITIND", "SRF", "DEEPAKNTR", "TATACHEM", "PIIND", "NAVINFLUOR"
             ],
+            "HOTELS": [
+                "INDHOTEL", "EIHOTEL", "CHALET", "LEMONONTREE", "TAJGVK"
+            ],
+            "CONSUMER SERVICES": [
+                "INDHOTEL", "EIHOTEL", "CHALET", "LEMONONTREE", "DEVYANI", "JUBLFOOD", "WESTLIFE"
+            ],
         }
 
         # Market metrics dictionary for high-precision bellwether pricing & P/E
@@ -722,6 +770,10 @@ class StockTechnicalService:
             matched_candidates = [s for s in SECTOR_PEERS_CATALOG["FINANCIAL SERVICES"] if s != sym_clean]
         elif "AUTO" in sec_upper:
             matched_candidates = [s for s in SECTOR_PEERS_CATALOG["AUTOMOBILE"] if s != sym_clean]
+        elif "HOTEL" in sec_upper or "HOTEL" in ind_upper or "HOSPITALITY" in sec_upper or "HOSPITALITY" in ind_upper:
+            matched_candidates = [s for s in SECTOR_PEERS_CATALOG.get("HOTELS", []) if s != sym_clean]
+        elif "CONSUMER SERVICE" in sec_upper or "CONSUMER SERVICE" in ind_upper:
+            matched_candidates = [s for s in SECTOR_PEERS_CATALOG.get("CONSUMER SERVICES", []) if s != sym_clean]
         elif "CONSUM" in sec_upper or "FMCG" in ind_upper:
             matched_candidates = [s for s in SECTOR_PEERS_CATALOG["CONSUMER STAPLES"] if s != sym_clean]
         elif "METAL" in sec_upper:
@@ -767,11 +819,43 @@ class StockTechnicalService:
             dist_pct = round(((high_52 - cmp_peer) / high_52) * 100, 1) if high_52 > 0 else 5.0
             is_stg2 = dist_pct <= 15.0
 
-            # Growth figures
-            sales_growth = round(qr.revenue_growth, 1) if qr and qr.revenue_growth is not None else round(getattr(p, "revenue_growth", 0.0) or 12.0, 1)
-            pat_growth = round(qr.pat_growth, 1) if qr and qr.pat_growth is not None else round(getattr(p, "pat_growth", 0.0) or 15.0, 1)
-            sales_qtr = round(qr.revenue, 1) if qr and qr.revenue is not None else 0.0
-            np_qtr = round(qr.net_profit, 1) if qr and qr.net_profit is not None else 0.0
+            # Growth figures with safe type casting
+            sales_growth = 12.0
+            pat_growth = 15.0
+            sales_qtr = 0.0
+            np_qtr = 0.0
+            if qr:
+                try:
+                    if qr.revenue_growth is not None:
+                        sales_growth = round(float(qr.revenue_growth), 1)
+                except Exception:
+                    pass
+                try:
+                    if qr.pat_growth is not None:
+                        pat_growth = round(float(qr.pat_growth), 1)
+                except Exception:
+                    pass
+                try:
+                    if qr.revenue is not None:
+                        sales_qtr = round(float(qr.revenue), 1)
+                except Exception:
+                    pass
+                try:
+                    if qr.net_profit is not None:
+                        np_qtr = round(float(qr.net_profit), 1)
+                except Exception:
+                    pass
+            else:
+                try:
+                    if getattr(p, "revenue_growth", None) is not None:
+                        sales_growth = round(float(p.revenue_growth), 1)
+                except Exception:
+                    pass
+                try:
+                    if getattr(p, "pat_growth", None) is not None:
+                        pat_growth = round(float(p.pat_growth), 1)
+                except Exception:
+                    pass
 
             # Market Cap
             try:

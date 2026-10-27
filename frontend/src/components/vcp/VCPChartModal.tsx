@@ -78,6 +78,7 @@ export default function VCPChartModal({ stock, onClose }: VCPChartModalProps) {
       timeScale: {
         borderColor: "#1E293B",
         timeVisible: true,
+        rightOffset: 12,
       },
     });
 

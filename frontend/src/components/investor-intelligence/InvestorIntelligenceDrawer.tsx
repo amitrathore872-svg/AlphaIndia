@@ -27,10 +27,12 @@ import {
   ChevronsDown,
   ChevronsUp,
   Search,
+  Award,
 } from "lucide-react";
 import {
   fetchCompanyInvestorIntelligence,
   fetchCommitmentsLedger,
+  fetchSymbolRunawayTrigger,
   triggerAnalyzeDocument,
   triggerAnalyzeLatest,
   formatGuidanceChanges,
@@ -38,6 +40,7 @@ import {
   type InvestorInsightItem,
   type InvestorDocumentItem,
   type CommitmentItem,
+  type RunawayTriggerItem,
 } from "@/lib/investorIntelligenceApi";
 
 interface Props {
@@ -50,6 +53,7 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
   const [data, setData] = useState<CompanyIntelligenceResponse | null>(null);
   const [selectedInsight, setSelectedInsight] = useState<InvestorInsightItem | null>(null);
   const [commitments, setCommitments] = useState<CommitmentItem[]>([]);
+  const [diamondTrigger, setDiamondTrigger] = useState<RunawayTriggerItem | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,13 +86,15 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
     setLoading(true);
     setError(null);
     try {
-      const [res, commsRes] = await Promise.all([
+      const [res, commsRes, triggerRes] = await Promise.all([
         fetchCompanyInvestorIntelligence(sym),
         fetchCommitmentsLedger({ symbol: sym, limit: 100 }).catch(() => ({ items: [] })),
+        fetchSymbolRunawayTrigger(sym).catch(() => null),
       ]);
       setData(res);
       setSelectedInsight(res.latest_insight || (res.insights_history.length > 0 ? res.insights_history[0] : null));
       setCommitments(commsRes.items || []);
+      setDiamondTrigger(triggerRes);
     } catch (err: any) {
       setError(err?.message || "Failed to load investor intelligence");
     } finally {
@@ -371,6 +377,79 @@ export default function InvestorIntelligenceDrawer({ symbol, isOpen, onClose }: 
                   </a>
                 )}
               </div>
+
+              {/* 3-Way Diamond Catalyst Validation Radar (Top Priority) */}
+              {diamondTrigger && (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-[#0C1B33] via-[#091426] to-[#0A1828] border-2 border-emerald-500/60 shadow-xl shadow-emerald-950/30 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-900/40 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-300">
+                        💎 Diamond Catalyst Validation Radar
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/60 text-emerald-300 font-bold">
+                        {diamondTrigger.diamond_score}/100 Score
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-cyan-300 uppercase">
+                      {diamondTrigger.conviction_tier.replace(/_/g, " ")}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                      <span className="text-amber-400 font-mono text-xs">⚡ {diamondTrigger.metric_highlight}:</span>
+                      <span>{diamondTrigger.headline}</span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                      {diamondTrigger.institutional_rationale}
+                    </p>
+                  </div>
+
+                  {/* 3-Way Status Badges */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 text-xs">
+                    <div className="p-2.5 rounded-lg bg-[#050B14] border border-cyan-900/50 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-cyan-400 font-bold">1. Guidance Spark</span>
+                        <span className="text-white font-bold">{diamondTrigger.scores.guidance_score}/35</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        {diamondTrigger.guidance_validation.checks[0]?.detail || "Verifiable disclosure"}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-[#050B14] border border-cyan-900/50 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-emerald-400 font-bold">2. Accounting Fuel</span>
+                        <span className="text-white font-bold">{diamondTrigger.scores.financial_score}/35</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Sales YoY: +{diamondTrigger.financial_validation.sales_growth_ttm?.toFixed(0)}% · PAT YoY: +{diamondTrigger.financial_validation.pat_growth_ttm?.toFixed(0)}%
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-[#050B14] border border-cyan-900/50 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-amber-400 font-bold">3. Stage 2 Price</span>
+                        <span className="text-white font-bold">{diamondTrigger.scores.technical_score}/30</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        {diamondTrigger.technical_validation.is_stage_2 ? "Confirmed Stage 2 Uptrend" : "Stage 1 Base / Consolidating"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Trade Action */}
+                  <div className="p-2.5 rounded-lg bg-black/60 border border-emerald-500/30 text-xs font-mono flex items-center justify-between">
+                    <span className="text-slate-300">
+                      <strong>Verdict:</strong> <span className="text-emerald-300">{diamondTrigger.gameplan.verdict}</span>
+                    </span>
+                    <span className="text-slate-400 text-[11px]">
+                      {diamondTrigger.gameplan.horizon}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Thesis Impact & Quarterly Developments Synthesis */}
               <div className="p-4 rounded-xl bg-[#08101E] border border-cyan-900/60 shadow-lg space-y-3">

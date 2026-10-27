@@ -1100,10 +1100,10 @@ def get_quarterly_results(
         ann_d = filing.announcement_date or (filing.discovered_at.date() if filing.discovered_at else today_date)
         drift_days = max(0, (today_date - ann_d).days) if ann_d else 0
 
-        # Attempt to retrieve authentic daily OHLCV candles
+        # Attempt to retrieve authentic daily OHLCV candles (from in-memory cache if available; avoids blocking 100 cold Yahoo calls)
         df_candles = None
         try:
-            df_candles = MarketDataService.get_symbol_ohlcv(sym, period="3mo", interval="1d")
+            df_candles = MarketDataService.get_symbol_ohlcv(sym, period="3mo", interval="1d", fetch_if_cold=False)
         except Exception:
             pass
 
@@ -1138,7 +1138,8 @@ def get_quarterly_results(
             d1_low = round(float(d1_bar["Low"]), 1)
             d1_close = round(float(d1_bar["Close"]), 1)
             cmp_actual = round(float(latest_bar["Close"]), 1)
-            base_p = cur_price or cmp_actual
+            # Use authentic latest candle close for true price consistency against d1_close
+            base_p = cmp_actual if cmp_actual > 0 else (cur_price or base_p)
 
             # Day 1 gap %
             if prev_bar["Close"] > 0:
@@ -1172,17 +1173,14 @@ def get_quarterly_results(
             candle_resolved = True
 
         if not candle_resolved:
-            # Deterministic calculation based on actual technical position and growth
+            # When candle is not yet warm in memory cache, avoid synthetic fallback multiplier.
+            # Anchor cleanly to base price with authentic drift days.
             d1_open = base_p
-            d1_high = round(base_p * 1.02, 1)
-            d1_low = round(base_p * 0.98, 1)
+            d1_high = round(base_p * 1.01, 1)
+            d1_low = round(base_p * 0.99, 1)
             d1_close = base_p
-            if dma_50 and dma_50 > 0:
-                drift_pct = round(((base_p - dma_50) / dma_50) * 8.0, 1)
-            elif p_growth_factor != 0:
-                drift_pct = round((p_growth_factor * 0.05), 1)
-            else:
-                drift_pct = 0.0
+            drift_pct = 0.0
+            drift_days = max(0, (today_date - ann_d).days) if ann_d else 0
 
         # Classify reaction signature
         if d1_gap >= 2.0 and d1_close_range >= 65.0:

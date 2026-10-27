@@ -126,7 +126,7 @@ function TradingViewChartComponent({
   symbol,
   exchange = "NSE",
   height = 540,
-  initialPeriod = "6mo",
+  initialPeriod = "1y",
   pivotReference,
   scenarioTrigger,
   downsideReference,
@@ -351,6 +351,9 @@ function TradingViewChartComponent({
         borderColor: isDark ? "#1e293b" : "#e2e8f0",
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 14,
+        barSpacing: 6,
+        minBarSpacing: 0.5,
       },
     });
 

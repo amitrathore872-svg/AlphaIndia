@@ -41,8 +41,8 @@ class AutonomousEngineScheduler:
         "wire_prices": {
             "name": "Live Wire & CMP Refresher",
             "market_interval_sec": 60,
-            "off_market_interval_sec": 0,
-            "market_hours_only": True,
+            "off_market_interval_sec": 300,
+            "market_hours_only": False,
             "is_enabled": True,
             "min_interval_sec": 30,
         },
@@ -789,7 +789,7 @@ class AutonomousEngineScheduler:
         try:
             from app.services.vcp_engine_service import VCPEngineService
             scan_res = VCPEngineService.run_discovery_scan(
-                db, limit_candidates=100, filter_mode="TODAY_BREAKOUT", persist=True
+                db, limit_candidates=300, filter_mode="TODAY_BREAKOUT", persist=True
             )
             records_count = scan_res.get("candidates_count", 0) if isinstance(scan_res, dict) else 0
 

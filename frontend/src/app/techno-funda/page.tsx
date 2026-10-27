@@ -11,6 +11,7 @@ import {
   type TechnoFundaItem,
   type TechnoFundaSummary,
 } from "@/lib/technoFundaApi";
+import { fetchGrowthFilters } from "@/lib/api";
 import {
   TrendingUp,
   Activity,
@@ -118,6 +119,71 @@ export default function TechnoFundaPage() {
   // Quick Inspection Drawer State
   const [selectedStock, setSelectedStock] = useState<TechnoFundaItem | null>(null);
   const [accountRiskRupees, setAccountRiskRupees] = useState<number>(10000);
+  const [sectors, setSectors] = useState<string[]>([]);
+  const [urlInitialized, setUrlInitialized] = useState(false);
+
+  // Read URL query parameters on initial client mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const pPreset = params.get("preset");
+      const pSector = params.get("sector");
+      const pSearch = params.get("search");
+      const pSort = params.get("sort_by");
+      const pOrder = params.get("sort_order") as "asc" | "desc" | null;
+      const pPage = params.get("page");
+
+      if (pPreset && STRATEGY_PRESETS.some((p) => p.id === pPreset)) {
+        setActivePreset(pPreset);
+      }
+      if (pSector) {
+        setSelectedSector(pSector);
+      }
+      if (pSearch) {
+        setSearch(pSearch);
+        setDebouncedSearch(pSearch);
+      }
+      if (pSort) {
+        setSortBy(pSort);
+      }
+      if (pOrder && (pOrder === "asc" || pOrder === "desc")) {
+        setSortOrder(pOrder);
+      }
+      if (pPage && parseInt(pPage, 10) > 0) {
+        setPage(parseInt(pPage, 10));
+      }
+      setUrlInitialized(true);
+    }
+  }, []);
+
+  // Sync state back to URL for bookmarkability and deep-linking
+  useEffect(() => {
+    if (!urlInitialized || typeof window === "undefined") return;
+
+    const params = new URLSearchParams();
+    if (activePreset && activePreset !== "TOP_1_PERCENT_SNIPER") {
+      params.set("preset", activePreset);
+    }
+    if (selectedSector && selectedSector !== "ALL") {
+      params.set("sector", selectedSector);
+    }
+    if (debouncedSearch) {
+      params.set("search", debouncedSearch);
+    }
+    if (sortBy && sortBy !== "canslim_score") {
+      params.set("sort_by", sortBy);
+    }
+    if (sortOrder && sortOrder !== "desc") {
+      params.set("sort_order", sortOrder);
+    }
+    if (page > 1) {
+      params.set("page", String(page));
+    }
+
+    const query = params.toString();
+    const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState(null, "", newUrl);
+  }, [urlInitialized, activePreset, selectedSector, debouncedSearch, sortBy, sortOrder, page]);
 
   // Debounce search
   useEffect(() => {
@@ -128,11 +194,19 @@ export default function TechnoFundaPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Load summary stats once
+  // Load summary stats and sectors once
   useEffect(() => {
     fetchTechnoFundaSummary()
       .then(setSummary)
       .catch((err) => console.error("Summary error:", err));
+
+    fetchGrowthFilters()
+      .then((res) => {
+        if (res?.sectors && Array.isArray(res.sectors)) {
+          setSectors(res.sectors.filter(Boolean));
+        }
+      })
+      .catch((err) => console.error("Sectors error:", err));
   }, []);
 
   // Fetch screener data
@@ -222,10 +296,11 @@ export default function TechnoFundaPage() {
             </div>
           </div>
 
-          {/* Preset Selector, Search & Candidate Count */}
+          {/* Preset Selector, Sector Selector, Search & Candidate Count */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Strategy Preset */}
             <div className="flex items-center gap-1.5">
-              <SlidersHorizontal size={13} className="text-slate-400" />
+              <SlidersHorizontal size={13} className="text-slate-400 shrink-0" />
               <select
                 value={activePreset}
                 onChange={(e) => handlePresetChange(e.target.value)}
@@ -239,7 +314,28 @@ export default function TechnoFundaPage() {
               </select>
             </div>
 
-            <div className="relative min-w-[180px] sm:w-60">
+            {/* Sector Filter */}
+            <div className="flex items-center gap-1.5">
+              <Filter size={13} className="text-slate-400 shrink-0" />
+              <select
+                value={selectedSector}
+                onChange={(e) => {
+                  setSelectedSector(e.target.value);
+                  setPage(1);
+                }}
+                className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/90 py-1.5 px-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-cyan-500 font-medium cursor-pointer max-w-[150px] truncate"
+              >
+                <option value="ALL" className="bg-slate-900 text-white">All Sectors</option>
+                {sectors.map((sec) => (
+                  <option key={sec} value={sec} className="bg-slate-900 text-white">
+                    {sec}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Search */}
+            <div className="relative min-w-[170px] sm:w-56">
               <Search size={14} className="absolute left-3 top-2.5 text-slate-500" />
               <input
                 type="text"
@@ -257,11 +353,140 @@ export default function TechnoFundaPage() {
                 </button>
               )}
             </div>
-            <div className="text-xs text-slate-500 font-mono whitespace-nowrap">
+
+            {/* Active Filters Reset Badge */}
+            {(activePreset !== "TOP_1_PERCENT_SNIPER" || selectedSector !== "ALL" || search) && (
+              <button
+                onClick={() => {
+                  setActivePreset("TOP_1_PERCENT_SNIPER");
+                  setSelectedSector("ALL");
+                  setSearch("");
+                  setPage(1);
+                }}
+                className="flex items-center gap-1 rounded-lg bg-rose-500/10 border border-rose-500/20 px-2 py-1 text-[11px] font-medium text-rose-400 hover:bg-rose-500/20 transition"
+                title="Reset all active filters"
+              >
+                <X size={12} />
+                <span>Reset</span>
+              </button>
+            )}
+
+            <div className="text-xs text-slate-500 font-mono whitespace-nowrap ml-auto sm:ml-0">
               <strong className="text-slate-900 dark:text-emerald-400">{totalCount}</strong> candidates
             </div>
           </div>
         </div>
+
+        {/* MACRO BREADTH & CONFLUENCE TELEMETRY RIBBON */}
+        {summary && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* Total Screened */}
+            <div
+              onClick={() => handlePresetChange("ALL")}
+              className={`group cursor-pointer rounded-xl border p-3 transition shadow-xs ${
+                activePreset === "ALL"
+                  ? "border-emerald-500/50 bg-emerald-500/10 dark:bg-emerald-950/20"
+                  : "border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#081225] hover:border-slate-300 dark:hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Universe Scanned
+                </span>
+                <Layers size={14} className="text-slate-400 group-hover:text-emerald-400 transition" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">
+                  {summary.total_screened.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-500 font-sans">Equities</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-cyan-600 dark:text-cyan-400/80 font-medium">
+                M-Cap ≥ ₹150 Cr Active
+              </div>
+            </div>
+
+            {/* Stage 2 Leaders */}
+            <div
+              onClick={() => handlePresetChange("STAGE_2_LEADERS")}
+              className={`group cursor-pointer rounded-xl border p-3 transition shadow-xs ${
+                activePreset === "STAGE_2_LEADERS"
+                  ? "border-teal-500/50 bg-teal-500/10 dark:bg-teal-950/20"
+                  : "border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#081225] hover:border-teal-500/30"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Stage 2 Markup
+                </span>
+                <TrendingUp size={14} className="text-teal-400" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-teal-600 dark:text-teal-400 font-mono">
+                  {summary.stage_2_count.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-teal-500 font-bold font-mono">
+                  ({summary.stage_2_ratio_pct}%)
+                </span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                CMP &gt; 50 DMA &gt; 200 DMA
+              </div>
+            </div>
+
+            {/* Blockbuster Earnings Accelerators */}
+            <div
+              onClick={() => handlePresetChange("EARNINGS_ACCELERATORS")}
+              className={`group cursor-pointer rounded-xl border p-3 transition shadow-xs ${
+                activePreset === "EARNINGS_ACCELERATORS"
+                  ? "border-cyan-500/50 bg-cyan-500/10 dark:bg-cyan-950/20"
+                  : "border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#081225] hover:border-cyan-500/30"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  PAT Accelerators
+                </span>
+                <Zap size={14} className="text-cyan-400" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-cyan-600 dark:text-cyan-400 font-mono">
+                  {summary.earnings_accelerator_count?.toLocaleString() ?? "—"}
+                </span>
+                <span className="text-[10px] text-cyan-500 font-sans">Growth Titans</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                Quarterly PAT YoY ≥ 35%
+              </div>
+            </div>
+
+            {/* Near 52W High Breakouts */}
+            <div
+              onClick={() => handlePresetChange("NEW_HIGHS_52W")}
+              className={`group cursor-pointer rounded-xl border p-3 transition shadow-xs ${
+                activePreset === "NEW_HIGHS_52W"
+                  ? "border-purple-500/50 bg-purple-500/10 dark:bg-purple-950/20"
+                  : "border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#081225] hover:border-purple-500/30"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Near 52W High
+                </span>
+                <Target size={14} className="text-purple-400" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-extrabold text-purple-600 dark:text-purple-400 font-mono">
+                  {summary.near_52w_high_count?.toLocaleString() ?? "—"}
+                </span>
+                <span className="text-[10px] text-purple-500 font-sans">Coiled Setups</span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                Within ≤ 6% of 52W High
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* DATA TABLE */}
         <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#060D1A] shadow-xs dark:shadow-xl">
@@ -289,7 +514,16 @@ export default function TechnoFundaPage() {
                       <ArrowUpDown size={11} />
                     </div>
                   </th>
-                  <th className="px-3 py-3 font-semibold">Dual Score [F | T]</th>
+                  <th
+                    onClick={() => handleSort("funda_score")}
+                    className="px-3 py-3 font-semibold cursor-pointer hover:text-white transition"
+                    title="Click to sort by Fundamental Score"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Dual Score [F | T]</span>
+                      <ArrowUpDown size={11} />
+                    </div>
+                  </th>
                   <th className="px-3 py-3 font-semibold">Archetype</th>
                   <th
                     onClick={() => handleSort("quarterly_pat_yoy")}
@@ -318,7 +552,16 @@ export default function TechnoFundaPage() {
                       <ArrowUpDown size={11} />
                     </div>
                   </th>
-                  <th className="px-3 py-3 font-semibold">Minervini Criteria</th>
+                  <th
+                    onClick={() => handleSort("minervini_pass_count")}
+                    className="px-3 py-3 font-semibold cursor-pointer hover:text-white transition"
+                    title="Click to sort by Minervini Criteria Pass Count"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Minervini Criteria</span>
+                      <ArrowUpDown size={11} />
+                    </div>
+                  </th>
                   <th className="px-3 py-3 font-semibold">Execution Plan</th>
                   <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
@@ -335,8 +578,53 @@ export default function TechnoFundaPage() {
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-14 text-center text-slate-400 dark:text-slate-500 font-sans">
-                      No matching CANSLIM candidates found in this preset. Try switching strategy presets or clearing search.
+                    <td colSpan={12} className="py-14 text-center font-sans">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/80 border border-slate-700 text-slate-400">
+                          <Target size={24} />
+                        </div>
+                        <div className="max-w-md">
+                          <div className="text-sm font-bold text-white">No Matching CANSLIM Equities Found</div>
+                          <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                            No equities currently match the confluence criteria for preset{" "}
+                            <span className="font-semibold text-emerald-400">
+                              {STRATEGY_PRESETS.find((p) => p.id === activePreset)?.label || activePreset}
+                            </span>
+                            {selectedSector !== "ALL" && (
+                              <span> in sector <span className="font-semibold text-cyan-400">{selectedSector}</span></span>
+                            )}
+                            {debouncedSearch && (
+                              <span> with search &ldquo;<span className="font-semibold text-amber-400">{debouncedSearch}</span>&rdquo;</span>
+                            )}.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          {(activePreset !== "ALL" || selectedSector !== "ALL" || search) && (
+                            <button
+                              onClick={() => {
+                                setActivePreset("ALL");
+                                setSelectedSector("ALL");
+                                setSearch("");
+                                setPage(1);
+                              }}
+                              className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/25 transition"
+                            >
+                              <span>Reset All Filters</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setActivePreset("CANSLIM_TITANS");
+                              setSelectedSector("ALL");
+                              setSearch("");
+                              setPage(1);
+                            }}
+                            className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white transition"
+                          >
+                            View CANSLIM Titans (87)
+                          </button>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -594,7 +882,9 @@ export default function TechnoFundaPage() {
                             <span>Inspect</span>
                           </button>
                           <Link
-                            href={`/techno-funda/${encodeURIComponent(item.symbol)}?from=/techno-funda`}
+                            href={`/techno-funda/${encodeURIComponent(item.symbol)}?from=${encodeURIComponent(
+                              typeof window !== "undefined" ? window.location.pathname + window.location.search : "/techno-funda"
+                            )}`}
                             className="rounded bg-slate-800 border border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-300 hover:border-cyan-500 hover:text-white transition"
                             title="Full Stock Terminal"
                           >
@@ -913,7 +1203,9 @@ export default function TechnoFundaPage() {
               {/* Action Buttons */}
               <div className="mt-6 flex items-center gap-3">
                 <Link
-                  href={`/techno-funda/${encodeURIComponent(selectedStock.symbol)}?from=/techno-funda`}
+                  href={`/techno-funda/${encodeURIComponent(selectedStock.symbol)}?from=${encodeURIComponent(
+                    typeof window !== "undefined" ? window.location.pathname + window.location.search : "/techno-funda"
+                  )}`}
                   className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-emerald-400 shadow-md shadow-emerald-500/20"
                 >
                   <Activity size={14} />

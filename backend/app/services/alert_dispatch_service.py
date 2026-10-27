@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.models.notification import SystemNotification, AlertChannelConfig, AlertDispatchLog
 from app.models.company import Company
+from app.db.database import utc_now
 
 logger = logging.getLogger("alpha_india.alerts")
 
@@ -48,7 +49,7 @@ class AlertDispatchService:
         Takes the earliest timestamp among them so that night scans across UTC/IST
         midnight boundaries never falsely re-alert the same symbols.
         """
-        now_utc = datetime.utcnow()
+        now_utc = utc_now()
         rolling_cutoff = now_utc - timedelta(hours=hours)
         today_utc_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         
@@ -348,7 +349,7 @@ class AlertDispatchService:
         Verifies if an alert for this symbol and channel was already dispatched
         successfully within the cooldown period (default: 4 hours).
         """
-        cutoff = datetime.utcnow() - timedelta(hours=cooldown_hours)
+        cutoff = utc_now() - timedelta(hours=cooldown_hours)
         query = db.query(AlertDispatchLog).filter(
             AlertDispatchLog.channel == channel,
             AlertDispatchLog.symbol == symbol,
@@ -1283,7 +1284,7 @@ class AlertDispatchService:
             metadata_json=metadata or {},
             is_read=False,
             is_archived=False,
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
         )
         db.add(notification)
         db.commit()
@@ -1310,7 +1311,7 @@ class AlertDispatchService:
             payload_preview=payload_preview[:1000],
             status=status,
             error_message=error_message,
-            dispatched_at=datetime.utcnow(),
+            dispatched_at=utc_now(),
         )
         db.add(log)
         db.commit()

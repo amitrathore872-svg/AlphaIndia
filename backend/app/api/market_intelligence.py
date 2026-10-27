@@ -504,7 +504,7 @@ def get_scanner_streams(db: Session = Depends(get_db)):
         "viewHref": "/institutional-radar",
         "viewLabel": "View →",
         "items": sector_items if sector_items else [
-            {"primary": "HEALTHCARE", "secondary": "Inflow Expansion", "badge": "+₹4,200 Cr", "badgeColor": "emerald"}
+            {"primary": "SCANNING", "secondary": "Aggregating institutional sector breadth...", "badge": "Live Radar", "badgeColor": "emerald"}
         ],
     })
 

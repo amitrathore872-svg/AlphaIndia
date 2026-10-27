@@ -21,9 +21,11 @@ from app.core.redis_cache import cache
 
 logger = logging.getLogger(__name__)
 
-BHAVCOPY_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "nse_delivery"
+BHAVCOPY_DIR = Path(__file__).resolve().parent.parent / "data" / "nse_delivery"
 if not BHAVCOPY_DIR.exists():
-    BHAVCOPY_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "nse_delivery"
+    BHAVCOPY_DIR = Path(__file__).resolve().parent.parent.parent / "backend" / "data" / "nse_delivery"
+if not BHAVCOPY_DIR.exists():
+    BHAVCOPY_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "nse_delivery"
 
 
 class DeliveryTreeService:
@@ -42,25 +44,23 @@ class DeliveryTreeService:
             return datetime.datetime.min
 
     @classmethod
+    def clear_cache(cls) -> None:
+        with cls._lock:
+            cls._cached_universe_df = None
+            cls._cached_symbol_map = {}
+            cls._cached_timestamp = 0
+            cls._cached_files_hash = ""
+            parquet_cache = BHAVCOPY_DIR.parent / "recent_universe.parquet"
+            if parquet_cache.exists():
+                try:
+                    parquet_cache.unlink()
+                except Exception:
+                    pass
+
+    @classmethod
     def _load_recent_universe(cls, lookback_sessions: int = 40) -> Optional[pd.DataFrame]:
         """Loads and caches the last N sessions in memory for ultra-fast tree slicing (< 5ms)."""
         now = time.time()
-        if cls._cached_universe_df is not None and (now - cls._cached_timestamp) < 43200:
-            return cls._cached_universe_df
-
-        parquet_cache = BHAVCOPY_DIR.parent / "recent_universe.parquet"
-
-        # 1. Fast Parquet binary cache
-        if parquet_cache.exists() and (now - parquet_cache.stat().st_mtime) < 43200:
-            try:
-                universe = pd.read_parquet(parquet_cache)
-                with cls._lock:
-                    cls._cached_universe_df = universe
-                    cls._cached_symbol_map = {sym: df.reset_index(drop=True) for sym, df in universe.groupby("SYMBOL")}
-                    cls._cached_timestamp = now
-                return universe
-            except Exception as e:
-                logger.warning(f"[DeliveryTreeService] Parquet read error: {e}")
 
         files = sorted(glob.glob(str(BHAVCOPY_DIR / "sec_bhavdata_full_*.csv")), key=cls._parse_file_date)
         if not files:
@@ -71,6 +71,30 @@ class DeliveryTreeService:
         if not files:
             logger.warning("[DeliveryTreeService] No bhavcopy files found.")
             return None
+
+        latest_file = files[-1]
+        latest_file_mtime = os.path.getmtime(latest_file)
+        latest_file_date = cls._parse_file_date(latest_file)
+
+        # Check in-memory cache: must be newer than the latest downloaded bhavcopy file
+        if cls._cached_universe_df is not None and cls._cached_timestamp >= latest_file_mtime and (now - cls._cached_timestamp) < 43200:
+            return cls._cached_universe_df
+
+        parquet_cache = BHAVCOPY_DIR.parent / "recent_universe.parquet"
+
+        # 1. Fast Parquet binary cache: must be newer than the latest downloaded bhavcopy file and contain latest file date
+        if parquet_cache.exists() and (now - parquet_cache.stat().st_mtime) < 43200:
+            try:
+                universe = pd.read_parquet(parquet_cache)
+                parquet_max_date = pd.to_datetime(universe["DATE"]).max()
+                if parquet_max_date >= latest_file_date:
+                    with cls._lock:
+                        cls._cached_universe_df = universe
+                        cls._cached_symbol_map = {sym: df.reset_index(drop=True) for sym, df in universe.groupby("SYMBOL")}
+                        cls._cached_timestamp = now
+                    return universe
+            except Exception as e:
+                logger.warning(f"[DeliveryTreeService] Parquet read error: {e}")
 
         recent_files = files[-lookback_sessions:]
         cols_needed = {
@@ -295,6 +319,9 @@ class DeliveryTreeService:
                     "candle_label": candle_label,
                     "candle_color": candle_color,
                 })
+
+            # Sort days descending so the most recent trading session in the week is first
+            days_list.reverse()
 
             weeks_list.append({
                 "week_index": idx + 1,

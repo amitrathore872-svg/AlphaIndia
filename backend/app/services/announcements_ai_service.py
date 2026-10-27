@@ -701,6 +701,16 @@ def run_announcements_ingestion(db: Optional[Session] = None) -> Dict[str, Any]:
                 (AnnouncementRadar.symbol == sym) & (AnnouncementRadar.headline == enriched_item["headline"])
             ).first()
 
+            if not existing and cat_type == "ORDER_WIN":
+                existing = OrderWinIntelligenceService.find_matching_existing_order_win(
+                    db=db,
+                    symbol=sym,
+                    headline=enriched_item["headline"],
+                    filing_date=enriched_item.get("published_at"),
+                    deal_value_cr=deal_val or enriched_item.get("synergy_rev_addition_cr"),
+                    client=order_intel.get("order_client_counterparty") if order_intel else None,
+                )
+
             if existing:
                 existing.category = enriched_item.get("category", existing.category)
                 existing.catalyst_type = cat_type

@@ -3,6 +3,7 @@ Alpha India Historical Filing Discovery Worker
 Sprint 34 Production Version
 """
 
+import logging
 from datetime import datetime
 from typing import Optional, Any
 from sqlalchemy.orm import Session
@@ -12,6 +13,8 @@ from app.models.filing_registry import FilingRegistry
 from app.models.monitoring_heartbeat import MonitoringHeartbeat
 from app.collectors.nse.announcements import NSEAnnouncementCollector
 from app.api.quarterly_results import _filing_feed_type, _is_results_filing
+
+logger = logging.getLogger(__name__)
 
 
 class DiscoveryWorker:
@@ -233,18 +236,39 @@ class DiscoveryWorker:
         """
         from app.clients.bse_client import BSEClient
         from app.models.announcement import Announcement
+        from app.models.system_setting import SystemSetting
+        from datetime import timezone
 
         nse_collector = NSEAnnouncementCollector()
         bse_client = BSEClient()
 
         total_discovered = 0
         new_filings = []
+        pending_enrich_symbols = set()
+
+        # 0. Dynamic Downtime Catch-Up: Calculate required lookback window from persistent sync watermark
+        dynamic_lookback = 8
+        try:
+            watermark_setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "results_discovery_last_sync_utc").first()
+            if watermark_setting and watermark_setting.setting_value:
+                last_sync_dt = datetime.fromisoformat(watermark_setting.setting_value)
+                if last_sync_dt.tzinfo is None:
+                    last_sync_dt = last_sync_dt.replace(tzinfo=timezone.utc)
+                now_utc = datetime.now(timezone.utc)
+                downtime_days = (now_utc - last_sync_dt).total_seconds() / 86400.0
+                # Catch up downtime + 2 safety buffer days for late exchange disclosures (clamped between 8 and 30 days)
+                dynamic_lookback = min(30, max(8, int(downtime_days) + 2))
+                logger.info(f"[DiscoveryWorker] Last sync was {last_sync_dt.isoformat()} ({downtime_days:.1f} days ago). Dynamic catch-up lookback: {dynamic_lookback} days.")
+            else:
+                logger.info("[DiscoveryWorker] No prior sync watermark found. Using default 8-day rolling lookback.")
+        except Exception as e_wm:
+            logger.warning(f"[DiscoveryWorker] Watermark calculation warning: {e_wm}")
 
         # 1. Fetch NSE global announcements
         try:
-            nse_items = nse_collector.fetch_global_announcements()
+            nse_items = nse_collector.fetch_global_announcements(days_back=dynamic_lookback)
         except Exception as e:
-            print(f"[DiscoveryWorker] NSE global fetch warning: {e}")
+            logger.warning(f"[DiscoveryWorker] NSE global fetch warning: {e}")
             nse_items = []
 
         for item in nse_items:
@@ -258,7 +282,7 @@ class DiscoveryWorker:
                     is_provisional=True,
                 )
                 db.add(comp)
-                db.flush()
+                db.commit()
 
             comp_id = comp.id
             comp_name = comp.company
@@ -287,7 +311,7 @@ class DiscoveryWorker:
                     discovered_at=datetime.utcnow(),
                 )
                 db.add(filing)
-                db.flush()
+                db.commit()
 
                 is_financial = any(k in (item.get("filing_type") or "").lower() for k in ["result", "financial", "outcome", "statement"])
                 if is_financial:
@@ -321,6 +345,7 @@ class DiscoveryWorker:
                     status="LIVE",
                 )
                 db.add(ann)
+                db.commit()
                 total_discovered += 1
                 new_filings.append({
                     "symbol": sym,
@@ -332,17 +357,17 @@ class DiscoveryWorker:
                     "date": str(item.get("announcement_date")),
                 })
 
-                # Auto-enrich newly discovered financial results
+                # Queue newly discovered financial results for asynchronous background enrichment
                 f_type_str = item.get("filing_type") or ""
                 p_url = item.get("pdf_url")
                 if _is_results_filing(f_type_str, p_url):
-                    DiscoveryWorker._auto_enrich_filing_company(db, comp)
+                    pending_enrich_symbols.add(sym)
 
-        # 2. Fetch BSE announcements (including Result and Board Meeting categories)
+        # 2. Fetch BSE announcements (daily-sliced to prevent 100-item cap truncation)
         try:
-            bse_items = bse_client.announcements(date_str=date_str)
+            bse_items = bse_client.announcements(date_str=date_str, lookback_days=dynamic_lookback)
         except Exception as e:
-            print(f"[DiscoveryWorker] BSE fetch warning: {e}")
+            logger.warning(f"[DiscoveryWorker] BSE fetch warning: {e}")
             bse_items = []
 
         for b_item in bse_items:
@@ -401,6 +426,7 @@ class DiscoveryWorker:
                     discovered_at=datetime.utcnow(),
                 )
                 db.add(filing)
+                db.commit()
 
                 total_discovered += 1
                 new_filings.append({
@@ -413,9 +439,9 @@ class DiscoveryWorker:
                     "date": str(filing_date),
                 })
 
-                # Auto-enrich newly discovered financial results
+                # Reconcile calendar immediately and queue for background enrichment
                 if feed_t == "RESULT" or _is_results_filing(cat, pdf_url):
-                    DiscoveryWorker._auto_enrich_filing_company(db, comp)
+                    pending_enrich_symbols.add(sym)
                     try:
                         from app.services.earnings_calendar_service import EarningsCalendarService
                         recon_res = EarningsCalendarService.reconcile_incoming_filing(
@@ -429,9 +455,26 @@ class DiscoveryWorker:
                     except Exception as ex_recon:
                         logger.warning(f"[DiscoveryWorker] BSE Calendar reconciliation warning: {ex_recon}")
 
-        db.commit()
+        # 3. Update persistent sync watermark in SystemSetting
+        try:
+            watermark = db.query(SystemSetting).filter(SystemSetting.setting_key == "results_discovery_last_sync_utc").first()
+            now_iso = datetime.now(timezone.utc).isoformat()
+            if not watermark:
+                watermark = SystemSetting(
+                    setting_key="results_discovery_last_sync_utc",
+                    setting_value=now_iso,
+                    setting_type="datetime",
+                    description="UTC timestamp of the latest successful live announcements discovery scan",
+                )
+                db.add(watermark)
+            else:
+                watermark.setting_value = now_iso
+            db.commit()
+            logger.info(f"[DiscoveryWorker] Updated persistent sync watermark results_discovery_last_sync_utc to {now_iso}")
+        except Exception as e_wm_up:
+            logger.warning(f"[DiscoveryWorker] Failed to update sync watermark: {e_wm_up}")
 
-        # Update monitoring heartbeat
+        # 4. Update monitoring heartbeat
         heartbeat = db.query(MonitoringHeartbeat).first()
         if heartbeat:
             heartbeat.results_found_today += total_discovered
@@ -439,8 +482,35 @@ class DiscoveryWorker:
             heartbeat.last_scan_time = datetime.utcnow()
             db.commit()
 
+        # 5. Non-blocking asynchronous enrichment of newly discovered companies
+        if pending_enrich_symbols:
+            import threading
+
+            def _bg_enrich_task(symbols_batch):
+                from app.db.database import SessionLocal
+                bg_db = SessionLocal()
+                try:
+                    for s in symbols_batch:
+                        try:
+                            c = bg_db.query(Company).filter(Company.symbol == s).first()
+                            if c:
+                                DiscoveryWorker._auto_enrich_filing_company(bg_db, c)
+                        except Exception as e_bg:
+                            logger.warning(f"[DiscoveryWorker] Background enrich notice for {s}: {e_bg}")
+                finally:
+                    bg_db.close()
+
+            threading.Thread(
+                target=_bg_enrich_task,
+                args=(list(pending_enrich_symbols),),
+                daemon=True,
+                name="DiscoveryWorker-EnrichmentThread",
+            ).start()
+            logger.info(f"[DiscoveryWorker] Dispatched background enrichment thread for {len(pending_enrich_symbols)} new companies: {list(pending_enrich_symbols)[:5]}...")
+
         return {
             "status": "SUCCESS",
+            "lookback_days_used": dynamic_lookback,
             "total_scanned": len(nse_items) + len(bse_items),
             "new_entries_discovered": total_discovered,
             "filings": new_filings,

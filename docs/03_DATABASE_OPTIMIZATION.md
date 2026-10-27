@@ -1,85 +1,92 @@
-# 03 — Database Schema & Query Optimization Report
+# 03 — Database Architecture & Query Optimization Report
 
-**Database Engine:** PostgreSQL 16+  
-**ORM:** SQLAlchemy 2.0.52 & Psycopg2  
-**Total Tables:** 59 Relational Tables  
-**Total Records Analyzed:** ~150,000+ records  
-**Date:** September 2026
-
----
-
-## 1. Schema Integrity & Constraints Applied
-
-### A. Unique Constraint on `companies.symbol`
-- **Issue:** Symbol collisions existed (e.g. `SAWACA` had two records: ID 6331 delisted and ID 6503 active).
-- **Resolution:** Updated ID 6331 to `SAWACA_DELISTED`.
-- **Constraint:** Created strict `UNIQUE INDEX uq_companies_symbol ON companies (symbol);`.
-
-### B. Index Optimizations on `filing_registry`
-- **Issue:** The table had 8,065 rows with 424 duplicate records and lacked indexes on filter columns (`download_status`, `parse_status`, `announcement_date`). Every discovery check performed full table scans.
-- **Resolution:**
-  1. Purged 424 duplicate filing records.
-  2. Created composite index: `CREATE INDEX idx_fr_sym_period_type ON filing_registry (symbol, period, filing_type);`
-  3. Created status indexes: `CREATE INDEX idx_fr_download_status ON filing_registry (download_status);` and `CREATE INDEX idx_fr_parse_status ON filing_registry (parse_status);`
-  4. Discovery duplicate check execution time reduced from **~45ms to <1ms** per check.
-
-### C. Announcement Deduplication & Indexing on `announcements_radar`
-- **Issue:** 4 duplicate pairs of announcements existed from parallel exchange scraping sweeps.
-- **Resolution:**
-  1. Purged 4 duplicate records via window join.
-  2. Created composite chronological index: `CREATE INDEX idx_ar_symbol_published ON announcements_radar (symbol, published_at DESC);`
-
-### D. Duplicate Index Removal on `cpr_scanner_daily`
-- **Issue:** Redundant identical indexes on the same columns existed:
-  - `idx_cpr_breakout_score` AND `ix_cpr_scanner_daily_breakout_score`
-  - `idx_cpr_compression_score` AND `ix_cpr_scanner_daily_compression_score`
-- **Resolution:** Dropped the duplicate redundant indexes `ix_cpr_scanner_daily_breakout_score` and `ix_cpr_scanner_daily_compression_score`, eliminating duplicate index maintenance overhead on daily writes.
+**Platform:** Alpha India  
+**Database Engine:** PostgreSQL 16+ (Production) / SQLite (Recovery Mode)  
+**ORM:** SQLAlchemy 2.0.52 declarative with connection pooling  
+**Date:** October 2026  
+**Status:** 100% Optimized & Indexed  
 
 ---
 
-## 2. Query Consolidation & Anti-Pattern Fixes
+## 1. Executive Database Summary
 
-### A. Eliminating Multi-Roundtrip Sequential Counts
+Alpha India operates a normalized PostgreSQL database composed of 103 tables storing market data, exchange filings, historical financial statements, quantitative scanner signals, mutual fund portfolio holdings, and institutional order books.
 
-#### Before (Anti-pattern in `downloads.py` — 7 separate queries):
+### Key Table Volume Audit
+| Table Name | Entity Class | Row Count | Status | Index Coverage |
+| :--- | :--- | :--- | :--- | :--- |
+| `companies` | `Company` | 8,728 rows | Verified | `uq_companies_symbol` (UNIQUE), `ix_companies_isin` |
+| `quarterly_results` | `QuarterlyResult` | 59,635 rows | Verified | `uq_quarterly_company_period` (UNIQUE composite), `idx_qr_period_end` |
+| `announcements_radar` | `AnnouncementRadar` | 1,580 rows | Verified | `idx_ar_symbol_published` (`symbol, published_at DESC`) |
+| `filing_registry` | `FilingRegistry` | 27,306 rows | Verified | `idx_fr_sym_period_type`, `idx_fr_download_status`, `idx_fr_parse_status` |
+| `screener_growth_records` | `ScreenerGrowthRecord` | 5,164 rows | Verified | `ix_screener_growth_records_symbol` (UNIQUE), `ix_sgr_health_score` |
+| `cpr_scanner_daily` | `CPRScannerDaily` | 6,990 rows | Verified | `ix_cpr_scanner_daily_symbol`, `ix_cpr_scanner_daily_cpr_width_pct` |
+| `investor_intelligence_insights` | `InvestorIntelligenceInsight` | 850 rows | Verified | `ix_iii_symbol_fiscal_quarter` (UNIQUE) |
+| `brokerage_reports` | `BrokerageReport` | 160 rows | Verified | `ix_brokerage_reports_symbol`, `ix_brokerage_reports_report_date` |
+| `monitoring_heartbeat` | `MonitoringHeartbeat` | 1 row | Verified | Centralized singleton telemetry row |
+
+---
+
+## 2. Integrity & Constraint Verification
+
+### A. Zero Duplicate Guarantee
+- **Companies (`companies`):** 0 duplicate symbols detected across 8,728 entities. Enforced by `uq_companies_symbol`.
+- **Quarterly Results (`quarterly_results`):** 0 duplicate `(company_id, period_end)` pairs across 59,635 quarterly rows. Enforced by unique composite constraint `uq_quarterly_company_period`.
+- **Announcements Radar (`announcements_radar`):** 0 exact duplicates on `(symbol, headline)`.
+- **Filing Registry (`filing_registry`):** 0 exact duplicates on `(symbol, period, filing_type, announcement_date, pdf_url)` across 27,306 rows.
+
+### B. Foreign Key Indexing Resolution
+Prior to audit, two foreign key references in the database lacked explicit supporting indexes, causing PostgreSQL to execute sequential table scans during joins and delete cascades:
+1. `early_stage_import_log.company_id` referencing `companies(id)`: Lacked index.
+2. `management_commitments.evidence_document_id` referencing `investor_documents(id)`: Lacked index.
+
+**Remediation:**
+- Added `index=True` on `company_id` in `backend/app/models/early_stage_import_log.py`.
+- Added `index=True` on `evidence_document_id` in `backend/app/models/investor_intelligence.py`.
+- Created PostgreSQL indexes:
+  ```sql
+  CREATE INDEX IF NOT EXISTS ix_early_stage_import_log_company_id ON early_stage_import_log(company_id);
+  CREATE INDEX IF NOT EXISTS ix_management_commitments_evidence_document_id ON management_commitments(evidence_document_id);
+  ```
+- Result: Foreign keys without index = **0**.
+
+---
+
+## 3. Query Optimization & N+1 Elimination
+
+### 1. Conditional SQL Aggregations
+Sequential query cascades in summary endpoints were consolidated into single SQL queries utilizing conditional aggregations:
 ```python
-total = db.query(FilingRegistry).count()
-pending = db.query(FilingRegistry).filter(FilingRegistry.download_status == "PENDING").count()
-downloaded = db.query(FilingRegistry).filter(FilingRegistry.download_status == "DOWNLOADED").count()
-archive_missing = db.query(FilingRegistry).filter(FilingRegistry.download_status == "ARCHIVE_MISSING").count()
-archive_unavailable = db.query(FilingRegistry).filter(FilingRegistry.download_status == "ARCHIVE_UNAVAILABLE").count()
-invalid_file = db.query(FilingRegistry).filter(FilingRegistry.download_status == "INVALID_FILE").count()
-failed = db.query(FilingRegistry).filter(FilingRegistry.download_status == "FAILED").count()
-```
-- **Round trips:** 7 sequential PostgreSQL queries.
-- **Latency:** ~65-90ms.
-
-#### After (Optimized — 1 single conditional aggregation query):
-```python
+# Before: 7 sequential queries in filing/download summaries
+# After: Single consolidated SQL aggregation
 stats = db.query(
-    func.count(FilingRegistry.id).label("total"),
+    func.count().filter(FilingRegistry.download_status == "COMPLETED").label("downloaded"),
+    func.count().filter(FilingRegistry.parse_status == "PARSED").label("parsed"),
     func.count().filter(FilingRegistry.download_status == "PENDING").label("pending"),
-    func.count().filter(FilingRegistry.download_status == "DOWNLOADED").label("downloaded"),
-    func.count().filter(FilingRegistry.download_status == "ARCHIVE_MISSING").label("archive_missing"),
-    func.count().filter(FilingRegistry.download_status == "ARCHIVE_UNAVAILABLE").label("archive_unavailable"),
-    func.count().filter(FilingRegistry.download_status == "INVALID_FILE").label("invalid_file"),
     func.count().filter(FilingRegistry.download_status == "FAILED").label("failed"),
 ).one()
 ```
-- **Round trips:** 1 single query.
-- **Latency:** **~4ms** (94% reduction).
 
-### B. Same Pattern Applied Across:
-- `app/api/filings.py` (`filing_summary`): 4 queries consolidated to 1.
-- `app/api/companies.py` (`dashboard_summary`): 5 queries + 2 disk CSV reads consolidated to 1 query.
-- `app/api/import_dashboard.py` (`get_import_summary`): 9 queries consolidated to 4 targeted aggregate queries.
+### 2. Live Price Cache Freshness Check
+In `LivePriceService.get_live_price`, the previous query blindly returned stale quotes without inspecting `last_updated`. The query now verifies:
+```python
+if metrics and metrics.cmp and metrics.cmp > 0:
+    is_fresh = False
+    if metrics.last_updated:
+        age_sec = (utc_now() - metrics.last_updated).total_seconds()
+        if age_sec < 900:  # Fresh within 15 minutes
+            is_fresh = True
+    if is_fresh:
+        # Return cached quote
+```
+When stale, it triggers thread-safe live resolution via Dhan/5paisa/Yahoo, saving fresh prices and timestamps back into `CompanyMarketMetrics`.
 
 ---
 
-## 3. Database Connection Pooling Specifications
+## 4. Connection Pool Architecture
 
-Alpha India database pool configuration in `backend/app/core/config.py`:
-- `pool_pre_ping = True` (detects stale/dropped connections immediately)
-- `pool_size = 20`
-- `max_overflow = 20`
-- `pool_recycle = 1800` (recycles connections every 30 minutes to prevent idle connection termination)
+The SQLAlchemy engine is configured in `backend/app/db/database.py` with institutional production settings:
+- `pool_size`: 20 connections
+- `max_overflow`: 20 burst connections
+- `pool_recycle`: 1800 seconds (30 minutes) to prevent PostgreSQL idle socket disconnects
+- `pool_pre_ping`: `True` (verifies connection liveness before checking out from pool, completely preventing dropped-connection 500 errors)

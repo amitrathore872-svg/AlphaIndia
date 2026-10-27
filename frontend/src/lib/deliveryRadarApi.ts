@@ -283,3 +283,33 @@ export async function fetchDeliveryTreeBreakdown(
   );
 }
 
+export interface BhavcopySyncStatus {
+  status: "UP_TO_DATE" | "PENDING_SYNC" | "SYNCING" | string;
+  is_up_to_date: boolean;
+  latest_bhavcopy_date: string;
+  latest_bhavcopy_display: string;
+  last_sync_time: string;
+  last_sync_display: string;
+  total_sessions: number;
+  is_syncing: boolean;
+  market_bhavcopy_ready: boolean;
+  today_date: string;
+  message?: string;
+  downloaded_count?: number;
+  success?: boolean;
+}
+
+export async function fetchBhavcopyStatus(): Promise<BhavcopySyncStatus> {
+  return fetchJson<BhavcopySyncStatus>("/api/v1/delivery-radar/bhavcopy/status", {
+    timeoutMs: 15000,
+  });
+}
+
+export async function triggerBhavcopySync(force: boolean = true): Promise<BhavcopySyncStatus> {
+  return fetchJson<BhavcopySyncStatus>(`/api/v1/delivery-radar/bhavcopy/sync?force=${force}`, {
+    method: "POST",
+    timeoutMs: 45000,
+  });
+}
+
+

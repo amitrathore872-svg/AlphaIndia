@@ -110,6 +110,16 @@ ORDER_NOISE_PATTERNS = [
     r"commercial\s+operation\s+date",
     r"\bcod\b",
     r"declared\s+fit\s+for\s+entry\s+into\s+operation",
+    # Financial results & deviation filings
+    r"statement\s+of\s+deviation",
+    r"financial\s+results\s+for\s+(?:the\s+)?quarter",
+    r"board\s+meeting\s+outcome\s+for\s+outcome\s+of\s+board\s+meeting",
+    # Tax / Customs / Regulatory penalties & demands (not customer order wins)
+    r"customs\s+(?:order|demand|penalty)",
+    r"tax\s+(?:demand|order|notice)",
+    r"gst\s+(?:demand|order|notice)",
+    r"penalty\s+(?:order|imposed|demand)",
+    r"adjudication\s+order",
 ]
 
 MONTH_NAMES = {
@@ -192,10 +202,14 @@ def parse_rupees_in_words(text: str) -> Optional[float]:
 
 
 SOVEREIGN_COUNTERPARTIES = [
-    "railways", "railway", "nhai", "ongc", "ntpc", "bhel", "seci", "defense", "defence",
+    "railways", "railway", "northern railway", "western railway", "central railway",
+    "nhai", "ongc", "ntpc", "bhel", "seci", "defense", "defence",
     "mod", "isro", "drdo", "powergrid", "pgcil", "transco", "discom", "genco", "bpcl",
     "hpcl", "iocl", "sail", "adani", "tata", "reliance", "l&t", "larsen", "tcgl", "rvnl",
     "irfc", "ircon", "rites", "metro", "dmrc", "bmrcl", "ap transco", "waaree",
+    "bank of maharashtra", "state bank", "sbi", "punjab national bank", "pnb", "canara bank",
+    "nagar nigam", "kashipur", "guvnl", "gujarat urja", "safran", "nato", "municipal corporation",
+    "indian army", "air force", "navy", "ministry of power", "ministry of road",
 ]
 
 
@@ -247,6 +261,7 @@ class OrderWinIntelligenceService:
         4. Lakhs: 'Rs. 500 Lakhs' -> 5.0 Cr, 'INR 9,625.50 Lacs' -> 96.25 Cr
         5. Words format: 'Rupees Ninety-Six Core Twenty-Five Lakhs...' -> 96.25 Cr
         6. International currencies (USD, EUR, GBP, AED, SAR, SGD, AUD, JPY) in Millions / Billions.
+        7. PPA Capacity and Tariff: '50 MW Wind Power Project @ 3.51/kWh for 25 years' -> life & annual contract value.
         """
         if not text_content:
             return None, None
@@ -256,12 +271,26 @@ class OrderWinIntelligenceService:
         clean_text = re.sub(r"\(exclusive\s+of\s+gst\)", "", clean_text, flags=re.IGNORECASE)
 
         # 0. Check SEBI Regulation 30 table consideration field directly
-        sebi_m = re.search(r"(?:Broad\s+consideration\s+or\s+size|size\s+of\s+the\s+order|contract\s+value|consideration\s+value)\s*(?:of\s+the\s+order\(s\)/contract\(s\))?\s*[;:]?\s*\n?\s*([^\n\r;]{3,120})", clean_text, re.IGNORECASE)
+        sebi_m = re.search(r"(?:Broad\s+consideration\s+or\s+size|size\s+of\s+the\s+order|contract\s+value|consideration\s+value|project\s+cost|award\s+value|total\s+contract\s+value)\s*(?:of\s+the\s+order\(s\)/contract\(s\))?\s*[;:]?\s*\n?\s*([^\n\r;]{3,180})", clean_text, re.IGNORECASE)
         if sebi_m:
             candidate_line = sebi_m.group(1).strip()
             val, raw = cls._parse_value_from_candidate(candidate_line)
             if val is not None:
                 return val, raw
+
+        # 0.5. Check multi-line OCR consideration blocks
+        block_m = re.search(r"(?:consideration|project\s+cost|total\s+contract\s+value|award\s+value)[\s\S]{1,250}?(\d+[\d,.]*\s*(?:crore|crores|cr|lakh|lakhs|lac|lacs)\b)", clean_text, re.IGNORECASE)
+        if block_m:
+            val, raw = cls._parse_value_from_candidate(block_m.group(1))
+            if val is not None:
+                return val, raw
+
+        # Check explicit commercial confidentiality
+        if re.search(r"\b(confidential|order\s+quantities\s+and\s+values[^\n.]*confidential|commercial\s+terms\s+are\s+confidential)\b", clean_text, re.IGNORECASE):
+            val, raw = cls._parse_value_from_candidate(clean_text)
+            if val is not None:
+                return val, raw
+            return None, "CONFIDENTIAL"
 
         # Run universal candidate parser on text
         return cls._parse_value_from_candidate(clean_text)
@@ -289,7 +318,7 @@ class OrderWinIntelligenceService:
             except ValueError:
                 pass
 
-        # 3. Full Raw Indian Rupee Number (e.g. 'INR 96,25,49,694/-', 'Rs. 96,25,49,694', '96,25,49,694/-')
+        # 3. Full Raw Indian Rupee Number (e.g. 'INR 96,25,49,694/-', 'Rs. 31,44,50,000', '96,25,49,694/-')
         match_raw_inr = re.search(r"(?:(?:INR|Rs\.?|₹)\s*)?([1-9]\d{0,2}(?:,\d{2})+,\d{3}(?:\.\d+)?)\s*(?:/-)?", text, re.IGNORECASE)
         if match_raw_inr:
             try:
@@ -298,6 +327,22 @@ class OrderWinIntelligenceService:
                 if val_cr > 0.01:
                     return val_cr, match_raw_inr.group(0).strip()
             except ValueError:
+                pass
+
+        # 3.5 PPA Capacity & Tariff format (e.g. '50 MW Wind Power Project in Gujarat @3.51/kWh for 25 years')
+        match_ppa = re.search(r"(\d+(?:\.\d+)?)\s*MW\b.*?@\s*(?:rs\.?|inr|₹)?\s*(\d+(?:\.\d+)?)\s*/?\s*kwh.*?(\d+)\s*years?", text, re.IGNORECASE)
+        if match_ppa:
+            try:
+                mw = float(match_ppa.group(1))
+                tariff = float(match_ppa.group(2))
+                years = float(match_ppa.group(3))
+                # CUF estimated at 28% for renewable energy: mw * 1000 kW * 8760 h * 0.28 = annual kWh
+                ann_kwh = mw * 1000.0 * 8760.0 * 0.28
+                ann_cr = (ann_kwh * tariff) / 10000000.0
+                total_cr = round(ann_cr * years, 2)
+                if total_cr > 0.01:
+                    return total_cr, f"PPA {mw}MW @ ₹{tariff}/kWh ({years}Y est. ₹{total_cr} Cr)"
+            except Exception:
                 pass
 
         # 4. Foreign Currencies (USD, EUR, GBP, AED, SAR, SGD, AUD, JPY)
@@ -349,23 +394,31 @@ class OrderWinIntelligenceService:
         comp_lower = (company_name or "").lower()
         sym_lower = (symbol or "").lower()
 
-        # 1. SEBI Reg 30 table field first: "Name of the entity awarding the order(s)/contract(s);"
-        m_sebi = re.search(r"Name of the entity awarding the order\(s\)/?\s*contract\(s\)\s*[;:]?\s*\n?\s*(?:M/s\.?|M/S\.?)?\s*([^\n\r;]{3,80})", text, re.IGNORECASE)
-        if m_sebi:
-            candidate = m_sebi.group(1).strip()
-            clean_cand = re.sub(r"^(?:M/s\.?|M/S\.?|Messrs\.?)\s*", "", candidate, flags=re.IGNORECASE).strip()
-            # Safety: Cannot be company itself
-            if clean_cand and clean_cand.lower() not in comp_lower and sym_lower not in clean_cand.lower():
-                return clean_cand
-
-        # 2. Sovereign client lookup
+        # 1. Sovereign & institutional client lookup first
         for client in SOVEREIGN_COUNTERPARTIES:
             # Skip if client name matches the company itself (e.g. IRCON cannot award order to IRCON)
             if client.lower() in comp_lower or client.lower() == sym_lower:
                 continue
             if re.search(rf"\b{re.escape(client)}\b", text, re.IGNORECASE):
+                if client.lower() in ["nagar nigam", "kashipur"]:
+                    return "Nagar Nigam, Kashipur"
+                if client.lower() in ["guvnl", "gujarat urja"]:
+                    return "Gujarat Urja Vikas Nigam Limited (GUVNL)"
+                if client.lower() in ["bank of maharashtra"]:
+                    return "Bank of Maharashtra"
+                if client.lower() in ["northern railway", "western railway", "central railway"]:
+                    return client.title()
                 clean_name = client.upper() if len(client) <= 5 else client.title()
                 return clean_name
+
+        # 2. SEBI Reg 30 table field: "Name of the entity awarding the order(s)/contract(s);"
+        m_sebi = re.search(r"Name of (?:the )?entity awarding the order\(s\)/?\s*contract\(s\)\s*[;:]?\s*\n?\s*([^\n\r;]{3,120})", text, re.IGNORECASE)
+        if m_sebi:
+            candidate = m_sebi.group(1).strip()
+            clean_cand = re.sub(r"^(?:Response|Details|M/s\.?|M/S\.?|Messrs\.?)\s*", "", candidate, flags=re.IGNORECASE).strip()
+            # Safety: Cannot be company itself
+            if clean_cand and clean_cand.lower() not in comp_lower and sym_lower not in clean_cand.lower() and len(clean_cand) > 3:
+                return clean_cand
 
         # 3. Look for 'from <Client>' or 'awarded by <Client>' or 'client: <Client>'
         match = re.search(r"(?:from|for|awarded\s+by|client\s*:?)\s+(?:M/s\.?|M/S\.?)?\s*([A-Z][A-Za-z0-9&.\s]{3,40}?)(?:for|to|worth|executing|with|in|\.|\,)", text)
@@ -376,6 +429,159 @@ class OrderWinIntelligenceService:
                 return clean_c
 
         return None
+
+    @classmethod
+    def extract_contract_keywords(cls, text: str) -> set:
+        """Extracts high-signal contract keywords for deduplication."""
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'for', 'of', 'in', 'on', 'at', 'to', 'from',
+            'with', 'by', 'as', 'has', 'have', 'had', 'is', 'was', 'were', 'be', 'been',
+            'being', 'limited', 'ltd', 'pvt', 'private', 'company', 'subsidiary', 'wholly',
+            'owned', 'emerges', 'emerged', 'receives', 'received', 'informed', 'exchange',
+            'regarding', 'press', 'release', 'dated', 'titled', 'approx', 'crore', 'crores',
+            'rs', 'inr', 'bid', 'value', 'tender', 'contract', 'order', 'orders', 'contracts',
+            'pursuant', 'regulation', 'lodr', 'intimation', 'outcome', 'commercial'
+        }
+        words = re.findall(r'[a-zA-Z0-9]+', (text or "").lower())
+        return {w for w in words if len(w) > 3 and w not in stop_words}
+
+    @classmethod
+    def find_matching_existing_order_win(
+        cls,
+        db: Session,
+        symbol: str,
+        headline: str,
+        filing_date: Optional[datetime.datetime] = None,
+        deal_value_cr: Optional[float] = None,
+        client: Optional[str] = None,
+        window_days: int = 4,
+    ) -> Optional[AnnouncementRadar]:
+        """
+        Detects whether an incoming announcement is an update, revision, dual filing,
+        or press release for an existing order win already recorded in the system.
+        """
+        if not symbol:
+            return None
+
+        clean_sym = symbol.strip().upper()
+        ref_date = filing_date or dt_cls.now(tz_cls.utc)
+        start_date = ref_date - td_cls(days=window_days)
+        end_date = ref_date + td_cls(days=window_days)
+
+        candidates = (
+            db.query(AnnouncementRadar)
+            .filter(
+                AnnouncementRadar.symbol == clean_sym,
+                AnnouncementRadar.catalyst_type == "ORDER_WIN",
+            )
+            .order_by(desc(AnnouncementRadar.id))
+            .limit(20)
+            .all()
+        )
+
+        if not candidates:
+            return None
+
+        new_kw = cls.extract_contract_keywords(headline)
+        client_clean = (client or "").strip().lower()
+
+        for cand in candidates:
+            # 1. Exact headline match
+            if cand.headline.strip().lower() == headline.strip().lower():
+                return cand
+
+            cand_kw = cls.extract_contract_keywords(cand.headline)
+            overlap = new_kw.intersection(cand_kw)
+
+            # 2. Client match
+            cand_client = (cand.order_client_counterparty or "").strip().lower()
+            if client_clean and cand_client and (client_clean in cand_client or cand_client in client_clean) and len(client_clean) > 4:
+                return cand
+
+            # 3. High keyword similarity (> 40% overlapping project words)
+            if new_kw and cand_kw:
+                sim = len(overlap) / min(len(new_kw), len(cand_kw))
+                if sim >= 0.40 and len(overlap) >= 2:
+                    return cand
+
+            # 4. Same value within 5% and at least 1 overlapping project keyword
+            if deal_value_cr and cand.deal_value_cr and abs(deal_value_cr - cand.deal_value_cr) / max(cand.deal_value_cr, 1.0) <= 0.05:
+                if len(overlap) >= 1:
+                    return cand
+
+        return None
+
+    @classmethod
+    def reconcile_existing_order_win(
+        cls,
+        db: Session,
+        existing: AnnouncementRadar,
+        new_headline: str,
+        new_pdf_url: Optional[str] = None,
+        new_deal_value_cr: Optional[float] = None,
+        new_client: Optional[str] = None,
+        new_filing_date: Optional[datetime.datetime] = None,
+        new_description: Optional[str] = None,
+    ) -> AnnouncementRadar:
+        """
+        Reconciles a subsequent/press-release filing into the existing master record.
+        Upgrades deal value, client, and recalculates quant metrics without creating duplicate rows.
+        """
+        updated = False
+
+        # Upgrade deal value if new value is larger (e.g. Press release reporting comprehensive ₹228 Cr vs initial ₹115 Cr L1 bid)
+        if new_deal_value_cr and (not existing.deal_value_cr or new_deal_value_cr > existing.deal_value_cr):
+            existing.deal_value_cr = new_deal_value_cr
+            existing.synergy_rev_addition_cr = new_deal_value_cr
+            updated = True
+
+        # Upgrade client if currently missing
+        if new_client and not existing.order_client_counterparty:
+            existing.order_client_counterparty = new_client
+            updated = True
+
+        # Upgrade PDF URL if current is missing or new one is a press release / upload
+        if new_pdf_url and new_pdf_url.startswith("http"):
+            if not existing.pdf_url or "press_release" in new_pdf_url.lower() or "seupload" in new_pdf_url.lower():
+                existing.pdf_url = new_pdf_url
+                updated = True
+
+        # If new headline is more descriptive (e.g. press release headline), upgrade headline
+        if len(new_headline) > len(existing.headline) or "press release" in new_headline.lower():
+            existing.headline = new_headline
+            updated = True
+
+        if updated:
+            # Re-run quantitative analysis with the upgraded details
+            analysis = cls.analyze_order_win(
+                db=db,
+                symbol=existing.symbol,
+                company_name=existing.company_name,
+                headline=existing.headline,
+                filing_description=new_description or existing.filing_description,
+                deal_value_cr=existing.deal_value_cr,
+                filing_date=new_filing_date or existing.announcement_date,
+                cmp_override=existing.current_price,
+                pdf_url=existing.pdf_url,
+            )
+            existing.synergy_rev_pct_ttm = analysis.get("revenue_contribution_pct")
+            existing.order_quarterly_rev_cr = analysis.get("order_quarterly_rev_cr")
+            existing.order_quarterly_rev_pct = analysis.get("order_quarterly_rev_pct")
+            existing.order_earnings_impact_cr = analysis.get("order_earnings_impact_cr")
+            existing.order_significance_score = analysis.get("order_significance_score")
+            existing.order_significance_tier = analysis.get("order_significance_tier")
+            existing.order_upside_prob_pct = analysis.get("order_upside_prob_pct")
+            existing.order_target_price_low = analysis.get("order_target_price_low")
+            existing.order_target_price_high = analysis.get("order_target_price_high")
+            existing.order_confidence_score = analysis.get("order_confidence_score")
+            existing.order_historical_comparison = analysis.get("order_historical_comparison")
+            existing.order_intelligence = analysis
+            if analysis.get("investment_thesis"):
+                existing.buy_thesis = analysis["investment_thesis"]
+                existing.ai_insight = analysis["investment_thesis"]
+
+        db.commit()
+        return existing
 
     @classmethod
     def extract_execution_timeline(cls, text: str, filing_date: Optional[datetime.datetime] = None) -> Tuple[Optional[int], str]:

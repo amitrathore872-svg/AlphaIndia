@@ -4,6 +4,7 @@ Endpoints for complete institutional Stock Technical Overview, peer comparisons,
 historical seasonality, and fast symbol search.
 """
 
+import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -13,6 +14,8 @@ from app.db.database import get_db
 from app.models.company import Company
 from app.models.screener_growth_record import ScreenerGrowthRecord
 from app.services.stock_technical_service import StockTechnicalService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stocks", tags=["Stock Technical Overview"])
 
@@ -32,13 +35,22 @@ def get_stock_technical_overview(
     - AI Strategic Trade Insights & Structured FAQ
     - Sector Peer Comparison
     """
-    data = StockTechnicalService.get_stock_technical_overview(symbol=symbol, db=db)
-    if not data:
+    try:
+        data = StockTechnicalService.get_stock_technical_overview(symbol=symbol, db=db)
+        if not data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Stock symbol '{symbol}' not found in Alpha India master database",
+            )
+        return data
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error generating technical overview for symbol '{symbol}': {exc}", exc_info=True)
         raise HTTPException(
-            status_code=404,
-            detail=f"Stock symbol '{symbol}' not found in Alpha India master database",
+            status_code=500,
+            detail=f"Failed to generate technical overview for '{symbol}': {str(exc)}",
         )
-    return data
 
 
 POPULAR_WATCHLIST_SYMBOLS = [

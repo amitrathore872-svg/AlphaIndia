@@ -276,7 +276,7 @@ class ManagementCommitment(Base):
     actual_result = Column(Text, nullable=True)  # Reported figure or outcome
     assessment_rationale = Column(Text, nullable=True)  # Explanation of assessment
     evidence_quote = Column(Text, nullable=True)  # Cited evidence from subsequent reporting
-    evidence_document_id = Column(Integer, ForeignKey("investor_documents.id", ondelete="SET NULL"), nullable=True)
+    evidence_document_id = Column(Integer, ForeignKey("investor_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     evidence_url = Column(Text, nullable=True)
     last_evaluated_at = Column(DateTime(timezone=True), nullable=True)
 

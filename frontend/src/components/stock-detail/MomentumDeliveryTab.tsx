@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import Link from "next/link";
 import {
   Rocket,
   Package,
@@ -200,16 +201,24 @@ export default function MomentumDeliveryTab({
 
       {/* Delivery Flow & Institutional Accumulation */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#081225] p-5 shadow-xs dark:shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <Package className="text-emerald-600 dark:text-emerald-400" size={18} />
             <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono">
               Delivery Volume Surge & Cash Accumulation (Past 5 Active Sessions)
             </h3>
           </div>
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold font-mono">
-            {surgeHeaderLabel}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+              {surgeHeaderLabel}
+            </span>
+            <Link
+              href={`/delivery-radar/${encodeURIComponent(symbol)}`}
+              className="inline-flex items-center gap-1 text-xs font-semibold font-mono text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 rounded-lg transition"
+            >
+              <span>30D Tree Radar →</span>
+            </Link>
+          </div>
         </div>
 
         {deliveryHistory.length === 0 ? (

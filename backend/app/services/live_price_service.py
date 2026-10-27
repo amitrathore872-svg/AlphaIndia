@@ -174,19 +174,28 @@ class LivePriceService:
         if db and not force_refresh:
             metrics = db.query(CompanyMarketMetrics).filter(CompanyMarketMetrics.symbol == clean_sym).first()
             if metrics and metrics.cmp and metrics.cmp > 0:
-                comp = db.query(Company).filter(Company.symbol == clean_sym).first()
-                return {
-                    "symbol": clean_sym,
-                    "cmp": round(metrics.cmp, 2),
-                    "prev_close": None,
-                    "day_change": None,
-                    "day_change_pct": None,
-                    "pe_ratio": round(metrics.pe_ratio, 2) if metrics.pe_ratio else None,
-                    "market_cap": metrics.market_cap,
-                    "sector": metrics.sector or (comp.sector if comp else "General"),
-                    "company_name": comp.company if comp else clean_sym,
-                    "source": "DB_CACHE",
-                }
+                is_fresh = False
+                if metrics.last_updated:
+                    age_sec = (utc_now() - metrics.last_updated).total_seconds()
+                    if age_sec < 900:  # Fresh within 15 minutes
+                        is_fresh = True
+
+                if is_fresh:
+                    comp = db.query(Company).filter(Company.symbol == clean_sym).first()
+                    screener_rec = db.query(ScreenerGrowthRecord).filter(ScreenerGrowthRecord.symbol == clean_sym).first()
+                    day_pct = float(screener_rec.daily_return) if (screener_rec and screener_rec.daily_return is not None) else None
+                    return {
+                        "symbol": clean_sym,
+                        "cmp": round(metrics.cmp, 2),
+                        "prev_close": None,
+                        "day_change": None,
+                        "day_change_pct": day_pct,
+                        "pe_ratio": round(metrics.pe_ratio, 2) if metrics.pe_ratio else None,
+                        "market_cap": metrics.market_cap,
+                        "sector": metrics.sector or (comp.sector if comp else "General"),
+                        "company_name": comp.company if comp else clean_sym,
+                        "source": "DB_CACHE",
+                    }
 
         # Resolve live quote
         live_data = cls.resolve_single_quote(clean_sym, exchange=exchange)

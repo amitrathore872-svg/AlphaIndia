@@ -34,6 +34,7 @@ from app.api.techno_funda import router as techno_funda_router
 from app.api.vcp_router import router as vcp_router
 from app.api.stocks import router as stocks_router
 from app.api.delivery_radar import router as delivery_radar_router
+from app.api.delivery_radar_v2 import router as delivery_radar_v2_router
 from app.api.momentum_screener import router as momentum_screener_router
 from app.api.cup_handle import router as cup_handle_router
 from app.api.pattern_screener import router as pattern_screener_router
@@ -64,6 +65,7 @@ from app.api.sovereign_intraday import router as sovereign_intraday_router
 from app.api.brokerage import router as brokerage_router
 from app.api.backtest import router as backtest_router
 from app.api.staircase_screener import router as staircase_screener_router
+from app.api.apex_swing import router as apex_swing_router
 import time
 from fastapi import Request
 
@@ -240,6 +242,8 @@ ALL_DOMAIN_ROUTERS = [
     backtest_router,
     earnings_calendar_router,
     ipo_radar_router,
+    apex_swing_router,
+    delivery_radar_v2_router,
 ]
 
 # Mount once at root (direct path resolution: /growth-screener, /companies, /health)

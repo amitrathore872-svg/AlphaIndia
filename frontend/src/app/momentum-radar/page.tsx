@@ -413,19 +413,8 @@ export default function MomentumRadarPage() {
           icon={<Zap className="h-5 w-5" />}
           iconColor="cyan"
           title="Super Momentum Radar"
-          badge={{ label: "TRIPLE RSI & BB EXPLOSION", color: "cyan" }}
-          extraBadges={[{ label: "CASH SEGMENT", color: "emerald" }]}
-          subtitle="Multi-Timeframe institutional momentum scanner targeting stocks with Volume Expansion, Daily &amp; Weekly Upper Bollinger Band breakouts, Triple RSI (Daily/Weekly/Monthly &gt; 60), and Weekly WMA 30/50 Golden Cross."
           actions={
             <>
-              <ActionButton
-                variant="secondary"
-                onClick={() => handleCopySymbols(pageMode === "screener" ? processedOpportunities : filteredUniverseResults)}
-                title="Copy matching stock symbols to clipboard for TradingView/Sensibull"
-              >
-                {copiedSymbols ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-cyan-400" />}
-                {copiedSymbols ? "Copied Symbols!" : "Copy Symbols"}
-              </ActionButton>
               <ActionButton
                 variant="secondary"
                 onClick={() => handleExportCSV(pageMode === "screener" ? processedOpportunities : filteredUniverseResults, `momentum_${pageMode}_candidates.csv`)}
@@ -1793,47 +1782,35 @@ export default function MomentumRadarPage() {
                     ))}
                   </div>
 
-                  {/* Search box */}
-                  <div className="relative min-w-[220px] max-w-xs flex-1">
-                    <input
-                      type="text"
-                      placeholder="Search symbol, company, sector..."
-                      value={universeSearchTerm}
-                      onChange={(e) => {
-                        setUniverseSearchTerm(e.target.value);
-                        setUniversePage(1);
-                      }}
-                      className="w-full bg-white dark:bg-[#081324] border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-500/60 shadow-xs"
-                    />
-                    {universeSearchTerm && (
-                      <button
-                        onClick={() => {
-                          setUniverseSearchTerm("");
+                  {/* Search box + stock count */}
+                  <div className="flex items-center gap-3">
+                    <div className="relative min-w-[220px] max-w-xs flex-1">
+                      <input
+                        type="text"
+                        placeholder="Search symbol, company, sector..."
+                        value={universeSearchTerm}
+                        onChange={(e) => {
+                          setUniverseSearchTerm(e.target.value);
                           setUniversePage(1);
                         }}
-                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-xs"
-                      >
-                        ✕
-                      </button>
-                    )}
+                        className="w-full bg-white dark:bg-[#081324] border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-purple-500/60 shadow-xs"
+                      />
+                      {universeSearchTerm && (
+                        <button
+                          onClick={() => {
+                            setUniverseSearchTerm("");
+                            setUniversePage(1);
+                          }}
+                          className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-xs"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-slate-600 dark:text-slate-400 font-mono text-xs font-bold whitespace-nowrap">
+                      {filteredUniverseResults.length} / {universeTotalCount} stocks showing
+                    </span>
                   </div>
-                </div>
-
-                {/* Institutional Filter Badges */}
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/60 text-[11px] font-mono flex-wrap">
-                  <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Active Institutional Gates:</span>
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold">
-                    ✓ Market Cap ≥ ₹1,000 Cr
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30 font-bold">
-                    ✓ Non-Penny (CMP ≥ ₹20)
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold">
-                    ✓ Liquid (Turnover ≥ ₹50L &amp; Vol ≥ 25k)
-                  </span>
-                  <span className="text-slate-600 dark:text-slate-400 ml-auto font-bold">
-                    {filteredUniverseResults.length} / {universeTotalCount} stocks showing
-                  </span>
                 </div>
               </div>
             )}

@@ -116,57 +116,238 @@ class DeliveryScreenerService:
         except Exception as e:
             logger.warning(f"[DeliveryScreenerService] Error saving cache: {e}")
 
+    _bhavcopy_sync_in_progress: bool = False
+    _bhavcopy_sync_lock = threading.Lock()
+
     @classmethod
-    def sync_missing_bhavcopies(cls, days_back: int = 15) -> int:
+    def _get_bhavcopy_dir(cls) -> Path:
+        candidates = [
+            Path(__file__).resolve().parent.parent / "data" / "nse_delivery",
+            Path(__file__).resolve().parent.parent.parent / "backend" / "data" / "nse_delivery",
+            Path(__file__).resolve().parent.parent.parent / "data" / "nse_delivery",
+        ]
+        for p in candidates:
+            if p.exists() and any(p.glob("sec_bhavdata_full_*.csv")):
+                return p
+        candidates[0].mkdir(parents=True, exist_ok=True)
+        return candidates[0]
+
+    @classmethod
+    def _parse_file_date(cls, filepath: Any) -> datetime.datetime:
+        import datetime
+        try:
+            raw = os.path.basename(str(filepath)).replace("sec_bhavdata_full_", "").replace(".csv", "")
+            return datetime.datetime.strptime(raw, "%d%m%Y")
+        except Exception:
+            return datetime.datetime.min
+
+    @classmethod
+    def get_bhavcopy_status(cls) -> Dict[str, Any]:
+        """
+        Returns full telemetry on the bhavcopy data status:
+        - latest session date available
+        - last sync date and time (IST & ISO)
+        - total number of historical trading sessions
+        - whether fresh data can be fetched
+        - whether a sync is currently running
+        """
+        import datetime
+        import glob
+        import json
+
+        bhav_dir = cls._get_bhavcopy_dir()
+        files = sorted(glob.glob(str(bhav_dir / "sec_bhavdata_full_*.csv")), key=cls._parse_file_date)
+        status_file = bhav_dir.parent / "bhavcopy_sync_status.json"
+
+        stored_status = {}
+        if status_file.exists():
+            try:
+                with open(status_file, "r", encoding="utf-8") as f:
+                    stored_status = json.load(f)
+            except Exception as e:
+                logger.warning(f"[DeliveryScreenerService] Error reading bhavcopy status file: {e}")
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        ist_now = now_utc + datetime.timedelta(hours=5, minutes=30)
+        today = ist_now.date()
+        market_bhavcopy_ready = (ist_now.time() >= datetime.time(18, 30)) and (today.weekday() < 5)
+
+        latest_file = files[-1] if files else None
+        latest_date_dt = cls._parse_file_date(latest_file) if latest_file else None
+        latest_date_str = latest_date_dt.strftime("%Y-%m-%d") if latest_date_dt else "N/A"
+        latest_display = latest_date_dt.strftime("%d %b %Y") if latest_date_dt else "N/A"
+
+        # Last sync time from stored status or latest file mtime
+        if stored_status.get("last_sync_time"):
+            last_sync_iso = stored_status["last_sync_time"]
+            last_sync_display = stored_status.get("last_sync_display", last_sync_iso)
+        elif latest_file:
+            mtime = os.path.getmtime(latest_file)
+            mtime_dt = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
+            last_sync_iso = mtime_dt.isoformat()
+            last_sync_display = mtime_dt.strftime("%d %b %Y, %I:%M %p")
+        else:
+            last_sync_iso = ist_now.isoformat()
+            last_sync_display = "Never"
+
+        # Determine status
+        is_up_to_date = False
+        if latest_date_dt:
+            if latest_date_dt.date() == today:
+                is_up_to_date = True
+            elif today.weekday() >= 5:  # Weekend, Friday's file is latest
+                days_since_fri = today.weekday() - 4
+                last_friday = today - datetime.timedelta(days=days_since_fri)
+                if latest_date_dt.date() >= last_friday:
+                    is_up_to_date = True
+            elif not market_bhavcopy_ready:
+                # Before 18:30 IST today, previous session is valid
+                prev_day = today - datetime.timedelta(days=1)
+                while prev_day.weekday() >= 5:
+                    prev_day -= datetime.timedelta(days=1)
+                if latest_date_dt.date() >= prev_day:
+                    is_up_to_date = True
+
+        status_code = "UP_TO_DATE" if is_up_to_date else "PENDING_SYNC"
+        if cls._bhavcopy_sync_in_progress:
+            status_code = "SYNCING"
+
+        return {
+            "status": status_code,
+            "is_up_to_date": is_up_to_date,
+            "latest_bhavcopy_date": latest_date_str,
+            "latest_bhavcopy_display": latest_display,
+            "last_sync_time": last_sync_iso,
+            "last_sync_display": last_sync_display,
+            "total_sessions": len(files),
+            "is_syncing": cls._bhavcopy_sync_in_progress,
+            "market_bhavcopy_ready": market_bhavcopy_ready,
+            "today_date": today.strftime("%Y-%m-%d"),
+            "message": stored_status.get("message") or (
+                f"Bhavcopy is up to date for session {latest_display}." if is_up_to_date
+                else f"New bhavcopy session pending sync. Latest on disk: {latest_display}."
+            ),
+        }
+
+    @classmethod
+    def sync_missing_bhavcopies(cls, days_back: int = 15, force: bool = False) -> int:
         """
         Scans recent trading sessions up to today and downloads any missing official
         security-wise delivery bhavcopies from NSE archives.
-        Avoids hammering NSE if synced within 30 minutes, and skips today before 18:30 IST.
+        Avoids hammering NSE if synced within 30 minutes (unless force=True), and skips today before 18:30 IST (unless force=True).
         """
         now = time.time()
-        if (now - cls._last_bhavcopy_sync) < 1800:
+        if not force and (now - cls._last_bhavcopy_sync) < 1800:
             return 0
         cls._last_bhavcopy_sync = now
 
-        import datetime
-        from curl_cffi import requests
+        with cls._bhavcopy_sync_lock:
+            cls._bhavcopy_sync_in_progress = True
+            try:
+                import datetime
+                import json
+                import glob
+                from curl_cffi import requests
 
-        target_dir = Path(__file__).resolve().parent.parent.parent / "data" / "nse_delivery"
-        target_dir.mkdir(parents=True, exist_ok=True)
+                target_dir = cls._get_bhavcopy_dir()
+                target_dir.mkdir(parents=True, exist_ok=True)
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "*/*",
-        }
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "*/*",
+                }
 
-        today = datetime.date.today()
-        # NSE publishes security-wise bhavcopy only after 18:30 IST (UTC + 5:30)
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        ist_time = now_utc + datetime.timedelta(hours=5, minutes=30)
-        market_bhavcopy_ready = ist_time.time() >= datetime.time(18, 30)
+                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                ist_now = now_utc + datetime.timedelta(hours=5, minutes=30)
+                today = ist_now.date()
+                market_bhavcopy_ready = ist_now.time() >= datetime.time(18, 30)
 
-        downloaded = 0
-        for i in range(days_back, -1, -1):
-            d = today - datetime.timedelta(days=i)
-            if d.weekday() >= 5:
-                continue
-            if d == today and not market_bhavcopy_ready:
-                continue
-            d_str = d.strftime("%d%m%Y")
-            fpath = target_dir / f"sec_bhavdata_full_{d_str}.csv"
-            if not fpath.exists() or fpath.stat().st_size < 10000:
-                url = f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d_str}.csv"
+                downloaded = 0
+                for i in range(days_back, -1, -1):
+                    d = today - datetime.timedelta(days=i)
+                    if d.weekday() >= 5:
+                        continue
+                    if d == today and not market_bhavcopy_ready and not force:
+                        continue
+                    d_str = d.strftime("%d%m%Y")
+                    fpath = target_dir / f"sec_bhavdata_full_{d_str}.csv"
+                    needs_download = not fpath.exists() or fpath.stat().st_size < 10000
+                    # If force=True and it's today's date, attempt to refresh/verify
+                    if needs_download or (force and d == today and (market_bhavcopy_ready or ist_now.time() >= datetime.time(16, 0))):
+                        url = f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d_str}.csv"
+                        try:
+                            s = requests.Session(impersonate="chrome124")
+                            r = s.get(url, headers=headers, timeout=6)
+                            if r.status_code == 200 and len(r.content) > 10000:
+                                with open(fpath, "wb") as f:
+                                    f.write(r.content)
+                                downloaded += 1
+                                logger.info(f"[DeliveryScreenerService] Synced new NSE delivery bhavcopy for {d_str} ({len(r.content)} bytes)")
+                        except Exception as e:
+                            logger.debug(f"[DeliveryScreenerService] Bhavcopy not yet ready for {d_str}: {e}")
+
+                # If new data was downloaded or force refresh requested:
+                if downloaded > 0 or force:
+                    # Invalidate DeliveryTreeService cache & parquet cache
+                    try:
+                        from app.services.delivery_tree_service import DeliveryTreeService
+                        DeliveryTreeService.clear_cache()
+                    except Exception as e:
+                        logger.warning(f"[DeliveryScreenerService] Failed clearing DeliveryTree cache: {e}")
+
+                    # Invalidate screener in-memory cache
+                    cls._cached_results = None
+                    cls._last_scan_time = 0
+
+                    # Invalidate CPR engine cache
+                    try:
+                        from app.services.cpr_engine_service import CPREngineService
+                        CPREngineService._bhavcopy_ohlcv_cache = None
+                    except Exception:
+                        pass
+
+                # Persist sync status file
                 try:
-                    s = requests.Session(impersonate="chrome124")
-                    r = s.get(url, headers=headers, timeout=4)
-                    if r.status_code == 200 and len(r.content) > 10000:
-                        with open(fpath, "wb") as f:
-                            f.write(r.content)
-                        downloaded += 1
-                        logger.info(f"[DeliveryScreenerService] Synced new NSE delivery bhavcopy for {d_str} ({len(r.content)} bytes)")
+                    files = sorted(glob.glob(str(target_dir / "sec_bhavdata_full_*.csv")), key=cls._parse_file_date)
+                    latest_f = files[-1] if files else None
+                    latest_d = cls._parse_file_date(latest_f) if latest_f else None
+                    latest_display = latest_d.strftime("%d %b %Y") if latest_d else "N/A"
+                    latest_date_str = latest_d.strftime("%Y-%m-%d") if latest_d else "N/A"
+
+                    msg = (
+                        f"Successfully fetched {downloaded} new bhavcopy file(s). Latest session: {latest_display}."
+                        if downloaded > 0
+                        else f"Bhavcopy data is already up to date. Latest session: {latest_display}."
+                    )
+                    status_record = {
+                        "last_sync_time": ist_now.isoformat(),
+                        "last_sync_display": ist_now.strftime("%d %b %Y, %I:%M %p"),
+                        "latest_bhavcopy_date": latest_date_str,
+                        "latest_bhavcopy_display": latest_display,
+                        "total_sessions": len(files),
+                        "downloaded_in_last_sync": downloaded,
+                        "status": "UP_TO_DATE",
+                        "message": msg,
+                        "success": True,
+                    }
+                    status_file = target_dir.parent / "bhavcopy_sync_status.json"
+                    with open(status_file, "w", encoding="utf-8") as f:
+                        json.dump(status_record, f, indent=2)
                 except Exception as e:
-                    logger.debug(f"[DeliveryScreenerService] Bhavcopy not yet ready for {d_str}: {e}")
-        return downloaded
+                    logger.warning(f"[DeliveryScreenerService] Error saving bhavcopy_sync_status.json: {e}")
+
+                return downloaded
+            finally:
+                cls._bhavcopy_sync_in_progress = False
+
+    @classmethod
+    def sync_missing_bhavcopies_detailed(cls, days_back: int = 15, force: bool = False) -> Dict[str, Any]:
+        """Runs sync and returns updated status dictionary."""
+        downloaded = cls.sync_missing_bhavcopies(days_back=days_back, force=force)
+        status = cls.get_bhavcopy_status()
+        status["downloaded_count"] = downloaded
+        status["success"] = True
+        return status
 
     @classmethod
     def trigger_background_scan(cls, min_spike: float = 1.0, min_deliv_per: float = 40.0, lookback_sessions: int = 10) -> None:
@@ -364,7 +545,7 @@ class DeliveryScreenerService:
 
         grouped = all_df.groupby("SYMBOL", group_keys=False)
         all_df["DELIV_10_SMA"] = grouped["DELIV_QTY"].transform(lambda x: x.shift(1).rolling(10, min_periods=5).mean())
-        all_df["DELIV_SPIKE_10X"] = np.where(all_df["DELIV_10_SMA"] > 0, all_df["DELIV_QTY"] / all_df["DELIV_10_SMA"], 0.0)
+        all_df["DELIV_SPIKE_10X"] = np.where(all_df["DELIV_10_SMA"] > 0, np.clip(all_df["DELIV_QTY"] / all_df["DELIV_10_SMA"], 0.0, 15.0), 0.0)
         all_df["SMA_20"] = grouped["CLOSE"].transform(lambda x: x.rolling(20, min_periods=10).mean())
         all_df["SMA_50"] = grouped["CLOSE"].transform(lambda x: x.rolling(50, min_periods=20).mean())
         all_df["EMA_20"] = grouped["CLOSE"].transform(lambda x: x.ewm(span=20).mean())
@@ -542,10 +723,17 @@ class DeliveryScreenerService:
         if min_deliv_per > 30.0:
             candidates = candidates[(candidates["DELIV_PER"] >= min_deliv_per) | cand_circuit]
 
+        # Deduplicate candidates chronologically: keep ONLY the latest session per symbol
+        candidates = candidates.sort_values(by=["DATE"], ascending=True)
+        candidates = candidates.drop_duplicates(subset=["SYMBOL"], keep="last")
+
         opportunities = []
         for _, row in candidates.iterrows():
             sym = str(row["SYMBOL"])
             close_p = float(row["CLOSE"])
+            open_p = float(row["OPEN"]) if pd.notna(row.get("OPEN")) else close_p
+            prev_close = float(row["PREV_CLOSE"]) if pd.notna(row.get("PREV_CLOSE")) else close_p
+            gap_pct = round(((open_p - prev_close) / prev_close) * 100.0, 2) if prev_close > 0 else 0.0
             low_p = float(row["LOW"])
             high_50 = float(row["HIGH_50"]) if pd.notna(row.get("HIGH_50")) else close_p
             deliv_per = float(row["DELIV_PER"]) if pd.notna(row.get("DELIV_PER")) else 0.0
@@ -648,8 +836,6 @@ class DeliveryScreenerService:
             momentum_score = rs_pts + candle_pts
 
             total_score = round(min(100.0, spike_score + ticket_score + flow_score + struct_score + momentum_score), 1)
-            if is_circuit_locked:
-                total_score = max(total_score, 88.0)
 
             # Dynamic Buying & Selling Zone Protocol
             entry_price = round(close_p, 2)
@@ -670,9 +856,20 @@ class DeliveryScreenerService:
             else:
                 buy_status = "ACCUMULATION_BASE"
 
-            # Structural Stop Loss (Candle Low with 3.5% maximum cap)
-            candle_low_sl = round(low_p * 0.995, 2)
-            stop_loss = max(round(close_p * 0.965, 2), candle_low_sl)
+            # Structural Stop Loss (Candle Low / Technical Support with institutional risk bounds)
+            if is_ema_pullback and pd.notna(row.get("EMA_20")):
+                raw_sl = round(float(row["EMA_20"]) * 0.993, 2)
+            elif is_breakout:
+                raw_sl = round(min(low_p * 0.995, high_50 * 0.988), 2)
+            else:
+                raw_sl = round(low_p * 0.994, 2)
+
+            if (close_p - raw_sl) / close_p < 0.022:
+                stop_loss = round(close_p * 0.976, 2)
+            elif (close_p - raw_sl) / close_p > 0.052:
+                stop_loss = round(close_p * 0.952, 2)
+            else:
+                stop_loss = round(raw_sl, 2)
             risk_pct = round(((close_p - stop_loss) / close_p) * 100.0, 1)
 
             if tier == "APEX_SNIPER":
@@ -713,6 +910,11 @@ class DeliveryScreenerService:
                 "market_cap_cr": round(mcap_val, 1),
                 "signal_date": row["DATE"].strftime("%Y-%m-%d") if hasattr(row["DATE"], "strftime") else str(row["DATE"])[:10],
                 "current_price": entry_price,
+                "open_price": round(open_p, 2),
+                "prev_close": round(prev_close, 2),
+                "low_price": round(low_p, 2),
+                "ema_20": round(float(row["EMA_20"]), 2) if pd.notna(row.get("EMA_20")) else round(close_p * 0.98, 2),
+                "gap_pct": gap_pct,
                 "day_change_pct": round(day_ret, 2),
                 "turnover_cr": round(turnover_cr, 2),
                 "delivery_per": round(deliv_per, 2),

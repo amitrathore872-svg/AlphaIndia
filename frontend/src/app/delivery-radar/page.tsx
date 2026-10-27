@@ -27,6 +27,7 @@ import {
   ChevronRight,
   ArrowUpDown,
   SlidersHorizontal,
+  PieChart,
 } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -43,6 +44,7 @@ import {
   triggerDeliveryScan,
 } from "@/lib/deliveryRadarApi";
 import DeliveryTreeDrawdownModal from "@/components/delivery/DeliveryTreeDrawdownModal";
+import BhavcopySyncControl from "@/components/delivery/BhavcopySyncControl";
 
 export default function DeliveryRadarPage() {
   const [opportunities, setOpportunities] = useState<DeliveryOpportunity[]>([]);
@@ -197,14 +199,28 @@ export default function DeliveryRadarPage() {
           badge={{ label: "INSTITUTIONAL APEX: 78% WIN RATE • MCAP ≥ ₹1,000 CR", color: "purple" }}
           subtitle="Institutional float absorption engine with ticket size expansion, pre-breakout contraction, and dynamic buy/sell corridors (Price ≥ ₹40, MCap ≥ ₹1,000 Cr)."
           actions={
-            <button
-              onClick={handleTriggerScan}
-              disabled={scanning}
-              className="flex items-center gap-2 rounded-lg bg-cyan-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500 active:scale-95 disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
-              <span>{scanning ? "Scanning 1,400+ Quality Equities..." : "Run Live Scan"}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <BhavcopySyncControl
+                onSyncCompleted={() => {
+                  loadData();
+                }}
+              />
+              <Link
+                href="/delivery-radar-v2"
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition"
+              >
+                <PieChart size={14} className="text-emerald-400" />
+                <span>Radar 2.0 (Free Float) &rarr;</span>
+              </Link>
+              <button
+                onClick={handleTriggerScan}
+                disabled={scanning}
+                className="flex items-center gap-2 rounded-lg bg-cyan-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500 active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
+                <span>{scanning ? "Scanning 1,400+ Quality Equities..." : "Run Live Scan"}</span>
+              </button>
+            </div>
           }
         />
 
@@ -950,22 +966,15 @@ export default function DeliveryRadarPage() {
                               currentPrice={item.current_price}
                               variant="star"
                             />
-                            <button
-                              onClick={() => handleOpenLiveDepth(item.symbol)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs font-semibold text-amber-400 transition hover:bg-amber-500 hover:text-white"
-                              title={`Check Live Order Book Depth & Buyer Ratio for ${item.symbol}`}
+
+                            <Link
+                              href={`/delivery-radar/${encodeURIComponent(item.symbol.replace(/\.NS$|\.BO$/i, "").trim())}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-1.5 text-xs font-semibold text-cyan-400 transition hover:bg-cyan-500 hover:text-slate-950"
+                              title={`Open dedicated Delivery Radar History page for ${item.symbol}`}
                             >
-                              <Gauge size={12} />
-                              <span>Depth</span>
-                            </button>
-                            <button
-                              onClick={() => setSelectedTreeSymbol({ symbol: item.symbol, companyName: item.company_name })}
-                              className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2 py-1.5 text-xs font-semibold text-indigo-400 transition hover:bg-indigo-500 hover:text-white"
-                              title={`View 30-Day Month -> Week -> Day Drawdown Tree for ${item.symbol}`}
-                            >
-                              <Layers size={12} />
-                              <span>30D Tree</span>
-                            </button>
+                              <ExternalLink size={12} />
+                              <span>History</span>
+                            </Link>
                             <button
                               onClick={() => setSelectedBlueprint(item)}
                               className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-400 transition hover:bg-cyan-500 hover:text-white"

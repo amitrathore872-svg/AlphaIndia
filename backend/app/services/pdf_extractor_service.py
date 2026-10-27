@@ -91,8 +91,52 @@ class PDFExtractorService:
             return None
 
     @classmethod
+    def ocr_image_file(cls, image_path: str) -> str:
+        """Runs fast Windows Native OCR on an image file using ocr_helper.ps1."""
+        import os
+        import subprocess
+
+        if not os.path.exists(image_path):
+            return ""
+
+        helper_script = Path(__file__).parent / "ocr_helper.ps1"
+        if not helper_script.exists():
+            logger.debug(f"OCR helper script not found at {helper_script}")
+            return ""
+
+        try:
+            res = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(helper_script),
+                    "-ImagePath",
+                    str(image_path),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=25,
+            )
+            if res.returncode == 0:
+                return res.stdout.strip()
+            else:
+                logger.debug(f"OCR script returned code {res.returncode}: {res.stderr}")
+                return ""
+        except Exception as exc:
+            logger.debug(f"OCR execution failed for {image_path}: {exc}")
+            return ""
+
+    @classmethod
     def extract_text_from_bytes(cls, pdf_bytes: bytes, max_pages: int = 60) -> Tuple[str, int]:
-        """Extracts text and page count from PDF bytes using pypdf."""
+        """Extracts text and page count from PDF bytes using pypdf with OCR fallback for scanned documents."""
+        import os
+        import tempfile
+        from PIL import Image
+
         if not HAS_PYPDF or not pdf_bytes:
             return "", 0
 
@@ -105,7 +149,38 @@ class PDFExtractorService:
             for i in range(pages_to_extract):
                 try:
                     page = reader.pages[i]
-                    page_text = page.extract_text()
+                    page_text = page.extract_text() or ""
+
+                    # If page text is very short (<100 chars) and page has images, trigger OCR fallback on scan
+                    if len(page_text.strip()) < 100 and getattr(page, "images", None):
+                        best_img = None
+                        best_area = 0
+                        for img in page.images:
+                            try:
+                                pil_im = Image.open(io.BytesIO(img.data))
+                                area = pil_im.width * pil_im.height
+                                if area > best_area:
+                                    best_area = area
+                                    best_img = pil_im
+                            except Exception:
+                                pass
+
+                        # Only OCR high-resolution document scans (> 400,000 pixels)
+                        if best_img and best_area >= 400000:
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                tmp_path = tmp.name
+                            try:
+                                best_img.save(tmp_path, format="PNG")
+                                ocr_text = cls.ocr_image_file(tmp_path)
+                                if ocr_text:
+                                    page_text = (page_text + "\n" + ocr_text).strip()
+                            finally:
+                                if os.path.exists(tmp_path):
+                                    try:
+                                        os.unlink(tmp_path)
+                                    except Exception:
+                                        pass
+
                     if page_text:
                         text_chunks.append(f"--- PAGE {i+1} ---\n{page_text}")
                 except Exception as page_err:

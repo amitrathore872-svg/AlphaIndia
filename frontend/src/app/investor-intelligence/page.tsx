@@ -42,11 +42,13 @@ import {
   LayoutGrid,
   Building2,
   PieChart,
+  Award,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { PageHeader, LoadingSpinner, EmptyState } from "@/components/common";
 import InvestorIntelligenceDrawer from "@/components/investor-intelligence/InvestorIntelligenceDrawer";
+import DiamondCatalystRadar from "@/components/investor-intelligence/DiamondCatalystRadar";
 import {
   fetchInvestorFeed,
   fetchQuarterlyCoverage,
@@ -88,7 +90,7 @@ const STATUS_FILTERS = [
 
 export default function InvestorIntelligencePage() {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<"FEED" | "COVERAGE" | "COMMITMENTS">("FEED");
+  const [activeTab, setActiveTab] = useState<"DIAMOND_RADAR" | "FEED" | "COVERAGE" | "COMMITMENTS">("DIAMOND_RADAR");
 
   // Global Quarter Selection
   const [coverageData, setCoverageData] = useState<QuarterlyCoverageResponse | null>(null);
@@ -457,6 +459,18 @@ export default function InvestorIntelligencePage() {
         <div className="flex items-center justify-between border-b border-cyan-950 pb-2">
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setActiveTab("DIAMOND_RADAR")}
+              className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeTab === "DIAMOND_RADAR"
+                  ? "bg-gradient-to-r from-emerald-600/30 to-cyan-600/20 text-emerald-300 border-2 border-emerald-500/80 shadow-md shadow-emerald-950/40"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 text-emerald-400" />
+              💎 Diamond Catalyst Radar (Runaway Triggers)
+            </button>
+
+            <button
               onClick={() => setActiveTab("FEED")}
               className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center gap-2 cursor-pointer ${
                 activeTab === "FEED"
@@ -465,7 +479,7 @@ export default function InvestorIntelligencePage() {
               }`}
             >
               <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              Latest Intelligence Feed ({feedTotal})
+              Latest Filings Feed ({feedTotal})
             </button>
 
             <button
@@ -477,7 +491,7 @@ export default function InvestorIntelligencePage() {
               }`}
             >
               <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />
-              Coverage & Processing Health ({selectedQuarter})
+              Coverage Health ({selectedQuarter})
             </button>
 
             <button
@@ -489,7 +503,7 @@ export default function InvestorIntelligencePage() {
               }`}
             >
               <Target className="w-3.5 h-3.5 text-amber-400" />
-              Management Commitment Ledger ({commitmentsTotal})
+              Commitments Ledger ({commitmentsTotal})
             </button>
           </div>
 
@@ -512,6 +526,18 @@ export default function InvestorIntelligencePage() {
             </button>
           </div>
         </div>
+
+        {/* =======================================================
+            TAB 0: 💎 DIAMOND CATALYST RADAR (RUNAWAY GUIDANCE TRIGGERS)
+           ======================================================= */}
+        {activeTab === "DIAMOND_RADAR" && (
+          <DiamondCatalystRadar
+            onSelectSymbol={(sym) => {
+              setActiveSymbolForDrawer(sym);
+              setIsDrawerOpen(true);
+            }}
+          />
+        )}
 
         {/* =======================================================
             TAB 1: LATEST INVESTOR INTELLIGENCE FEED (Newest First)

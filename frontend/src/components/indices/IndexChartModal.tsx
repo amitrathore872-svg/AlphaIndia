@@ -197,6 +197,7 @@ export default function IndexChartModal({
         borderColor: "rgba(148, 163, 184, 0.15)",
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 12,
       },
     });
 

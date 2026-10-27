@@ -24,14 +24,15 @@ from app.services.vcp_monitoring_service import VCPMonitoringService
 router = APIRouter(prefix="/api/vcp", tags=["VCP Discovery Engine"])
 
 
-@router.get("/discovery", summary="Get Today's Top 3 Institutional VCP Breakout Picks")
+@router.get("/discovery", summary="Get Today's Institutional VCP Breakout Picks")
 def get_vcp_discovery(
     force_scan: bool = Query(False, description="Trigger fresh scan if true"),
     filter_mode: str = Query("TODAY_BREAKOUT", description="TODAY_BREAKOUT or BEFORE_BREAKOUT"),
+    limit_candidates: int = Query(300, ge=10, le=1000, description="Universe scan depth"),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
-    Returns today's top 0-3 institutional VCP breakout candidates.
+    Returns today's institutional VCP breakout candidates (up to 10).
     If no stocks satisfy all 8 gates with score >= 90, returns empty list
     with clear capital-preservation rationale.
     """
@@ -54,7 +55,7 @@ def get_vcp_discovery(
                 if sym_clean not in seen_symbols:
                     seen_symbols.add(sym_clean)
                     unique_scores.append(sc)
-                if len(unique_scores) >= 3:
+                if len(unique_scores) >= 10:
                     break
 
             results = []
@@ -147,7 +148,7 @@ def get_vcp_discovery(
             }
 
         # Fast Path 4: If no scan has run yet today, launch background scan and return immediately (<10ms)
-        VCPMonitoringService.trigger_scan_now(mode=filter_mode)
+        VCPMonitoringService.trigger_scan_now(mode=filter_mode, limit_candidates=limit_candidates)
         return {
             "status": "SCANNING",
             "scan_date": str(scan_date),
@@ -163,7 +164,7 @@ def get_vcp_discovery(
     # Synchronous full scan ONLY when explicitly requested via force_scan=True
     return VCPEngineService.run_discovery_scan(
         db=db,
-        limit_candidates=150,
+        limit_candidates=limit_candidates,
         filter_mode=filter_mode,
         persist=True,
     )
@@ -316,11 +317,12 @@ def get_monitoring_progress() -> Dict[str, Any]:
 @router.post("/monitoring/scan-now", summary="Trigger Immediate Priority On-Demand Scan")
 def trigger_scan_now(
     filter_mode: str = Query("TODAY_BREAKOUT", description="TODAY_BREAKOUT or BEFORE_BREAKOUT"),
+    limit_candidates: int = Query(300, ge=10, le=1000, description="Max candidate universe to scan"),
 ) -> Dict[str, Any]:
     """
     Launches an instantaneous prioritized scan in a background worker pool.
     """
-    return VCPMonitoringService.trigger_scan_now(mode=filter_mode)
+    return VCPMonitoringService.trigger_scan_now(mode=filter_mode, limit_candidates=limit_candidates)
 
 
 @router.post("/monitoring/start", summary="Start Continuous Live Opportunity Monitoring")
@@ -361,7 +363,7 @@ def get_single_stock_vcp(
 @router.post("/scan", summary="Trigger Manual Real-Time or EOD VCP Scan")
 def trigger_vcp_scan(
     filter_mode: str = Query("TODAY_BREAKOUT", description="TODAY_BREAKOUT or BEFORE_BREAKOUT"),
-    limit_candidates: int = Query(120, ge=10, le=500),
+    limit_candidates: int = Query(300, ge=10, le=1000),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
@@ -369,7 +371,7 @@ def trigger_vcp_scan(
     """
     top_picks = VCPMonitoringService.execute_scan_pass(
         mode=filter_mode,
-        limit_candidates=min(limit_candidates, 100),
+        limit_candidates=limit_candidates,
         use_cache=False,
     )
     return {

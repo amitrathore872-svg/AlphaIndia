@@ -64,6 +64,7 @@ class MarketDataService:
         interval: str = "1d",
         force_refresh: bool = False,
         ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        fetch_if_cold: bool = True,
     ) -> Optional[pd.DataFrame]:
         """
         Retrieves historical OHLCV DataFrame for a symbol.
@@ -81,6 +82,10 @@ class MarketDataService:
                     if now - cached_time < ttl_seconds:
                         cls._cache_hits += 1
                         return df.copy()
+
+        # If cold and fetch_if_cold is False, return None without blocking
+        if not fetch_if_cold:
+            return None
 
         # 2. Fetch fresh historical data
         cls._cache_misses += 1

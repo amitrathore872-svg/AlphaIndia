@@ -231,3 +231,29 @@ def get_symbol_tree_breakdown(
         raise HTTPException(status_code=404, detail=res["error"])
     return res
 
+
+@router.get("/bhavcopy/status", summary="Get Bhavcopy Sync Status & Last Updated Timestamp")
+def get_bhavcopy_status() -> Dict[str, Any]:
+    """
+    Returns full telemetry on the bhavcopy data status:
+    - latest session date available on disk
+    - last sync date and time (IST & ISO)
+    - total number of historical trading sessions
+    - whether market data is ready for today
+    - whether a sync is currently running
+    """
+    return DeliveryScreenerService.get_bhavcopy_status()
+
+
+@router.post("/bhavcopy/sync", summary="Trigger On-Demand Bhavcopy Data Fetch")
+def trigger_bhavcopy_sync(
+    force: bool = Query(True, description="Force fetch even if synced recently or skip 30min throttle")
+) -> Dict[str, Any]:
+    """
+    Triggers an immediate download of the latest official NSE security-wise bhavcopy files,
+    invalidates in-memory and parquet caches, and returns the updated sync status.
+    """
+    res = DeliveryScreenerService.sync_missing_bhavcopies_detailed(force=force)
+    return res
+
+

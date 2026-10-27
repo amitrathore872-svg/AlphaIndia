@@ -1151,6 +1151,15 @@ export default function AthenaUnifiedCockpit() {
         existing.shock_score = existing.shock_score ?? qr.shock_score ?? qr.pead_score ?? undefined;
         existing.pead_score = qr.pead_score ?? existing.pead_score ?? qr.shock_score ?? undefined;
         existing.pead_tier = qr.pead_tier ?? existing.pead_tier ?? undefined;
+        if (qr.period) {
+          existing.fiscal_period = formatFiscalPeriod(qr.period);
+        }
+        if (qr.discovered_at && !existing.detected_at) {
+          existing.detected_at = qr.discovered_at;
+        }
+        if (qr.announcement_date && !existing.published_at) {
+          existing.published_at = qr.announcement_date;
+        }
       } else if (universeMode === "active_season" || universeMode === "all_universe") {
         // Exclude purely blank intimations without any financial data or quarterly trend
         const hasFinancialData =
@@ -1308,16 +1317,15 @@ export default function AthenaUnifiedCockpit() {
       // When searching for a specific stock/company, do not hide it due to the default "current" quarter filter!
       if (!hasSearch || selectedPeriod !== "current") {
         if (selectedPeriod === "current") {
-          if (currentFilingPeriod && item.fiscal_period !== currentFilingPeriod) {
+          if (currentFilingPeriod && formatFiscalPeriod(item.fiscal_period) !== formatFiscalPeriod(currentFilingPeriod)) {
             return false;
           }
         } else if (selectedPeriod !== "all") {
-          if (item.fiscal_period !== selectedPeriod) {
+          if (formatFiscalPeriod(item.fiscal_period) !== formatFiscalPeriod(selectedPeriod)) {
             return false;
           }
         }
       }
-
 
       // Conviction Grade
       if (selectedGrade && item.conviction_grade !== selectedGrade) {
@@ -1340,7 +1348,7 @@ export default function AthenaUnifiedCockpit() {
 
       // Institutional Filter: PEAD Score (Default: >= 40)
       if (minPeadScore > 0) {
-        const score = item.shock_score ?? item.pead_score ?? 0;
+        const score = Math.max(item.pead_score ?? 0, item.shock_score ?? 0);
         if (score < minPeadScore) {
           return false;
         }

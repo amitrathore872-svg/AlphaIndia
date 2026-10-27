@@ -62,7 +62,7 @@ export async function fetchJson<T>(
   // Deduplicate any accidental /api/api occurrences
   fullUrl = fullUrl.replace(/\/api\/api(\/|$)/g, "/api$1");
 
-  const timeoutMs = options?.timeoutMs ?? 25000;
+  const timeoutMs = options?.timeoutMs ?? 45000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 

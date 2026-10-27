@@ -14,6 +14,6 @@ class EarlyStageImportLog(Base):
 
     id           = Column(Integer, primary_key=True, index=True)
     candidate_id = Column(Integer, ForeignKey("early_stage_candidate.id", ondelete="CASCADE"), nullable=False, index=True)
-    company_id   = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id   = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     imported_at  = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     source       = Column(String(100), nullable=False)

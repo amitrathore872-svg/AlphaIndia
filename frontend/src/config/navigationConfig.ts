@@ -29,6 +29,7 @@ import {
   Rocket,
   FlaskConical,
   Moon,
+  PieChart,
   LucideIcon,
 } from "lucide-react";
 
@@ -92,6 +93,15 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
   {
     title: "BREAKOUT & SWING ENGINES",
     items: [
+      {
+        id: "apex-swing",
+        name: "Apex Swing Sniper",
+        href: "/apex-swing",
+        icon: Crosshair,
+        badge: "SNIPER",
+        section: "BREAKOUT & SWING ENGINES",
+        description: "Institutional Asymmetric Swing Trading Engine unifying PEAD, Concall Guidance, Broker Targets, MF Absorption, and Delivery Ignition.",
+      },
       {
         id: "apex-confluence",
         name: "Apex Confluence Radar",
@@ -178,6 +188,15 @@ export const NAVIGATION_CONFIG: NavSectionConfig[] = [
         icon: Radar,
         section: "BREAKOUT & SWING ENGINES",
         description: "NSE delivery volume surges signaling institutional cash market absorption.",
+      },
+      {
+        id: "delivery-radar-v2",
+        name: "Delivery Radar 2.0",
+        href: "/delivery-radar-v2",
+        icon: PieChart,
+        badge: "FLOAT 2.0",
+        section: "BREAKOUT & SWING ENGINES",
+        description: "Multi-day Free Float Absorption, sweet-spot buyer dominance & float squeeze radar.",
       },
       {
         id: "staircase-radar",

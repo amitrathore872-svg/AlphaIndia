@@ -221,10 +221,11 @@ export interface VCPRejectionResponse {
 
 export async function fetchVCPDiscovery(
   forceScan: boolean = false,
-  filterMode: string = "TODAY_BREAKOUT"
+  filterMode: string = "TODAY_BREAKOUT",
+  limitCandidates: number = 300
 ): Promise<VCPDiscoveryResponse> {
   return fetchJson<VCPDiscoveryResponse>(
-    `/api/vcp/discovery?force_scan=${forceScan}&filter_mode=${filterMode}`
+    `/api/vcp/discovery?force_scan=${forceScan}&filter_mode=${filterMode}&limit_candidates=${limitCandidates}`
   );
 }
 
@@ -248,8 +249,11 @@ export async function fetchVCPRejections(limit: number = 50): Promise<VCPRejecti
   return fetchJson<VCPRejectionResponse>(`/api/vcp/rejections?limit=${limit}`);
 }
 
-export async function triggerVCPScan(filterMode: string = "TODAY_BREAKOUT"): Promise<VCPDiscoveryResponse> {
-  return fetchJson<VCPDiscoveryResponse>(`/api/vcp/scan?filter_mode=${filterMode}&limit_candidates=150`, {
+export async function triggerVCPScan(
+  filterMode: string = "TODAY_BREAKOUT",
+  limitCandidates: number = 300
+): Promise<VCPDiscoveryResponse> {
+  return fetchJson<VCPDiscoveryResponse>(`/api/vcp/scan?filter_mode=${filterMode}&limit_candidates=${limitCandidates}`, {
     method: "POST",
   });
 }
@@ -277,10 +281,11 @@ export async function fetchVCPProgress(): Promise<VCPProgressTelemetry> {
 }
 
 export async function triggerScanNow(
-  filterMode: string = "TODAY_BREAKOUT"
+  filterMode: string = "TODAY_BREAKOUT",
+  limitCandidates: number = 300
 ): Promise<{ status: string; message: string; telemetry: VCPProgressTelemetry }> {
   return fetchJson<{ status: string; message: string; telemetry: VCPProgressTelemetry }>(
-    `/api/vcp/monitoring/scan-now?filter_mode=${filterMode}`,
+    `/api/vcp/monitoring/scan-now?filter_mode=${filterMode}&limit_candidates=${limitCandidates}`,
     { method: "POST" }
   );
 }

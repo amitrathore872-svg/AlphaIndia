@@ -90,11 +90,18 @@ def optimize_database():
         print("  -> Created performance indexes on filing_registry (download_status, parse_status, sym_period_type).")
 
         # 5. Drop redundant duplicate indexes on cpr_scanner_daily
-        print("\n[5/5] Cleaning duplicate indexes on cpr_scanner_daily...")
+        print("\n[5/6] Cleaning duplicate indexes on cpr_scanner_daily...")
         db.execute(text("DROP INDEX IF EXISTS ix_cpr_scanner_daily_breakout_score"))
         db.execute(text("DROP INDEX IF EXISTS ix_cpr_scanner_daily_compression_score"))
         db.commit()
         print("  -> Dropped redundant duplicate indexes ix_cpr_scanner_daily_breakout_score & ix_cpr_scanner_daily_compression_score.")
+
+        # 6. Ensure critical foreign key indexes exist
+        print("\n[6/6] Ensuring foreign key indexes exist...")
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_early_stage_import_log_company_id ON early_stage_import_log(company_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_management_commitments_evidence_document_id ON management_commitments(evidence_document_id)"))
+        db.commit()
+        print("  -> Created foreign key indexes ix_early_stage_import_log_company_id and ix_management_commitments_evidence_document_id.")
 
         print("\n" + "=" * 60)
         print("DATABASE OPTIMIZATION COMPLETED SUCCESSFULLY! All constraints and indexes applied.")

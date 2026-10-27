@@ -1,60 +1,53 @@
-# 06 — Background Engine Health & Scheduler Audit Report
+# 06 — Autonomous Background Engines Health Report
 
-**Engine Subsystem:** Background Schedulers & Autonomous Ingestion  
-**Environment:** In-process threading with daemon safety  
-**Date:** September 2026
-
----
-
-## 1. Engine Subsystems Status
-
-| Subsystem | Worker Class | Target / Cadence | Health Status | Observability & Telemetry |
-| :--- | :--- | :--- | :--- | :--- |
-| **Live Exchange Wire** | `LiveExchangeWireWorker` | NSE/BSE corporate announcements every 60s | **HEALTHY** | Exposes `total_filings_scanned`, `catalysts_discovered`, `last_poll_time` on `/health` and WebSocket wire. |
-| **Athena Omega PEAD** | `AutonomousEngineScheduler` | Quarterly results evaluation every 3 mins | **HEALTHY** | 5-gate financial shock, earnings quality, and conviction scoring stored to `athena_*` tables. |
-| **VCP Breakout Engine** | `VCPScheduler` | 15:40 IST EOD scan + 5m intraday scans | **HEALTHY** | Auto catch-up thread handles restarts post-15:40 IST; pattern stages stored to `vcp_patterns`. |
-| **CPR Compression** | `AutonomousEngineScheduler` | Narrow CPR and daily breakout scans every 5m | **HEALTHY** | Daily rankings, RSI, and breakout triggers stored to `cpr_scanner_daily`. |
-| **Financial Importer** | `ScreenerScheduler` & `FinancialQueueManager` | Fundamental import sweep across 8,627 equities | **HEALTHY** | Batch-aware queue stored in `financial_import_queue` and `screener_growth_records`. |
-| **Financial Audit** | `FinancialAuditBackfillEngine` | Cursor-tracked audit verification | **HEALTHY** | Processed with offset tracking; results stored in `financial_import_audit`. |
-| **Raw File Archiver** | `RawFileArchiveService` | Hourly raw file backups | **HEALTHY** | Background archiving of filings and logs. |
+**Platform:** Alpha India  
+**Subsystems:** Autonomous Scheduler, Velocity Burst Elite, Exchange Wire Worker, Financial Warehouse  
+**Date:** October 2026  
+**Status:** Healthy, Active & Supervised  
 
 ---
 
-## 2. Fixed Infinite Loop in Financial Audit Engine
+## 1. Engine Architecture & Telemetry Grid
 
-### Root Cause
-In `FinancialAuditEngine._worker`, the query was defined as:
+Alpha India operates autonomous background worker threads managed via FastAPI lifespan hooks. Telemetry is tracked in real time and surfaced through `/health`, `/mission-control/heartbeat`, and `/control-system`.
+
+| Engine Name | Worker Service | Market Interval | Off-Market Interval | Health Status | Last Verified State |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Live Exchange Wire Worker** | `live_exchange_wire_worker.py` | 60s | 300s | **ACTIVE** | Continuously polling NSE/BSE corporate disclosures; 1,580 catalysts stored. |
+| **Active Quote Refresher** | `live_price_service.py` | 60s | 300s | **ACTIVE** | Fresh quote resolution via Dhan/5paisa/Yahoo with 15-min TTL cache enforcement. |
+| **Results Discovery & Athena** | `athena_orchestrator.py` | 180s | 600s | **ACTIVE** | Ingests board meeting result filings; evaluates 5-gate PEAD financial shocks. |
+| **Minervini VCP Scanner** | `vcp_engine_service.py` | 300s | 0s (Paused) | **ACTIVE** | Computes volatility contraction bases, volume dry-up, and pivot alerts. |
+| **Financial Importer & Growth** | `yahoo_import_service.py` | 900s | 1800s | **ACTIVE** | Enriches historical quarterly statements; computes YoY sales/PAT growth. |
+| **CPR Compression Engine** | `cpr_engine_service.py` | 300s | 0s (Paused) | **ACTIVE** | Tracks narrow CPR setups, virgin CPRs, and multi-timeframe transitions. |
+| **Velocity Burst Elite** | `velocity_scheduler.py` | 60s | 0s (Paused) | **ACTIVE** | Flagship 18-stage institutional breakout scanner and trailing trade manager. |
+| **Mutual Fund Radar** | `mf_warehouse_service.py` | 1800s | 3600s | **ACTIVE** | Ingests AMC monthly portfolios; computes net float absorption and sector flows. |
+| **Momentum Universe Scanner** | `momentum_universe_scanner.py` | 0s (Paused) | 3600s | **ACTIVE** | Deep off-market batch scanner evaluating 10-condition momentum waterfalls. |
+
+---
+
+## 2. Off-Market Stall Remediation
+
+### The Issue
+`wire_prices` was previously configured with `off_market_interval_sec: 0` and `market_hours_only: True`. Consequently, after 3:30 PM IST on weekdays and throughout weekends, the exchange wire poller stopped running. Material corporate announcements and quarterly earnings filed during the evening (4:00 PM - 11:00 PM IST) remained undiscovered until 9:15 AM the next trading day.
+
+### Remediation
+Updated `DEFAULT_ENGINE_SCHEDULES` in `backend/app/services/autonomous_scheduler.py`:
 ```python
-companies = (
-    db.query(Company)
-    .join(QuarterlyResult, QuarterlyResult.company_id == Company.id)
-    .distinct()
-    .order_by(Company.symbol.asc())
-    .limit(batch_size)
-    .all()
-)
+"wire_prices": {
+    "name": "Live Wire & CMP Refresher",
+    "market_interval_sec": 60,
+    "off_market_interval_sec": 300,  # Runs every 5 minutes off-market
+    "market_hours_only": False,
+    "is_enabled": True,
+    "min_interval_sec": 30,
+}
 ```
-Because the query lacked an offset or watermark filter, every iteration re-fetched the exact same first `batch_size` companies, locking the worker into an endless loop over the same companies.
-
-### Resolution
-The audit engine has been unified under `FinancialAuditBackfillEngine`, which tracks `cls._stats["processed"]` and advances via `.offset(cls._stats["processed"]).limit(batch_size).all()`. Calling either `/financials/audit/engine/start` or `/financials/audit/backfill/start` now executes the correct cursor-advancing logic.
+This ensures that evening exchange disclosures and board meeting outcomes are ingested continuously with minimal CPU and database overhead.
 
 ---
 
-## 3. Worker Thread Isolation & Shutdown Safety
+## 3. Supervision & Self-Healing Watchdogs
 
-### A. PreBreakout Radar Thread Isolation
-- **Problem:** `prebreakout_radar_service.py` shared a database session across worker threads inside a `ThreadPoolExecutor`, which led to SQLAlchemy session concurrency warnings and connection leakage. Furthermore, during application shutdown, worker threads attempting to schedule work into the executor encountered `RuntimeError: cannot schedule new futures after shutdown`.
-- **Resolution:**
-  1. Thread workers now instantiate their own isolated `worker_db = SessionLocal()` with strict `finally: worker_db.close()`.
-  2. Guarded executor submissions with shutdown status flags and exception traps to ensure clean application termination.
-
----
-
-## 4. Market Data Provider Rate-Limit Circuit Breaker
-
-### A. Yahoo Finance Empty Chunk Trap
-- **Problem:** When rate-limited (HTTP 429), Yahoo Finance's `yf.download()` outputs errors to stderr but returns an empty DataFrame rather than raising a Python exception. Background schedulers would repeatedly retry in tight loops, exhausting thread pools.
-- **Resolution:**
-  1. Added empty chunk detection in `MarketDataService.preload_universe_batch`: when a batch chunk returns 0 valid rows, a 60-second cooldown is immediately tripped (`cls.set_rate_limit_cooldown(60)`).
-  2. Bypassed direct unthrottled `yf.Ticker(sym).history()` fallback loops in `candlestick_scanner_service.py`, `pattern_orchestrator.py`, and `cup_handle_engine.py`, routing all fetches strictly through `MarketDataService.get_symbol_ohlcv`.
+1. **Autonomous Thread Isolation:** Each engine cycle executes inside a dedicated `try/except` block with isolated database sessions (`SessionLocal()`). An unhandled exception in one engine cannot crash sibling engines.
+2. **Database Reconnection Pre-Ping:** All worker database sessions leverage `pool_pre_ping=True`, automatically discarding dead PostgreSQL sockets.
+3. **Control System Telemetry:** Worker runs, duration, records processed, and errors are published to `ControlSystemService` for real-time observability on `/monitoring`.

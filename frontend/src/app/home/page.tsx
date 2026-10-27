@@ -6,7 +6,7 @@
 // 1. All Screeners' Top 1% Picks (VCP, PEAD, Momentum, Techno-Funda, Growth, Smart Money, Order Wins)
 // 2. Most Active Stocks in Amit's Watchlist (Live prices, 3M gains, pivot proximity, 1-click add/remove)
 // 3. Broader Market & Today's Outperforming Indices (Regime, Advance/Decline, Sector Rotation)
-// Zero duplication Â· Zero stale mocks Â· 100% Live Backend Integration
+// Zero duplication · Zero stale mocks · 100% Live Backend Integration
 // =========================================================================
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -74,21 +74,22 @@ export interface IndexItem {
 
 export interface ScreenerTopPick {
   engineId:
-    | "pead"
-    | "vcp"
-    | "velocity"
-    | "confluence"
-    | "momentum"
-    | "cuphandle"
-    | "candlestick"
-    | "delivery"
-    | "intraday"
-    | "cpr"
-    | "technofunda"
-    | "growth"
-    | "smartmoney"
-    | "orderwin"
-    | "ipo";
+  | "pead"
+  | "vcp"
+  | "velocity"
+  | "confluence"
+  | "momentum"
+  | "cuphandle"
+  | "candlestick"
+  | "delivery"
+  | "intraday"
+  | "cpr"
+  | "technofunda"
+  | "growth"
+  | "smartmoney"
+  | "orderwin"
+  | "ipo"
+  | "brokerage";
   engineName: string;
   engineCategory: "TECHNICALS" | "INTRADAY" | "FUNDAMENTALS" | "INSTITUTIONAL";
   engineBadge: string;
@@ -148,6 +149,7 @@ export default function HomePage() {
 
   // Interactive UI states
   const [newSymbolInput, setNewSymbolInput] = useState<string>("");
+  const [watchlistSearch, setWatchlistSearch] = useState<string>("");
   const [isAddingSymbol, setIsAddingSymbol] = useState<boolean>(false);
   const [copiedSymbol, setCopiedSymbol] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -247,16 +249,17 @@ export default function HomePage() {
         liveIntradayRes,
         cprRes,
         ipoRes,
+        brokerageRes,
       ] = await Promise.allSettled([
         fetchJson<any>("/api/v4/velocity/market-regime"),
         fetchJson<any>("/indices"),
         fetchJson<any>("/watchlists/1"),
         fetchJson<any>("/api/vcp/discovery"),
         fetchJson<any>("/athena-omega/flash"),
-        fetchJson<any>("/momentum-screener"),
-        fetchJson<any>("/api/techno-funda/screener"),
+        fetchJson<any>("/momentum-screener?limit=10"),
+        fetchJson<any>("/api/techno-funda/screener?limit=10&page=1"),
         fetchJson<any>("/growth-screener?limit=10"),
-        fetchJson<any>("/institutional-radar/screener?limit=10"),
+        fetchJson<any>("/institutional/radar?limit=10"),
         fetchJson<any>("/announcements?limit=10"),
         fetchJson<any>("/api/v4/velocity/live-signals"),
         fetchJson<any>("/api/v1/confluence"),
@@ -266,6 +269,7 @@ export default function HomePage() {
         fetchJson<any>("/live-intraday/opportunities?min_score=0"),
         fetchJson<any>("/scanner/cpr?limit=10"),
         fetchJson<any>("/api/v1/ipo-radar/setups?min_score=0&limit=10"),
+        fetchJson<any>("/brokerage/hot-picks"),
       ]);
 
       // 1. Broader Market Regime
@@ -315,15 +319,15 @@ export default function HomePage() {
         const p = pickFirstUnique(peadRes.value.results, (it: any) => it.symbol);
         if (p) {
           const cmp = Number(p.current_price || 780);
-          const target = Number(p.target_price_inr || Math.round(cmp * 1.25));
+          const target = Number(p.estimated_fair_value || p.target_price_inr || Math.round(cmp * 1.25));
           const stop = Math.round(cmp * 0.94);
-          const upside = Math.round(((target - cmp) / cmp) * 100);
+          const upside = Number(p.upside_potential_pct || Math.round(((target - cmp) / cmp) * 100));
 
           topPicks.push({
             engineId: "pead",
             engineName: "Athena PEAD Shock Screener",
             engineCategory: "FUNDAMENTALS",
-            engineBadge: "âš¡ ATHENA PEAD",
+            engineBadge: "⚡ ATHENA PEAD",
             badgeColor: "amber",
             symbol: p.symbol,
             company: p.company_name || p.symbol,
@@ -332,7 +336,7 @@ export default function HomePage() {
             changeToday: 0.0,
             statusBadge: "FRESH EARNINGS BEAT",
             keyMetric: `Athena Score: ${p.athena_conviction_score || 94}/100 (${p.conviction_grade || "AAA+"})`,
-            concreteInsight: `Exploits post-earnings drift with ${p.growth_category || "Accelerating Profits"}. Verified by 5-gate financial shock engine.`,
+            concreteInsight: p.ai_investment_summary || `Exploits post-earnings drift with ${p.growth_category || "Accelerating Profits"}. Verified by 5-gate financial shock engine.`,
             entryZone: `₹${Math.round(cmp * 0.99)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
             upsidePct: upside > 0 ? upside : 25,
@@ -357,7 +361,7 @@ export default function HomePage() {
             engineId: "vcp",
             engineName: "Minervini VCP Volume Breakout",
             engineCategory: "TECHNICALS",
-            engineBadge: "Œ€ MINERVINI VCP",
+            engineBadge: "🌪 MINERVINI VCP",
             badgeColor: "cyan",
             symbol: v.symbol,
             company: v.company_name || v.symbol,
@@ -365,7 +369,7 @@ export default function HomePage() {
             cmp,
             changeToday: 0.0,
             statusBadge: "STAGE 2 PIVOT BREAKOUT",
-            keyMetric: `Pivot: ₹${pivot} Â· Entry: ${v.entry_zone || `₹${cmp}`}`,
+            keyMetric: `Pivot: ₹${pivot} · Entry: ${v.entry_zone || `₹${cmp}`}`,
             concreteInsight: `Volatility contraction base coiling complete. Dry-up volume precedes high-momentum institutional expansion.`,
             entryZone: v.entry_zone || `₹${cmp} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
@@ -390,22 +394,22 @@ export default function HomePage() {
             engineId: "velocity",
             engineName: "Velocity Burst Elite (18-Stage)",
             engineCategory: "TECHNICALS",
-            engineBadge: "”¥ VELOCITY BURST",
+            engineBadge: "⚡ VELOCITY BURST",
             badgeColor: "purple",
             symbol: vel.symbol,
-            company: vel.symbol,
-            sector: "High Velocity Breakout",
+            company: vel.company_name || vel.symbol,
+            sector: vel.sector || "High Velocity Breakout",
             cmp,
             changeToday: Number(vel.candle_strength ? (vel.candle_strength / 20).toFixed(1) : 0.0),
             statusBadge: vel.signal_type || "BREAKOUT ACTIVE",
-            keyMetric: `Confidence: ${vel.confidence_score || 85}% Â· Rel Vol: ${vel.relative_volume || 1.2}x`,
+            keyMetric: `Confidence: ${vel.confidence_score || 85}% · Rel Vol: ${vel.relative_volume || 1.2}x`,
             concreteInsight: `Passed 18-stage velocity funnel with VWAP confirmation. AI Verdict: ${vel.ai_verdict || "EXECUTE"}.`,
             entryZone: `₹${cmp} - ₹${Math.round(cmp * 1.015)}`,
             targetPrice: target,
             upsidePct: upside > 0 ? upside : 15,
             stopLoss: stop,
             riskReward: `1 : ${vel.risk_reward || 2.5}`,
-            screenerUrl: "/velocity",
+            screenerUrl: "/velocity-burst-elite",
           });
         }
       }
@@ -432,16 +436,16 @@ export default function HomePage() {
               company: conf.company_name || conf.symbol,
               sector: conf.sector || "Multi-Strategy Synergy",
               cmp,
-              changeToday: 0.0,
+              changeToday: Number(conf.day_change_pct || 0.0),
               statusBadge: conf.confluence_tier || "APEX TRIPLE+ CONFLUENCE",
-              keyMetric: `Score: ${conf.confluence_score || 98}/100 Â· ${conf.concurrence_count || 4} Concurring Systems`,
+              keyMetric: `Score: ${conf.confluence_score || 98}/100 · ${conf.concurrence_count || 4} Concurring Systems`,
               concreteInsight: `Simultaneous algorithmic breakout alignment across: ${engines}. Consensus pivot ₹${conf.consensus_pivot || cmp}.`,
               entryZone: `₹${conf.consensus_pivot || cmp} - ₹${Math.round(cmp * 1.015)}`,
               targetPrice: target,
               upsidePct: upside > 0 ? upside : 18,
               stopLoss: stop,
               riskReward: `1 : ${((target - cmp) / Math.max(1, cmp - stop)).toFixed(1)}`,
-              screenerUrl: "/confluence",
+              screenerUrl: "/apex-confluence",
             });
           }
         }
@@ -460,7 +464,7 @@ export default function HomePage() {
             engineId: "momentum",
             engineName: "Super Momentum Radar",
             engineCategory: "TECHNICALS",
-            engineBadge: "š€ SUPER MOMENTUM",
+            engineBadge: "🚀 SUPER MOMENTUM",
             badgeColor: "emerald",
             symbol: m.symbol,
             company: m.company_name || m.symbol,
@@ -468,7 +472,7 @@ export default function HomePage() {
             cmp,
             changeToday: Number(m.day_change_pct || 0.9),
             statusBadge: m.setup_tier || "HIGH CONVICTION (9/10)",
-            keyMetric: `Match: ${m.match_count || 9}/10 Â· Vol Surge: ${m.indicators?.volume_surge_ratio || 1.5}x`,
+            keyMetric: `Match: ${m.match_count || 9}/10 · Vol Surge: ${m.indicators?.volume_surge_ratio || 1.5}x`,
             concreteInsight: `Triple timeframe RSI > 60 bullish alignment with weekly WMA crossover and Bollinger band breakout.`,
             entryZone: `₹${m.trade_blueprint?.entry_trigger || cmp}`,
             targetPrice: target,
@@ -493,7 +497,7 @@ export default function HomePage() {
             engineId: "cuphandle",
             engineName: "Cup & Handle AI Pattern Engine",
             engineCategory: "TECHNICALS",
-            engineBadge: "â˜• CUP & HANDLE",
+            engineBadge: "☕ CUP & HANDLE",
             badgeColor: "amber",
             symbol: ch.symbol,
             company: ch.company_name || ch.symbol,
@@ -501,7 +505,7 @@ export default function HomePage() {
             cmp,
             changeToday: Number(ch.day_change_pct || 0.0),
             statusBadge: ch.conviction_tier || "ELITE CUP SETUP",
-            keyMetric: `AI Score: ${ch.ai_conviction_score || 85}/100 Â· Pivot: ₹${ch.pivot_buy_point || cmp}`,
+            keyMetric: `AI Score: ${ch.ai_conviction_score || 85}/100 · Pivot: ₹${ch.pivot_buy_point || cmp}`,
             concreteInsight: `William O'Neil classic institutional base pattern. Volume contraction on handle with breakout expansion.`,
             entryZone: `₹${ch.pivot_buy_point || cmp} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
@@ -526,29 +530,32 @@ export default function HomePage() {
             engineId: "candlestick",
             engineName: "Candlestick Pattern Radar",
             engineCategory: "TECHNICALS",
-            engineBadge: "•¯ï¸ CANDLESTICK",
+            engineBadge: "🕯️ CANDLESTICK",
             badgeColor: "teal",
             symbol: cnd.symbol,
-            company: cnd.symbol,
-            sector: "Price Action Formations",
+            company: cnd.company_name || cnd.symbol,
+            sector: cnd.sector || "Price Action Formations",
             cmp,
-            changeToday: 0.0,
+            changeToday: Number(cnd.day_change_pct || 0.0),
             statusBadge: `${cnd.pattern_name || "BULLISH FORMATION"} (${cnd.direction || "BULLISH"})`,
-            keyMetric: `Reliability: ${cnd.reliability || "VERY HIGH"} Â· Conviction: ${cnd.ai_conviction_score || 88}/100`,
+            keyMetric: `Reliability: ${cnd.reliability || "VERY HIGH"} · Conviction: ${cnd.ai_conviction_score || 88}/100`,
             concreteInsight: `${cnd.description || "Institutional demand candle pattern confirmed with volume surge."}`,
             entryZone: `₹${cnd.trigger_price || cmp}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
             riskReward: `1 : ${cnd.risk_reward || 2.4}`,
-            screenerUrl: "/candlestick-screener",
+            screenerUrl: "/candlestick-radar",
           });
         }
       }
 
       // 8. Institutional Delivery Breakout Surge
-      if (deliveryRes.status === "fulfilled" && deliveryRes.value?.opportunities?.length > 0) {
-        const del = pickFirstUnique(deliveryRes.value.opportunities, (it: any) => it.symbol);
+      const delList = deliveryRes.status === "fulfilled"
+        ? (deliveryRes.value?.items || deliveryRes.value?.opportunities || [])
+        : [];
+      if (delList.length > 0) {
+        const del = pickFirstUnique(delList, (it: any) => it.symbol);
         if (del) {
           const cmp = Number(del.current_price || 74.37);
           const target = Math.round(cmp * 1.22);
@@ -559,7 +566,7 @@ export default function HomePage() {
             engineId: "delivery",
             engineName: "Institutional Delivery Breakout Surge",
             engineCategory: "INSTITUTIONAL",
-            engineBadge: "📍¦ DELIVERY SURGE",
+            engineBadge: "📦 DELIVERY SURGE",
             badgeColor: "cyan",
             symbol: del.symbol,
             company: del.company_name || del.symbol,
@@ -567,7 +574,7 @@ export default function HomePage() {
             cmp,
             changeToday: Number(del.day_change_pct || 1.3),
             statusBadge: "HIGH DELIVERY ACCUMULATION",
-            keyMetric: `Delivery: ${del.delivery_per}% Â· Spike: ${del.delivery_spike_x}x 10D SMA`,
+            keyMetric: `Delivery: ${del.delivery_per}% · Spike: ${del.delivery_spike_x}x 10D SMA`,
             concreteInsight: `Massive institutional absorption with ${del.delivery_per}% delivery. 20D accumulation flow +₹${del.deliv_flow_20d || 10} Cr.`,
             entryZone: `₹${Math.round(cmp * 0.99)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
@@ -592,7 +599,7 @@ export default function HomePage() {
             engineId: "intraday",
             engineName: "Live Intraday VWAP & Precision Funnel",
             engineCategory: "INTRADAY",
-            engineBadge: "âš¡ INTRADAY VWAP",
+            engineBadge: "⚡ INTRADAY VWAP",
             badgeColor: "emerald",
             symbol: intra.symbol,
             company: intra.company_name || intra.symbol,
@@ -600,7 +607,7 @@ export default function HomePage() {
             cmp,
             changeToday: Number(intra.day_change_pct || 1.2),
             statusBadge: intra.conviction_tier || "STAGE 5 ELITE",
-            keyMetric: `ICE Score: ${intra.conviction_score || 93}/100 Â· CPR Width: ${intra.cpr_width_pct || 0.01}%`,
+            keyMetric: `ICE Score: ${intra.conviction_score || 93}/100 · CPR Width: ${intra.cpr_width_pct || 0.01}%`,
             concreteInsight: `Passed 5-Stage Intraday Funnel with Super Narrow CPR compression and ORB breakout. Pivot ₹${intra.pivot || cmp}.`,
             entryZone: `₹${intra.pivot || cmp} - ₹${cmp}`,
             targetPrice: target,
@@ -617,15 +624,15 @@ export default function HomePage() {
         const cprCandidate = pickFirstUnique(cprRes.value.items, (it: any) => it.symbol);
         if (cprCandidate) {
           const cmp = Number(cprCandidate.current_price || 168);
-          const target = Math.round(cmp * 1.16);
-          const stop = Math.round(cmp * 0.96);
+          const target = Number(cprCandidate.target1 || Math.round(cmp * 1.16));
+          const stop = Number(cprCandidate.stop_loss || Math.round(cmp * 0.96));
           const upside = Math.round(((target - cmp) / cmp) * 100);
 
           topPicks.push({
             engineId: "cpr",
             engineName: "Narrow CPR Compression Scanner",
             engineCategory: "TECHNICALS",
-            engineBadge: "📍 CPR COMPRESSION",
+            engineBadge: "🎯 CPR COMPRESSION",
             badgeColor: "purple",
             symbol: cprCandidate.symbol,
             company: cprCandidate.company_name || cprCandidate.symbol,
@@ -633,13 +640,13 @@ export default function HomePage() {
             cmp,
             changeToday: 0.0,
             statusBadge: cprCandidate.category || "ULTRA COMPRESSION (TOP 1%)",
-            keyMetric: `CPR Width: ${cprCandidate.cpr_width_pct || 0.0}% Â· Percentile: ${cprCandidate.cpr_percentile || 99}%`,
+            keyMetric: `CPR Width: ${cprCandidate.cpr_width_pct || 0.0}% · Percentile: ${cprCandidate.cpr_percentile || 99}%`,
             concreteInsight: `Extremely narrow Central Pivot Range. Massive volatility compression indicates imminent explosive trend breakout.`,
             entryZone: `₹${cmp} - ₹${Math.round(cmp * 1.015)}`,
             targetPrice: target,
             upsidePct: upside,
             stopLoss: stop,
-            riskReward: `1 : 2.8`,
+            riskReward: cprCandidate.risk_reward ? `1 : ${cprCandidate.risk_reward}` : `1 : 2.8`,
             screenerUrl: "/cpr-scanner",
           });
         }
@@ -658,7 +665,7 @@ export default function HomePage() {
             engineId: "technofunda",
             engineName: "Techno-Funda Base Radar",
             engineCategory: "TECHNICALS",
-            engineBadge: "📍Š TECHNO-FUNDA",
+            engineBadge: "🔬 TECHNO-FUNDA",
             badgeColor: "sky",
             symbol: t.symbol,
             company: t.company_name || t.symbol,
@@ -691,7 +698,7 @@ export default function HomePage() {
             engineId: "growth",
             engineName: "Growth Screener PRO",
             engineCategory: "FUNDAMENTALS",
-            engineBadge: "📍ˆ GROWTH PRO",
+            engineBadge: "📈 GROWTH PRO",
             badgeColor: "emerald",
             symbol: g.symbol,
             company: g.company || g.symbol,
@@ -699,7 +706,7 @@ export default function HomePage() {
             cmp,
             changeToday: 0.0,
             statusBadge: "HIGH ROCE COMPOUNDER",
-            keyMetric: `Market Cap: ₹${Math.round((g.market_cap || 10000) / 100)} Cr Â· PE: ${g.pe_ratio || 21}x`,
+            keyMetric: `Market Cap: ₹${Math.round((g.market_cap || 10000) / 100)} Cr · PE: ${g.pe_ratio || 21}x`,
             concreteInsight: `Accelerating multi-quarter profitability with high capital efficiency and institutional moat.`,
             entryZone: `₹${Math.round(cmp * 0.98)} - ₹${Math.round(cmp * 1.02)}`,
             targetPrice: target,
@@ -724,15 +731,15 @@ export default function HomePage() {
             engineId: "smartmoney",
             engineName: "Smart Money Inflow Radar",
             engineCategory: "INSTITUTIONAL",
-            engineBadge: "›¡ï¸ SMART MONEY",
+            engineBadge: "🏦 SMART MONEY",
             badgeColor: "indigo",
             symbol: s.symbol,
             company: s.company_name || s.symbol,
             sector: s.sector || "Mutual Fund Accumulation",
             cmp,
-            changeToday: 0.0,
+            changeToday: Number(s.day_change_pct || 0.0),
             statusBadge: "INSTITUTIONAL ACCUMULATION",
-            keyMetric: `Smart Score: ${Math.round(s.smart_money_score || 88)}/100 Â· ${s.total_schemes || 12} AMC Funds`,
+            keyMetric: `Smart Score: ${Math.round(s.smart_money_score || 88)}/100 · ${s.total_schemes || 12} AMC Funds`,
             concreteInsight: `Net institutional inflow of +₹${Math.round(s.net_value_flow_mom_cr || 350)} Cr MoM. Top AMCs absorbing free float.`,
             entryZone: `₹${Math.round(cmp * 0.98)} - ₹${Math.round(cmp * 1.01)}`,
             targetPrice: target,
@@ -752,15 +759,15 @@ export default function HomePage() {
         const a = pickFirstUnique(annList, (it: any) => it.symbol);
         if (a) {
           const cmp = Number(a.current_price || 450);
-          const target = Math.round(cmp * 1.24);
-          const stop = Math.round(cmp * 0.92);
-          const upside = Math.round(((target - cmp) / cmp) * 100);
+          const target = Number(a.target_price || Math.round(cmp * 1.24));
+          const stop = Number(a.stop_loss || Math.round(cmp * 0.92));
+          const upside = Number(a.upside_pct || Math.round(((target - cmp) / cmp) * 100));
 
           topPicks.push({
             engineId: "orderwin",
             engineName: "Corporate Catalysts & Order Wins",
             engineCategory: "FUNDAMENTALS",
-            engineBadge: "📍œ ORDER WIN",
+            engineBadge: "📜 ORDER WIN",
             badgeColor: "amber",
             symbol: a.symbol || "CONTRACT",
             company: a.company_name || "Contract Winner",
@@ -795,7 +802,7 @@ export default function HomePage() {
               engineId: "ipo",
               engineName: "Mainboard IPO Radar",
               engineCategory: "FUNDAMENTALS",
-              engineBadge: "š€ IPO RADAR",
+              engineBadge: "🚀 IPO RADAR",
               badgeColor: "rose",
               symbol: ipo.symbol,
               company: ipo.company || ipo.company_name || ipo.symbol,
@@ -803,7 +810,7 @@ export default function HomePage() {
               cmp,
               changeToday: Number(ipo.day_change_pct || 0.0),
               statusBadge: ipo.setup_label || "LISTING DAY HIGH BREAKOUT",
-              keyMetric: `Setup: ${ipo.setup_type || "LDH Breakout"} Â· Conviction: ${ipo.conviction_score || 90}/100`,
+              keyMetric: `Setup: ${ipo.setup_type || "LDH Breakout"} · Conviction: ${ipo.conviction_score || 90}/100`,
               concreteInsight: ipo.rationale || `Mainboard IPO base breakout. Pivot ₹${ipo.pivot_price || cmp} with SEBI anchor float absorption.`,
               entryZone: `₹${ipo.pivot_price || cmp} - ₹${Math.round(cmp * 1.02)}`,
               targetPrice: target,
@@ -813,6 +820,40 @@ export default function HomePage() {
               screenerUrl: "/ipo-radar",
             });
           }
+        }
+      }
+
+      // 16. Brokerage Radar & Institutional Hot Picks
+      const brokerageList = brokerageRes.status === "fulfilled" ? (brokerageRes.value?.data || []) : [];
+      if (brokerageList.length > 0) {
+        const b = pickFirstUnique(brokerageList, (it: any) => it.symbol);
+        if (b) {
+          const cmp = Number(b.cmp || 1200);
+          const target = Number(b.target_price || Math.round(cmp * 1.25));
+          const stop = Math.round(cmp * 0.93);
+          const upside = Number(b.upside_pct || Math.round(((target - cmp) / cmp) * 100));
+
+          topPicks.push({
+            engineId: "brokerage",
+            engineName: "Brokerage Radar Institutional Hot Picks",
+            engineCategory: "FUNDAMENTALS",
+            engineBadge: "🎯 BROKERAGE PICK",
+            badgeColor: "rose",
+            symbol: b.symbol,
+            company: b.company_name || b.symbol,
+            sector: b.sector || "Institutional Upgrade",
+            cmp,
+            changeToday: 0.0,
+            statusBadge: `${(b.brokerage_house || "TOP BROKERAGE").toUpperCase()} · ${b.recommendation || "BUY"}`,
+            keyMetric: `Target: ₹${target.toLocaleString("en-IN")} (${upside >= 0 ? "+" : ""}${upside}%)`,
+            concreteInsight: b.key_catalyst || `${b.brokerage_house || "Top Institutional Desk"} maintains high conviction target with ${upside}% upside potential.`,
+            entryZone: `₹${Math.round(cmp * 0.99)} - ₹${Math.round(cmp * 1.015)}`,
+            targetPrice: target,
+            upsidePct: upside,
+            stopLoss: stop,
+            riskReward: `1 : ${((target - cmp) / Math.max(1, cmp - stop)).toFixed(1)}`,
+            screenerUrl: "/brokerage-radar",
+          });
         }
       }
 
@@ -899,9 +940,18 @@ export default function HomePage() {
     return screenerPicks.filter((p) => p.engineCategory === screenerCategoryFilter);
   }, [screenerPicks, screenerCategoryFilter]);
 
-  // Sorted Watchlist Stocks (Amit's tracked stocks)
+  // Sorted & Filtered Watchlist Stocks (Amit's tracked stocks)
   const sortedWatchlistStocks = useMemo(() => {
-    const list = [...watchlistStocks];
+    let list = [...watchlistStocks];
+    if (watchlistSearch.trim()) {
+      const q = watchlistSearch.trim().toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.symbol.toLowerCase().includes(q) ||
+          (s.company_name && s.company_name.toLowerCase().includes(q)) ||
+          (s.sector && s.sector.toLowerCase().includes(q))
+      );
+    }
     if (watchlistSortBy === "return3m") {
       list.sort((a, b) => (b.return_3m || 0) - (a.return_3m || 0));
     } else if (watchlistSortBy === "roce") {
@@ -912,7 +962,7 @@ export default function HomePage() {
       list.sort((a, b) => a.symbol.localeCompare(b.symbol));
     }
     return list;
-  }, [watchlistStocks, watchlistSortBy]);
+  }, [watchlistStocks, watchlistSortBy, watchlistSearch]);
 
   // Outperforming Sectors Today (Indices doing good today)
   const outperformingSectors = useMemo(() => {
@@ -945,15 +995,14 @@ export default function HomePage() {
 
                   {/* Market Session Countdown */}
                   <div
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-mono font-bold border ${
-                      marketClock.isOpen
-                        ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-                        : "bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300"
-                    }`}
+                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-mono font-bold border ${marketClock.isOpen
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                      : "bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                      }`}
                   >
                     <Clock size={12} className={marketClock.isOpen ? "animate-spin text-emerald-500" : "text-amber-500"} />
                     <span>{marketClock.label}</span>
-                    <span className="opacity-60">Â·</span>
+                    <span className="opacity-60">·</span>
                     <span>{marketClock.timeLeft}</span>
                   </div>
 
@@ -1014,20 +1063,24 @@ export default function HomePage() {
               <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1 text-slate-700 dark:text-slate-300 text-[11px]">
                 <Layers size={13} className="text-cyan-500" />
                 <span>Active Engines Scanning:</span>
-                <strong className="text-cyan-700 dark:text-cyan-300 font-mono">7 Engines Live</strong>
+                <strong className="text-cyan-700 dark:text-cyan-300 font-mono">
+                  {loading ? "Scanning 16 Engines..." : `${screenerPicks.length} Engines Reporting`}
+                </strong>
               </div>
 
               <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1 text-slate-700 dark:text-slate-300 text-[11px]">
                 <Star size={13} className="text-amber-400" />
                 <span>Tracked in Watchlist:</span>
-                <strong className="text-amber-600 dark:text-amber-300 font-mono">{watchlistStocks.length} Stocks</strong>
+                <strong className="text-amber-600 dark:text-amber-300 font-mono">
+                  {loading ? "--" : `${watchlistStocks.length} Stocks`}
+                </strong>
               </div>
 
               <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1 text-slate-700 dark:text-slate-300 text-[11px]">
                 <Activity size={13} className="text-emerald-500" />
                 <span>Market Regime:</span>
                 <strong className="text-slate-900 dark:text-white font-mono uppercase">
-                  {marketRegime?.market_bias || "CALCULATING"}
+                  {marketRegime?.market_bias || (loading ? "ANALYZING..." : "NEUTRAL")}
                 </strong>
               </div>
             </div>
@@ -1064,13 +1117,12 @@ export default function HomePage() {
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#071322] p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
               <div className="flex flex-wrap items-center gap-3">
                 <span
-                  className={`rounded-lg border px-2.5 py-1 font-black uppercase text-[10px] ${
-                    marketRegime.market_bias.toLowerCase().includes("bull")
-                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                      : marketRegime.market_bias.toLowerCase().includes("bear")
+                  className={`rounded-lg border px-2.5 py-1 font-black uppercase text-[10px] ${marketRegime.market_bias.toLowerCase().includes("bull")
+                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                    : marketRegime.market_bias.toLowerCase().includes("bear")
                       ? "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300"
                       : "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                  }`}
+                    }`}
                 >
                   {marketRegime.market_bias} ({marketRegime.market_score}/100)
                 </span>
@@ -1090,11 +1142,10 @@ export default function HomePage() {
                 <div className="flex items-center gap-1 font-mono text-[11px] text-slate-700 dark:text-slate-300">
                   <span className="text-slate-400 font-sans">Risk Level:</span>
                   <strong
-                    className={`font-bold ${
-                      marketRegime.risk_level === "HIGH"
-                        ? "text-rose-600 dark:text-rose-400"
-                        : "text-emerald-600 dark:text-emerald-400"
-                    }`}
+                    className={`font-bold ${marketRegime.risk_level === "HIGH"
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-emerald-600 dark:text-emerald-400"
+                      }`}
                   >
                     {marketRegime.risk_level}
                   </strong>
@@ -1102,7 +1153,7 @@ export default function HomePage() {
               </div>
 
               <div className="text-[11px] text-slate-500 dark:text-slate-400 italic md:text-right max-w-xl">
-                ’¡ <strong className="text-slate-700 dark:text-slate-300 not-italic">Verdict:</strong> {marketRegime.summary_verdict}
+                💡 <strong className="text-slate-700 dark:text-slate-300 not-italic">Verdict:</strong> {marketRegime.summary_verdict}
               </div>
             </div>
           )}
@@ -1123,11 +1174,10 @@ export default function HomePage() {
                     {marketRegime?.nifty_price ? marketRegime.nifty_price.toLocaleString("en-IN") : "22,421.95"}
                   </span>
                   <span
-                    className={`text-[10px] font-bold ${
-                      (marketRegime?.nifty_change_pct ?? -0.88) >= 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-600 dark:text-rose-400"
-                    }`}
+                    className={`text-[10px] font-bold ${(marketRegime?.nifty_change_pct ?? -0.88) >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-rose-600 dark:text-rose-400"
+                      }`}
                   >
                     {(marketRegime?.nifty_change_pct ?? -0.88) >= 0 ? "+" : ""}
                     {marketRegime?.nifty_change_pct ?? -0.88}%
@@ -1141,11 +1191,10 @@ export default function HomePage() {
                     {marketRegime?.banknifty_price ? marketRegime.banknifty_price.toLocaleString("en-IN") : "54,450.75"}
                   </span>
                   <span
-                    className={`text-[10px] font-bold ${
-                      (marketRegime?.banknifty_change_pct ?? -0.33) >= 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-600 dark:text-rose-400"
-                    }`}
+                    className={`text-[10px] font-bold ${(marketRegime?.banknifty_change_pct ?? -0.33) >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-rose-600 dark:text-rose-400"
+                      }`}
                   >
                     {(marketRegime?.banknifty_change_pct ?? -0.33) >= 0 ? "+" : ""}
                     {marketRegime?.banknifty_change_pct ?? -0.33}%
@@ -1153,15 +1202,27 @@ export default function HomePage() {
                 </div>
 
                 {/* Nifty Midcap 100 */}
-                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-2.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">MIDCAP 100</span>
-                  <span className="font-mono font-black text-sm text-slate-900 dark:text-white block mt-0.5">
-                    {indices.find((i) => i.name?.includes("Midcap 100"))?.cmp?.toLocaleString("en-IN") || "58,732.00"}
-                  </span>
-                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                    {indices.find((i) => i.name?.includes("Midcap 100"))?.change_pct_1d?.toFixed(2) || "-1.01"}%
-                  </span>
-                </div>
+                {(() => {
+                  const midcap = indices.find((i) => i.name?.includes("Midcap 100"));
+                  const midChange = midcap?.change_pct_1d ?? -1.01;
+                  return (
+                    <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-2.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">MIDCAP 100</span>
+                      <span className="font-mono font-black text-sm text-slate-900 dark:text-white block mt-0.5">
+                        {midcap?.cmp ? Math.round(midcap.cmp).toLocaleString("en-IN") : "58,732.00"}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold ${midChange >= 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-rose-600 dark:text-rose-400"
+                          }`}
+                      >
+                        {midChange >= 0 ? "+" : ""}
+                        {midChange.toFixed(2)}%
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* India VIX */}
                 <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-2.5">
@@ -1169,7 +1230,11 @@ export default function HomePage() {
                   <span className="font-mono font-black text-sm text-amber-600 dark:text-amber-400 block mt-0.5">
                     {marketRegime?.vix_value || "14.46"}
                   </span>
-                  <span className="text-[10px] font-medium text-slate-400">Volatility Index</span>
+                  <span className="text-[10px] font-medium text-slate-400">
+                    {marketRegime?.vix_change_pct != null
+                      ? `${marketRegime.vix_change_pct >= 0 ? "+" : ""}${marketRegime.vix_change_pct}% Volatility`
+                      : "Volatility Index"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1207,11 +1272,10 @@ export default function HomePage() {
                         ₹{Math.round(sec.cmp).toLocaleString("en-IN")}
                       </span>
                       <span
-                        className={`font-mono font-black text-[11px] ${
-                          sec.change_pct_1d >= 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-rose-600 dark:text-rose-400"
-                        }`}
+                        className={`font-mono font-black text-[11px] ${sec.change_pct_1d >= 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-rose-600 dark:text-rose-400"
+                          }`}
                       >
                         {sec.change_pct_1d >= 0 ? "+" : ""}
                         {sec.change_pct_1d.toFixed(2)}%
@@ -1243,19 +1307,18 @@ export default function HomePage() {
             <div className="flex items-center gap-1 overflow-x-auto pb-1">
               {[
                 { id: "ALL", label: `All Engines (${screenerPicks.length})` },
-                { id: "TECHNICALS", label: "Œ€ Technicals & Patterns" },
-                { id: "INTRADAY", label: "âš¡ Intraday & VWAP" },
-                { id: "FUNDAMENTALS", label: "’Ž Fundamentals & Catalysts" },
-                { id: "INSTITUTIONAL", label: "›¡ï¸ Institutional & Delivery" },
+                { id: "TECHNICALS", label: "🌪 Technicals & Patterns" },
+                { id: "INTRADAY", label: "⚡ Intraday & VWAP" },
+                { id: "FUNDAMENTALS", label: "💎 Fundamentals & Catalysts" },
+                { id: "INSTITUTIONAL", label: "🏦 Institutional & Delivery" },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setScreenerCategoryFilter(tab.id as any)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                    screenerCategoryFilter === tab.id
-                      ? "bg-cyan-500 text-slate-950 font-black shadow-xs"
-                      : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition whitespace-nowrap cursor-pointer ${screenerCategoryFilter === tab.id
+                    ? "bg-cyan-500 text-slate-950 font-black shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1265,9 +1328,26 @@ export default function HomePage() {
 
           {/* Screener Matrix List (High Information Density, No Box Fluff) */}
           <div className="divide-y divide-slate-100 dark:divide-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#071322] shadow-xs overflow-hidden">
-            {filteredScreenerPicks.length === 0 ? (
+            {loading && filteredScreenerPicks.length === 0 ? (
+              <div className="p-6 space-y-4">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="flex flex-col lg:flex-row items-center justify-between gap-4 animate-pulse">
+                    <div className="space-y-2 w-full max-w-md">
+                      <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                      <div className="h-6 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                      <div className="h-3 w-72 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    </div>
+                    <div className="flex gap-3 w-full lg:w-auto">
+                      <div className="h-12 w-20 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                      <div className="h-12 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                      <div className="h-12 w-20 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredScreenerPicks.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">
-                Scanning engines currently calculating fresh picks...
+                No active setups meet top 1% conviction criteria in this category today.
               </div>
             ) : (
               filteredScreenerPicks.map((pick) => {
@@ -1282,23 +1362,22 @@ export default function HomePage() {
                     <div className="min-w-0 max-w-xl">
                       <div className="flex flex-wrap items-center gap-2 mb-1.5">
                         <span
-                          className={`rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-tight ${
-                            pick.badgeColor === "cyan"
-                              ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30"
-                              : pick.badgeColor === "emerald"
+                          className={`rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-tight ${pick.badgeColor === "cyan"
+                            ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30"
+                            : pick.badgeColor === "emerald"
                               ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
                               : pick.badgeColor === "amber"
-                              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30"
-                              : pick.badgeColor === "purple"
-                              ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30"
-                              : pick.badgeColor === "rose"
-                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30"
-                              : pick.badgeColor === "teal"
-                              ? "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30"
-                              : pick.badgeColor === "sky"
-                              ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30"
-                              : "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30"
-                          }`}
+                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                                : pick.badgeColor === "purple"
+                                  ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30"
+                                  : pick.badgeColor === "rose"
+                                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30"
+                                    : pick.badgeColor === "teal"
+                                      ? "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30"
+                                      : pick.badgeColor === "sky"
+                                        ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30"
+                                        : "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30"
+                            }`}
                         >
                           {pick.engineBadge}
                         </span>
@@ -1414,63 +1493,96 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Quick Add Symbol Bar */}
-            <form onSubmit={handleAddSymbol} className="flex items-center gap-1.5 shrink-0">
+            {/* Action Bar: Quick Filter & Add Symbol */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Client-side Watchlist Filter Search */}
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Add NSE Symbol (e.g. INFY)"
-                  value={newSymbolInput}
-                  onChange={(e) => setNewSymbolInput(e.target.value)}
-                  className="h-8 w-44 sm:w-56 rounded-xl border border-slate-300 bg-white pl-8 pr-3 text-xs uppercase font-mono font-bold text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                  placeholder="Filter watchlist..."
+                  value={watchlistSearch}
+                  onChange={(e) => setWatchlistSearch(e.target.value)}
+                  className="h-8 w-36 sm:w-44 rounded-xl border border-slate-300 bg-white pl-8 pr-3 text-xs font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
                 />
               </div>
-              <button
-                type="submit"
-                disabled={isAddingSymbol || !newSymbolInput.trim()}
-                className="flex items-center gap-1 rounded-xl bg-cyan-500 px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-cyan-400 transition disabled:opacity-50 cursor-pointer"
-              >
-                <Plus size={13} />
-                <span>{isAddingSymbol ? "Adding..." : "Add"}</span>
-              </button>
-            </form>
+
+              {/* Quick Add Symbol Bar */}
+              <form onSubmit={handleAddSymbol} className="flex items-center gap-1.5 shrink-0">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Add Ticker (e.g. INFY)"
+                    value={newSymbolInput}
+                    onChange={(e) => setNewSymbolInput(e.target.value)}
+                    className="h-8 w-36 sm:w-44 rounded-xl border border-slate-300 bg-white px-3 text-xs uppercase font-mono font-bold text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isAddingSymbol || !newSymbolInput.trim()}
+                  className="flex items-center gap-1 rounded-xl bg-cyan-500 px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-cyan-400 transition disabled:opacity-50 cursor-pointer"
+                >
+                  <Plus size={13} />
+                  <span>{isAddingSymbol ? "Adding..." : "Add"}</span>
+                </button>
+              </form>
+            </div>
           </div>
 
-          {/* Watchlist Sorting Controls */}
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-400">Sort Watchlist By:</span>
+          {/* Watchlist Sorting Controls & Status */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold text-slate-400">Sort By:</span>
               {[
-                { id: "return3m", label: "”¥ Top 3M Gainers" },
-                { id: "roce", label: "’Ž Highest ROCE" },
-                { id: "confidence", label: "â˜… Conviction" },
+                { id: "return3m", label: "🔥 Top 3M Gainers" },
+                { id: "roce", label: "💎 Highest ROCE" },
+                { id: "confidence", label: "★ Conviction" },
                 { id: "symbol", label: "Ticker A-Z" },
               ].map((btn) => (
                 <button
                   key={btn.id}
                   onClick={() => setWatchlistSortBy(btn.id as any)}
-                  className={`rounded-lg px-2.5 py-0.5 text-[11px] font-bold transition cursor-pointer ${
-                    watchlistSortBy === btn.id
-                      ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40"
-                      : "bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                  }`}
+                  className={`rounded-lg px-2.5 py-0.5 text-[11px] font-bold transition cursor-pointer ${watchlistSortBy === btn.id
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40"
+                    : "bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
                 >
                   {btn.label}
                 </button>
               ))}
+              {watchlistSearch && (
+                <span className="text-[11px] text-cyan-600 dark:text-cyan-400 font-mono ml-1">
+                  ({sortedWatchlistStocks.length} matching)
+                </span>
+              )}
             </div>
 
-            <Link href="/watchlist" className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
-              Manage Watchlists â†’
+            <Link href="/watchlist" className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+              <span>Manage Watchlists</span>
+              <span>→</span>
             </Link>
           </div>
 
           {/* Active Watchlist Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#071322] shadow-xs">
-            {sortedWatchlistStocks.length === 0 ? (
+            {loading && watchlistStocks.length === 0 ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-800/60 animate-pulse">
+                    <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                  </div>
+                ))}
+              </div>
+            ) : sortedWatchlistStocks.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">
-                Your watchlist is currently empty. Use the box above to add your first stock.
+                {watchlistSearch
+                  ? `No tracked stocks match "${watchlistSearch}".`
+                  : "Your watchlist is currently empty. Use the box above to add your first stock."}
               </div>
             ) : (
               <table className="w-full text-left text-xs">

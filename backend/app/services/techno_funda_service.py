@@ -295,6 +295,7 @@ class TechnoFundaService:
             "high_52_week": round(high_52, 2),
             "low_52_week": round(low_52, 2),
             "dist_52w_high_pct": dist_52w_high_pct,
+            "dist_to_52w_high_pct": dist_52w_high_pct,
             "gain_from_52w_low_pct": gain_from_52w_low_pct,
             "is_stage_2": is_stage_2,
             "rsi_14": rsi,
@@ -436,7 +437,7 @@ class TechnoFundaService:
                 if tech["institutional_holding"] < 18.0 or not tech["is_stage_2"]:
                     continue
             elif active_preset == "NEW_HIGHS_52W":
-                if tech["dist_to_52w_high_pct"] > 6.0 or not tech["is_stage_2"]:
+                if tech.get("dist_52w_high_pct", 999.0) > 6.0 or not tech["is_stage_2"]:
                     continue
             elif active_preset == "VALUE_GROWTH":
                 pe = r.stock_pe or 999.0
@@ -457,7 +458,7 @@ class TechnoFundaService:
                     continue
 
             if max_pivot_distance is not None and max_pivot_distance > 0:
-                if tech["dist_to_52w_high_pct"] > max_pivot_distance:
+                if tech.get("dist_52w_high_pct", 999.0) > max_pivot_distance:
                     continue
 
             item = {
@@ -502,6 +503,8 @@ class TechnoFundaService:
             results.sort(key=lambda x: x.get("roce", 0), reverse=reverse)
         elif sort_by == "institutional_holding":
             results.sort(key=lambda x: x.get("institutional_holding", 0), reverse=reverse)
+        elif sort_by == "minervini_pass_count":
+            results.sort(key=lambda x: x.get("minervini_pass_count", 0), reverse=reverse)
         elif sort_by == "market_cap":
             results.sort(key=lambda x: (x.get("market_cap") or 0), reverse=reverse)
         elif sort_by == "current_price":

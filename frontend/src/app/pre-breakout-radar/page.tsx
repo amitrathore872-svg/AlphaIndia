@@ -199,7 +199,7 @@ export default function PreBreakoutRadarPage() {
     try {
       const res = await autoEnrollTopBreakoutCandidates(10, 70);
       if (res && res.enrolled_count !== undefined) {
-        setToastMessage(`âš¡ Enrolled ${res.enrolled_count} A+ Coils into Breakout Execution Engine!`);
+        setToastMessage(`⚡ Enrolled ${res.enrolled_count} A+ Coils into Breakout Execution Engine!`);
         await loadWatchedSymbols();
         setActiveTab("execution");
       }

@@ -19,10 +19,50 @@ from app.models.investor_intelligence import (
 )
 from app.services.investor_document_harvester import InvestorDocumentHarvester
 from app.services.investor_intelligence_service import InvestorIntelligenceService
+from app.services.runaway_trigger_service import RunawayTriggerService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/investor-intelligence", tags=["Investor Intelligence & Concalls"])
+
+
+@router.get("/runaway-triggers", response_model=Dict[str, Any])
+def get_runaway_guidance_triggers(
+    archetype: Optional[str] = Query(default=None, description="Archetype filter (e.g. ORDER_BOOK_EXPLOSION, CAPACITY_INFLECTION_COD, MARGIN_CORRIDOR_JUMP, SUNRISE_MONOPOLY_PLI, DELEVERAGING_DEBT_FREE)"),
+    conviction_tier: Optional[str] = Query(default=None, description="Conviction tier (DIAMOND_SOLID, COILED_SPRING, SPECULATIVE_CATALYST, NARRATIVE_TRAP)"),
+    stage_2_only: bool = Query(default=False, description="Filter only Stan Weinstein Stage 2 uptrend stocks"),
+    search: Optional[str] = Query(default=None, description="Search symbol or company name"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=30, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Scans corporate filings and concall transcripts for high-velocity forward guidance triggers
+    with 3-way quantitative validation (Guidance Spark + Accounting Fuel + Stage 2 Harmony).
+    """
+    return RunawayTriggerService.scan_diamond_catalysts(
+        db,
+        archetype=archetype,
+        conviction_tier=conviction_tier,
+        stage_2_only=stage_2_only,
+        search=search,
+        limit=limit,
+        page=page,
+    )
+
+
+@router.get("/runaway-triggers/{symbol}", response_model=Dict[str, Any])
+def get_symbol_runaway_trigger(
+    symbol: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Instant 3-way quantitative validation and diamond conviction rating for a specific equity symbol.
+    """
+    res = RunawayTriggerService.evaluate_symbol_catalyst(db, symbol)
+    if not res:
+        raise HTTPException(status_code=404, detail=f"No filing or technical records available for {symbol}")
+    return res
 
 
 @router.get("/coverage", response_model=Dict[str, Any])

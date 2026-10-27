@@ -88,6 +88,7 @@ backend/data/*_cache/
 backend/app/data/*_cache.json
 backend/app/data/*_cache/
 backend/data/*_scan_state.json
+backend/data/*_sync_status.json
 backend/scratch/
 scratch/
 brain/

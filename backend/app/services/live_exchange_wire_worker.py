@@ -384,6 +384,7 @@ class LiveExchangeWireWorker:
                 deal_value_cr=deal_val,
                 filing_date=ann_date,
                 cmp_override=cmp_val,
+                pdf_url=pdf_url,
             )
             if order_intel.get("order_value_cr"):
                 deal_val = order_intel["order_value_cr"]
@@ -398,6 +399,29 @@ class LiveExchangeWireWorker:
             impact_lvl = "CRITICAL" if order_intel.get("order_significance_score", 0) >= 75 else "HIGH"
             impact_score = round(min(9.9, max(7.5, (order_intel.get("order_significance_score", 70) / 10.0))), 1)
             recommendation = "STRONG_BUY" if order_intel.get("order_significance_score", 0) >= 80 else "TACTICAL_BUY"
+
+            # Check if this order win is an update, revision, or press release of an existing recent order
+            existing_order = OrderWinIntelligenceService.find_matching_existing_order_win(
+                db=db,
+                symbol=sym,
+                headline=headline,
+                filing_date=ann_date,
+                deal_value_cr=deal_val,
+                client=order_intel.get("order_client_counterparty") if order_intel else None,
+            )
+            if existing_order:
+                logger.info(f"Reconciling subsequent order win filing for {sym} into master record ID {existing_order.id}")
+                OrderWinIntelligenceService.reconcile_existing_order_win(
+                    db=db,
+                    existing=existing_order,
+                    new_headline=headline,
+                    new_pdf_url=pdf_url,
+                    new_deal_value_cr=deal_val,
+                    new_client=order_intel.get("order_client_counterparty") if order_intel else None,
+                    new_filing_date=ann_date,
+                    new_description=headline,
+                )
+                return True
 
         ai_insight = ai_insight or generate_ai_insight(company_name, cat_type, headline, deal_val)
         buy_thesis = buy_thesis or f"Fresh live exchange disclosure ({exchange}). Catalyst: {cat_type.replace('_', ' ')}. Trend regime: {regime}. Stop loss guardrail: Rs.{sl}."

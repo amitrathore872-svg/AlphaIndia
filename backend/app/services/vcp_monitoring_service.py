@@ -121,7 +121,7 @@ class VCPMonitoringService:
     def _build_priority_queue(
         cls,
         db: Session,
-        limit_candidates: int = 150,
+        limit_candidates: int = 300,
     ) -> List[Tuple[ScreenerGrowthRecord, float]]:
         """
         Builds a prioritized list of candidates:
@@ -134,9 +134,9 @@ class VCPMonitoringService:
             db.query(ScreenerGrowthRecord)
             .filter(
                 ScreenerGrowthRecord.current_price != None,
-                ScreenerGrowthRecord.current_price >= 50.0,
+                ScreenerGrowthRecord.current_price >= 100.0,
                 ScreenerGrowthRecord.market_cap != None,
-                ScreenerGrowthRecord.market_cap >= 500.0,
+                ScreenerGrowthRecord.market_cap >= 2000.0,
                 ScreenerGrowthRecord.dma_50 != None,
                 ScreenerGrowthRecord.high_52_week != None,
                 ScreenerGrowthRecord.high_52_week > 0,
@@ -239,7 +239,7 @@ class VCPMonitoringService:
     def execute_scan_pass(
         cls,
         mode: str = "TODAY_BREAKOUT",
-        limit_candidates: int = 120,
+        limit_candidates: int = 300,
         use_cache: bool = True,
     ) -> List[Dict[str, Any]]:
         """
@@ -263,6 +263,9 @@ class VCPMonitoringService:
                 cls._remaining_stocks = total
 
             opportunities: List[Dict[str, Any]] = []
+            rejections: List[VCPScanRejection] = []
+            rejections_lock = threading.Lock()
+            scan_date = date.today()
 
             # ThreadPoolExecutor for concurrent price history fetches and 8-gate calculations
             def process_candidate(rec_tuple: Tuple[ScreenerGrowthRecord, float]) -> Optional[Dict[str, Any]]:
@@ -286,21 +289,45 @@ class VCPMonitoringService:
                     hist = VCPEngineService._fetch_price_history(sym, cmp=cmp)
 
                     # Gate 1: Trend
-                    p1, trend_score, _, _ = VCPEngineService.evaluate_trend_gate(rec, hist)
+                    p1, trend_score, _, err1 = VCPEngineService.evaluate_trend_gate(rec, hist)
                     if not p1:
                         cls._update_cache(rec)
+                        with rejections_lock:
+                            rejections.append(VCPScanRejection(
+                                symbol=sym,
+                                scan_date=scan_date,
+                                gate_failed="GATE_1_TREND",
+                                reason=err1 or "Failed Stage 2 Trend Template",
+                                gate_details={"trend_score": trend_score},
+                            ))
                         return None
 
                     # Gate 2: VCP
-                    p2, vcp_score, vcp_details, _ = VCPEngineService.evaluate_vcp_gate(hist, cmp)
+                    p2, vcp_score, vcp_details, err2 = VCPEngineService.evaluate_vcp_gate(hist, cmp)
                     if not p2:
                         cls._update_cache(rec)
+                        with rejections_lock:
+                            rejections.append(VCPScanRejection(
+                                symbol=sym,
+                                scan_date=scan_date,
+                                gate_failed="GATE_2_VCP",
+                                reason=err2 or "Failed VCP Contraction",
+                                gate_details={"vcp_score": vcp_score},
+                            ))
                         return None
 
                     # Gate 3: Volume Dry-Up
-                    p3, vol_score, vol_details, _ = VCPEngineService.evaluate_volume_dryup_gate(hist, rec)
+                    p3, vol_score, vol_details, err3 = VCPEngineService.evaluate_volume_dryup_gate(hist, rec)
                     if not p3:
                         cls._update_cache(rec)
+                        with rejections_lock:
+                            rejections.append(VCPScanRejection(
+                                symbol=sym,
+                                scan_date=scan_date,
+                                gate_failed="GATE_3_VOLUME",
+                                reason=err3 or "Volume did not dry up sufficiently",
+                                gate_details={"vol_score": vol_score},
+                            ))
                         return None
 
                     # Gate 4: Pivot
@@ -308,11 +335,19 @@ class VCPMonitoringService:
 
                     # Gate 5: Breakout
                     is_breakout_mode = (mode == "TODAY_BREAKOUT")
-                    p5, breakout_score, breakout_details, _ = VCPEngineService.evaluate_breakout_gate(
+                    p5, breakout_score, breakout_details, err5 = VCPEngineService.evaluate_breakout_gate(
                         hist, pivot_info["pivot_price"], is_today_breakout_mode=is_breakout_mode
                     )
                     if not p5 and is_breakout_mode:
                         cls._update_cache(rec)
+                        with rejections_lock:
+                            rejections.append(VCPScanRejection(
+                                symbol=sym,
+                                scan_date=scan_date,
+                                gate_failed="GATE_5_BREAKOUT",
+                                reason=err5 or "Failed Breakout Confirmation",
+                                gate_details={"breakout_score": breakout_score},
+                            ))
                         return None
 
                     # Gates 6-8: Inst, Fund, Catalyst
@@ -334,8 +369,16 @@ class VCPMonitoringService:
 
                     cls._update_cache(rec)
 
-                    min_score = 88.0 if is_breakout_mode else 82.0
+                    min_score = 90.0 if is_breakout_mode else 85.0
                     if total_score < min_score:
+                        with rejections_lock:
+                            rejections.append(VCPScanRejection(
+                                symbol=sym,
+                                scan_date=scan_date,
+                                gate_failed="GATE_SCORE_THRESHOLD",
+                                reason=f"Composite score {total_score}/100 below institutional cutoff of {min_score}",
+                                gate_details={"total_score": total_score},
+                            ))
                         return None
 
                     is_elite = total_score >= 95.0
@@ -417,7 +460,7 @@ class VCPMonitoringService:
                                     seen_live.add(s_live)
                                     live_picks.append(opp)
                             cls._opportunities_found = len(live_picks)
-                            cls._latest_picks = live_picks[:3]
+                            cls._latest_picks = live_picks[:10]
 
             # Deduplicate opportunities by symbol
             seen_opps = set()
@@ -428,13 +471,23 @@ class VCPMonitoringService:
                     seen_opps.add(s_opp)
                     unique_opps.append(opp)
 
-            top_picks = unique_opps[:3]
+            top_picks = unique_opps[:10]
 
             with cls._lock:
                 cls._scan_duration_seconds = round((datetime.now() - cls._scan_start_time).total_seconds(), 1) if cls._scan_start_time else 0.0
                 cls._status = "COMPLETED" if not cls._is_continuous_active else "MONITORING"
                 cls._latest_picks = top_picks
                 cls._last_updated_timestamp = datetime.now(timezone.utc).isoformat()
+
+            # Save live rejections to DB so Waterfall Funnel stays updated
+            if rejections:
+                try:
+                    db.query(VCPScanRejection).filter(VCPScanRejection.scan_date == scan_date).delete()
+                    db.bulk_save_objects(rejections)
+                    db.commit()
+                except Exception as rej_err:
+                    logger.warning(f"Failed to persist live VCP rejections: {rej_err}")
+                    db.rollback()
 
             # Save newly discovered top picks to DB if found
             if top_picks:
@@ -499,7 +552,7 @@ class VCPMonitoringService:
     # On-Demand Trigger (Async Launch)
     # ----------------------------------------------------------------------
     @classmethod
-    def trigger_scan_now(cls, mode: str = "TODAY_BREAKOUT") -> Dict[str, Any]:
+    def trigger_scan_now(cls, mode: str = "TODAY_BREAKOUT", limit_candidates: int = 300) -> Dict[str, Any]:
         """
         Triggers an immediate asynchronous priority scan pass.
         Returns immediately with current state.
@@ -517,7 +570,7 @@ class VCPMonitoringService:
         # Launch in background worker thread
         t = threading.Thread(
             target=cls.execute_scan_pass,
-            args=(mode, 120, False),  # on-demand clears cache check to guarantee fresh evaluation
+            args=(mode, limit_candidates, False),  # on-demand clears cache check to guarantee fresh evaluation
             daemon=True,
             name="VCPOnDemandWorker",
         )
@@ -581,8 +634,8 @@ class VCPMonitoringService:
         """
         while not cls._stop_continuous_event.is_set():
             try:
-                # Perform an incremental scan pass
-                cls.execute_scan_pass(mode="TODAY_BREAKOUT", limit_candidates=80, use_cache=True)
+                # Perform an incremental scan pass across all eligible Stage 2 candidates
+                cls.execute_scan_pass(mode="TODAY_BREAKOUT", limit_candidates=300, use_cache=True)
             except Exception as e:
                 logger.error(f"Error in continuous monitoring loop: {e}")
                 with cls._lock:

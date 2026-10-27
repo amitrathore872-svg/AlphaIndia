@@ -142,6 +142,7 @@ export default function Breadth20DmaChart({
         borderColor: "#1e293b",
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 12,
       },
       rightPriceScale: {
         borderColor: "#1e293b",

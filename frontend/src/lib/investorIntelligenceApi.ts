@@ -451,3 +451,115 @@ export async function triggerBatchScan(
     method: "POST",
   });
 }
+
+// =======================================================
+// Runaway Guidance & Diamond Catalyst Types & API
+// =======================================================
+
+export interface ValidationCheckItem {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface RunawayTriggerItem {
+  symbol: string;
+  company_name: string;
+  fiscal_period: string;
+  doc_type: string;
+  pdf_url?: string | null;
+  announcement_date?: string | null;
+
+  diamond_score: number;
+  conviction_tier: "DIAMOND_SOLID" | "COILED_SPRING" | "SPECULATIVE_CATALYST" | "NARRATIVE_TRAP";
+  archetype:
+    | "ORDER_BOOK_EXPLOSION"
+    | "CAPACITY_INFLECTION_COD"
+    | "MARGIN_CORRIDOR_JUMP"
+    | "SUNRISE_MONOPOLY_PLI"
+    | "DELEVERAGING_DEBT_FREE"
+    | "ACCELERATING_EARNINGS_BEAT";
+  headline: string;
+  metric_highlight: string;
+  institutional_rationale: string;
+  verbatim_quote?: string | null;
+
+  scores: {
+    guidance_score: number;
+    financial_score: number;
+    technical_score: number;
+    total_diamond_score: number;
+  };
+
+  guidance_validation: {
+    passed: boolean;
+    checks: ValidationCheckItem[];
+  };
+
+  financial_validation: {
+    passed: boolean;
+    sales_growth_ttm?: number | null;
+    pat_growth_ttm?: number | null;
+    debt_to_equity?: number | null;
+    debtor_days?: number | null;
+    checks: ValidationCheckItem[];
+  };
+
+  technical_validation: {
+    passed: boolean;
+    is_stage_2: boolean;
+    cmp?: number | null;
+    dma_50?: number | null;
+    dma_200?: number | null;
+    distance_52w_high?: number | null;
+    checks: ValidationCheckItem[];
+  };
+
+  gameplan: {
+    verdict: string;
+    entry_trigger: string;
+    invalidation_level: string;
+    horizon: string;
+  };
+}
+
+export interface RunawayTriggersResponse {
+  total: number;
+  page: number;
+  limit: number;
+  kpis: {
+    total_screened: number;
+    triggers_detected: number;
+    diamond_solid_count: number;
+    coiled_spring_count: number;
+    order_book_explosions: number;
+    capacity_inflections: number;
+    margin_jumps: number;
+    sunrise_monopolies: number;
+  };
+  items: RunawayTriggerItem[];
+}
+
+export async function fetchRunawayTriggers(params?: {
+  archetype?: string;
+  conviction_tier?: string;
+  stage_2_only?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<RunawayTriggersResponse> {
+  const q = new URLSearchParams();
+  if (params?.archetype && params.archetype !== "ALL") q.set("archetype", params.archetype);
+  if (params?.conviction_tier && params.conviction_tier !== "ALL") q.set("conviction_tier", params.conviction_tier);
+  if (params?.stage_2_only) q.set("stage_2_only", "true");
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", params.page.toString());
+  if (params?.limit) q.set("limit", params.limit.toString());
+
+  return fetchJson<RunawayTriggersResponse>(`/api/v1/investor-intelligence/runaway-triggers?${q.toString()}`);
+}
+
+export async function fetchSymbolRunawayTrigger(symbol: string): Promise<RunawayTriggerItem> {
+  return fetchJson<RunawayTriggerItem>(`/api/v1/investor-intelligence/runaway-triggers/${encodeURIComponent(symbol)}`);
+}
+
