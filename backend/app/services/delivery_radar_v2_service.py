@@ -419,6 +419,9 @@ class DeliveryRadarV2Service:
                 is_coil = bool(range_cont <= 0.88 and vdu_ratio <= 0.75 and abs(pivot_dist) <= 3.5)
                 is_float_lock = bool(float_5d >= 2.5 and deliv_flow_10d >= 1.4 and range_cont <= 0.90)
 
+                high_20_val = float(row.get("HIGH_20", cmp))
+                is_extended = bool(dist_to_ema20 >= 7.0 or (cmp >= high_20_val * 1.05 and dist_to_ema20 >= 5.0))
+
                 if is_climax_shock:
                     archetype = "CLIMAX_SHOCK_WARNING"
                     archetype_label = "⚠️ Climax Shock Trap (Avoid)"
@@ -430,11 +433,17 @@ class DeliveryRadarV2Service:
                 elif is_multi_day_expansion:
                     archetype = "VOLUME_EXPANSION_SURGE"
                     archetype_label = "🔥 Multi-Day Volume & Capital Expansion"
-                    verdict = f"Sustained Institutional Surge: 3-Day turnover running {to_exp_3d:.1f}x baseline with ₹{deliv_cr_5d:.1f} Cr absorbed ({float_5d:.2f}% of free float) and net inflow ratio {deliv_flow_10d:.2f}x.{' Short-term supply test near highs.' if upper_wick >= 0.40 else ''}"
                     badge_color = "emerald"
-                    trigger_status = "EXPANSION_BUY"
-                    trigger_status_label = "🔥 VOLUME SURGE"
-                    status_badge_color = "emerald"
+                    if is_extended:
+                        trigger_status = "PULLBACK_WATCH"
+                        trigger_status_label = "🎯 PULLBACK ENTRY (WAIT)"
+                        status_badge_color = "amber"
+                        verdict = f"Sustained Institutional Surge: 3-Day turnover running {to_exp_3d:.1f}x baseline with ₹{deliv_cr_5d:.1f} Cr absorbed ({float_5d:.2f}% of float). Stock is currently extended (+{dist_to_ema20:.1f}% vs 20-EMA); wait for pullback to avoid chasing."
+                    else:
+                        trigger_status = "EXPANSION_BUY"
+                        trigger_status_label = "🔥 FRESH PIVOT BUY"
+                        status_badge_color = "emerald"
+                        verdict = f"Sustained Institutional Surge: 3-Day turnover running {to_exp_3d:.1f}x baseline with ₹{deliv_cr_5d:.1f} Cr absorbed ({float_5d:.2f}% of free float) and net inflow ratio {deliv_flow_10d:.2f}x."
                 elif is_asymmetric_coil:
                     archetype = "ASYMMETRIC_COIL"
                     archetype_label = "⚡ 20-EMA Cheat Coil"
@@ -496,28 +505,55 @@ class DeliveryRadarV2Service:
                 if is_climax_shock:
                     score = min(score, 45.0)
 
-                # Mechanical Trade Blueprint (Zero Guesswork)
-                entry_min = round(min(cmp, ema_20_val if ema_20_val > 0 else cmp), 2)
-                entry_max = round(cmp * 1.008, 2)
-                sl_price = round(cmp * (1 - 0.032), 2)
-                be_price = round(cmp * (1 + 0.035), 2)
-                t1_price = round(cmp * (1 + 0.10), 2)
-                t2_price = round(cmp * (1 + 0.16), 2)
+                # Mechanical Trade Blueprint (Dynamic Downside Risk Protection)
+                if is_extended:
+                    # Stock is extended far above moving averages — calculate Pullback Retest Corridor
+                    entry_mode = "PULLBACK_RETEST"
+                    e_min = round(max(high_20_val * 0.99, ema_20_val * 1.02), 2)
+                    e_max = round(min(cmp * 0.96, max(high_20_val * 1.03, ema_20_val * 1.06)), 2)
+                    if e_max < e_min:
+                        e_min = round(ema_20_val * 1.02, 2)
+                        e_max = round(ema_20_val * 1.06, 2)
+                    entry_min = e_min
+                    entry_max = e_max
+                    rec_buy_price = round((entry_min + entry_max) / 2.0, 2)
+                    sl_price = round(min(entry_min * 0.965, ema_20_val * 0.97), 2)
+                    risk_pct = round(((rec_buy_price - sl_price) / rec_buy_price) * 100.0, 1)
+                    be_price = round(rec_buy_price * 1.035, 2)
+                    t1_price = round(rec_buy_price * 1.10, 2)
+                    t2_price = round(rec_buy_price * 1.18, 2)
+                    exec_protocol = f"⚠️ DO NOT CHASE AT CMP (Extended {dist_to_ema20:+.1f}% vs 20-EMA). Downside risk to 20-EMA is -{dist_to_ema20:.1f}%. Place GTT Buy Limit order in pullback corridor ₹{entry_min} - ₹{entry_max} (Breakout Retest / 20-EMA zone). Set SL at ₹{sl_price} (-{risk_pct}%)."
+                else:
+                    # Stock is near key pivot or tight base — normal entry corridor
+                    entry_mode = "PIVOT_BUY" if (is_breakout or is_multi_day_expansion) else "COIL_ENTRY"
+                    entry_min = round(min(cmp, ema_20_val if ema_20_val > 0 else cmp), 2)
+                    entry_max = round(cmp * 1.012, 2)
+                    rec_buy_price = round(cmp, 2)
+                    sl_price = round(cmp * (1 - 0.035), 2)
+                    risk_pct = 3.5
+                    be_price = round(cmp * (1 + 0.035), 2)
+                    t1_price = round(cmp * (1 + 0.10), 2)
+                    t2_price = round(cmp * (1 + 0.16), 2)
+                    exec_protocol = f"Enter in corridor near 20-EMA (₹{entry_min} - ₹{entry_max}). Set -3.5% GTT SL. When +3.5% hit, ratchet SL to Cost. Sell 50% at +10% (₹{t1_price}), trail 50% on 20-EMA."
 
                 blueprint = {
                     "entry_corridor_min": entry_min,
                     "entry_corridor_max": entry_max,
+                    "recommended_buy_price": rec_buy_price,
+                    "entry_mode": entry_mode,
+                    "is_extended": is_extended,
+                    "downside_to_ema20_pct": dist_to_ema20,
                     "stop_loss": sl_price,
-                    "risk_pct": 3.2,
+                    "risk_pct": risk_pct,
                     "breakeven_trigger": be_price,
                     "breakeven_gain_pct": 3.5,
                     "target_1": t1_price,
-                    "target_1_gain_pct": 10.0,
+                    "target_1_gain_pct": round(((t1_price - rec_buy_price) / rec_buy_price) * 100.0, 1),
                     "target_2": t2_price,
-                    "target_2_gain_pct": 16.0,
-                    "rr_ratio": "1:4.8",
+                    "target_2_gain_pct": round(((t2_price - rec_buy_price) / rec_buy_price) * 100.0, 1),
+                    "rr_ratio": f"1:{round(10.0 / max(0.1, risk_pct), 1)}",
                     "suggested_holding_days": "10 - 18 Sessions",
-                    "execution_protocol": "Enter in corridor near 20-EMA. Set -3.2% GTT SL. When +3.5% hit, ratchet SL to Cost. Sell 50% at +10%, trail 50% on 20-EMA.",
+                    "execution_protocol": exec_protocol,
                 }
 
                 opportunities.append({
@@ -552,8 +588,11 @@ class DeliveryRadarV2Service:
                     "ticket_spike": ticket_spike,
                     "pivot_distance_pct": pivot_dist,
                     "dist_to_ema20_pct": dist_to_ema20,
+                    "downside_to_ema20_pct": dist_to_ema20,
                     "peak_drawdown_20d": peak_dd,
                     "ema_20": ema_20_val,
+                    "recommended_buy_price": rec_buy_price,
+                    "is_extended": is_extended,
                     "archetype": archetype,
                     "archetype_label": archetype_label,
                     "badge_color": badge_color,
@@ -586,8 +625,9 @@ class DeliveryRadarV2Service:
                 "qualifying_setups_count": len(opportunities),
                 "asymmetric_coil_count": sum(1 for o in opportunities if o["archetype"] == "ASYMMETRIC_COIL"),
                 "volume_expansion_count": sum(1 for o in opportunities if o["archetype"] == "VOLUME_EXPANSION_SURGE"),
+                "pullback_watch_count": sum(1 for o in opportunities if o["trigger_status"] == "PULLBACK_WATCH"),
                 "buy_triggered_count": sum(1 for o in opportunities if o["trigger_status"] in ("BUY_TRIGGERED", "ASYMMETRIC_BUY", "EXPANSION_BUY")),
-                "coiling_count": sum(1 for o in opportunities if o["trigger_status"] == "COILING_WATCHLIST"),
+                "coiling_count": sum(1 for o in opportunities if o["trigger_status"] in ("COILING_WATCHLIST", "PULLBACK_WATCH")),
                 "climax_avoid_count": sum(1 for o in opportunities if o["trigger_status"] == "CLIMAX_AVOID"),
                 "stealth_lock_count": sum(1 for o in opportunities if o["archetype"] == "STEALTH_FLOAT_LOCK"),
                 "coil_dryup_count": sum(1 for o in opportunities if o["archetype"] == "COIL_SUPPLY_EXHAUSTION"),
@@ -596,7 +636,7 @@ class DeliveryRadarV2Service:
                 "sweetspot_demand_count": sum(1 for o in opportunities if o["is_sweetspot_demand"]),
                 "market_regime": market_regime,
                 "scan_duration_seconds": round(time.time() - t0, 2),
-                "algorithm_version": "2.2.0-MULTI-DAY-EXPANSION",
+                "algorithm_version": "2.3.0-RISK-MANAGED",
             }
 
             result = {

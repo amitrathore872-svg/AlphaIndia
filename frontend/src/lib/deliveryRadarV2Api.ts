@@ -8,6 +8,10 @@ import { fetchJson } from "@/lib/apiConfig";
 export interface TradeBlueprint {
   entry_corridor_min: number;
   entry_corridor_max: number;
+  recommended_buy_price?: number;
+  entry_mode?: "PULLBACK_RETEST" | "PIVOT_BUY" | "COIL_ENTRY" | string;
+  is_extended?: boolean;
+  downside_to_ema20_pct?: number;
   stop_loss: number;
   risk_pct: number;
   breakeven_trigger: number;
@@ -54,6 +58,7 @@ export interface DeliveryV2Opportunity {
   ticket_spike: number;
   pivot_distance_pct: number;
   dist_to_ema20_pct?: number;
+  downside_to_ema20_pct?: number;
   peak_drawdown_20d?: number;
   ema_20?: number;
   vol_expansion_3d?: number;
@@ -63,10 +68,12 @@ export interface DeliveryV2Opportunity {
   return_3d_pct?: number;
   return_5d_pct?: number;
   is_multi_day_expansion?: boolean;
+  is_extended?: boolean;
+  recommended_buy_price?: number;
   archetype: "VOLUME_EXPANSION_SURGE" | "ASYMMETRIC_COIL" | "STEALTH_FLOAT_LOCK" | "COIL_SUPPLY_EXHAUSTION" | "BREAKOUT_EXPANSION" | "CLIMAX_SHOCK_WARNING" | "MULTI_DAY_ACCUMULATION" | string;
   archetype_label: string;
   badge_color: string;
-  trigger_status?: "EXPANSION_BUY" | "ASYMMETRIC_BUY" | "BUY_TRIGGERED" | "COILING_WATCHLIST" | "CLIMAX_AVOID" | string;
+  trigger_status?: "PULLBACK_WATCH" | "EXPANSION_BUY" | "ASYMMETRIC_BUY" | "BUY_TRIGGERED" | "COILING_WATCHLIST" | "CLIMAX_AVOID" | string;
   trigger_status_label?: string;
   status_badge_color?: string;
   institutional_verdict: string;
@@ -83,6 +90,7 @@ export interface DeliveryV2Metadata {
   qualifying_setups_count?: number;
   asymmetric_coil_count?: number;
   volume_expansion_count?: number;
+  pullback_watch_count?: number;
   buy_triggered_count?: number;
   coiling_count?: number;
   climax_avoid_count?: number;

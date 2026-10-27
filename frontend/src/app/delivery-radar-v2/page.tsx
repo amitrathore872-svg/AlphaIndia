@@ -309,6 +309,23 @@ export default function DeliveryRadarV2Page() {
 
           <button
             onClick={() => {
+              setSelectedStatus("PULLBACK_WATCH");
+              setPage(1);
+            }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedStatus === "PULLBACK_WATCH"
+                ? "bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20"
+                : "bg-amber-950/40 text-amber-400 hover:bg-amber-900/50 border border-amber-500/30"
+            }`}
+          >
+            <span>🎯 PULLBACK ENTRY</span>
+            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-950 text-amber-300 font-mono text-[10px] border border-amber-500/30">
+              {metadata?.pullback_watch_count || 0}
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
               setSelectedStatus("ASYMMETRIC_BUY");
               setPage(1);
             }}
@@ -550,6 +567,8 @@ export default function DeliveryRadarV2Page() {
                           className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide inline-flex items-center gap-1 ${
                             opp.trigger_status === "EXPANSION_BUY"
                               ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/60 shadow-sm shadow-emerald-500/30"
+                              : opp.trigger_status === "PULLBACK_WATCH"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20"
                               : opp.trigger_status === "ASYMMETRIC_BUY"
                               ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-sm shadow-cyan-500/20"
                               : opp.trigger_status === "BUY_TRIGGERED"
@@ -562,6 +581,9 @@ export default function DeliveryRadarV2Page() {
                           {opp.trigger_status === "EXPANSION_BUY" && (
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                           )}
+                          {opp.trigger_status === "PULLBACK_WATCH" && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          )}
                           {opp.trigger_status === "ASYMMETRIC_BUY" && (
                             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
                           )}
@@ -570,6 +592,8 @@ export default function DeliveryRadarV2Page() {
                           )}
                           {opp.trigger_status === "EXPANSION_BUY"
                             ? "🔥 VOLUME SURGE"
+                            : opp.trigger_status === "PULLBACK_WATCH"
+                            ? "🎯 PULLBACK ENTRY"
                             : opp.trigger_status === "ASYMMETRIC_BUY"
                             ? "⚡ CHEAT ENTRY"
                             : opp.trigger_status === "BUY_TRIGGERED"
@@ -580,7 +604,7 @@ export default function DeliveryRadarV2Page() {
                         </span>
                       </td>
 
-                      {/* CMP */}
+                      {/* CMP & Recommended Buy Price */}
                       <td className="py-3 px-3">
                         <div className="text-slate-200">₹{opp.current_price.toLocaleString("en-IN")}</div>
                         <div className="flex flex-wrap items-center gap-1 mt-0.5">
@@ -609,6 +633,17 @@ export default function DeliveryRadarV2Page() {
                             </span>
                           )}
                         </div>
+                        {opp.is_extended ? (
+                          <div className="mt-1 text-[10px] font-semibold text-amber-300 font-mono bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center gap-1" title="Stock is extended. Place GTT Buy Limit in pullback corridor">
+                            <span>Buy: ₹{opp.blueprint?.recommended_buy_price || opp.recommended_buy_price}</span>
+                            <span className="text-[9px] text-amber-400 font-normal">(Pullback)</span>
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-[10px] font-semibold text-emerald-400 font-mono flex items-center gap-1" title="Pivot Buy Level">
+                            <span>Buy: ₹{opp.blueprint?.recommended_buy_price || opp.recommended_buy_price || opp.current_price}</span>
+                            <span className="text-[9px] text-emerald-500 font-normal">(Pivot)</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Free Float MCap */}
@@ -879,32 +914,65 @@ export default function DeliveryRadarV2Page() {
                 </div>
               </div>
 
+              {/* Downside Risk Warning Banner for Extended Stocks */}
+              {selectedStock.is_extended && (
+                <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-xs flex items-start gap-3 shadow-lg shadow-amber-950/20">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-bold text-amber-300 flex items-center gap-2">
+                      <span>⚠️ Downside Risk Warning: Extended {selectedStock.dist_to_ema20_pct !== undefined ? `+${selectedStock.dist_to_ema20_pct}%` : ""} vs 20-EMA</span>
+                      <span className="px-1.5 py-0.2 rounded bg-amber-900/60 text-amber-300 text-[10px] font-mono border border-amber-500/40 font-normal">DO NOT CHASE</span>
+                    </div>
+                    <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                      This stock has already undergone an explosive institutional expansion. Buying at CMP (₹{selectedStock.current_price}) exposes you to an immediate <strong>-{selectedStock.dist_to_ema20_pct}% pullback drawdown</strong>. 
+                      Place a patient GTT Buy Limit order at the <strong>Recommended Pullback Level: ₹{selectedStock.blueprint?.recommended_buy_price || selectedStock.recommended_buy_price}</strong> (Corridor: ₹{selectedStock.blueprint?.entry_corridor_min} - ₹{selectedStock.blueprint?.entry_corridor_max}) to capture high-probability asymmetry.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Mechanical Trade Blueprint (Zero-Guesswork Execution) */}
               {selectedStock.blueprint && (
-                <div className="bg-slate-950 p-4 rounded-xl border border-cyan-500/30 space-y-3">
+                <div className={`bg-slate-950 p-4 rounded-xl border space-y-3 ${
+                  selectedStock.is_extended ? "border-amber-500/40" : "border-cyan-500/30"
+                }`}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300 uppercase tracking-wide">
-                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                      Mechanical Trade Blueprint (R:R {selectedStock.blueprint.rr_ratio})
+                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                      <Zap className={`w-3.5 h-3.5 ${selectedStock.is_extended ? "text-amber-400" : "text-cyan-400"}`} />
+                      <span className={selectedStock.is_extended ? "text-amber-300" : "text-cyan-300"}>
+                        {selectedStock.is_extended ? "Pullback Retest Blueprint" : "Mechanical Trade Blueprint"} (R:R {selectedStock.blueprint.rr_ratio})
+                      </span>
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700">
                       Hold: {selectedStock.blueprint.suggested_holding_days}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs font-mono">
-                    <div className="p-2 rounded bg-slate-900 border border-slate-800">
-                      <div className="text-[9px] text-slate-400 uppercase">Entry Corridor</div>
-                      <div className="font-bold text-slate-100 text-[11px] mt-0.5">
-                        ₹{selectedStock.blueprint.entry_corridor_min} - {selectedStock.blueprint.entry_corridor_max}
+                    <div className={`p-2 rounded border ${
+                      selectedStock.is_extended
+                        ? "bg-amber-950/30 border-amber-500/40"
+                        : "bg-slate-900 border-slate-800"
+                    }`}>
+                      <div className="text-[9px] text-slate-400 uppercase">
+                        {selectedStock.is_extended ? "Recommended Limit Buy" : "Entry Level"}
+                      </div>
+                      <div className={`font-bold text-[11px] mt-0.5 ${
+                        selectedStock.is_extended ? "text-amber-300" : "text-emerald-400"
+                      }`}>
+                        ₹{selectedStock.blueprint.recommended_buy_price || selectedStock.blueprint.entry_corridor_min}
+                      </div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">
+                        Zone: ₹{selectedStock.blueprint.entry_corridor_min} - {selectedStock.blueprint.entry_corridor_max}
                       </div>
                     </div>
 
                     <div className="p-2 rounded bg-rose-950/30 border border-rose-500/30">
-                      <div className="text-[9px] text-rose-400 uppercase font-semibold">GTT Stop Loss</div>
+                      <div className="text-[9px] text-rose-400 uppercase font-semibold">Structural Stop Loss</div>
                       <div className="font-bold text-rose-300 text-[11px] mt-0.5">
                         ₹{selectedStock.blueprint.stop_loss} (-{selectedStock.blueprint.risk_pct}%)
                       </div>
+                      <div className="text-[9px] text-rose-500/80 mt-0.5">Below 20-EMA / Pivot</div>
                     </div>
 
                     <div className="p-2 rounded bg-amber-950/30 border border-amber-500/30">
@@ -912,6 +980,7 @@ export default function DeliveryRadarV2Page() {
                       <div className="font-bold text-amber-300 text-[11px] mt-0.5">
                         ₹{selectedStock.blueprint.breakeven_trigger} (+{selectedStock.blueprint.breakeven_gain_pct}%)
                       </div>
+                      <div className="text-[9px] text-amber-500/80 mt-0.5">Ratchet SL to Cost</div>
                     </div>
 
                     <div className="p-2 rounded bg-emerald-950/30 border border-emerald-500/30">
@@ -919,11 +988,18 @@ export default function DeliveryRadarV2Page() {
                       <div className="font-bold text-emerald-300 text-[11px] mt-0.5">
                         ₹{selectedStock.blueprint.target_1} / ₹{selectedStock.blueprint.target_2}
                       </div>
+                      <div className="text-[9px] text-emerald-500/80 mt-0.5">+{selectedStock.blueprint.target_1_gain_pct}% / +{selectedStock.blueprint.target_2_gain_pct}%</div>
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-slate-400 leading-snug bg-slate-900/80 p-2.5 rounded border border-slate-800">
-                    <span className="text-cyan-400 font-semibold">Execution Protocol: </span>
+                  <div className={`text-[11px] leading-snug p-2.5 rounded border ${
+                    selectedStock.is_extended
+                      ? "bg-amber-950/20 border-amber-500/30 text-amber-200"
+                      : "bg-slate-900/80 border-slate-800 text-slate-400"
+                  }`}>
+                    <span className={`font-semibold ${selectedStock.is_extended ? "text-amber-400" : "text-cyan-400"}`}>
+                      Execution Protocol:{" "}
+                    </span>
                     {selectedStock.blueprint.execution_protocol}
                   </div>
                 </div>
