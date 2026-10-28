@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, String
 from sqlalchemy.orm import relationship
 
@@ -41,8 +42,14 @@ class Company(Base):
     exchange = Column(String(20), default="NSE")
     bse_code = Column(String(20), nullable=True)
     market_cap_category = Column(String(30), nullable=True)
-    face_value = Column(Float, nullable=True)
     listing_status = Column(String(20), default="Active")
+
+    @property
+    def face_value(self) -> Optional[float]:
+        """Safe fallback for deprecated face_value on Company table."""
+        if hasattr(self, "market_metrics") and self.market_metrics:
+            return getattr(self.market_metrics, "face_value", None)
+        return None
     revenue_growth = Column(Float, default=0)
     pat_growth = Column(Float, default=0)
     roce = Column(Float, default=0)
