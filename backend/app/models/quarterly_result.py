@@ -4,6 +4,7 @@ Sprint 30.2 Production Model
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -57,8 +58,32 @@ class QuarterlyResult(Base):
     revenue_growth = Column(Float)
     pat_growth = Column(Float)
     roce = Column(Float)
-    operating_margin = Column(Float, nullable=True)
-    net_profit_margin = Column(Float, nullable=True)
+
+    @property
+    def operating_margin(self) -> Optional[float]:
+        """Safe dynamic calculation of operating margin %."""
+        if hasattr(self, "_operating_margin_override") and self._operating_margin_override is not None:
+            return self._operating_margin_override
+        if self.revenue and self.operating_income:
+            return round((self.operating_income / self.revenue) * 100.0, 2)
+        return None
+
+    @operating_margin.setter
+    def operating_margin(self, val: Optional[float]):
+        self._operating_margin_override = val
+
+    @property
+    def net_profit_margin(self) -> Optional[float]:
+        """Safe dynamic calculation of net profit margin %."""
+        if hasattr(self, "_net_profit_margin_override") and self._net_profit_margin_override is not None:
+            return self._net_profit_margin_override
+        if self.revenue and self.net_profit:
+            return round((self.net_profit / self.revenue) * 100.0, 2)
+        return None
+
+    @net_profit_margin.setter
+    def net_profit_margin(self, val: Optional[float]):
+        self._net_profit_margin_override = val
 
     source = Column(String(30), default="YAHOO_FINANCE")
     imported_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

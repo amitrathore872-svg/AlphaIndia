@@ -3,7 +3,7 @@
  * Official Sprint 24
  */
 
-import { API_BASE as BASE_URL } from "@/lib/apiConfig";
+import { API_BASE as BASE_URL, fetchJson } from "@/lib/apiConfig";
 
 
 export interface PeadInfo {
@@ -262,11 +262,17 @@ export async function fetchFullAnalysis(idOrSymbol: string | number): Promise<Ga
 }
 
 export async function triggerExchangeScan(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${BASE_URL}/athena-omega/trigger-scan`, {
+  // 1. Trigger live corporate results discovery cycle on exchange feeds
+  try {
+    await fetchJson("/quarterly-results/scan-exchange?limit=15", { method: "POST" });
+  } catch (err) {
+    console.warn("Exchange scan discovery notice:", err);
+  }
+
+  // 2. Trigger Athena Omega 5-Gate PEAD evaluation & cache invalidation
+  return fetchJson<{ status: string; message: string }>("/athena-omega/trigger-scan", {
     method: "POST",
   });
-  if (!res.ok) throw new Error("Failed to trigger exchange scan");
-  return res.json();
 }
 
 export async function fetchShareableBrief(

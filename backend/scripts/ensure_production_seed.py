@@ -83,6 +83,10 @@ def ensure_production_database():
                 -- Ensure filing_registry feed_type column and index exists
                 ALTER TABLE filing_registry ADD COLUMN IF NOT EXISTS feed_type VARCHAR(30);
                 CREATE INDEX IF NOT EXISTS idx_fr_feed_type ON filing_registry (feed_type);
+
+                -- Ensure quarterly_results margin columns exist in database
+                ALTER TABLE quarterly_results ADD COLUMN IF NOT EXISTS operating_margin FLOAT;
+                ALTER TABLE quarterly_results ADD COLUMN IF NOT EXISTS net_profit_margin FLOAT;
             """))
             conn.commit()
         logger.info("      Schema tables, filing_registry extensions, and custom velocity verified.")
