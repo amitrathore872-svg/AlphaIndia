@@ -56,8 +56,24 @@ class PDFExtractorService:
     ]
 
     @classmethod
+    def _headers_for_url(cls, url: str) -> Dict[str, str]:
+        headers = dict(cls.HTTP_HEADERS)
+        lower_url = (url or "").lower()
+        if "bseindia.com" in lower_url:
+            headers["Referer"] = "https://www.bseindia.com/"
+        elif "nseindia.com" in lower_url:
+            headers["Referer"] = "https://www.nseindia.com/"
+        else:
+            headers.pop("Referer", None)
+        return headers
+
+    @staticmethod
+    def _is_valid_pdf_bytes(content: bytes) -> bool:
+        return bool(content) and len(content) > 500 and content.lstrip()[:4] == b"%PDF"
+
+    @classmethod
     def download_pdf(cls, url: str, symbol: str, doc_name: str) -> Optional[bytes]:
-        """Downloads PDF bytes from URL with retry and timeout."""
+        """Downloads PDF bytes from URL with retry, PDF validation, and timeout."""
         if not url or not url.startswith("http"):
             return None
 
@@ -70,13 +86,17 @@ class PDFExtractorService:
 
         if target_path.exists() and target_path.stat().st_size > 1024:
             try:
-                return target_path.read_bytes()
+                cached = target_path.read_bytes()
+                if cls._is_valid_pdf_bytes(cached):
+                    return cached
+                logger.warning(f"Purging corrupt non-PDF cache file {target_path}")
+                target_path.unlink(missing_ok=True)
             except Exception as e:
                 logger.warning(f"Error reading cached PDF {target_path}: {e}")
 
         try:
-            resp = requests.get(url, headers=cls.HTTP_HEADERS, timeout=35)
-            if resp.status_code == 200 and len(resp.content) > 500:
+            resp = requests.get(url, headers=cls._headers_for_url(url), timeout=35)
+            if resp.status_code == 200 and cls._is_valid_pdf_bytes(resp.content):
                 # Save to disk
                 try:
                     target_path.write_bytes(resp.content)
@@ -84,7 +104,10 @@ class PDFExtractorService:
                     logger.warning(f"Could not write cache file {target_path}: {write_err}")
                 return resp.content
             else:
-                logger.warning(f"Failed to fetch PDF from {url}: HTTP {resp.status_code}")
+                ct = resp.headers.get("Content-Type", "unknown") if resp is not None else "unknown"
+                logger.warning(
+                    f"Failed to fetch valid PDF from {url}: HTTP {resp.status_code}, Content-Type={ct}, bytes={len(resp.content)}"
+                )
                 return None
         except Exception as exc:
             logger.error(f"Exception downloading PDF from {url}: {exc}")

@@ -64,9 +64,6 @@ export default function AddToWatchlistButton({
   const [watchlists, setWatchlists] = useState<WatchlistSummary[]>(cachedWatchlists || []);
   const [isAdded, setIsAdded] = useState(false);
 
-  // Do not render if symbol is blank
-  if (!symbol || symbol.trim() === "") return null;
-
   const handleClick = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -79,6 +76,9 @@ export default function AddToWatchlistButton({
     },
     []
   );
+
+  // Do not render if symbol is blank
+  if (!symbol || symbol.trim() === "") return null;
 
   const targetCompany: WatchlistModalTarget = {
     symbol: symbol.toUpperCase(),

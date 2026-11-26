@@ -184,3 +184,35 @@ def test_commitments_ledger_endpoint(client):
         assert "statement" in item
         assert "status" in item
         assert "is_financial_target" in item
+
+
+def test_pdf_extractor_validates_pdf_and_headers(tmp_path, monkeypatch):
+    """Verifies exchange-specific Referer selection and rejection/purging of non-PDF payloads."""
+    from unittest.mock import MagicMock
+    from app.services.pdf_extractor_service import PDFExtractorService
+
+    assert PDFExtractorService._headers_for_url("https://www.bseindia.com/stockinfo/AnnPdfOpen.aspx?Pname=1.pdf")["Referer"] == "https://www.bseindia.com/"
+    assert PDFExtractorService._headers_for_url("https://nsearchives.nseindia.com/corporate/doc.pdf")["Referer"] == "https://www.nseindia.com/"
+    assert "Referer" not in PDFExtractorService._headers_for_url("https://example.com/report.pdf")
+
+    monkeypatch.setattr(PDFExtractorService, "STORAGE_ROOT", tmp_path)
+
+    # Plant a corrupt HTML file disguised as a cached PDF (>1024 bytes)
+    sym_dir = tmp_path / "TESTSYM"
+    sym_dir.mkdir(parents=True, exist_ok=True)
+    cached_file = sym_dir / "doc1.pdf"
+    cached_file.write_bytes(b"<!DOCTYPE html>" + b"x" * 2000)
+
+    # Mock HTTP 200 returning HTML instead of PDF: must reject and purge corrupt cache
+    html_resp = MagicMock(status_code=200, content=b"<!DOCTYPE html>" + b"y" * 1000, headers={"Content-Type": "text/html"})
+    monkeypatch.setattr("app.services.pdf_extractor_service.requests.get", lambda *a, **kw: html_resp)
+    assert PDFExtractorService.download_pdf("https://www.bseindia.com/test.pdf", "TESTSYM", "doc1") is None
+    assert not cached_file.exists()
+
+    # Mock HTTP 200 returning valid PDF bytes: must cache and return bytes
+    pdf_bytes = b"%PDF-1.5\n" + b"0" * 600
+    pdf_resp = MagicMock(status_code=200, content=pdf_bytes, headers={"Content-Type": "application/pdf"})
+    monkeypatch.setattr("app.services.pdf_extractor_service.requests.get", lambda *a, **kw: pdf_resp)
+    result = PDFExtractorService.download_pdf("https://www.bseindia.com/test.pdf", "TESTSYM", "doc1")
+    assert result == pdf_bytes
+    assert cached_file.exists()
